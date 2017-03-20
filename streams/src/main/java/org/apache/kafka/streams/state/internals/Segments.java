@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -35,12 +35,14 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 class Segments {
     static final long MIN_SEGMENT_INTERVAL = 60 * 1000L;
+
     private final ConcurrentHashMap<Long, Segment> segments = new ConcurrentHashMap<>();
     private final String name;
     private final int numSegments;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
-    private long currentSegmentId = -1L;
+    private long minSegmentId = Long.MAX_VALUE;
+    private long maxSegmentId = -1L;
 
     Segments(final String name, final long retentionPeriod, final int numSegments) {
         this.name = name;
@@ -64,7 +66,7 @@ class Segments {
     }
 
     Segment getOrCreateSegment(final long segmentId, final ProcessorContext context) {
-        if (segmentId > currentSegmentId || segmentId > currentSegmentId - numSegments) {
+        if (segmentId > maxSegmentId - numSegments) {
             final long key = segmentId % numSegments;
             final Segment segment = segments.get(key);
             if (!isSegment(segment, segmentId)) {
@@ -74,14 +76,16 @@ class Segments {
                 Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
                 newSegment.openDB(context);
                 segments.put(key, newSegment);
-                currentSegmentId = segmentId > currentSegmentId ? segmentId : currentSegmentId;
+                maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
+                if (minSegmentId == Long.MAX_VALUE) {
+                    minSegmentId = maxSegmentId;
+                }
             }
             return segments.get(key);
         } else {
             return null;
         }
     }
-
 
     void openExisting(final ProcessorContext context) {
         try {
@@ -103,7 +107,7 @@ class Segments {
                 }
             } else {
                 if (!dir.mkdir()) {
-                    throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for store %s", dir, name));
+                    throw new ProcessorStateException(String.format("dir %s doesn't exist and cannot be created for segments %s", dir, name));
                 }
             }
         } catch (Exception ex) {
@@ -112,8 +116,8 @@ class Segments {
     }
 
     List<Segment> segments(final long timeFrom, final long timeTo) {
-        final long segFrom = segmentId(Math.max(0L, timeFrom));
-        final long segTo = segmentId(Math.min(currentSegmentId * segmentInterval, Math.max(0, timeTo)));
+        final long segFrom = Math.max(minSegmentId, segmentId(Math.max(0L, timeFrom)));
+        final long segTo = Math.min(maxSegmentId, segmentId(Math.min(maxSegmentId * segmentInterval, Math.max(0, timeTo))));
 
         final List<Segment> segments = new ArrayList<>();
         for (long segmentId = segFrom; segmentId <= segTo; segmentId++) {
@@ -154,9 +158,9 @@ class Segments {
     }
 
     private void cleanup(final long segmentId) {
-        final long oldestSegmentId = currentSegmentId < segmentId
+        final long oldestSegmentId = maxSegmentId < segmentId
                 ? segmentId - numSegments
-                : currentSegmentId - numSegments;
+                : maxSegmentId - numSegments;
 
         for (Map.Entry<Long, Segment> segmentEntry : segments.entrySet()) {
             final Segment segment = segmentEntry.getValue();
@@ -165,6 +169,9 @@ class Segments {
                 segment.close();
                 segment.destroy();
             }
+        }
+        if (oldestSegmentId > minSegmentId) {
+            minSegmentId = oldestSegmentId + 1;
         }
     }
 

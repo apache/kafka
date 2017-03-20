@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -112,13 +112,19 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         }
     }
 
-
-    public static long extractEnd(final byte [] binaryKey) {
+    public static long extractEnd(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
     }
 
-    public static long extractStart(final byte [] binaryKey) {
+    public static long extractStart(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE);
+    }
+
+    public static Window extractWindow(final byte[] binaryKey) {
+        final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
+        final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
+        final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
+        return new SessionWindow(start, end);
     }
 
     public static byte[] extractKeyBytes(final byte[] binaryKey) {
@@ -129,10 +135,16 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
 
     public static <K> Windowed<K> from(final byte[] binaryKey, final Deserializer<K> keyDeserializer) {
         final K key = extractKey(binaryKey, keyDeserializer);
+        final Window window = extractWindow(binaryKey);
+        return new Windowed<>(key, window);
+    }
+
+    public static Windowed<Bytes> fromBytes(Bytes bytesKey) {
+        final byte[] binaryKey = bytesKey.get();
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
-        return new Windowed<>(key, new SessionWindow(start, end));
+        return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), new SessionWindow(start, end));
     }
 
     private static <K> K extractKey(final byte[] binaryKey, Deserializer<K> deserializer) {
@@ -155,12 +167,5 @@ public class SessionKeySerde<K> implements Serde<Windowed<K>> {
         buf.putLong(sessionKey.window().end());
         buf.putLong(sessionKey.window().start());
         return new Bytes(buf.array());
-    }
-
-    public static Window extractWindow(final byte [] binaryKey) {
-        final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
-        final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
-        final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
-        return new TimeWindow(start, end);
     }
 }

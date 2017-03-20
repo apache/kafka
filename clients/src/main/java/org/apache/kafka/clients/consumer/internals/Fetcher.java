@@ -1,16 +1,19 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
@@ -177,6 +180,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             final FetchRequest.Builder request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
+            log.debug("Sending fetch for partitions {} to broker {}", request.fetchData().keySet(), fetchTarget);
             client.send(fetchTarget, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
@@ -199,16 +203,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                                 long fetchOffset = request.fetchData().get(partition).offset;
                                 FetchResponse.PartitionData fetchData = entry.getValue();
                                 completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                        request.version()));
+                                        resp.requestHeader().apiVersion()));
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
-                            sensors.fetchThrottleTimeSensor.record(response.getThrottleTime());
+                            sensors.fetchThrottleTimeSensor.record(response.throttleTimeMs());
                         }
 
                         @Override
                         public void onFailure(RuntimeException e) {
-                            log.debug("Fetch request to {} failed", fetchTarget, e);
+                            log.debug("Fetch request to {} for partitions {} failed", fetchTarget, request.fetchData().keySet(), e);
                         }
                     });
         }
@@ -602,13 +606,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      * @return A response which can be polled to obtain the corresponding timestamps and offsets.
      */
     private RequestFuture<Map<TopicPartition, OffsetData>> sendListOffsetRequest(final Node node,
-                                                                                         final Map<TopicPartition, Long> timestampsToSearch,
-                                                                                         boolean requireTimestamp) {
-        ListOffsetRequest.Builder builder = new ListOffsetRequest.Builder().setTargetTimes(timestampsToSearch);
-
-        // If we need a timestamp in the response, the minimum RPC version we can send is v1.
-        // Otherwise, v0 is OK.
-        builder.setMinVersion(requireTimestamp ? (short) 1 : (short) 0);
+                                                                                 final Map<TopicPartition, Long> timestampsToSearch,
+                                                                                 boolean requireTimestamp) {
+        ListOffsetRequest.Builder builder = ListOffsetRequest.Builder.forConsumer(requireTimestamp)
+                .setTargetTimes(timestampsToSearch);
 
         log.trace("Sending ListOffsetRequest {} to broker {}", builder, node);
         return client.send(node, builder)
@@ -636,7 +637,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = listOffsetResponse.responseData().get(topicPartition);
-            Errors error = Errors.forCode(partitionData.errorCode);
+            Errors error = partitionData.error;
             if (error == Errors.NONE) {
                 if (partitionData.offsets != null) {
                     // Handle v0 response
@@ -712,7 +713,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
-            } else if (this.client.pendingRequestCount(node) == 0) {
+            } else if (!this.client.hasPendingRequests(node)) {
                 // if there is a leader and no in-flight requests, issue a new fetch
                 LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node);
                 if (fetch == null) {
@@ -722,7 +723,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 long position = this.subscriptions.position(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(position, this.fetchSize));
-                log.trace("Added fetch request for partition {} at offset {}", partition, position);
+                log.trace("Added fetch request for partition {} at offset {} to node {}", partition, position, node);
             } else {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             }
@@ -732,7 +733,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         Map<Node, FetchRequest.Builder> requests = new HashMap<>();
         for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest.Builder fetch = new FetchRequest.Builder(this.maxWaitMs, this.minBytes, entry.getValue()).
+            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes, entry.getValue()).
                     setMaxBytes(this.maxBytes);
             requests.put(node, fetch);
         }
@@ -749,7 +750,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         int bytes = 0;
         int recordsCount = 0;
         PartitionRecords<K, V> parsedRecords = null;
-        Errors error = Errors.forCode(partition.errorCode);
+        Errors error = partition.error;
 
         try {
             if (!subscriptions.isFetchable(tp)) {

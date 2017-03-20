@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -24,6 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -35,6 +35,7 @@ import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 import org.rocksdb.FlushOptions;
+import org.rocksdb.InfoLogLevel;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -43,6 +44,8 @@ import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -69,8 +72,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     // TODO: these values should be configurable
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
-    private static final long WRITE_BUFFER_SIZE = 32 * 1024 * 1024L;
-    private static final long BLOCK_CACHE_SIZE = 100 * 1024 * 1024L;
+    private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
+    private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
     private static final int TTL_SECONDS = TTL_NOT_USED;
     private static final int MAX_WRITE_BUFFERS = 3;
@@ -120,6 +123,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         options.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
         options.setCreateIfMissing(true);
         options.setErrorIfExists(false);
+        options.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+        // this is the recommended way to increase parallelism in RocksDb
+        // note that the current implementation increases the number of compaction threads
+        // but not flush threads.
+        options.setIncreaseParallelism(Runtime.getRuntime().availableProcessors());
 
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
@@ -140,7 +148,11 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
-        this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
+        try {
+            this.db = openDB(this.dbDir, this.options, TTL_SECONDS);
+        } catch (IOException e) {
+            throw new StreamsException(e);
+        }
     }
 
     public void init(ProcessorContext context, StateStore root) {
@@ -150,19 +162,19 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
         context.register(root, false, new StateRestoreCallback() {
-
             @Override
             public void restore(byte[] key, byte[] value) {
                 putInternal(key, value);
             }
         });
+
         open = true;
     }
 
-    private RocksDB openDB(File dir, Options options, int ttl) {
+    private RocksDB openDB(File dir, Options options, int ttl) throws IOException {
         try {
             if (ttl == TTL_NOT_USED) {
-                dir.getParentFile().mkdirs();
+                Files.createDirectories(dir.getParentFile().toPath());
                 return RocksDB.open(options, dir.getAbsolutePath());
             } else {
                 throw new UnsupportedOperationException("Change log is not supported for store " + this.name + " since it is TTL based.");
@@ -281,7 +293,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     public synchronized KeyValueIterator<K, V> range(K from, K to) {
         validateStoreOpen();
         // query rocksdb
-        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(db.newIterator(), serdes, from, to);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), serdes, from, to);
         openIterators.add(rocksDBRangeIterator);
         return rocksDBRangeIterator;
     }
@@ -292,7 +304,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // query rocksdb
         RocksIterator innerIter = db.newIterator();
         innerIter.seekToFirst();
-        final RocksDbIterator rocksDbIterator = new RocksDbIterator(innerIter, serdes);
+        final RocksDbIterator rocksDbIterator = new RocksDbIterator(name, innerIter, serdes);
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
@@ -310,6 +322,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
      */
     @Override
     public long approximateNumEntries() {
+        validateStoreOpen();
         long value;
         try {
             value = this.db.getLongProperty("rocksdb.estimate-num-keys");
@@ -373,15 +386,17 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         openIterators.clear();
     }
 
-
-    class RocksDbIterator implements KeyValueIterator<K, V> {
+    private class RocksDbIterator implements KeyValueIterator<K, V> {
+        private final String storeName;
         private final RocksIterator iter;
         private final StateSerdes<K, V> serdes;
-        private boolean open = true;
 
-        RocksDbIterator(RocksIterator iter, StateSerdes<K, V> serdes) {
+        private volatile boolean open = true;
+
+        RocksDbIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes) {
             this.iter = iter;
             this.serdes = serdes;
+            this.storeName = storeName;
         }
 
         byte[] peekRawKey() {
@@ -395,8 +410,9 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
-                throw new InvalidStateStoreException("store %s has closed");
+                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
             }
+
             return iter.isValid();
         }
 
@@ -413,19 +429,16 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
             return entry;
         }
 
-        /**
-         * @throws UnsupportedOperationException
-         */
         @Override
         public void remove() {
-            throw new UnsupportedOperationException("RocksDB iterator does not support remove");
+            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
         }
 
         @Override
         public synchronized void close() {
-            open = false;
             openIterators.remove(this);
             iter.close();
+            open = false;
         }
 
         @Override
@@ -434,9 +447,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
                 throw new NoSuchElementException();
             }
             return serdes.keyFrom(iter.key());
-
         }
-
     }
 
     private class RocksDBRangeIterator extends RocksDbIterator {
@@ -446,8 +457,8 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
         private byte[] rawToKey;
 
-        RocksDBRangeIterator(RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
-            super(iter, serdes);
+        RocksDBRangeIterator(String storeName, RocksIterator iter, StateSerdes<K, V> serdes, K from, K to) {
+            super(storeName, iter, serdes);
             iter.seek(serdes.rawKey(from));
             this.rawToKey = serdes.rawKey(to);
         }

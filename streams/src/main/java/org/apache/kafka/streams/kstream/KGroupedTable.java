@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -73,9 +72,12 @@ public interface KGroupedTable<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics,
+     * '.', '_' and '-'.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
-     * @param storeName the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII
+     *                      alphanumerics, '.', '_' and '-'
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
@@ -177,11 +179,14 @@ public interface KGroupedTable<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics,
+     * '.', '_' and '-'.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param adder      a {@link Reducer} that adds a new value to the aggregate result
      * @param subtractor a {@link Reducer} that removed an old value from the aggregate result
-     * @param storeName  the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics,
+     *                      '.', '_' and '-'
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
@@ -405,6 +410,8 @@ public interface KGroupedTable<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
      * provide {@code storeName}, and "-changelog" is a fixed suffix.
+     * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics,
+     * '.', '_' and '-'.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param initializer   a {@link Initializer} that provides an initial aggregate result value
@@ -412,7 +419,8 @@ public interface KGroupedTable<K, V> {
      * @param subtractor    a {@link Aggregator} that removed an old record from the aggregate result
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
-     * @param storeName     the name of the underlying {@link KTable} state store
+     * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII
+     *                      alphanumerics, '.', '_' and '-'
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key

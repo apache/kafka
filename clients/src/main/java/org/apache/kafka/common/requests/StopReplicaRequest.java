@@ -1,22 +1,24 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -52,9 +54,9 @@ public class StopReplicaRequest extends AbstractRequest {
         }
 
         @Override
-        public StopReplicaRequest build() {
+        public StopReplicaRequest build(short version) {
             return new StopReplicaRequest(controllerId, controllerEpoch,
-                    deletePartitions, partitions, version());
+                    deletePartitions, partitions, version);
         }
 
         @Override
@@ -77,30 +79,15 @@ public class StopReplicaRequest extends AbstractRequest {
 
     private StopReplicaRequest(int controllerId, int controllerEpoch, boolean deletePartitions,
                                Set<TopicPartition> partitions, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.STOP_REPLICA.id, version)), version);
-
-        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
-        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
-
-        List<Struct> partitionDatas = new ArrayList<>(partitions.size());
-        for (TopicPartition partition : partitions) {
-            Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
-            partitionData.set(TOPIC_KEY_NAME, partition.topic());
-            partitionData.set(PARTITION_KEY_NAME, partition.partition());
-            partitionDatas.add(partitionData);
-        }
-
-        struct.set(PARTITIONS_KEY_NAME, partitionDatas.toArray());
-
+        super(version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.deletePartitions = deletePartitions;
         this.partitions = partitions;
     }
 
-    public StopReplicaRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public StopReplicaRequest(Struct struct, short version) {
+        super(version);
 
         partitions = new HashSet<>();
         for (Object partitionDataObj : struct.getArray(PARTITIONS_KEY_NAME)) {
@@ -117,18 +104,18 @@ public class StopReplicaRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(Throwable e) {
-        Map<TopicPartition, Short> responses = new HashMap<>(partitions.size());
+        Map<TopicPartition, Errors> responses = new HashMap<>(partitions.size());
         for (TopicPartition partition : partitions) {
-            responses.put(partition, Errors.forException(e).code());
+            responses.put(partition, Errors.forException(e));
         }
 
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new StopReplicaResponse(Errors.NONE.code(), responses);
+                return new StopReplicaResponse(Errors.NONE, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.STOP_REPLICA.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.STOP_REPLICA.latestVersion()));
         }
     }
 
@@ -148,12 +135,27 @@ public class StopReplicaRequest extends AbstractRequest {
         return partitions;
     }
 
-    public static StopReplicaRequest parse(ByteBuffer buffer, int versionId) {
-        return new StopReplicaRequest(ProtoUtils.parseRequest(ApiKeys.STOP_REPLICA.id, versionId, buffer),
-                (short) versionId);
+    public static StopReplicaRequest parse(ByteBuffer buffer, short version) {
+        return new StopReplicaRequest(ApiKeys.STOP_REPLICA.parseRequest(version, buffer), version);
     }
 
-    public static StopReplicaRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.STOP_REPLICA.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ApiKeys.STOP_REPLICA.requestSchema(version()));
+
+        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
+        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
+        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
+
+        List<Struct> partitionDatas = new ArrayList<>(partitions.size());
+        for (TopicPartition partition : partitions) {
+            Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
+            partitionData.set(TOPIC_KEY_NAME, partition.topic());
+            partitionData.set(PARTITION_KEY_NAME, partition.partition());
+            partitionDatas.add(partitionData);
+        }
+
+        struct.set(PARTITIONS_KEY_NAME, partitionDatas.toArray());
+        return struct;
     }
 }

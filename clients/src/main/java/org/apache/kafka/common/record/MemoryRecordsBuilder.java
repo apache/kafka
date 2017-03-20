@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,16 +17,11 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.lang.reflect.Constructor;
 import java.nio.ByteBuffer;
-import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 
 /**
  * This class is used to write new log data in memory, i.e. this is the write path for {@link MemoryRecords}.
@@ -34,10 +29,9 @@ import java.util.zip.GZIPOutputStream;
  * format conversion.
  */
 public class MemoryRecordsBuilder {
-
-    static private final float COMPRESSION_RATE_DAMPING_FACTOR = 0.9f;
-    static private final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
-    static private final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
+    private static final float COMPRESSION_RATE_DAMPING_FACTOR = 0.9f;
+    private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
+    private static final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
 
     private static final float[] TYPE_TO_RATE;
 
@@ -50,40 +44,6 @@ public class MemoryRecordsBuilder {
             TYPE_TO_RATE[type.id] = type.rate;
         }
     }
-
-    // dynamically load the snappy and lz4 classes to avoid runtime dependency if we are not using compression
-    // caching constructors to avoid invoking of Class.forName method for each batch
-    private static MemoizingConstructorSupplier snappyOutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.xerial.snappy.SnappyOutputStream")
-                .getConstructor(OutputStream.class, Integer.TYPE);
-        }
-    });
-
-    private static MemoizingConstructorSupplier lz4OutputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream")
-                .getConstructor(OutputStream.class, Boolean.TYPE);
-        }
-    });
-
-    private static MemoizingConstructorSupplier snappyInputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.xerial.snappy.SnappyInputStream")
-                .getConstructor(InputStream.class);
-        }
-    });
-
-    private static MemoizingConstructorSupplier lz4InputStreamSupplier = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
-                .getConstructor(InputStream.class, Boolean.TYPE);
-        }
-    });
 
     private final TimestampType timestampType;
     private final CompressionType compressionType;
@@ -105,6 +65,20 @@ public class MemoryRecordsBuilder {
 
     private MemoryRecords builtRecords;
 
+    /**
+     * Construct a new builder.
+     *
+     * @param buffer The underlying buffer to use (note that this class will allocate a new buffer if necessary
+     *               to fit the records appended)
+     * @param magic The magic value to use
+     * @param compressionType The compression codec to use
+     * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
+     * @param baseOffset The initial offset to use for
+     * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
+     * @param writeLimit The desired limit on the total bytes for this record set (note that this can be exceeded
+     *                   when compression is used since size estimates are rough, and in the case that the first
+     *                   record added exceeds the size).
+     */
     public MemoryRecordsBuilder(ByteBuffer buffer,
                                 byte magic,
                                 CompressionType compressionType,
@@ -112,6 +86,9 @@ public class MemoryRecordsBuilder {
                                 long baseOffset,
                                 long logAppendTime,
                                 int writeLimit) {
+        if (magic > Record.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
+            throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
+
         this.magic = magic;
         this.timestampType = timestampType;
         this.compressionType = compressionType;
@@ -129,7 +106,8 @@ public class MemoryRecordsBuilder {
 
         // create the stream
         bufferStream = new ByteBufferOutputStream(buffer);
-        appendStream = wrapForOutput(bufferStream, compressionType, magic, COMPRESSION_DEFAULT_BUFFER_SIZE);
+        appendStream = new DataOutputStream(compressionType.wrapForOutput(bufferStream, magic,
+                COMPRESSION_DEFAULT_BUFFER_SIZE));
     }
 
     public ByteBuffer buffer() {
@@ -177,13 +155,18 @@ public class MemoryRecordsBuilder {
             throw new KafkaException(e);
         }
 
-        if (compressionType != CompressionType.NONE)
-            writerCompressedWrapperHeader();
+        if (numRecords == 0L) {
+            buffer().position(initPos);
+            builtRecords = MemoryRecords.EMPTY;
+        } else {
+            if (compressionType != CompressionType.NONE)
+                writerCompressedWrapperHeader();
 
-        ByteBuffer buffer = buffer().duplicate();
-        buffer.flip();
-        buffer.position(initPos);
-        builtRecords = MemoryRecords.readableRecords(buffer.slice());
+            ByteBuffer buffer = buffer().duplicate();
+            buffer.flip();
+            buffer.position(initPos);
+            builtRecords = MemoryRecords.readableRecords(buffer.slice());
+        }
     }
 
     private void writerCompressedWrapperHeader() {
@@ -373,98 +356,13 @@ public class MemoryRecordsBuilder {
     }
 
     public boolean isFull() {
-        return isClosed() || this.writeLimit <= estimatedBytesWritten();
+        // note that the write limit is respected only after the first record is added which ensures we can always
+        // create non-empty batches (this is used to disable batching when the producer's batch size is set to 0).
+        return isClosed() || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
     public int sizeInBytes() {
         return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
-    }
-
-    private static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, byte messageVersion, int bufferSize) {
-        try {
-            switch (type) {
-                case NONE:
-                    return buffer;
-                case GZIP:
-                    return new DataOutputStream(new GZIPOutputStream(buffer, bufferSize));
-                case SNAPPY:
-                    try {
-                        OutputStream stream = (OutputStream) snappyOutputStreamSupplier.get().newInstance(buffer, bufferSize);
-                        return new DataOutputStream(stream);
-                    } catch (Exception e) {
-                        throw new KafkaException(e);
-                    }
-                case LZ4:
-                    try {
-                        OutputStream stream = (OutputStream) lz4OutputStreamSupplier.get().newInstance(buffer,
-                                messageVersion == Record.MAGIC_VALUE_V0);
-                        return new DataOutputStream(stream);
-                    } catch (Exception e) {
-                        throw new KafkaException(e);
-                    }
-                default:
-                    throw new IllegalArgumentException("Unknown compression type: " + type);
-            }
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
-    }
-
-    public static DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type, byte messageVersion) {
-        try {
-            switch (type) {
-                case NONE:
-                    return buffer;
-                case GZIP:
-                    return new DataInputStream(new GZIPInputStream(buffer));
-                case SNAPPY:
-                    try {
-                        InputStream stream = (InputStream) snappyInputStreamSupplier.get().newInstance(buffer);
-                        return new DataInputStream(stream);
-                    } catch (Exception e) {
-                        throw new KafkaException(e);
-                    }
-                case LZ4:
-                    try {
-                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(buffer,
-                                messageVersion == Record.MAGIC_VALUE_V0);
-                        return new DataInputStream(stream);
-                    } catch (Exception e) {
-                        throw new KafkaException(e);
-                    }
-                default:
-                    throw new IllegalArgumentException("Unknown compression type: " + type);
-            }
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
-    }
-
-    private interface ConstructorSupplier {
-        Constructor get() throws ClassNotFoundException, NoSuchMethodException;
-    }
-
-    // this code is based on Guava's @see{com.google.common.base.Suppliers.MemoizingSupplier}
-    private static class MemoizingConstructorSupplier {
-        final ConstructorSupplier delegate;
-        transient volatile boolean initialized;
-        transient Constructor value;
-
-        public MemoizingConstructorSupplier(ConstructorSupplier delegate) {
-            this.delegate = delegate;
-        }
-
-        public Constructor get() throws NoSuchMethodException, ClassNotFoundException {
-            if (!initialized) {
-                synchronized (this) {
-                    if (!initialized) {
-                        value = delegate.get();
-                        initialized = true;
-                    }
-                }
-            }
-            return value;
-        }
     }
 
     public static class RecordsInfo {

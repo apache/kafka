@@ -153,7 +153,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   @Test
   def testDeleteRecursive() {
     info(s"zkConnect string: $zkConnect")
-    for (path <- zkUtils.securePersistentZkPaths) {
+    for (path <- ZkUtils.SecureZkRootPaths) {
       info(s"Creating $path")
       zkUtils.makeSurePersistentPathExists(path)
       zkUtils.createPersistentPath(s"$path/fpjwashere", "")
@@ -185,7 +185,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   private def testMigration(zkUrl: String, firstZk: ZkUtils, secondZk: ZkUtils) {
     info(s"zkConnect string: $zkUrl")
-    for (path <- firstZk.securePersistentZkPaths) {
+    for (path <- ZkUtils.SecureZkRootPaths) {
       info(s"Creating $path")
       firstZk.makeSurePersistentPathExists(path)
       // Create a child for each znode to exercise the recurrent
@@ -206,7 +206,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
       }
     ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
     info("Done with migration")
-    for (path <- secondZk.securePersistentZkPaths) {
+    for (path <- ZkUtils.SecureZkRootPaths) {
       val listParent = secondZk.zkConnection.getAcl(path).getKey
       assertTrue(path, isAclCorrect(listParent, secondZk.isSecure))
 

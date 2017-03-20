@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -32,7 +32,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private ProcessorContext context;
     private volatile boolean open;
 
-
     RocksDBSegmentedBytesStore(final String name,
                                final long retention,
                                final int numSegments,
@@ -42,19 +41,16 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         this.segments = new Segments(name, retention, numSegments);
     }
 
-
     @Override
-    @SuppressWarnings("unchecked")
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
         final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
 
         final Bytes binaryFrom = keySchema.lowerRange(key, from);
         final Bytes binaryTo = keySchema.upperRange(key, to);
 
-        return new SegmentIterator(
-                searchSpace.iterator(),
-                keySchema.hasNextCondition(key, from, to),
-                binaryFrom, binaryTo);
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(key, from, to),
+                                   binaryFrom, binaryTo);
     }
 
     @Override
@@ -75,7 +71,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         }
     }
 
-
     @Override
     public byte[] get(final Bytes key) {
         final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
@@ -91,7 +86,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
         this.context = context;
 
@@ -129,6 +123,4 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     public boolean isOpen() {
         return open;
     }
-
-
 }

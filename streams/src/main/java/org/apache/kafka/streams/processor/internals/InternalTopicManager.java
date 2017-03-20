@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -58,9 +57,10 @@ public class InternalTopicManager {
     public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
         for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
             try {
-                final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic();
+                final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
+                final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention);
+                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
                 log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
@@ -73,7 +73,8 @@ public class InternalTopicManager {
      * Get the number of partitions for the given topics
      */
     public Map<String, Integer> getNumPartitions(final Set<String> topics) {
-        final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic();
+        final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
+        final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
         existingTopicPartitions.keySet().retainAll(topics);
 
         return existingTopicPartitions;
@@ -93,26 +94,27 @@ public class InternalTopicManager {
     private Map<InternalTopicConfig, Integer> validateTopicPartitions(final Map<InternalTopicConfig, Integer> topicsPartitionsMap,
                                                                       final Map<String, Integer> existingTopicNamesPartitions) {
         final Map<InternalTopicConfig, Integer> topicsToBeCreated = new HashMap<>();
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsPartitionsMap.entrySet()) {
+            InternalTopicConfig topic = entry.getKey();
+            Integer partition = entry.getValue();
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
-                if (!existingTopicNamesPartitions.get(topic.name()).equals(topicsPartitionsMap.get(topic))) {
+                if (!existingTopicNamesPartitions.get(topic.name()).equals(partition)) {
                     throw new StreamsException("Existing internal topic " + topic.name() + " has invalid partitions." +
-                            " Expected: " + topicsPartitionsMap.get(topic) + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
+                            " Expected: " + partition + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
                             ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             } else {
-                topicsToBeCreated.put(topic, topicsPartitionsMap.get(topic));
+                topicsToBeCreated.put(topic, partition);
             }
         }
 
         return topicsToBeCreated;
     }
 
-    private Map<String, Integer> fetchExistingPartitionCountByTopic() {
+    private Map<String, Integer> fetchExistingPartitionCountByTopic(final MetadataResponse metadata) {
         // The names of existing topics and corresponding partition counts
         final Map<String, Integer> existingPartitionCountByTopic = new HashMap<>();
-
-        Collection<MetadataResponse.TopicMetadata> topicsMetadata = streamsKafkaClient.fetchTopicsMetadata();
+        final Collection<MetadataResponse.TopicMetadata> topicsMetadata = metadata.topicMetadata();
 
         for (MetadataResponse.TopicMetadata topicMetadata: topicsMetadata) {
             existingPartitionCountByTopic.put(topicMetadata.topic(), topicMetadata.partitionMetadata().size());

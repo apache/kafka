@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.serialization.Deserializer;
@@ -238,7 +237,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Create a {@link KTable} for the specified topic.
      * The default {@code "auto.offset.reset"} strategy and default key and value deserializers as specified in the
      * {@link StreamsConfig config} are used.
-     * Input {@link KeyValue} pairs with {@code null} key will be dropped.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
@@ -271,7 +270,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link KTable} for the specified topic.
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
-     * Input {@link KeyValue} pairs with {@code null} key will be dropped.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
@@ -307,7 +306,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link KTable} for the specified topic.
      * The default {@code "auto.offset.reset"} strategy as specified in the {@link StreamsConfig config} is used.
-     * Input {@link KeyValue} pairs with {@code null} key will be dropped.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
@@ -345,7 +344,7 @@ public class KStreamBuilder extends TopologyBuilder {
 
     /**
      * Create a {@link KTable} for the specified topic.
-     * Input {@link KeyValue} pairs with {@code null} key will be dropped.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
@@ -409,7 +408,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link GlobalKTable} for the specified topic.
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
-     * Input {@link KeyValue} pairs cannot have a {@code null} key (otherwise an exception will be thrown).
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
      * {@code storeName}.
@@ -439,7 +438,7 @@ public class KStreamBuilder extends TopologyBuilder {
     /**
      * Create a {@link GlobalKTable} for the specified topic.
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
-     * Input {@link KeyValue} pairs cannot have a {@code null} key (otherwise an exception will be thrown).
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
      * {@code storeName}.

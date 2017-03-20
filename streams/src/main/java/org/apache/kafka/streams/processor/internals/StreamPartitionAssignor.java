@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -33,8 +32,8 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.ClientState;
+import org.apache.kafka.streams.processor.internals.assignment.StickyTaskAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
-import org.apache.kafka.streams.processor.internals.assignment.TaskAssignor;
 import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -80,7 +79,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private static class ClientMetadata {
         final HostInfo hostInfo;
         final Set<String> consumers;
-        final ClientState<TaskId> state;
+        final ClientState state;
 
         ClientMetadata(final String endPoint) {
 
@@ -101,17 +100,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             consumers = new HashSet<>();
 
             // initialize the client state
-            state = new ClientState<>();
+            state = new ClientState();
         }
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
-
             consumers.add(consumerMemberId);
-
-            state.prevActiveTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.prevTasks);
-            state.prevAssignedTasks.addAll(info.standbyTasks);
-            state.capacity = state.capacity + 1d;
+            state.addPreviousActiveTasks(info.prevTasks);
+            state.addPreviousStandbyTasks(info.standbyTasks);
+            state.incrementCapacity();
         }
 
         @Override
@@ -228,10 +224,10 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // 2. Task ids of previously running tasks
         // 3. Task ids of valid local states on the client's state directory.
 
-        Set<TaskId> prevTasks = streamThread.prevTasks();
+        final Set<TaskId> previousActiveTasks = streamThread.prevActiveTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
-        standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPoint);
+        standbyTasks.removeAll(previousActiveTasks);
+        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, previousActiveTasks, standbyTasks, this.userEndPoint);
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
@@ -410,7 +406,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         }
         for (String topic : allSourceTopics) {
             List<PartitionInfo> partitionInfoList = metadataWithInternalTopics.partitionsForTopic(topic);
-            if (partitionInfoList != null) {
+            if (!partitionInfoList.isEmpty()) {
                 for (PartitionInfo partitionInfo : partitionInfoList) {
                     TopicPartition partition = new TopicPartition(partitionInfo.topic(), partitionInfo.partition());
                     if (!allAssignedPartitions.contains(partition)) {
@@ -453,7 +449,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // ---------------- Step Two ---------------- //
 
         // assign tasks to clients
-        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
+        Map<UUID, ClientState> states = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             states.put(entry.getKey(), entry.getValue().state);
         }
@@ -461,7 +457,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         log.debug("stream-thread [{}] Assigning tasks {} to clients {} with number of replicas {}",
                 streamThread.getName(), partitionsForTask.keySet(), states, numStandbyReplicas);
 
-        TaskAssignor.assign(states, partitionsForTask.keySet(), numStandbyReplicas);
+        final StickyTaskAssignor<UUID> taskAssignor = new StickyTaskAssignor<>(states, partitionsForTask.keySet());
+        taskAssignor.assign(numStandbyReplicas);
 
         log.info("stream-thread [{}] Assigned tasks to clients as {}.", streamThread.getName(), states);
 
@@ -474,9 +471,9 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             if (hostInfo != null) {
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
-                final ClientState<TaskId> state = entry.getValue().state;
+                final ClientState state = entry.getValue().state;
 
-                for (TaskId id : state.activeTasks) {
+                for (final TaskId id : state.activeTasks()) {
                     topicPartitions.addAll(partitionsForTask.get(id));
                 }
 
@@ -487,14 +484,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // within the client, distribute tasks to its owned consumers
         Map<String, Assignment> assignment = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
-            Set<String> consumers = entry.getValue().consumers;
-            ClientState<TaskId> state = entry.getValue().state;
+            final Set<String> consumers = entry.getValue().consumers;
+            final ClientState state = entry.getValue().state;
 
-            ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTasks.size());
-            final int numActiveTasks = state.activeTasks.size();
+            final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
+            final int numActiveTasks = state.activeTaskCount();
 
-            taskIds.addAll(state.activeTasks);
-            taskIds.addAll(state.standbyTasks);
+            taskIds.addAll(state.activeTasks());
+            taskIds.addAll(state.standbyTasks());
 
             final int numConsumers = consumers.size();
 

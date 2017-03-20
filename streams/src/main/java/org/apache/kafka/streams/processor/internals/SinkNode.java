@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serializer;
@@ -78,14 +77,16 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         try {
             collector.send(topic, key, value, null, timestamp, keySerializer, valSerializer, partitioner);
         } catch (ClassCastException e) {
+            final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
             throw new StreamsException(
                     String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
                                     "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
                                     "provide correct Serdes via method parameters.",
                                     keySerializer.getClass().getName(),
                                     valSerializer.getClass().getName(),
-                                    key.getClass().getName(),
-                                    value.getClass().getName()),
+                                    keyClass,
+                                    valueClass),
                     e);
         }
     }

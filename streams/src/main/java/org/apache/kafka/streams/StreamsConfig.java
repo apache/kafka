@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -129,7 +128,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code state.cleanup.delay} */
     public static final String STATE_CLEANUP_DELAY_MS_CONFIG = "state.cleanup.delay.ms";
-    private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated.";
+    private static final String STATE_CLEANUP_DELAY_MS_DOC = "The amount of time in milliseconds to wait before deleting state when a partition has migrated. Only state directories that have not been modified for at least state.cleanup.delay.ms will be removed";
 
     /** {@code timestamp.extractor} */
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
@@ -291,7 +290,7 @@ public class StreamsConfig extends AbstractConfig {
                     BUFFERED_RECORDS_PER_PARTITION_DOC)
             .define(STATE_CLEANUP_DELAY_MS_CONFIG,
                     Type.LONG,
-                    60000,
+                    10 * 60 * 1000,
                     Importance.LOW,
                     STATE_CLEANUP_DELAY_MS_DOC)
             .define(METRIC_REPORTER_CLASSES_CONFIG,
@@ -389,8 +388,7 @@ public class StreamsConfig extends AbstractConfig {
     // this is the list of configs for underlying clients
     // that streams prefer different default values
     private static final Map<String, Object> PRODUCER_DEFAULT_OVERRIDES;
-    static
-    {
+    static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
 
@@ -398,8 +396,7 @@ public class StreamsConfig extends AbstractConfig {
     }
 
     private static final Map<String, Object> CONSUMER_DEFAULT_OVERRIDES;
-    static
-    {
+    static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>();
         tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

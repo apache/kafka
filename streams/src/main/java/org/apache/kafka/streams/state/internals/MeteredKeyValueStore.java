@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
@@ -29,16 +28,16 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.List;
 
 /**
- * Metered KeyValueStore wrapper is used for recording operation metrics, and hence its
+ * Metered {@link KeyValueStore} wrapper is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
  *
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappedStateStore implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
-    protected final KeyValueStore<K, V> inner;
-    protected final String metricScope;
+    private final KeyValueStore<K, V> inner;
+    private final String metricScope;
     protected final Time time;
 
     private Sensor putTime;
@@ -132,6 +131,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappe
     }
 
     @Override
+    public long approximateNumEntries() {
+        return inner.approximateNumEntries();
+    }
+
+    @Override
     public V get(K key) {
         this.key = key;
         metrics.measureLatencyNs(time, getDelegate, this.getTime);
@@ -177,11 +181,6 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappe
     }
 
     @Override
-    public long approximateNumEntries() {
-        return this.inner.approximateNumEntries();
-    }
-
-    @Override
     public void flush() {
         metrics.measureLatencyNs(time, flushDelegate, this.flushTime);
     }
@@ -192,7 +191,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractWrappe
         private final Sensor sensor;
         private final long startNs;
 
-        public MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
+        MeteredKeyValueIterator(KeyValueIterator<K1, V1> iter, Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
             this.startNs = time.nanoseconds();

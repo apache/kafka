@@ -18,7 +18,7 @@
 package kafka
 
 import org.apache.log4j.PropertyConfigurator
-import kafka.utils.Logging
+import kafka.utils.{Exit, Logging}
 import serializer.Encoder
 
 object TestKafkaAppender extends Logging {
@@ -27,7 +27,7 @@ object TestKafkaAppender extends Logging {
     
     if(args.length < 1) {
       println("USAGE: " + TestKafkaAppender.getClass.getName + " log4j_config")
-      System.exit(1)
+      Exit.exit(1)
     }
 
     try {
@@ -36,7 +36,7 @@ object TestKafkaAppender extends Logging {
       case e: Exception =>
         System.err.println("KafkaAppender could not be initialized ! Exiting..")
         e.printStackTrace()
-        System.exit(1)
+        Exit.exit(1)
     }
 
     for (_ <- 1 to 10)

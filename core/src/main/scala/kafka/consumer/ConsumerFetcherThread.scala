@@ -26,6 +26,7 @@ import kafka.common.{ErrorMapping, TopicAndPartition}
 import scala.collection.Map
 import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 
 class ConsumerFetcherThread(name: String,
@@ -124,11 +125,11 @@ object ConsumerFetcherThread {
   }
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {
-    def errorCode: Short = underlying.error
+    def error = underlying.error
     def toRecords: MemoryRecords = underlying.messages.asInstanceOf[ByteBufferMessageSet].asRecords
     def highWatermark: Long = underlying.hw
     def exception: Option[Throwable] =
-      if (errorCode == ErrorMapping.NoError) None else Some(ErrorMapping.exceptionFor(errorCode))
+      if (error == Errors.NONE) None else Some(ErrorMapping.exceptionFor(error.code))
 
   }
 }

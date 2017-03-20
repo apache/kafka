@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -20,7 +20,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -60,16 +59,23 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
         private final int replicaId;
+        private final short minVersion;
         private Map<TopicPartition, PartitionData> offsetData = null;
         private Map<TopicPartition, Long> partitionTimestamps = null;
-        private short minVersion = (short) 0;
 
-        public Builder() {
-            this(CONSUMER_REPLICA_ID);
+        public static Builder forReplica(short desiredVersion, int replicaId) {
+            return new Builder((short) 0, desiredVersion, replicaId);
         }
 
-        public Builder(int replicaId) {
-            super(ApiKeys.LIST_OFFSETS);
+        public static Builder forConsumer(boolean requireTimestamp) {
+            // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
+            short minVersion = requireTimestamp ? (short) 1 : (short) 0;
+            return new Builder(minVersion, null, CONSUMER_REPLICA_ID);
+        }
+
+        private Builder(short minVersion, Short desiredVersion, int replicaId) {
+            super(ApiKeys.LIST_OFFSETS, desiredVersion);
+            this.minVersion = minVersion;
             this.replicaId = replicaId;
         }
 
@@ -84,8 +90,7 @@ public class ListOffsetRequest extends AbstractRequest {
         }
 
         @Override
-        public ListOffsetRequest build() {
-            short version = version();
+        public ListOffsetRequest build(short version) {
             if (version < minVersion) {
                 throw new UnsupportedVersionException("Cannot create a v" + version + " ListOffsetRequest because " +
                     "we require features supported only in " + minVersion + " or later.");
@@ -115,14 +120,6 @@ public class ListOffsetRequest extends AbstractRequest {
             }
             Map<TopicPartition, ?> m = (version == 0) ?  offsetData : partitionTimestamps;
             return new ListOffsetRequest(replicaId, m, version);
-        }
-
-        /**
-         * Set the minimum version which we will produce for this request.
-         */
-        public Builder setMinVersion(short minVersion) {
-            this.minVersion = minVersion;
-            return this;
         }
 
         @Override
@@ -170,44 +167,15 @@ public class ListOffsetRequest extends AbstractRequest {
      */
     @SuppressWarnings("unchecked")
     private ListOffsetRequest(int replicaId, Map<TopicPartition, ?> targetTimes, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.LIST_OFFSETS.id, version)), version);
-        Map<String, Map<Integer, Object>> topicsData =
-                CollectionUtils.groupDataByTopic((Map<TopicPartition, Object>) targetTimes);
-
-        struct.set(REPLICA_ID_KEY_NAME, replicaId);
-        List<Struct> topicArray = new ArrayList<Struct>();
-        for (Map.Entry<String, Map<Integer, Object>> topicEntry: topicsData.entrySet()) {
-            Struct topicData = struct.instance(TOPICS_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, Object> partitionEntry : topicEntry.getValue().entrySet()) {
-                if (version == 0) {
-                    PartitionData offsetPartitionData = (PartitionData) partitionEntry.getValue();
-                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                    partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                    partitionData.set(TIMESTAMP_KEY_NAME, offsetPartitionData.timestamp);
-                    partitionData.set(MAX_NUM_OFFSETS_KEY_NAME, offsetPartitionData.maxNumOffsets);
-                    partitionArray.add(partitionData);
-                } else {
-                    Long timestamp = (Long) partitionEntry.getValue();
-                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
-                    partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                    partitionData.set(TIMESTAMP_KEY_NAME, timestamp);
-                    partitionArray.add(partitionData);
-                }
-            }
-            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
-            topicArray.add(topicData);
-        }
-        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+        super(version);
         this.replicaId = replicaId;
         this.offsetData = version == 0 ? (Map<TopicPartition, PartitionData>) targetTimes : null;
         this.partitionTimestamps = version == 1 ? (Map<TopicPartition, Long>) targetTimes : null;
         this.duplicatePartitions = Collections.emptySet();
     }
 
-    public ListOffsetRequest(Struct struct, short versionId) {
-        super(struct, versionId);
+    public ListOffsetRequest(Struct struct, short version) {
+        super(version);
         Set<TopicPartition> duplicatePartitions = new HashSet<>();
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
         offsetData = new HashMap<>();
@@ -236,17 +204,19 @@ public class ListOffsetRequest extends AbstractRequest {
     @Override
     @SuppressWarnings("deprecation")
     public AbstractResponse getErrorResponse(Throwable e) {
-        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
+        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
 
         short versionId = version();
         if (versionId == 0) {
             for (Map.Entry<TopicPartition, PartitionData> entry : offsetData.entrySet()) {
-                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e).code(), new ArrayList<Long>());
+                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(
+                        Errors.forException(e), Collections.<Long>emptyList());
                 responseData.put(entry.getKey(), partitionResponse);
             }
         } else {
             for (Map.Entry<TopicPartition, Long> entry : partitionTimestamps.entrySet()) {
-                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e).code(), -1L, -1L);
+                ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(
+                        Errors.forException(e), -1L, -1L);
                 responseData.put(entry.getKey(), partitionResponse);
             }
         }
@@ -254,10 +224,10 @@ public class ListOffsetRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-                return new ListOffsetResponse(responseData, versionId);
+                return new ListOffsetResponse(responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_OFFSETS.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.LIST_OFFSETS.latestVersion()));
         }
     }
 
@@ -278,12 +248,44 @@ public class ListOffsetRequest extends AbstractRequest {
         return duplicatePartitions;
     }
 
-    public static ListOffsetRequest parse(ByteBuffer buffer, int versionId) {
-        return new ListOffsetRequest(ProtoUtils.parseRequest(ApiKeys.LIST_OFFSETS.id, versionId, buffer),
-                (short) versionId);
+    public static ListOffsetRequest parse(ByteBuffer buffer, short version) {
+        return new ListOffsetRequest(ApiKeys.LIST_OFFSETS.parseRequest(version, buffer), version);
     }
 
-    public static ListOffsetRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.LIST_OFFSETS.id));
+    @Override
+    protected Struct toStruct() {
+        short version = version();
+        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.requestSchema(version));
+
+        Map<TopicPartition, ?> targetTimes = partitionTimestamps == null ? offsetData : partitionTimestamps;
+        Map<String, Map<Integer, Object>> topicsData = CollectionUtils.groupDataByTopic(targetTimes);
+
+        struct.set(REPLICA_ID_KEY_NAME, replicaId);
+        List<Struct> topicArray = new ArrayList<>();
+        for (Map.Entry<String, Map<Integer, Object>> topicEntry: topicsData.entrySet()) {
+            Struct topicData = struct.instance(TOPICS_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            List<Struct> partitionArray = new ArrayList<>();
+            for (Map.Entry<Integer, Object> partitionEntry : topicEntry.getValue().entrySet()) {
+                if (version == 0) {
+                    PartitionData offsetPartitionData = (PartitionData) partitionEntry.getValue();
+                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                    partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                    partitionData.set(TIMESTAMP_KEY_NAME, offsetPartitionData.timestamp);
+                    partitionData.set(MAX_NUM_OFFSETS_KEY_NAME, offsetPartitionData.maxNumOffsets);
+                    partitionArray.add(partitionData);
+                } else {
+                    Long timestamp = (Long) partitionEntry.getValue();
+                    Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
+                    partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
+                    partitionData.set(TIMESTAMP_KEY_NAME, timestamp);
+                    partitionArray.add(partitionData);
+                }
+            }
+            topicData.set(PARTITIONS_KEY_NAME, partitionArray.toArray());
+            topicArray.add(topicData);
+        }
+        struct.set(TOPICS_KEY_NAME, topicArray.toArray());
+        return struct;
     }
 }

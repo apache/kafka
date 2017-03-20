@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -34,6 +34,7 @@ import org.apache.kafka.test.TestUtils;
 import java.io.File;
 import java.util.Collections;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 public class BrokerCompatibilityTest {
 
@@ -63,6 +64,14 @@ public class BrokerCompatibilityTest {
         builder.stream(SOURCE_TOPIC).to(SINK_TOPIC);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsProperties);
+        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            @Override
+            public void uncaughtException(Thread t, Throwable e) {
+                System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
+
+                streams.close(30, TimeUnit.SECONDS);
+            }
+        });
         System.out.println("start Kafka Streams");
         streams.start();
 

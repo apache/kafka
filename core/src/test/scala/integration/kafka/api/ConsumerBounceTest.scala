@@ -13,8 +13,8 @@
 
 package kafka.api
 
+import java.util.concurrent._
 import java.util.{Collection, Collections}
-import java.util.concurrent.{Callable, Executors, ExecutorService, Future, Semaphore, TimeUnit}
 
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
-import org.junit.{Before, After, Test}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 
@@ -43,14 +43,14 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   // Time to process commit and leave group requests in tests when brokers are available
   val gracefulCloseTimeMs = 1000
-  val executor = Executors.newFixedThreadPool(2)
+  val executor = Executors.newScheduledThreadPool(2)
 
   // configure the servers and clients
-  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
   this.serverConfig.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp,"true")
+  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
@@ -59,7 +59,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
   override def generateConfigs() = {
-    FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect,enableControlledShutdown = false)
+    FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, serverConfig))
   }
 
@@ -161,6 +161,52 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       }
     }
   }
+
+  @Test
+  def testSubscribeWhenTopicUnavailable() {
+    val numRecords = 1000
+    val newtopic = "newtopic"
+
+    val consumer = this.consumers.head
+    consumer.subscribe(Collections.singleton(newtopic))
+    executor.schedule(new Runnable {
+        def run() = TestUtils.createTopic(zkUtils, newtopic, serverCount, serverCount, servers)
+      }, 2, TimeUnit.SECONDS)
+    consumer.poll(0)
+
+    def sendRecords(numRecords: Int, topic: String = this.topic) {
+      var remainingRecords = numRecords
+      val endTimeMs = System.currentTimeMillis + 20000
+      while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {
+        val futures = (0 until remainingRecords).map { i =>
+          this.producers.head.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+        }
+        futures.map { future =>
+          try {
+            future.get
+            remainingRecords -= 1
+          } catch {
+            case _: Exception =>
+          }
+        }
+      }
+      assertEquals(0, remainingRecords)
+    }
+
+    sendRecords(numRecords, newtopic)
+    receiveRecords(consumer, numRecords, newtopic, 10000)
+
+    servers.foreach(server => killBroker(server.config.brokerId))
+    Thread.sleep(500)
+    restartDeadBrokers()
+
+    val future = executor.submit(new Runnable {
+      def run() = receiveRecords(consumer, numRecords, newtopic, 10000)
+    })
+    sendRecords(numRecords, newtopic)
+    future.get
+  }
+
 
   @Test
   def testClose() {
@@ -313,10 +359,12 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     consumer
   }
 
-  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) {
-    var received = 0
-    while (received < numRecords)
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, topic: String = this.topic, timeoutMs: Long = 60000) {
+    var received = 0L
+    val endTimeMs = System.currentTimeMillis + timeoutMs
+    while (received < numRecords && System.currentTimeMillis < endTimeMs)
       received += consumer.poll(1000).count()
+    assertEquals(numRecords, received)
   }
 
   private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
@@ -374,7 +422,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }
   }
 
-  private def sendRecords(numRecords: Int) {
+  private def sendRecords(numRecords: Int, topic: String = this.topic) {
     val futures = (0 until numRecords).map { i =>
       this.producers.head.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
     }

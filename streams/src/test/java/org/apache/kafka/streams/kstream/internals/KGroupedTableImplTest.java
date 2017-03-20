@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -43,6 +43,7 @@ import static org.junit.Assert.assertEquals;
 public class KGroupedTableImplTest {
 
     private final KStreamBuilder builder = new KStreamBuilder();
+    private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
     private KStreamTestDriver driver = null;
 
@@ -63,6 +64,11 @@ public class KGroupedTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnAggregate() throws Exception {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, (String) null);
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAllowInvalidStoreNameOnAggregate() throws Exception {
+        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)
@@ -93,6 +99,11 @@ public class KGroupedTableImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnReduce() throws Exception {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (String) null);
+    }
+
+    @Test(expected = InvalidTopicException.class)
+    public void shouldNotAllowInvalidStoreNameOnReduce() throws Exception {
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, INVALID_STORE_NAME);
     }
 
     @Test(expected = NullPointerException.class)

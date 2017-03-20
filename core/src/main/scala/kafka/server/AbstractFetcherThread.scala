@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicLong
 
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.internals.PartitionStates
+import org.apache.kafka.common.internals.{FatalExitError, PartitionStates}
 import org.apache.kafka.common.record.MemoryRecords
 
 /**
@@ -44,7 +44,7 @@ import org.apache.kafka.common.record.MemoryRecords
  */
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
-                                     sourceBroker: BrokerEndPoint,
+                                     val sourceBroker: BrokerEndPoint,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -141,7 +141,7 @@ abstract class AbstractFetcherThread(name: String,
           Option(partitionStates.stateValue(topicPartition)).foreach(currentPartitionFetchState =>
             // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
             if (fetchRequest.offset(topicPartition) == currentPartitionFetchState.offset) {
-              Errors.forCode(partitionData.errorCode) match {
+              partitionData.error match {
                 case Errors.NONE =>
                   try {
                     val records = partitionData.toRecords
@@ -177,6 +177,7 @@ abstract class AbstractFetcherThread(name: String,
                     error("Current offset %d for partition [%s,%d] out of range; reset offset to %d"
                       .format(currentPartitionFetchState.offset, topic, partitionId, newOffset))
                   } catch {
+                    case e: FatalExitError => throw e
                     case e: Throwable =>
                       error("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
                       updatePartitionsWithError(topicPartition)
@@ -258,7 +259,7 @@ object AbstractFetcherThread {
   }
 
   trait PartitionData {
-    def errorCode: Short
+    def error: Errors
     def exception: Option[Throwable]
     def toRecords: MemoryRecords
     def highWatermark: Long

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -27,26 +26,20 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
+public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
     private final KeyValueStore<K, V> inner;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private final String storeName;
 
     private StoreChangeLogger<K, V> changeLogger;
     private ProcessorContext context;
 
-    public InMemoryKeyValueLoggedStore(final String storeName, final KeyValueStore<K, V> inner, Serde<K> keySerde, Serde<V> valueSerde) {
-        this.storeName = storeName;
+    InMemoryKeyValueLoggedStore(final KeyValueStore<K, V> inner, Serde<K> keySerde, Serde<V> valueSerde) {
+        super(inner);
         this.inner = inner;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-    }
-
-    @Override
-    public String name() {
-        return this.storeName;
     }
 
     @Override
@@ -56,11 +49,11 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
         inner.init(context, root);
 
         // construct the serde
-        StateSerdes<K, V>  serdes = new StateSerdes<>(storeName,
+        StateSerdes<K, V>  serdes = new StateSerdes<>(inner.name(),
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.changeLogger = new StoreChangeLogger<>(storeName, context, serdes);
+        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, serdes);
 
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
@@ -75,13 +68,8 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public boolean persistent() {
-        return inner.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return inner.isOpen();
+    public long approximateNumEntries() {
+        return inner.approximateNumEntries();
     }
 
     @Override
@@ -142,20 +130,5 @@ public class InMemoryKeyValueLoggedStore<K, V> implements KeyValueStore<K, V> {
     @Override
     public KeyValueIterator<K, V> all() {
         return this.inner.all();
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return this.inner.approximateNumEntries();
-    }
-
-    @Override
-    public void close() {
-        inner.close();
-    }
-
-    @Override
-    public void flush() {
-        this.inner.flush();
     }
 }

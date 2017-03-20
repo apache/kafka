@@ -1,19 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -200,6 +203,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 final Serde<T> aggValueSerde,
                                                 final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer,
                          aggregator,
                          sessionMerger,
@@ -235,6 +239,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @SuppressWarnings("unchecked")
     public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return count(sessionWindows,
                      storeFactory(keySerde, Serdes.Long(), storeName)
                              .sessionWindowed(sessionWindows.maintainMs()).build());
@@ -276,6 +281,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                          final String storeName) {
 
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return reduce(reducer, sessionWindows,
                       storeFactory(keySerde, valSerde, storeName)
                               .sessionWindowed(sessionWindows.maintainMs()).build());

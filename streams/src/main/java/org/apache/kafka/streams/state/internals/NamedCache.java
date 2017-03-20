@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -152,7 +152,7 @@ class NamedCache {
 
 
     synchronized void put(final Bytes key, final LRUCacheEntry value) {
-        if (!value.isDirty && dirtyKeys.contains(key)) {
+        if (!value.isDirty() && dirtyKeys.contains(key)) {
             throw new IllegalStateException(String.format("Attempting to put a clean entry for key [%s] " +
                                                                   "into NamedCache [%s] when it already contains " +
                                                                   "a dirty entry for the same key",
@@ -308,10 +308,6 @@ class NamedCache {
         return tail;
     }
 
-    synchronized long dirtySize() {
-        return dirtyKeys.size();
-    }
-
     synchronized void close() {
         head = tail = null;
         listener = null;
@@ -324,7 +320,7 @@ class NamedCache {
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */
-    class LRUNode {
+    static class LRUNode {
         private final Bytes key;
         private LRUCacheEntry entry;
         private LRUNode previous;

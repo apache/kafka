@@ -133,8 +133,8 @@ class GroupMetadataManager(val brokerId: Int,
   def prepareStoreGroup(group: GroupMetadata,
                         groupAssignment: Map[String, Array[Byte]],
                         responseCallback: Errors => Unit): Option[DelayedStore] = {
-    getMagicAndTimestamp(partitionFor(group.groupId)) match {
-      case Some((magicValue, timestampType, timestamp)) =>
+    getMagic(partitionFor(group.groupId)) match {
+      case Some(magicValue) =>
         val groupMetadataValueVersion = {
           if (interBrokerProtocolVersion < KAFKA_0_10_1_IV0)
             0.toShort
@@ -142,6 +142,9 @@ class GroupMetadataManager(val brokerId: Int,
             GroupMetadataManager.CURRENT_GROUP_VALUE_SCHEMA_VERSION
         }
 
+        // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+        val timestampType = TimestampType.CREATE_TIME
+        val timestamp = time.milliseconds()
         val record = Record.create(magicValue, timestampType, timestamp,
           GroupMetadataManager.groupMetadataKey(group.groupId),
           GroupMetadataManager.groupMetadataValue(group, groupAssignment, version = groupMetadataValueVersion))
@@ -224,15 +227,18 @@ class GroupMetadataManager(val brokerId: Int,
                           consumerId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Short] => Unit): Option[DelayedStore] = {
+                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Option[DelayedStore] = {
     // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
 
     // construct the message set to append
-    getMagicAndTimestamp(partitionFor(group.groupId)) match {
-      case Some((magicValue, timestampType, timestamp)) =>
+    getMagic(partitionFor(group.groupId)) match {
+      case Some(magicValue) =>
+        // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+        val timestampType = TimestampType.CREATE_TIME
+        val timestamp = time.milliseconds()
         val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
           Record.create(magicValue, timestampType, timestamp,
             GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition),
@@ -254,7 +260,7 @@ class GroupMetadataManager(val brokerId: Int,
           // the offset and metadata to cache if the append status has no error
           val status = responseStatus(offsetTopicPartition)
 
-          val responseCode =
+          val response =
             group synchronized {
               if (status.error == Errors.NONE) {
                 if (!group.is(Dead)) {
@@ -262,7 +268,7 @@ class GroupMetadataManager(val brokerId: Int,
                     group.completePendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
                 }
-                Errors.NONE.code
+                Errors.NONE
               } else {
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
@@ -291,16 +297,16 @@ class GroupMetadataManager(val brokerId: Int,
                   case other => other
                 }
 
-                responseError.code
+                responseError
               }
             }
 
           // compute the final error codes for the commit response
           val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
-              (topicPartition, responseCode)
+              (topicPartition, response)
             else
-              (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE.code)
+              (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
           }
 
           // finally trigger the callback logic passed from the API layer
@@ -315,7 +321,7 @@ class GroupMetadataManager(val brokerId: Int,
 
       case None =>
         val commitStatus = offsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
-          (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP.code)
+          (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP)
         }
         responseCallback(commitStatus)
         None
@@ -575,8 +581,12 @@ class GroupMetadataManager(val brokerId: Int,
 
       val offsetsPartition = partitionFor(groupId)
       val appendPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
-      getMagicAndTimestamp(offsetsPartition) match {
-        case Some((magicValue, timestampType, timestamp)) =>
+      getMagic(offsetsPartition) match {
+        case Some(magicValue) =>
+          // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+          val timestampType = TimestampType.CREATE_TIME
+          val timestamp = time.milliseconds()
+
           val partitionOpt = replicaManager.getPartition(appendPartition)
           partitionOpt.foreach { partition =>
             val tombstones = removedOffsets.map { case (topicPartition, offsetAndMetadata) =>
@@ -652,15 +662,10 @@ class GroupMetadataManager(val brokerId: Int,
    * Check if the replica is local and return the message format version and timestamp
    *
    * @param   partition  Partition of GroupMetadataTopic
-   * @return  Option[(MessageFormatVersion, TimeStamp)] if replica is local, None otherwise
+   * @return  Some(MessageFormatVersion) if replica is local, None otherwise
    */
-  private def getMagicAndTimestamp(partition: Int): Option[(Byte, TimestampType, Long)] = {
-    val groupMetadataTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partition)
-    replicaManager.getMagicAndTimestampType(groupMetadataTopicPartition).map { case (messageFormatVersion, timestampType) =>
-      val timestamp = if (messageFormatVersion == Record.MAGIC_VALUE_V0) Record.NO_TIMESTAMP else time.milliseconds()
-      (messageFormatVersion, timestampType, timestamp)
-    }
-  }
+  private def getMagic(partition: Int): Option[Byte] =
+    replicaManager.getMagic(new TopicPartition(Topic.GroupMetadataTopicName, partition))
 
   /**
    * Add the partition into the owned list

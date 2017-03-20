@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -73,6 +73,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       Aggregator<? super K, ? super V, T> adder,
                                       Aggregator<? super K, ? super V, T> subtractor,
                                       String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer, adder, subtractor, null, storeName);
     }
 
@@ -125,6 +127,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(Reducer<V> adder,
                                Reducer<V> subtractor,
                                String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName));
     }
 
@@ -141,6 +145,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public KTable<K, Long> count(String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return count(keyValueStore(keySerde, Serdes.Long(), storeName));
     }
 

@@ -33,7 +33,7 @@ object OffsetResponse {
       val numPartitions = buffer.getInt
       (1 to numPartitions).map(_ => {
         val partition = buffer.getInt
-        val error = buffer.getShort
+        val error = Errors.forCode(buffer.getShort)
         val numOffsets = buffer.getInt
         val offsets = (1 to numOffsets).map(_ => buffer.getLong)
         (TopicAndPartition(topic, partition), PartitionOffsetsResponse(error, offsets))
@@ -45,9 +45,9 @@ object OffsetResponse {
 }
 
 
-case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long]) {
+case class PartitionOffsetsResponse(error: Errors, offsets: Seq[Long]) {
   override def toString: String = {
-    new String("error: " + Errors.forCode(error).exceptionName + " offsets: " + offsets.mkString)
+    new String("error: " + error.exceptionName + " offsets: " + offsets.mkString)
   }
 }
 
@@ -58,7 +58,7 @@ case class OffsetResponse(correlationId: Int,
 
   lazy val offsetsGroupedByTopic = partitionErrorAndOffsets.groupBy(_._1.topic)
 
-  def hasError = partitionErrorAndOffsets.values.exists(_.error != Errors.NONE.code)
+  def hasError = partitionErrorAndOffsets.values.exists(_.error != Errors.NONE)
 
   val sizeInBytes = {
     4 + /* correlation id */
@@ -88,7 +88,7 @@ case class OffsetResponse(correlationId: Int,
         errorAndOffsetsMap.foreach {
           case((TopicAndPartition(_, partition), errorAndOffsets)) =>
             buffer.putInt(partition)
-            buffer.putShort(errorAndOffsets.error)
+            buffer.putShort(errorAndOffsets.error.code)
             buffer.putInt(errorAndOffsets.offsets.size) // offset array length
             errorAndOffsets.offsets.foreach(buffer.putLong(_))
         }

@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -192,7 +192,7 @@ public interface KStream<K, V> {
      * and emit a record {@code <word:1>} for each word.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
+     * KStream<String, Integer> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
      *     Iterable<KeyValue<String, Integer>> apply(byte[] key, String value) {
      *         String[] tokens = value.split(" ");
      *         List<KeyValue<String, Integer>> result = new ArrayList<>(tokens.length);
@@ -238,7 +238,7 @@ public interface KStream<K, V> {
      * The example below splits input records {@code <null:String>} containing sentences as values into their words.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<Integer, String> outputStream = inputStream.flatMap(new ValueMapper<String, Iterable<String>> {
+     * KStream<byte[], String> outputStream = inputStream.flatMapValues(new ValueMapper<String, Iterable<String>> {
      *     Iterable<String> apply(String value) {
      *         return Arrays.asList(value.split(" "));
      *     }
@@ -404,6 +404,20 @@ public interface KStream<K, V> {
      * @see #process(ProcessorSupplier, String...)
      */
     void foreach(final ForeachAction<? super K, ? super V> action);
+
+    /**
+     * Perform an action on each record of {@code KStream}.
+     * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
+     * <p>
+     * Peek is a non-terminal operation that triggers a side effect (such as logging or statistics collection)
+     * and returns an unchanged stream.
+     * <p>
+     * Note that since this operation is stateless, it may execute multiple times for a single record in failure cases.
+     *
+     * @param action an action to perform on each record
+     * @see #process(ProcessorSupplier, String...)
+     */
+    KStream<K, V> peek(final ForeachAction<? super K, ? super V> action);
 
     /**
      * Creates an array of {@code KStream} from this stream by branching the records in the original stream based on
@@ -1522,7 +1536,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@code KStream} record weather or not it finds a corresponding record in {@link KTable} the provided
+     * For each {@code KStream} record whether or not it finds a corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
@@ -1594,7 +1608,7 @@ public interface KStream<K, V> {
      * In contrast, processing {@link KTable} input records will only update the internal {@link KTable} state and
      * will not produce any result records.
      * <p>
-     * For each {@code KStream} record weather or not it finds a corresponding record in {@link KTable} the provided
+     * For each {@code KStream} record whether or not it finds a corresponding record in {@link KTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.

@@ -85,8 +85,8 @@ object SerializationTestUtils {
 
   def createTestProducerResponse: ProducerResponse =
     ProducerResponse(1, Map(
-      TopicAndPartition(topic1, 0) -> ProducerResponseStatus(0.toShort, 10001),
-      TopicAndPartition(topic2, 0) -> ProducerResponseStatus(0.toShort, 20001)
+      TopicAndPartition(topic1, 0) -> ProducerResponseStatus(Errors.forCode(0.toShort), 10001),
+      TopicAndPartition(topic2, 0) -> ProducerResponseStatus(Errors.forCode(0.toShort), 20001)
     ), ProducerRequest.CurrentVersion, 100)
 
   def createTestFetchRequest: FetchRequest = new FetchRequest(requestInfo = requestInfos.toVector)
@@ -100,7 +100,7 @@ object SerializationTestUtils {
 
   def createTestOffsetResponse: OffsetResponse = {
     new OffsetResponse(0, collection.immutable.Map(
-      TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(Errors.NONE.code, Seq(1000l, 2000l, 3000l, 4000l)))
+      TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(Errors.NONE, Seq(1000l, 2000l, 3000l, 4000l)))
     )
   }
 
@@ -135,8 +135,8 @@ object SerializationTestUtils {
   }
 
   def createTestOffsetCommitResponse: OffsetCommitResponse = {
-    new OffsetCommitResponse(collection.immutable.Map(TopicAndPartition(topic1, 0) -> Errors.NONE.code,
-                                 TopicAndPartition(topic1, 1) -> Errors.NONE.code))
+    new OffsetCommitResponse(collection.immutable.Map(TopicAndPartition(topic1, 0) -> Errors.NONE,
+                                 TopicAndPartition(topic1, 1) -> Errors.NONE))
   }
 
   def createTestOffsetFetchRequest: OffsetFetchRequest = {
@@ -148,16 +148,16 @@ object SerializationTestUtils {
 
   def createTestOffsetFetchResponse: OffsetFetchResponse = {
     new OffsetFetchResponse(collection.immutable.Map(
-      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", Errors.NONE.code),
-      TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadata.NoMetadata, Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-    ), errorCode = Errors.NONE.code)
+      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", Errors.NONE),
+      TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadata.NoMetadata, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+    ), error = Errors.NONE)
   }
 
   def createConsumerMetadataRequest: GroupCoordinatorRequest = GroupCoordinatorRequest("group 1", clientId = "client 1")
 
   def createConsumerMetadataResponse: GroupCoordinatorResponse = {
     GroupCoordinatorResponse(Some(
-      brokers.head.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))), Errors.NONE.code, 0)
+      brokers.head.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))), Errors.NONE, 0)
   }
 }
 
@@ -175,7 +175,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val offsetFetchResponse = SerializationTestUtils.createTestOffsetFetchResponse
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
-  private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, 0)
+  private val consumerMetadataResponseNoCoordinator = GroupCoordinatorResponse(None, Errors.GROUP_COORDINATOR_NOT_AVAILABLE, 0)
 
   @Test
   def testSerializationAndDeserialization() {
@@ -203,13 +203,13 @@ class RequestResponseSerializationTest extends JUnitSuite {
   @Test
   def testProduceResponseVersion() {
     val oldClientResponse = ProducerResponse(1, Map(
-      TopicAndPartition("t1", 0) -> ProducerResponseStatus(0.toShort, 10001),
-      TopicAndPartition("t2", 0) -> ProducerResponseStatus(0.toShort, 20001)
+      TopicAndPartition("t1", 0) -> ProducerResponseStatus(Errors.NONE, 10001),
+      TopicAndPartition("t2", 0) -> ProducerResponseStatus(Errors.NONE, 20001)
     ))
 
     val newClientResponse = ProducerResponse(1, Map(
-      TopicAndPartition("t1", 0) -> ProducerResponseStatus(0.toShort, 10001),
-      TopicAndPartition("t2", 0) -> ProducerResponseStatus(0.toShort, 20001)
+      TopicAndPartition("t1", 0) -> ProducerResponseStatus(Errors.NONE, 10001),
+      TopicAndPartition("t2", 0) -> ProducerResponseStatus(Errors.NONE, 20001)
     ), 1, 100)
 
     // new response should have 4 bytes more than the old response since delayTime is an INT32

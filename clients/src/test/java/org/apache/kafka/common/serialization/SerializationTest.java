@@ -1,17 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.serialization;
 
+import org.apache.kafka.common.errors.SerializationException;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -20,7 +25,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsNull.nullValue;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class SerializationTest {
 
@@ -116,6 +125,94 @@ public class SerializationTest {
 
         serializer.close();
         deserializer.close();
+    }
+
+    @Test
+    public void shouldSerializeDeserializeFloat() {
+        final Float[] floats = new Float[]{
+            5678567.12312f,
+            -5678567.12341f
+        };
+        final Serializer<Float> serializer = Serdes.Float().serializer();
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+
+        for (final Float value : floats) {
+            assertThat("Should round-trip a float",
+                value, equalTo(deserializer.deserialize(topic, serializer.serialize(topic, value))));
+        }
+
+        serializer.close();
+        deserializer.close();
+    }
+
+    @Test
+    public void floatSerializerShouldReturnNullForNull() {
+        final Serializer<Float> serializer = Serdes.Float().serializer();
+        assertThat(serializer.serialize(topic, null), nullValue());
+        serializer.close();
+    }
+
+    @Test
+    public void floatDeserializerShouldReturnNullForNull() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        assertThat(deserializer.deserialize(topic, null), nullValue());
+        deserializer.close();
+    }
+
+    @Test
+    public void floatDeserializerShouldThrowSerializationExceptionOnZeroBytes() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        try {
+            deserializer.deserialize(topic, new byte[0]);
+            fail("Should have thrown a SerializationException because of zero input bytes");
+        } catch (SerializationException e) {
+            // Ignore (there's no contract on the details of the exception)
+        }
+        deserializer.close();
+    }
+
+    @Test
+    public void floatDeserializerShouldThrowSerializationExceptionOnTooFewBytes() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        try {
+            deserializer.deserialize(topic, new byte[3]);
+            fail("Should have thrown a SerializationException because of too few input bytes");
+        } catch (SerializationException e) {
+            // Ignore (there's no contract on the details of the exception)
+        }
+        deserializer.close();
+    }
+
+
+    @Test
+    public void floatDeserializerShouldThrowSerializationExceptionOnTooManyBytes() {
+        final Deserializer<Float> deserializer = Serdes.Float().deserializer();
+        try {
+            deserializer.deserialize(topic, new byte[5]);
+            fail("Should have thrown a SerializationException because of too many input bytes");
+        } catch (SerializationException e) {
+            // Ignore (there's no contract on the details of the exception)
+        }
+        deserializer.close();
+    }
+
+    @Test
+    public void floatSerdeShouldPreserveNaNValues() {
+        final int someNaNAsIntBits = 0x7f800001;
+        final float someNaN = Float.intBitsToFloat(someNaNAsIntBits);
+        final int anotherNaNAsIntBits = 0x7f800002;
+        final float anotherNaN = Float.intBitsToFloat(anotherNaNAsIntBits);
+
+        final Serde<Float> serde = Serdes.Float();
+        // Because of NaN semantics we must assert based on the raw int bits.
+        final Float roundtrip = serde.deserializer().deserialize(topic,
+            serde.serializer().serialize(topic, someNaN));
+        assertThat(Float.floatToRawIntBits(roundtrip), equalTo(someNaNAsIntBits));
+        final Float otherRoundtrip = serde.deserializer().deserialize(topic,
+            serde.serializer().serialize(topic, anotherNaN));
+        assertThat(Float.floatToRawIntBits(otherRoundtrip), equalTo(anotherNaNAsIntBits));
+
+        serde.close();
     }
 
     @Test

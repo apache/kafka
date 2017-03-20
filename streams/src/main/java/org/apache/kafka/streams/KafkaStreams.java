@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -97,7 +96,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * <p>
  * A simple example might look like this:
  * <pre>{@code
- * Map&lt;String, Object&gt; props = new HashMap&lt;&gt;();
+ * Map<String, Object> props = new HashMap<>();
  * props.put(StreamsConfig.APPLICATION_ID_CONFIG, "my-stream-processing-application");
  * props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
  * props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -105,7 +104,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * StreamsConfig config = new StreamsConfig(props);
  *
  * KStreamBuilder builder = new KStreamBuilder();
- * builder.stream("my-input-topic").mapValues(value -&gt; value.length().toString()).to("my-output-topic");
+ * builder.stream("my-input-topic").mapValues(value -> value.length().toString()).to("my-output-topic");
  *
  * KafkaStreams streams = new KafkaStreams(builder, config);
  * streams.start();
@@ -132,6 +131,7 @@ public class KafkaStreams {
     // of the co-location of stream thread's consumers. It is for internal
     // usage only and should not be exposed to users at all.
     private final UUID processId;
+    private final String logPrefix;
     private final StreamsMetadataState streamsMetadataState;
 
     private final StreamsConfig config;
@@ -143,30 +143,32 @@ public class KafkaStreams {
      * Note this instance will be in "Rebalancing" state if any of its threads is rebalancing
      * The expected state transition with the following defined states is:
      *
-     *                 +-----------+
-     *         +<------|Created    |
-     *         |       +-----+-----+
-     *         |             |   +--+
-     *         |             v   |  |
-     *         |       +-----+---v--+--+
-     *         +<----- | Rebalancing   |<--------+
-     *         |       +-----+---------+         ^
-     *         |                 +--+            |
-     *         |                 |  |            |
-     *         |       +-----+---v--+-----+      |
-     *         +------>|Running           |------+
-     *         |       +-----+------------+
+     * <pre>
+     *                 +--------------+
+     *         +<----- | Created      |
+     *         |       +-----+--------+
      *         |             |
      *         |             v
-     *         |     +-------+--------+
-     *         +---->|Pending         |
-     *               |Shutdown        |
-     *               +-------+--------+
+     *         |       +-----+--------+
+     *         +<----- | Rebalancing  | <----+
+     *         |       +--------------+      |
+     *         |                             |
+     *         |                             |
+     *         |       +--------------+      |
+     *         +-----> | Running      | ---->+
+     *         |       +-----+--------+
+     *         |             |
+     *         |             v
+     *         |       +-----+--------+
+     *         +-----> | Pending      |
+     *                 | Shutdown     |
+     *                 +-----+--------+
      *                       |
      *                       v
-     *                 +-----+-----+
-     *                 |Not Running|
-     *                 +-----------+
+     *                 +-----+--------+
+     *                 | Not Running  |
+     *                 +--------------+
+     * </pre>
      */
     public enum State {
         CREATED(1, 2, 3), RUNNING(2, 3), REBALANCING(1, 2, 3), PENDING_SHUTDOWN(4), NOT_RUNNING;
@@ -216,9 +218,13 @@ public class KafkaStreams {
     private synchronized void setState(final State newState) {
         final State oldState = state;
         if (!state.isValidTransition(newState)) {
-            log.warn("Unexpected state transition from {} to {}.", oldState, newState);
+            log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+        } else {
+            log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
         }
+
         state = newState;
+
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
         }
@@ -309,6 +315,8 @@ public class KafkaStreams {
         if (clientId.length() <= 0)
             clientId = applicationId + "-" + processId;
 
+        this.logPrefix = String.format("stream-client [%s]", clientId);
+
         final List<MetricsReporter> reporters = config.getConfiguredInstances(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG,
             MetricsReporter.class);
         reporters.add(new JmxReporter(JMX_PREFIX));
@@ -328,7 +336,7 @@ public class KafkaStreams {
         final ProcessorTopology globalTaskTopology = builder.buildGlobalStateTopology();
 
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
+            log.warn("{} Negative cache size passed in. Reverting to cache size of 0 bytes.", logPrefix);
         }
 
         final long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
@@ -339,7 +347,7 @@ public class KafkaStreams {
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
                                                         clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
-                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG)),
+                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time),
                                                         metrics,
                                                         time,
                                                         clientId);
@@ -394,7 +402,7 @@ public class KafkaStreams {
         try {
             client.close();
         } catch (final IOException e) {
-            log.warn("Could not close StreamKafkaClient.", e);
+            log.warn("{} Could not close StreamKafkaClient.", logPrefix, e);
         }
 
     }
@@ -410,7 +418,7 @@ public class KafkaStreams {
      * @throws StreamsException if the Kafka brokers have version 0.10.0.x
      */
     public synchronized void start() throws IllegalStateException, StreamsException {
-        log.debug("Starting Kafka Stream process.");
+        log.debug("{} Starting Kafka Stream process.", logPrefix);
 
         if (state == State.CREATED) {
             checkBrokerVersionCompatibility();
@@ -424,7 +432,7 @@ public class KafkaStreams {
                 thread.start();
             }
 
-            log.info("Started Kafka Stream process");
+            log.info("{} Started Kafka Stream process", logPrefix);
         } else {
             throw new IllegalStateException("Cannot start again.");
         }
@@ -449,7 +457,7 @@ public class KafkaStreams {
      * before all threads stopped
      */
     public synchronized boolean close(final long timeout, final TimeUnit timeUnit) {
-        log.debug("Stopping Kafka Stream process.");
+        log.debug("{} Stopping Kafka Stream process.", logPrefix);
         if (state.isCreatedOrRunning()) {
             setState(State.PENDING_SHUTDOWN);
             // save the current thread so that if it is a stream thread
@@ -485,7 +493,7 @@ public class KafkaStreams {
                     }
 
                     metrics.close();
-                    log.info("Stopped Kafka Streams process.");
+                    log.info("{} Stopped Kafka Streams process.", logPrefix);
                 }
             }, "kafka-streams-close-thread");
             shutdown.setDaemon(true);
@@ -555,12 +563,13 @@ public class KafkaStreams {
         final String stateDir = config.getString(StreamsConfig.STATE_DIR_CONFIG);
 
         final String localApplicationDir = stateDir + File.separator + appId;
-        log.debug("Removing local Kafka Streams application data in {} for application {}.",
+        log.debug("{} Removing local Kafka Streams application data in {} for application {}.",
+            logPrefix,
             localApplicationDir,
             appId);
 
-        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir);
-        stateDirectory.cleanRemovedTasks();
+        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir, Time.SYSTEM);
+        stateDirectory.cleanRemovedTasks(0);
     }
 
     /**
@@ -635,6 +644,8 @@ public class KafkaStreams {
      *   <li>this is a point in time view and it may change due to partition reassignment</li>
      *   <li>the key may not exist in the {@link StateStore}; this method provides a way of finding which host it
      *       <em>would</em> exist on</li>
+     *   <li>if this is for a window store the serializer should be the serializer for the record key,
+     *       not the window serializer</li>
      * </ul>
      *
      * @param storeName     the {@code storeName} to find metadata for

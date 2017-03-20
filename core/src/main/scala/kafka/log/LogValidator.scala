@@ -148,15 +148,15 @@ private[kafka] object LogValidator {
    * 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
    * 4. Message format conversion is needed.
    */
-  def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
-                                                 offsetCounter: LongRef,
-                                                 now: Long,
-                                                 sourceCodec: CompressionCodec,
-                                                 targetCodec: CompressionCodec,
-                                                 compactedTopic: Boolean = false,
-                                                 messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
-                                                 messageTimestampType: TimestampType,
-                                                 messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
+  private def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
+                                                         offsetCounter: LongRef,
+                                                         now: Long,
+                                                         sourceCodec: CompressionCodec,
+                                                         targetCodec: CompressionCodec,
+                                                         compactedTopic: Boolean = false,
+                                                         messageFormatVersion: Byte = Record.CURRENT_MAGIC_VALUE,
+                                                         messageTimestampType: TimestampType,
+                                                         messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
     // No in place assignment situation 1 and 2
     var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > Record.MAGIC_VALUE_V0
 
@@ -186,7 +186,7 @@ private[kafka] object LogValidator {
       if (record.magic != messageFormatVersion)
         inPlaceAssignment = false
 
-      validatedRecords += record.convert(messageFormatVersion)
+      validatedRecords += record.convert(messageFormatVersion, messageTimestampType)
     }
 
     if (!inPlaceAssignment) {
@@ -235,9 +235,11 @@ private[kafka] object LogValidator {
                                 now: Long,
                                 timestampType: TimestampType,
                                 timestampDiffMaxMs: Long) {
-    if (timestampType == TimestampType.CREATE_TIME && math.abs(record.timestamp - now) > timestampDiffMaxMs)
+    if (timestampType == TimestampType.CREATE_TIME
+      && record.timestamp != Record.NO_TIMESTAMP
+      && math.abs(record.timestamp - now) > timestampDiffMaxMs)
       throw new InvalidTimestampException(s"Timestamp ${record.timestamp} of message is out of range. " +
-        s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}")
+        s"The timestamp should be within [${now - timestampDiffMaxMs}, ${now + timestampDiffMaxMs}]")
     if (record.timestampType == TimestampType.LOG_APPEND_TIME)
       throw new InvalidTimestampException(s"Invalid timestamp type in message $record. Producer should not set " +
         s"timestamp type to LogAppendTime.")

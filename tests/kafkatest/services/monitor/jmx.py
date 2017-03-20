@@ -35,6 +35,7 @@ class JmxMixin(object):
         self.average_jmx_value = {}  # map from object_attribute_name to average value observed over time
 
         self.jmx_tool_log = "/mnt/jmx_tool.log"
+        self.jmx_tool_err_log = "/mnt/jmx_tool.err.log"
 
     def clean_node(self, node):
         node.account.kill_process("jmx", clean_shutdown=False, allow_fail=True)
@@ -55,11 +56,12 @@ class JmxMixin(object):
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:
             cmd += " --attributes %s" % jmx_attribute
-        cmd += " >> %s &" % self.jmx_tool_log
+        cmd += " 1>> %s" % self.jmx_tool_log
+        cmd += " 2>> %s &" % self.jmx_tool_err_log
 
         self.logger.debug("%s: Start JmxTool %d command: %s" % (node.account, idx, cmd))
         node.account.ssh(cmd, allow_fail=False)
-        wait_until(lambda: self._jmx_has_output(node), timeout_sec=5, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
+        wait_until(lambda: self._jmx_has_output(node), timeout_sec=10, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
         self.started[idx-1] = True
 
     def _jmx_has_output(self, node):
