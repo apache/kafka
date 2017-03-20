@@ -20,23 +20,28 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
+import java.util.Locale;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assume.assumeTrue;
 
 public class ShellTest {
     @Rule
-    public Timeout globalTimeout = Timeout.seconds(180);
+    public final Timeout globalTimeout = Timeout.seconds(180);
 
     @Test
     public void testEchoHello() throws Exception {
+        assumeTrue(!System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows"));
         String output = Shell.execCommand("echo", "hello");
         assertEquals("hello\n", output);
     }
 
     @Test
     public void testHeadDevZero() throws Exception {
+        assumeTrue(!System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows"));
         final int length = 100000;
         String output = Shell.execCommand("head", "-c",
-            Integer.valueOf(length).toString(), "/dev/zero");
+            Integer.toString(length), "/dev/zero");
         assertEquals(length, output.length());
     }
 }
