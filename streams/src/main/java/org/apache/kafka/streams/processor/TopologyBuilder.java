@@ -884,7 +884,15 @@ public class TopologyBuilder {
     private void connectStateStoreNameToSourceTopicsOrPattern(final String stateStoreName,
                                                               final ProcessorNodeFactory processorNodeFactory) {
 
-        final Set<String> sourceTopics =  new HashSet<>();
+        // we should never update the mapping from state store names to source topics if the store name already exists
+        // in the map; this scenario is possible, for example, that a state store underlying a source KTable is
+        // connecting to a join operator whose source topic is not the original KTable's source topic but an internal repartition topic.
+
+        if (stateStoreNameToSourceTopics.containsKey(stateStoreName) || stateStoreNameToSourceRegex.containsKey(stateStoreName)) {
+            return;
+        }
+
+        final Set<String> sourceTopics = new HashSet<>();
         final Set<Pattern> sourcePatterns = new HashSet<>();
         final Set<SourceNodeFactory> sourceNodesForParent = findSourcesForProcessorParents(processorNodeFactory.parents);
 
@@ -896,26 +904,23 @@ public class TopologyBuilder {
             }
         }
 
-
-        if (sourceTopics.isEmpty() && sourcePatterns.isEmpty()) {
-            throw new TopologyBuilderException("can't find source topic or source Pattern for state store " +
-                    stateStoreName);
+        //If both aren't empty it will force and update to the map which according to the warning above we should not do.
+        if (!sourceTopics.isEmpty() && !sourcePatterns.isEmpty()) {
+            String message = "Attempting to connect a state store to both source topics and regex patterns. This will force an update " +
+                    "to the stateStoreNameToSourceTopics map once the Consumer retrieves subscribed topics " +
+                    "matching the provided pattern";
+            throw new TopologyBuilderException(message);
         }
 
-        // we should never update the mapping from state store names to source topics if the store name already exists
-        // in the map; this scenario is possible, for example, that a state store underlying a source KTable is
-        // connecting to a join operator whose source topic is not the original KTable's source topic but an internal repartition topic.
 
-        if (!stateStoreNameToSourceTopics.containsKey(stateStoreName) && !sourceTopics.isEmpty()) {
+        if (!sourceTopics.isEmpty()) {
             stateStoreNameToSourceTopics.put(stateStoreName,
                     Collections.unmodifiableSet(sourceTopics));
-        }
-
-        if (!stateStoreNameToSourceRegex.containsKey(stateStoreName) && !sourcePatterns.isEmpty()) {
+        } else {
             stateStoreNameToSourceRegex.put(stateStoreName,
                     Collections.unmodifiableSet(sourcePatterns));
-
         }
+
     }
 
 
