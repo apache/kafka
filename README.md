@@ -32,16 +32,28 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew scaladocJar # builds a scaladoc jar for each module
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
-### Running unit tests ###
-    ./gradlew test
+### Run unit tests ###
+    ./gradlew unitTest
 
+### Run integration tests ###
+    ./gradlew integrationTest
+    
+### Run unit & integration tests ###
+    ./gradlew test
+    
 ### Forcing re-running unit tests w/o code change ###
+    ./gradlew cleanTest unitTest
+
+### Forcing re-running integration tests w/o code change ###
+    ./gradlew cleanTest integrationTest
+
+### Forcing re-running unit & integration tests w/o code change ###
     ./gradlew cleanTest test
 
-### Running a particular unit test ###
+### Running a particular test ###
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
-### Running a particular test method within a unit test ###
+### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 

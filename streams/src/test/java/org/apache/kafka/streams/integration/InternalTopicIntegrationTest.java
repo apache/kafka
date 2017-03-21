@@ -38,12 +38,14 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
@@ -60,6 +62,7 @@ import static org.junit.Assert.assertTrue;
 /**
  * Tests related to internal topics in streams
  */
+@Category({IntegrationTest.class})
 public class InternalTopicIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule

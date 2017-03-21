@@ -36,7 +36,7 @@ import org.apache.kafka.common.network.ListenerName
 /**
  * A test harness that brings up some number of broker nodes
  */
-trait KafkaServerTestHarness extends ZooKeeperTestHarness {
+abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   var instanceConfigs: Seq[KafkaConfig] = null
   var servers: Buffer[KafkaServer] = null
   var brokerList: String = null

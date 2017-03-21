@@ -39,6 +39,7 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
@@ -47,6 +48,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -60,6 +62,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 /**
  * Tests local state store and global application cleanup.
  */
+@Category({IntegrationTest.class})
 public class ResetIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
