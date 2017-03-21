@@ -23,8 +23,7 @@ import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.utils.ByteUtils
-import org.apache.kafka.common.record.{SimpleRecord, CompressionType, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
@@ -183,8 +182,11 @@ class AbstractFetcherThreadTest {
       if (fetchCount == 1) {
         val record = new SimpleRecord("hello".getBytes())
         val records = MemoryRecords.withRecords(CompressionType.NONE, record)
-        ByteUtils.writeUnsignedInt(records.buffer, 15, Int.MaxValue)
+        val buffer = records.buffer
 
+        // flip some bits in the message to ensure the crc fails
+        buffer.putInt(15, buffer.getInt(15) ^ 23422)
+        buffer.putInt(30, buffer.getInt(30) ^ 93242)
         fetchRequest.offsets.mapValues(_ => new TestPartitionData(records)).toSeq
       } else {
         // Then, the following fetches get the normal data

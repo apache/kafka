@@ -46,7 +46,7 @@ import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
  */
 public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch implements Record {
 
-    public abstract LegacyRecord legacyRecord();
+    public abstract LegacyRecord outerRecord();
 
     @Override
     public long lastOffset() {
@@ -55,42 +55,42 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public boolean isValid() {
-        return legacyRecord().isValid();
+        return outerRecord().isValid();
     }
 
     @Override
     public void ensureValid() {
-        legacyRecord().ensureValid();
+        outerRecord().ensureValid();
     }
 
     @Override
     public int keySize() {
-        return legacyRecord().keySize();
+        return outerRecord().keySize();
     }
 
     @Override
     public boolean hasKey() {
-        return legacyRecord().hasKey();
+        return outerRecord().hasKey();
     }
 
     @Override
     public ByteBuffer key() {
-        return legacyRecord().key();
+        return outerRecord().key();
     }
 
     @Override
     public int valueSize() {
-        return legacyRecord().valueSize();
+        return outerRecord().valueSize();
     }
 
     @Override
     public boolean hasValue() {
-        return !legacyRecord().hasNullValue();
+        return !outerRecord().hasNullValue();
     }
 
     @Override
     public ByteBuffer value() {
-        return legacyRecord().value();
+        return outerRecord().value();
     }
 
     @Override
@@ -100,17 +100,17 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public boolean hasMagic(byte magic) {
-        return magic == legacyRecord().magic();
+        return magic == outerRecord().magic();
     }
 
     @Override
     public boolean hasTimestampType(TimestampType timestampType) {
-        return legacyRecord().timestampType() == timestampType;
+        return outerRecord().timestampType() == timestampType;
     }
 
     @Override
     public long checksum() {
-        return legacyRecord().checksum();
+        return outerRecord().checksum();
     }
 
     @Override
@@ -120,12 +120,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public long timestamp() {
-        return legacyRecord().timestamp();
+        return outerRecord().timestamp();
     }
 
     @Override
     public TimestampType timestampType() {
-        return legacyRecord().timestampType();
+        return outerRecord().timestampType();
     }
 
     @Override
@@ -135,17 +135,17 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public byte magic() {
-        return legacyRecord().magic();
+        return outerRecord().magic();
     }
 
     @Override
     public CompressionType compressionType() {
-        return legacyRecord().compressionType();
+        return outerRecord().compressionType();
     }
 
     @Override
     public int sizeInBytes() {
-        return legacyRecord().sizeInBytes() + LOG_OVERHEAD;
+        return outerRecord().sizeInBytes() + LOG_OVERHEAD;
     }
 
     @Override
@@ -155,13 +155,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public String toString() {
-        return "LegacyRecordBatch(" + offset() + ", " + legacyRecord() + ")";
+        return "LegacyRecordBatch(" + offset() + ", " + outerRecord() + ")";
     }
 
     @Override
     public void writeTo(ByteBuffer buffer) {
-        writeHeader(buffer, offset(), legacyRecord().sizeInBytes());
-        buffer.put(legacyRecord().buffer().duplicate());
+        writeHeader(buffer, offset(), outerRecord().sizeInBytes());
+        buffer.put(outerRecord().buffer().duplicate());
     }
 
     @Override
@@ -212,28 +212,18 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      */
     @Override
     public Iterator<Record> iterator() {
-        final Iterator<AbstractLegacyRecordBatch> iterator;
         if (isCompressed())
-            iterator = new DeepRecordsIterator(this, false, Integer.MAX_VALUE);
+            return new DeepRecordsIterator(this, false, Integer.MAX_VALUE);
         else
-            iterator = Collections.singletonList(this).iterator();
-
-        return new AbstractIterator<Record>() {
-            @Override
-            protected Record makeNext() {
-                if (iterator.hasNext())
-                    return iterator.next();
-                return allDone();
-            }
-        };
+            return Collections.<Record>singletonList(this).iterator();
     }
 
-    public static void writeHeader(ByteBuffer buffer, long offset, int size) {
+    static void writeHeader(ByteBuffer buffer, long offset, int size) {
         buffer.putLong(offset);
         buffer.putInt(size);
     }
 
-    public static void writeHeader(DataOutputStream out, long offset, int size) throws IOException {
+    static void writeHeader(DataOutputStream out, long offset, int size) throws IOException {
         out.writeLong(offset);
         out.writeInt(size);
     }
@@ -266,13 +256,13 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
     }
 
-    private static class DeepRecordsIterator extends AbstractIterator<AbstractLegacyRecordBatch> {
+    private static class DeepRecordsIterator extends AbstractIterator<Record> {
         private final ArrayDeque<AbstractLegacyRecordBatch> batches;
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
 
         private DeepRecordsIterator(AbstractLegacyRecordBatch wrapperEntry, boolean ensureMatchingMagic, int maxMessageSize) {
-            LegacyRecord wrapperRecord = wrapperEntry.legacyRecord();
+            LegacyRecord wrapperRecord = wrapperEntry.outerRecord();
             this.wrapperMagic = wrapperRecord.magic();
 
             CompressionType compressionType = wrapperRecord.compressionType();
@@ -298,7 +288,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                     if (batch == null)
                         break;
 
-                    LegacyRecord record = batch.legacyRecord();
+                    LegacyRecord record = batch.outerRecord();
                     byte magic = record.magic();
 
                     if (ensureMatchingMagic && magic != wrapperMagic)
@@ -335,7 +325,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        protected AbstractLegacyRecordBatch makeNext() {
+        protected Record makeNext() {
             if (batches.isEmpty())
                 return allDone();
 
@@ -344,7 +334,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             // Convert offset to absolute offset if needed.
             if (absoluteBaseOffset >= 0) {
                 long absoluteOffset = absoluteBaseOffset + entry.lastOffset();
-                entry = new BasicLegacyRecordBatch(absoluteOffset, entry.legacyRecord());
+                entry = new BasicLegacyRecordBatch(absoluteOffset, entry.outerRecord());
             }
 
             if (entry.isCompressed())
@@ -369,7 +359,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public LegacyRecord legacyRecord() {
+        public LegacyRecord outerRecord() {
             return record;
         }
 
@@ -410,7 +400,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public LegacyRecord legacyRecord() {
+        public LegacyRecord outerRecord() {
             return record;
         }
 

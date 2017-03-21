@@ -49,9 +49,8 @@ public class Header {
         if (o == null || getClass() != o.getClass()) return false;
 
         Header header = (Header) o;
-
-        if (key != null ? !key.equals(header.key) : header.key != null) return false;
-        return value != null ? value.equals(header.value) : header.value == null;
+        return (key == null ? header.key == null : key.equals(header.key)) &&
+                (value == null ? header.value == null : value.equals(header.value));
     }
 
     @Override

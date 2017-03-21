@@ -22,6 +22,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
+import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
+import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
 
 /**
  * A byte buffer backed log input stream. This class avoids the need to copy records by returning
@@ -41,7 +43,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         if (remaining < LOG_OVERHEAD)
             return null;
 
-        int recordSize = buffer.getInt(buffer.position() + Records.SIZE_OFFSET);
+        int recordSize = buffer.getInt(buffer.position() + SIZE_OFFSET);
         if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
         if (recordSize > maxMessageSize)
@@ -51,7 +53,7 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         if (remaining < entrySize)
             return null;
 
-        byte magic = buffer.get(buffer.position() + LOG_OVERHEAD + LegacyRecord.MAGIC_OFFSET);
+        byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
 
         ByteBuffer entrySlice = buffer.slice();
         entrySlice.limit(entrySize);

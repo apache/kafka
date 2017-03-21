@@ -313,51 +313,6 @@ public final class LegacyRecord {
     }
 
     /**
-     * Get the size of this record if converted to the given format.
-     *
-     * @param toMagic The target magic version to convert to
-     * @return The size in bytes after conversion
-     */
-    public int convertedSize(byte toMagic) {
-        return recordSize(toMagic, Math.max(0, keySize()), Math.max(0, valueSize()));
-    }
-
-    /**
-     * Convert this record to another message format.
-     *
-     * @param toMagic The target magic version to convert to
-     * @param upconvertTimestampType The timestamp type to use if up-converting from magic 0, ignored if
-     *                               down-converting or if no conversion is needed
-     * @return A new record instance with a freshly allocated ByteBuffer.
-     */
-    public LegacyRecord convert(byte toMagic, TimestampType upconvertTimestampType) {
-        byte magic = magic();
-        if (toMagic == magic)
-            return this;
-
-        final TimestampType timestampType;
-        if (magic == RecordBatch.MAGIC_VALUE_V0) {
-            if (upconvertTimestampType == TimestampType.NO_TIMESTAMP_TYPE)
-                throw new IllegalArgumentException("Cannot up-convert using timestamp type " + upconvertTimestampType);
-            timestampType = upconvertTimestampType;
-        } else {
-            timestampType = timestampType();
-        }
-
-        ByteBuffer buffer = ByteBuffer.allocate(convertedSize(toMagic));
-        convertTo(buffer, toMagic, timestamp(), timestampType);
-        buffer.rewind();
-        return new LegacyRecord(buffer);
-    }
-
-    private void convertTo(ByteBuffer buffer, byte toMagic, long timestamp, TimestampType timestampType) {
-        if (compressionType() != CompressionType.NONE)
-            throw new IllegalArgumentException("Cannot use convertTo for deep conversion");
-
-        write(buffer, toMagic, timestamp, key(), value(), CompressionType.NONE, timestampType);
-    }
-
-    /**
      * Create a new record instance. If the record's compression type is not none, then
      * its value payload should be already compressed with the specified type; the constructor
      * would always write the value payload as is and will not do the compression itself.

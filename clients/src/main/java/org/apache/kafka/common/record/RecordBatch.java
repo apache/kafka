@@ -78,6 +78,7 @@ public interface RecordBatch extends Iterable<Record> {
 
     /**
      * Get the timestamp of this record batch. This is the max timestamp among all records contained in this batch.
+     * This value is updated during compaction.
      *
      * @return The max timestamp
      */
@@ -106,7 +107,8 @@ public interface RecordBatch extends Iterable<Record> {
     long baseOffset();
 
     /**
-     * Get the last offset in this record batch (inclusive).
+     * Get the last offset in this record batch (inclusive). Unlike {@link #baseOffset()}, the last offset
+     * always reflects the offset of the last record in the batch, even after compaction.
      *
      * @return The offset of the last record in this batch
      */

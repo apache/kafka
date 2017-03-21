@@ -329,10 +329,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Get an iterator over the shallow batches in the file. Note that the batches are
+     * Get an iterator over the record batches in the file. Note that the batches are
      * backed by the open file channel. When the channel is closed (i.e. when this instance
      * is closed), the batches will generally no longer be readable.
-     * @return An iterator over the shallow batches
+     * @return An iterator over the batches
      */
     @Override
     public Iterable<FileChannelRecordBatch> batches() {
@@ -340,9 +340,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Get an iterator over the shallow batches, enforcing a maximum record size
+     * Get an iterator over the record batches, enforcing a maximum record size
      * @param maxRecordSize The maximum allowable size of individual records (including compressed record sets)
-     * @return An iterator over the shallow batches
+     * @return An iterator over the batches
      */
     public Iterable<FileChannelRecordBatch> batches(int maxRecordSize) {
         return batches(maxRecordSize, start);

@@ -225,23 +225,23 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      for (entry <- log.batches(maxMessageSize).asScala) {
-        entry.ensureValid()
+      for (batch <- log.batches(maxMessageSize).asScala) {
+        batch.ensureValid()
 
-        // The max timestamp should have been put in the outer message, so we don't need to iterate over the inner messages.
-        if (entry.maxTimestamp > maxTimestampSoFar) {
-          maxTimestampSoFar = entry.maxTimestamp
-          offsetOfMaxTimestamp = entry.lastOffset
+        // The max timestamp is exposed at the batch level, so no need to iterate the records
+        if (batch.maxTimestamp > maxTimestampSoFar) {
+          maxTimestampSoFar = batch.maxTimestamp
+          offsetOfMaxTimestamp = batch.lastOffset
         }
 
         // Build offset index
         if(validBytes - lastIndexEntry > indexIntervalBytes) {
-          val startOffset = entry.baseOffset
+          val startOffset = batch.baseOffset
           index.append(startOffset, validBytes)
           timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
           lastIndexEntry = validBytes
         }
-        validBytes += entry.sizeInBytes()
+        validBytes += batch.sizeInBytes()
       }
     } catch {
       case e: CorruptRecordException =>
@@ -293,7 +293,7 @@ class LogSegment(val log: FileRecords,
     // after truncation, reset and allocate more space for the (new currently  active) index
     index.resize(index.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
-    val bytesTruncated = log.truncateTo(mapping.position.toInt)
+    val bytesTruncated = log.truncateTo(mapping.position)
     if(log.sizeInBytes == 0) {
       created = time.milliseconds
       rollingBasedTimestamp = None
@@ -366,10 +366,10 @@ class LogSegment(val log: FileRecords,
 
   /**
    * The time this segment has waited to be rolled.
-   * If the first message has a timestamp we use the message timestamp to determine when to roll a segment. A segment
-   * is rolled if the difference between the new message's timestamp and the first message's timestamp exceeds the
+   * If the first message batch has a timestamp we use its timestamp to determine when to roll a segment. A segment
+   * is rolled if the difference between the new batch's timestamp and the first batch's timestamp exceeds the
    * segment rolling time.
-   * If the first message does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
+   * If the first batch does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
    * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
    * segment rolling time.
    */

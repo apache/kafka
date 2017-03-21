@@ -34,9 +34,6 @@ import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConverters._
-
-
 /**
  *  For verifying the consistency among replicas.
  *
@@ -274,7 +271,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       assert(fetchResponsePerReplica.size == expectedReplicasPerTopicAndPartition(topicAndPartition),
             "fetched " + fetchResponsePerReplica.size + " replicas for " + topicAndPartition + ", but expected "
             + expectedReplicasPerTopicAndPartition(topicAndPartition) + " replicas")
-      val logEntryIteratorMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
+      val recordBatchIteratorMap = fetchResponsePerReplica.map { case (replicaId, fetchResponse) =>
         replicaId -> fetchResponse.messages.asInstanceOf[ByteBufferMessageSet].asRecords.batches.iterator
       }
       val maxHw = fetchResponsePerReplica.values.map(_.hw).max
@@ -283,32 +280,32 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       var isMessageInAllReplicas = true
       while (isMessageInAllReplicas) {
         var messageInfoFromFirstReplicaOpt: Option[MessageInfo] = None
-        for ((replicaId, logEntriesIterator) <- logEntryIteratorMap) {
+        for ((replicaId, recordBatchIterator) <- recordBatchIteratorMap) {
           try {
-            if (logEntriesIterator.hasNext) {
-              val logEntry = logEntriesIterator.next()
+            if (recordBatchIterator.hasNext) {
+              val batch = recordBatchIterator.next()
 
               // only verify up to the high watermark
-              if (logEntry.lastOffset >= fetchResponsePerReplica.get(replicaId).hw)
+              if (batch.lastOffset >= fetchResponsePerReplica.get(replicaId).hw)
                 isMessageInAllReplicas = false
               else {
                 messageInfoFromFirstReplicaOpt match {
                   case None =>
                     messageInfoFromFirstReplicaOpt = Some(
-                      MessageInfo(replicaId, logEntry.lastOffset, logEntry.nextOffset, logEntry.checksum))
+                      MessageInfo(replicaId, batch.lastOffset, batch.nextOffset, batch.checksum))
                   case Some(messageInfoFromFirstReplica) =>
-                    if (messageInfoFromFirstReplica.offset != logEntry.lastOffset) {
+                    if (messageInfoFromFirstReplica.offset != batch.lastOffset) {
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicAndPartition
                         + ": replica " + messageInfoFromFirstReplica.replicaId + "'s offset "
                         + messageInfoFromFirstReplica.offset + " doesn't match replica "
-                        + replicaId + "'s offset " + logEntry.lastOffset)
+                        + replicaId + "'s offset " + batch.lastOffset)
                       Exit.exit(1)
                     }
-                    if (messageInfoFromFirstReplica.checksum != logEntry.checksum)
+                    if (messageInfoFromFirstReplica.checksum != batch.checksum)
                       println(ReplicaVerificationTool.getCurrentTimeString + ": partition "
-                        + topicAndPartition + " has unmatched checksum at offset " + logEntry.lastOffset + "; replica "
+                        + topicAndPartition + " has unmatched checksum at offset " + batch.lastOffset + "; replica "
                         + messageInfoFromFirstReplica.replicaId + "'s checksum " + messageInfoFromFirstReplica.checksum
-                        + "; replica " + replicaId + "'s checksum " + logEntry.checksum)
+                        + "; replica " + replicaId + "'s checksum " + batch.checksum)
                 }
               }
             } else

@@ -204,8 +204,8 @@ class LogTest extends JUnitSuite {
       val read = log.read(i, 100, Some(i+1)).records.batches.iterator.next()
       assertEquals("Offset read should match order appended.", i, read.lastOffset)
       val actual = read.iterator.next()
-      assertNull(s"Key should be null", actual.key)
-      assertEquals(s"Values not equal", ByteBuffer.wrap(values(i)), actual.value)
+      assertNull("Key should be null", actual.key)
+      assertEquals("Values not equal", ByteBuffer.wrap(values(i)), actual.value)
     }
     assertEquals("Reading beyond the last message returns nothing.", 0, log.read(values.length, 100, None).records.batches.asScala.size)
   }

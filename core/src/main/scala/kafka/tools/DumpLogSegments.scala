@@ -184,10 +184,10 @@ object DumpLogSegments {
       val entry = timeIndex.entry(i)
       val position = index.lookup(entry.offset + timeIndex.baseOffset).position
       val partialFileRecords = fileRecords.read(position, Int.MaxValue)
-      val shallowBatches = partialFileRecords.batches.asScala
+      val batches = partialFileRecords.batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.
-      val maybeLogEntry = shallowBatches.find(_.lastOffset >= entry.offset + timeIndex.baseOffset)
+      val maybeLogEntry = batches.find(_.lastOffset >= entry.offset + timeIndex.baseOffset)
       maybeLogEntry match {
         case None =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
@@ -195,8 +195,8 @@ object DumpLogSegments {
         case Some(logEntry) if logEntry.lastOffset != entry.offset + timeIndex.baseOffset =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
             logEntry.lastOffset)
-        case Some(shallowLogEntry) =>
-          for (record <- shallowLogEntry.asScala)
+        case Some(batch) =>
+          for (record <- batch.asScala)
             maxTimestamp = math.max(maxTimestamp, record.timestamp)
 
           if (maxTimestamp != entry.timestamp)
@@ -310,26 +310,25 @@ object DumpLogSegments {
     val messageSet = FileRecords.open(file, false)
     var validBytes = 0L
     var lastOffset = -1L
-    val entries = messageSet.batches(maxMessageSize).asScala
-    for (entry <- entries) { // this only does shallow iteration
+    val batches = messageSet.batches(maxMessageSize).asScala
+    for (batch <- batches) {
       if (isDeepIteration) {
-        for (record <- entry.asScala) {
+        for (record <- batch.asScala) {
           if (lastOffset == -1)
             lastOffset = record.offset
-          // If we are iterating uncompressed messages, offsets must be consecutive
           else if (record.offset != lastOffset + 1) {
             var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
-            nonConsecutivePairsSeq ::=(lastOffset, record.offset)
+            nonConsecutivePairsSeq ::= (lastOffset, record.offset)
             nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
           }
           lastOffset = record.offset
 
           print("offset: " + record.offset + " position: " + validBytes +
-            " " + entry.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
-            " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + entry.magic +
-            " compresscodec: " + entry.compressionType + " crc: " + record.checksum)
+            " " + batch.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
+            " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + batch.magic +
+            " compresscodec: " + batch.compressionType + " crc: " + record.checksum)
 
-          if (entry.magic >= RecordBatch.MAGIC_VALUE_V2) {
+          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
             print(" sequence: " + record.sequence +
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           }
@@ -345,20 +344,20 @@ object DumpLogSegments {
           println()
         }
       } else {
-        if (entry.magic >= RecordBatch.MAGIC_VALUE_V2)
-          print("baseOffset: " + entry.baseOffset + " lastOffset: " + entry.lastOffset +
-            " baseSequence: " + entry.baseSequence + " lastSequence: " + entry.lastSequence +
-            " producerId: " + entry.producerId + " producerEpoch: " + entry.producerEpoch +
-            " partitionLeaderEpoch: " + entry.partitionLeaderEpoch + " isTransactional: " + entry.isTransactional)
+        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+          print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset +
+            " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
+            " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
+            " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional)
         else
-          print("offset: " + entry.lastOffset)
+          print("offset: " + batch.lastOffset)
 
-        println(" position: " + validBytes + " " + entry.timestampType + ": " + entry.maxTimestamp +
-          " isvalid: " + entry.isValid +
-          " size: " + entry.sizeInBytes + " magic: " + entry.magic +
-          " compresscodec: " + entry.compressionType + " crc: " + entry.checksum)
+        println(" position: " + validBytes + " " + batch.timestampType + ": " + batch.maxTimestamp +
+          " isvalid: " + batch.isValid +
+          " size: " + batch.sizeInBytes + " magic: " + batch.magic +
+          " compresscodec: " + batch.compressionType + " crc: " + batch.checksum)
       }
-      validBytes += entry.sizeInBytes
+      validBytes += batch.sizeInBytes
     }
     val trailingBytes = messageSet.sizeInBytes - validBytes
     if(trailingBytes > 0)

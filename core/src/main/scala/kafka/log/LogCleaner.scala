@@ -451,8 +451,7 @@ private[log] class Cleaner(val id: Int,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
-      def shouldRetain(record: Record): Boolean =
-        record.isControlRecord || shouldRetainMessage(source, map, retainDeletes, record, stats)
+      def shouldRetain(record: Record): Boolean = shouldRetainMessage(source, map, retainDeletes, record, stats)
     }
 
     var position = 0
@@ -495,6 +494,9 @@ private[log] class Cleaner(val id: Int,
                                   retainDeletes: Boolean,
                                   record: Record,
                                   stats: CleanerStats): Boolean = {
+    if (record.isControlRecord)
+      return true
+
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true

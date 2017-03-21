@@ -73,8 +73,8 @@ class ProduceRequestTest extends BaseRequestTest {
     val timestamp = 1000000
     val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
       new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
-    // Change the lz4 checksum value so that it doesn't match the contents
-    memoryRecords.buffer.array.update(40, 3) // FIXME: Is this index significant? For older magic, the CRC should be at offset 13
+    // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
+    memoryRecords.buffer.array.update(40, 3)
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
     val produceResponse = sendProduceRequest(leader, 

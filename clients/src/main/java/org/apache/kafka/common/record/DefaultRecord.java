@@ -62,7 +62,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
 public class DefaultRecord implements Record {
 
     // excluding key, value and headers: 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
-    private static final int MAX_RECORD_OVERHEAD = 21;
+    public static final int MAX_RECORD_OVERHEAD = 21;
 
     private static final int CONTROL_FLAG_MASK = 0x01;
     private static final int NULL_VARINT_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);

@@ -314,34 +314,25 @@ object TestUtils extends Logging {
                        codec: CompressionType = CompressionType.NONE,
                        timestamp: Long = RecordBatch.NO_TIMESTAMP,
                        magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
-    records(magicValue = magicValue, codec = codec, (key, value, timestamp))
+    records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
   }
 
   def recordsWithValues(magicValue: Byte,
                         codec: CompressionType,
                         values: Array[Byte]*): MemoryRecords = {
-    records(magicValue, codec, values.map((null, _, RecordBatch.NO_TIMESTAMP)): _*)
+    records(values.map(value => new SimpleRecord(value)), magicValue, codec)
   }
 
-  def records(magicValue: Byte,
-              codec: CompressionType,
-              records: (Array[Byte], Array[Byte], Long)*): MemoryRecords = {
-    this.records(records, magicValue = magicValue, codec = codec)
-  }
-
-  def records(records: Iterable[(Array[Byte], Array[Byte], Long)],
+  def records(records: Iterable[SimpleRecord],
               magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
               codec: CompressionType = CompressionType.NONE,
               pid: Long = RecordBatch.NO_PRODUCER_ID,
               epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
-    val kafkaRecords = records.map(record => new SimpleRecord(record._3, record._1, record._2))
-    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(kafkaRecords.asJava))
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
       System.currentTimeMillis, pid, epoch, sequence)
-    records.foreach { case (key, value, timestamp) =>
-      builder.appendWithOffset(0, timestamp, key, value)
-    }
+    records.foreach(builder.append)
     builder.build()
   }
 

@@ -156,6 +156,10 @@ public class ProduceRequest extends AbstractRequest {
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                         "contain exactly one record batch");
         }
+
+        // Note that we do not do similar validation for older versions to ensure compatibility with
+        // clients which send the wrong magic version in the wrong version of the produce request. The broker
+        // did not do this validation before, so we maintain that behavior here.
     }
 
     /**

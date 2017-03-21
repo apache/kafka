@@ -113,16 +113,16 @@ public class FileRecordsTest {
         FileRecords read = fileRecords.read(0, fileRecords.sizeInBytes());
         TestUtils.checkEquals(fileRecords.batches(), read.batches());
 
-        List<RecordBatch> items = shallowBatches(read);
+        List<RecordBatch> items = batches(read);
         RecordBatch second = items.get(1);
 
         read = fileRecords.read(second.sizeInBytes(), fileRecords.sizeInBytes());
         assertEquals("Try a read starting from the second message",
-                items.subList(1, 3), shallowBatches(read));
+                items.subList(1, 3), batches(read));
 
         read = fileRecords.read(second.sizeInBytes(), second.sizeInBytes());
         assertEquals("Try a read of a single message starting from the second message",
-                Collections.singletonList(second), shallowBatches(read));
+                Collections.singletonList(second), batches(read));
     }
 
     /**
@@ -134,7 +134,7 @@ public class FileRecordsTest {
         SimpleRecord lastMessage = new SimpleRecord("test".getBytes());
         fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
 
-        List<RecordBatch> entries = shallowBatches(fileRecords);
+        List<RecordBatch> entries = batches(fileRecords);
         int position = 0;
 
         int message1Size = entries.get(0).sizeInBytes();
@@ -166,13 +166,13 @@ public class FileRecordsTest {
      */
     @Test
     public void testIteratorWithLimits() throws IOException {
-        RecordBatch entry = shallowBatches(fileRecords).get(1);
+        RecordBatch entry = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size);
-        assertEquals(Collections.singletonList(entry), shallowBatches(slice));
+        assertEquals(Collections.singletonList(entry), batches(slice));
         FileRecords slice2 = fileRecords.read(start, size - 1);
-        assertEquals(Collections.emptyList(), shallowBatches(slice2));
+        assertEquals(Collections.emptyList(), batches(slice2));
     }
 
     /**
@@ -180,10 +180,10 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncate() throws IOException {
-        RecordBatch entry = shallowBatches(fileRecords).get(0);
+        RecordBatch entry = batches(fileRecords).get(0);
         int end = fileRecords.searchForOffsetWithSize(1, 0).position;
         fileRecords.truncateTo(end);
-        assertEquals(Collections.singletonList(entry), shallowBatches(fileRecords));
+        assertEquals(Collections.singletonList(entry), batches(fileRecords));
         assertEquals(entry.sizeInBytes(), fileRecords.sizeInBytes());
     }
 
@@ -304,12 +304,12 @@ public class FileRecordsTest {
 
     @Test
     public void testFormatConversionWithPartialMessage() throws IOException {
-        RecordBatch entry = shallowBatches(fileRecords).get(1);
+        RecordBatch entry = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
         int size = entry.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
         Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0);
-        assertTrue("No message should be there", shallowBatches(messageV0).isEmpty());
+        assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
 
@@ -374,7 +374,7 @@ public class FileRecordsTest {
         }
     }
 
-    private static List<RecordBatch> shallowBatches(Records buffer) {
+    private static List<RecordBatch> batches(Records buffer) {
         return TestUtils.toList(buffer.batches());
     }
 

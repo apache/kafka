@@ -24,9 +24,7 @@ import java.io.DataOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class SimpleLegacyRecordTest {
@@ -84,50 +82,6 @@ public class SimpleLegacyRecordTest {
         LegacyRecord record = new LegacyRecord(buffer);
         assertFalse(record.isValid());
         record.ensureValid();
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void cannotUpconvertWithNoTimestampType() {
-        LegacyRecord record = LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0, RecordBatch.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
-        record.convert(RecordBatch.MAGIC_VALUE_V1, TimestampType.NO_TIMESTAMP_TYPE);
-    }
-
-    @Test
-    public void testConvertFromV0ToV1() {
-        byte[][] keys = new byte[][] {"a".getBytes(), "".getBytes(), null, "b".getBytes()};
-        byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
-
-        for (int i = 0; i < keys.length; i++) {
-            LegacyRecord record = LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0, RecordBatch.NO_TIMESTAMP, keys[i], values[i]);
-            LegacyRecord converted = record.convert(RecordBatch.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
-
-            assertEquals(RecordBatch.MAGIC_VALUE_V1, converted.magic());
-            assertEquals(RecordBatch.NO_TIMESTAMP, converted.timestamp());
-            assertEquals(TimestampType.CREATE_TIME, converted.timestampType());
-            assertEquals(record.key(), converted.key());
-            assertEquals(record.value(), converted.value());
-            assertTrue(record.isValid());
-            assertEquals(record.convertedSize(RecordBatch.MAGIC_VALUE_V1), converted.sizeInBytes());
-        }
-    }
-
-    @Test
-    public void testConvertFromV1ToV0() {
-        byte[][] keys = new byte[][] {"a".getBytes(), "".getBytes(), null, "b".getBytes()};
-        byte[][] values = new byte[][] {"1".getBytes(), "".getBytes(), "2".getBytes(), null};
-
-        for (int i = 0; i < keys.length; i++) {
-            LegacyRecord record = LegacyRecord.create(RecordBatch.MAGIC_VALUE_V1, System.currentTimeMillis(), keys[i], values[i]);
-            LegacyRecord converted = record.convert(RecordBatch.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
-
-            assertEquals(RecordBatch.MAGIC_VALUE_V0, converted.magic());
-            assertEquals(RecordBatch.NO_TIMESTAMP, converted.timestamp());
-            assertEquals(TimestampType.NO_TIMESTAMP_TYPE, converted.timestampType());
-            assertEquals(record.key(), converted.key());
-            assertEquals(record.value(), converted.value());
-            assertTrue(record.isValid());
-            assertEquals(record.convertedSize(RecordBatch.MAGIC_VALUE_V0), converted.sizeInBytes());
-        }
     }
 
 }

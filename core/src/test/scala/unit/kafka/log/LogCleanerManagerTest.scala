@@ -100,8 +100,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     while(log.numberOfSegments < 8)
-      log.append(TestUtils.records(RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-        (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, time.milliseconds)))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()))
 
     val topicPartition = new TopicPartition("log", 0)
     val lastClean = Map(topicPartition -> 0L)
@@ -124,8 +123,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val t0 = time.milliseconds
     while(log.numberOfSegments < 4)
-      log.append(TestUtils.records(RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-        (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, t0)))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0))
 
     val activeSegAtT0 = log.activeSegment
 
@@ -133,8 +131,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val t1 = time.milliseconds
 
     while (log.numberOfSegments < 8)
-      log.append(TestUtils.records(RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-        (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, t1)))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1))
 
     val topicPartition = new TopicPartition("log", 0)
     val lastClean = Map(topicPartition -> 0L)
@@ -158,8 +155,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val t0 = time.milliseconds
     while (log.numberOfSegments < 8)
-      log.append(TestUtils.records(RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-        (log.logEndOffset.toString.getBytes, log.logEndOffset.toString.getBytes, t0)))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0))
 
     time.sleep(compactionLag + 1)
 
@@ -196,7 +192,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
-  private def logEntries(key: Int, value: Int, timestamp: Long) =
+  private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
 
 }

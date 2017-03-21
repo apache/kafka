@@ -648,6 +648,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       "value".getBytes)
     val largeRecord = new ProducerRecord(tp.topic(), tp.partition(), "large".getBytes,
       new Array[Byte](largeProducerRecordSize))
+
     this.producers.head.send(smallRecord)
     this.producers.head.flush()
     this.producers.head.send(largeRecord)

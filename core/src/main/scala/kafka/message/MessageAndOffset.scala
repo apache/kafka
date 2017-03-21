@@ -20,8 +20,8 @@ package kafka.message
 import org.apache.kafka.common.record.AbstractLegacyRecordBatch
 
 object MessageAndOffset {
-  def fromRecordBatch(logEntry: AbstractLegacyRecordBatch): MessageAndOffset = {
-    MessageAndOffset(Message.fromRecord(logEntry.legacyRecord), logEntry.lastOffset)
+  def fromRecordBatch(recordBatch: AbstractLegacyRecordBatch): MessageAndOffset = {
+    MessageAndOffset(Message.fromRecord(recordBatch.outerRecord), recordBatch.lastOffset)
   }
 }
 

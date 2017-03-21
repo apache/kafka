@@ -81,8 +81,8 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
     }
 
     /**
-     * Log entry backed by an underlying FileChannel. This allows iteration over the shallow log
-     * entries without needing to read the record data into memory until it is needed. The downside
+     * Log entry backed by an underlying FileChannel. This allows iteration over the record batches
+     * without needing to read the record data into memory until it is needed. The downside
      * is that entries will generally no longer be readable when the underlying channel is closed.
      */
     public static class FileChannelRecordBatch extends AbstractRecordBatch {
@@ -163,7 +163,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 byte[] magic = new byte[1];
                 ByteBuffer buf = ByteBuffer.wrap(magic);
-                Utils.readFullyOrFail(channel, buf, position + Records.LOG_OVERHEAD + LegacyRecord.MAGIC_OFFSET, "magic byte");
+                Utils.readFullyOrFail(channel, buf, position + Records.MAGIC_OFFSET, "magic byte");
                 return magic[0];
             } catch (IOException e) {
                 throw new KafkaException(e);

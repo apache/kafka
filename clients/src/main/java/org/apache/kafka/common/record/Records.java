@@ -46,6 +46,10 @@ public interface Records {
     int SIZE_LENGTH = 4;
     int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
 
+    // the magic offset is at the same offset for all current message formats, but the 4 bytes
+    // between the size and the magic is dependent on the version.
+    int MAGIC_OFFSET = 16;
+
     /**
      * The size of these records in bytes.
      * @return The size in bytes of the records
