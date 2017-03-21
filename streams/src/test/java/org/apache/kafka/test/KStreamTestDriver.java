@@ -109,10 +109,7 @@ public class KStreamTestDriver {
 
     public void process(String topicName, Object key, Object value) {
         final ProcessorNode prevNode = context.currentNode();
-        ProcessorNode currNode = topology.source(topicName);
-        if (currNode == null && globalTopology != null) {
-            currNode = globalTopology.source(topicName);
-        }
+        ProcessorNode currNode = nodeByTopicName(topicName);
 
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
@@ -126,6 +123,20 @@ public class KStreamTestDriver {
         } finally {
             context.setCurrentNode(prevNode);
         }
+    }
+
+    private ProcessorNode nodeByTopicName(String topicName) {
+        ProcessorNode topicNode = topology.source(topicName);
+        if (topicNode == null && globalTopology != null) {
+            topicNode = globalTopology.source(topicName);
+        }
+        if (topicNode == null) {
+            topicNode = topology.sink(topicName);
+        }
+        if (topicNode == null && globalTopology != null) {
+            topicNode = globalTopology.sink(topicName);
+        }
+        return topicNode;
     }
 
     public void punctuate(long timestamp) {

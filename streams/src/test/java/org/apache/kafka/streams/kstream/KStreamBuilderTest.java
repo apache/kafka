@@ -84,6 +84,24 @@ public class KStreamBuilderTest {
         assertEquals("Z-0000000002", newBuilder.newName("Z-"));
     }
 
+
+    @Test
+    public void shouldHaveSinkTopicForStreamTo() {
+        KStream<String, String> source = builder.stream("topic-source");
+        source.to("topic-sink");
+
+        MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+
+        source.process(processorSupplier);
+
+        driver = new KStreamTestDriver(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-source", "A", "aa");
+
+        assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
+    }
+
     @Test
     public void testMerge() {
         String topic1 = "topic-1";
