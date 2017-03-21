@@ -36,8 +36,9 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * RecordBatch =>
  *  BaseOffset => Int64
  *  Length => Int32
- *  CRC => Int32
+ *  PartitionLeaderEpoch => Int32
  *  Magic => Int8
+ *  CRC => Uint32
  *  Attributes => Int16
  *  LastOffsetDelta => Int32
  *  BaseTimestamp => Int64
@@ -45,11 +46,18 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  ProducerId => Int64
  *  ProducerEpoch => Int16
  *  BaseSequence => Int32
- *  PartitionLeaderEpoch => Int32
- *  RecordsCount => Int32
- *  Records => Record1, Record2, … , RecordN
+ *  Records => [Record]
  *
- *  The current attributes are given below:
+ * Note that when compression is enabled (see attributes below), the compressed record data is serialized
+ * directly following the count of the number of records.
+ *
+ * The CRC covers the data from the attributes to the end of the batch. Note that the location is
+ * located after the magic byte, which means that consumers must parse the magic byte before
+ * deciding how to interpret the bytes between the batch length and the magic byte. The reason that
+ * the partition leader epoch field is moved ahead of the CRC is to avoid the need to recompute the CRC
+ * for every batch that is received by the broker when this field is assigned.
+ *
+ * The current attributes are given below:
  *
  *  -----------------------------------------------------------------------------------
  *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
@@ -58,13 +66,15 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBatch.MutableRecordBatch {
     static final int BASE_OFFSET_OFFSET = 0;
     static final int BASE_OFFSET_LENGTH = 8;
-    static final int SIZE_OFFSET = BASE_OFFSET_OFFSET + BASE_OFFSET_LENGTH;
-    static final int SIZE_LENGTH = 4;
-    static final int CRC_OFFSET = SIZE_OFFSET + SIZE_LENGTH;
-    static final int CRC_LENGTH = 4;
-    static final int MAGIC_OFFSET = CRC_OFFSET + CRC_LENGTH;
+    static final int LENGTH_OFFSET = BASE_OFFSET_OFFSET + BASE_OFFSET_LENGTH;
+    static final int LENGTH_LENGTH = 4;
+    static final int PARTITION_LEADER_EPOCH_OFFSET = LENGTH_OFFSET + LENGTH_LENGTH;
+    static final int PARTITION_LEADER_EPOCH_LENGTH = 4;
+    static final int MAGIC_OFFSET = PARTITION_LEADER_EPOCH_OFFSET + PARTITION_LEADER_EPOCH_LENGTH;
     static final int MAGIC_LENGTH = 1;
-    static final int ATTRIBUTES_OFFSET = MAGIC_OFFSET + MAGIC_LENGTH;
+    static final int CRC_OFFSET = MAGIC_OFFSET + MAGIC_LENGTH;
+    static final int CRC_LENGTH = 4;
+    static final int ATTRIBUTES_OFFSET = CRC_OFFSET + CRC_LENGTH;
     static final int ATTRIBUTE_LENGTH = 2;
     static final int LAST_OFFSET_DELTA_OFFSET = ATTRIBUTES_OFFSET + ATTRIBUTE_LENGTH;
     static final int LAST_OFFSET_DELTA_LENGTH = 4;
@@ -78,9 +88,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     static final int PRODUCER_EPOCH_LENGTH = 2;
     static final int BASE_SEQUENCE_OFFSET = PRODUCER_EPOCH_OFFSET + PRODUCER_EPOCH_LENGTH;
     static final int BASE_SEQUENCE_LENGTH = 4;
-    static final int PARTITION_LEADER_EPOCH_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
-    static final int PARTITION_LEADER_EPOCH_LENGTH = 4;
-    static final int RECORDS_COUNT_OFFSET = PARTITION_LEADER_EPOCH_OFFSET + PARTITION_LEADER_EPOCH_LENGTH;
+    static final int RECORDS_COUNT_OFFSET = BASE_SEQUENCE_OFFSET + BASE_SEQUENCE_LENGTH;
     static final int RECORDS_COUNT_LENGTH = 4;
     static final int RECORDS_OFFSET = RECORDS_COUNT_OFFSET + RECORDS_COUNT_LENGTH;
     public static final int RECORD_BATCH_OVERHEAD = RECORDS_OFFSET;
@@ -101,6 +109,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public void ensureValid() {
+        if (sizeInBytes() < RECORD_BATCH_OVERHEAD)
+            throw new InvalidRecordException("Record batch is corrupt (the size " + sizeInBytes() +
+                    "is smaller than the minimum allowed overhead " + RECORD_BATCH_OVERHEAD + ")");
+
         if (!isValid())
             throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
                     + ", computed crc = " + computeChecksum() + ")");
@@ -117,10 +129,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public TimestampType timestampType() {
-        if (magic() == 0)
-            return TimestampType.NO_TIMESTAMP_TYPE;
-        else
-            return TimestampType.forAttributes(attributes());
+        return TimestampType.forAttributes(attributes());
     }
 
     @Override
@@ -130,7 +139,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public long lastOffset() {
-        return baseOffset() + ByteUtils.readUnsignedInt(buffer, LAST_OFFSET_DELTA_OFFSET);
+        return baseOffset() + lastOffsetDelta();
     }
 
     @Override
@@ -148,9 +157,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         return buffer.getInt(BASE_SEQUENCE_OFFSET);
     }
 
+    private int lastOffsetDelta() {
+        return buffer.getInt(LAST_OFFSET_DELTA_OFFSET);
+    }
+
     @Override
     public int lastSequence() {
-        return baseSequence() + buffer.getInt(LAST_OFFSET_DELTA_OFFSET);
+        return baseSequence() + lastOffsetDelta();
     }
 
     @Override
@@ -160,7 +173,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public int sizeInBytes() {
-        return LOG_OVERHEAD + buffer.getInt(SIZE_OFFSET);
+        return LOG_OVERHEAD + buffer.getInt(LENGTH_OFFSET);
     }
 
     private int count() {
@@ -259,7 +272,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public void setLastOffset(long offset) {
-        buffer.putLong(BASE_OFFSET_OFFSET, offset - buffer.getInt(LAST_OFFSET_DELTA_OFFSET));
+        buffer.putLong(BASE_OFFSET_OFFSET, offset - lastOffsetDelta());
     }
 
     @Override
@@ -293,11 +306,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     }
 
     public boolean isValid() {
-        return sizeInBytes() >= CRC_LENGTH && checksum() == computeChecksum();
+        return sizeInBytes() >= RECORD_BATCH_OVERHEAD && checksum() == computeChecksum();
     }
 
     private long computeChecksum() {
-        return Utils.computeChecksum(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
+        return Utils.computeChecksum(buffer, ATTRIBUTES_OFFSET, buffer.limit() - ATTRIBUTES_OFFSET);
     }
 
     private byte attributes() {
@@ -350,7 +363,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
         int position = buffer.position();
         buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
-        buffer.putInt(position + SIZE_OFFSET, size - LOG_OVERHEAD);
+        buffer.putInt(position + LENGTH_OFFSET, size - LOG_OVERHEAD);
+        buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         buffer.put(position + MAGIC_OFFSET, magic);
         buffer.putShort(position + ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
@@ -359,9 +373,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         buffer.putLong(position + PRODUCER_ID_OFFSET, pid);
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
-        buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
-        long crc = Utils.computeChecksum(buffer, position + MAGIC_OFFSET, size - MAGIC_OFFSET);
+        long crc = Utils.computeChecksum(buffer, position + ATTRIBUTES_OFFSET, size - ATTRIBUTES_OFFSET);
         buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
     }
 

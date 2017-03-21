@@ -107,6 +107,9 @@ public class ProduceRequest extends AbstractRequest {
         this.transactionalId = null;
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
+
+        for (MemoryRecords records : partitionRecords.values())
+            validateRecords(version, records);
     }
 
     private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
@@ -126,10 +129,7 @@ public class ProduceRequest extends AbstractRequest {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
                 MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
-
-                if (version >= 3)
-                    validateRecords(version, records);
-
+                validateRecords(version, records);
                 partitionRecords.put(new TopicPartition(topic, partition), records);
             }
         }
@@ -143,16 +143,17 @@ public class ProduceRequest extends AbstractRequest {
         if (version >= 3) {
             Iterator<RecordBatch.MutableRecordBatch> iterator = records.batches().iterator();
             if (!iterator.hasNext())
-                throw new InvalidRecordException("Version 3 and above of the produce request contained no log entries");
+                throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
+                        "one record batch");
 
             RecordBatch.MutableRecordBatch entry = iterator.next();
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
-                throw new InvalidRecordException("Version 3 and above of the produce request is only allowed to " +
-                        "contain log entries with magic version 2");
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                        "contain record batches with magic version 2");
 
             if (iterator.hasNext())
-                throw new InvalidRecordException("Version 3 and above of the produce request is only allowed to " +
-                        "contain exactly one log entry");
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                        "contain exactly one record batch");
         }
     }
 
@@ -181,10 +182,6 @@ public class ProduceRequest extends AbstractRequest {
                 MemoryRecords records = partitionEntry.getValue();
                 Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
                         .set(PARTITION_KEY_NAME, partitionEntry.getKey());
-
-                if (version >= 3)
-                    validateRecords(version, records);
-
                 part.set(RECORD_SET_KEY_NAME, records);
                 partitionArray.add(part);
             }

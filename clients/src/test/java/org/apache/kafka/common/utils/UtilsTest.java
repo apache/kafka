@@ -93,29 +93,26 @@ public class UtilsTest {
 
     @Test
     public void writeToBuffer() throws IOException {
-        byte[] input = {0, 1, 2, 3, 4};
+        byte[] input = {0, 1, 2, 3, 4, 5};
         ByteBuffer source = ByteBuffer.wrap(input);
 
-        ByteBuffer dest = ByteBuffer.allocate(input.length);
-        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
+        doTestWriteToByteBuffer(source, ByteBuffer.allocate(input.length));
+        doTestWriteToByteBuffer(source, ByteBuffer.allocateDirect(input.length));
+        assertEquals(0, source.position());
 
-        Utils.writeTo(out, source, source.remaining());
-
-        dest.flip();
-        assertEquals(source, dest);
+        source.position(2);
+        doTestWriteToByteBuffer(source, ByteBuffer.allocate(input.length));
+        doTestWriteToByteBuffer(source, ByteBuffer.allocateDirect(input.length));
     }
 
-    @Test
-    public void writeToDirectBuffer() throws IOException {
-        byte[] input = {0, 1, 2, 3, 4};
-        ByteBuffer source = ByteBuffer.wrap(input);
-
-        ByteBuffer dest = ByteBuffer.allocateDirect(input.length);
+    private void doTestWriteToByteBuffer(ByteBuffer source, ByteBuffer dest) throws IOException {
+        int numBytes = source.remaining();
+        int position = source.position();
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
-
         Utils.writeTo(out, source, source.remaining());
-
         dest.flip();
+        assertEquals(numBytes, dest.remaining());
+        assertEquals(position, source.position());
         assertEquals(source, dest);
     }
 

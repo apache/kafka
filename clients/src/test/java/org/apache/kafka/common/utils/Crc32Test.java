@@ -27,26 +27,35 @@ public class Crc32Test {
     @Test
     public void testUpdateByteBuffer() {
         byte[] bytes = new byte[]{0, 1, 2, 3, 4, 5};
+        doTestUpdateByteBuffer(bytes, ByteBuffer.allocate(bytes.length));
+        doTestUpdateByteBuffer(bytes, ByteBuffer.allocateDirect(bytes.length));
+    }
 
-        Crc32 byteArrayCrc = new Crc32();
-        byteArrayCrc.update(bytes, 0, bytes.length);
-        long byteArrayCrcValue = byteArrayCrc.getValue();
-
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+    private void doTestUpdateByteBuffer(byte[] bytes, ByteBuffer buffer) {
+        buffer.put(bytes);
+        buffer.flip();
         Crc32 bufferCrc = new Crc32();
         bufferCrc.update(buffer, buffer.remaining());
-        long bufferCrcValue = bufferCrc.getValue();
+        assertEquals(Crc32.crc32(bytes), bufferCrc.getValue());
+        assertEquals(0, buffer.position());
+    }
 
-        ByteBuffer directBuffer = ByteBuffer.allocateDirect(bytes.length);
-        directBuffer.put(bytes);
-        directBuffer.flip();
+    @Test
+    public void testUpdateByteBufferWithOffsetPosition() {
+        byte[] bytes = new byte[]{-2, -1, 0, 1, 2, 3, 4, 5};
+        doTestUpdateByteBufferWithOffsetPosition(bytes, ByteBuffer.allocate(bytes.length), 2);
+        doTestUpdateByteBufferWithOffsetPosition(bytes, ByteBuffer.allocateDirect(bytes.length), 2);
+    }
 
-        Crc32 directBufferCrc = new Crc32();
-        directBufferCrc.update(directBuffer, directBuffer.remaining());
-        long directBufferCrcValue = directBufferCrc.getValue();
+    private void doTestUpdateByteBufferWithOffsetPosition(byte[] bytes, ByteBuffer buffer, int offset) {
+        buffer.put(bytes);
+        buffer.flip();
+        buffer.position(offset);
 
-        assertEquals(byteArrayCrcValue, bufferCrcValue);
-        assertEquals(byteArrayCrcValue, directBufferCrcValue);
+        Crc32 bufferCrc = new Crc32();
+        bufferCrc.update(buffer, buffer.remaining());
+        assertEquals(Crc32.crc32(bytes, offset, buffer.remaining()), bufferCrc.getValue());
+        assertEquals(offset, buffer.position());
     }
 
 }

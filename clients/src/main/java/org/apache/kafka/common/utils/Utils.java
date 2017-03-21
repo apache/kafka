@@ -798,7 +798,7 @@ public class Utils {
     }
 
     /**
-     * Write the contents of a buffer to an output stream. The byes are copied from the current position
+     * Write the contents of a buffer to an output stream. The bytes are copied from the current position
      * in the buffer.
      * @param out The output to write to
      * @param buffer The buffer to write from
@@ -809,7 +809,8 @@ public class Utils {
         if (buffer.hasArray()) {
             out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
         } else {
-            for (int i = 0; i < length; i++)
+            int pos = buffer.position();
+            for (int i = pos; i < length + pos; i++)
                 out.writeByte(buffer.get(i));
         }
     }

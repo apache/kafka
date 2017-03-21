@@ -119,7 +119,7 @@ public final class LegacyRecord {
      * Returns true if the crc stored with the record matches the crc computed off the record contents
      */
     public boolean isValid() {
-        return sizeInBytes() >= CRC_LENGTH && checksum() == computeChecksum();
+        return sizeInBytes() >= RECORD_OVERHEAD_V0 && checksum() == computeChecksum();
     }
 
     public Long wrapperRecordTimestamp() {
@@ -134,14 +134,13 @@ public final class LegacyRecord {
      * Throw an InvalidRecordException if isValid is false for this record
      */
     public void ensureValid() {
-        if (!isValid()) {
-            if (sizeInBytes() < CRC_LENGTH)
-                throw new InvalidRecordException("Record is corrupt (crc could not be retrieved as the record is too "
-                        + "small, size = " + sizeInBytes() + ")");
-            else
-                throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
-                        + ", computed crc = " + computeChecksum() + ")");
-        }
+        if (sizeInBytes() < RECORD_OVERHEAD_V0)
+            throw new InvalidRecordException("Record is corrupt (crc could not be retrieved as the record is too "
+                    + "small, size = " + sizeInBytes() + ")");
+
+        if (!isValid())
+            throw new InvalidRecordException("Record is corrupt (stored crc = " + checksum()
+                    + ", computed crc = " + computeChecksum() + ")");
     }
 
     /**

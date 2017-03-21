@@ -63,7 +63,7 @@ object ApiVersion {
     // introduced UpdateMetadataRequest v3 in KIP-103
     "0.10.2-IV0" -> KAFKA_0_10_2_IV0,
     "0.10.2" -> KAFKA_0_10_2_IV0,
-    // KIP-98, aka EOS, changes.
+    // KIP-98 (idempotent and transactional producer support)
     "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
     "0.11.0" -> KAFKA_0_11_0_IV0
   )

@@ -18,20 +18,18 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.io.DataOutputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
-import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class SimpleRecordTest {
+public class SimpleLegacyRecordTest {
 
     @Test(expected = InvalidRecordException.class)
     public void testCompressedIterationWithNullValue() throws Exception {
@@ -88,18 +86,6 @@ public class SimpleRecordTest {
         record.ensureValid();
     }
 
-    @Test
-    public void testIsValidWithFourBytesBuffer() {
-        ByteBuffer buffer = ByteBuffer.allocate(4);
-        LegacyRecord record = new LegacyRecord(buffer);
-        // it is a bit weird that we return `true` in this case, we could extend the definition of `isValid` to
-        // something like the following to detect a clearly corrupt record:
-        // return size() >= recordSize(0, 0) && checksum() == computeChecksum();
-        assertTrue(record.isValid());
-        // no exception should be thrown
-        record.ensureValid();
-    }
-
     @Test(expected = IllegalArgumentException.class)
     public void cannotUpconvertWithNoTimestampType() {
         LegacyRecord record = LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0, RecordBatch.NO_TIMESTAMP, "foo".getBytes(), "bar".getBytes());
@@ -142,49 +128,6 @@ public class SimpleRecordTest {
             assertTrue(record.isValid());
             assertEquals(record.convertedSize(RecordBatch.MAGIC_VALUE_V0), converted.sizeInBytes());
         }
-    }
-
-    @Test
-    public void buildDefaultRecord() {
-        ByteBuffer buffer = ByteBuffer.allocate(2048);
-
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 1234567L);
-        builder.appendWithOffset(1234567, System.currentTimeMillis(), "a".getBytes(), "v".getBytes());
-        builder.appendWithOffset(1234568, System.currentTimeMillis(), "b".getBytes(), "v".getBytes());
-
-        MemoryRecords records = builder.build();
-        for (RecordBatch.MutableRecordBatch batch : records.batches()) {
-            assertEquals(1234567, batch.baseOffset());
-            assertEquals(1234568, batch.lastOffset());
-            assertTrue(batch.isValid());
-
-            for (Record record : batch) {
-                assertTrue(record.isValid());
-            }
-        }
-    }
-
-    @Test
-    public void appendControlRecord() {
-        ByteBuffer buffer = ByteBuffer.allocate(128);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
-
-        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.COMMIT, null);
-        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.ABORT, null);
-        MemoryRecords records = builder.build();
-
-        List<Record> logRecords = TestUtils.toList(records.records());
-        assertEquals(2, logRecords.size());
-
-        Record commitRecord = logRecords.get(0);
-        assertTrue(commitRecord.isControlRecord());
-        assertEquals(ControlRecordType.COMMIT, ControlRecordType.parse(commitRecord.key()));
-
-        Record abortRecord = logRecords.get(1);
-        assertTrue(abortRecord.isControlRecord());
-        assertEquals(ControlRecordType.ABORT, ControlRecordType.parse(abortRecord.key()));
     }
 
 }

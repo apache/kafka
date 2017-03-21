@@ -77,9 +77,10 @@ public class Crc32 implements Checksum {
 
     public void update(ByteBuffer buffer, int length) {
         if (buffer.hasArray()) {
-            update(buffer.array(), buffer.arrayOffset(), length);
+            update(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
         } else {
-            for (int i = 0; i < length; i++)
+            int pos = buffer.position();
+            for (int i = pos; i < length + pos; i++)
                 update(buffer.get(i));
         }
     }
