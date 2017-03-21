@@ -25,4 +25,34 @@
     <Match>
         <Bug code="EI,EI2,MS"/>
     </Match>
+
+    <Match>
+        <!-- Suppress a warning about some static initializers in Schema using instances of a
+             subclass. -->
+        <Or>
+            <Class name="org.apache.kafka.connect.data.Schema"/>
+            <Class name="org.apache.kafka.connect.data.SchemaBuilder"/>
+        </Or>
+        <Bug pattern="IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about unread protected fields in some public classes.
+             Although these are not read in Kafka Connect code, they are part of the API. -->
+        <Or>
+            <Class name="org.apache.kafka.connect.connector.Connector"/>
+            <Class name="org.apache.kafka.connect.sink.SinkTask"/>
+            <Class name="org.apache.kafka.connect.source.SourceTask"/>
+        </Or>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about converting an integer number of
+             milliseconds to a java.util.Date object.  We do this intentionally in
+             org.apache.kafka.connect.data.Time. -->
+        <Class name="org.apache.kafka.connect.data.Time"/>
+        <Method name="toLogical"/>
+        <Bug pattern="ICAST_INT_2_LONG_AS_INSTANT"/>
+    </Match>
 </FindBugsFilter>
