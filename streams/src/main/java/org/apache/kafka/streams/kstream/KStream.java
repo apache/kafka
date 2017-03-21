@@ -927,7 +927,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -998,7 +1002,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1082,7 +1090,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1157,7 +1169,11 @@ public interface KStream<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1244,7 +1260,11 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1320,7 +1340,11 @@ public interface KStream<K, V> {
      * <td>&lt;K3:ValueJoiner(null,c)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} (for one input stream) before doing the
+     * join, using a pre-created topic with the "correct" number of partitions.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1408,8 +1432,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1418,7 +1446,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
@@ -1477,8 +1505,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1487,7 +1519,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
@@ -1556,8 +1588,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1566,7 +1602,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
@@ -1628,8 +1664,12 @@ public interface KStream<K, V> {
      * <td>&lt;K1:ValueJoiner(C,b)&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key (cf.
-     * {@link #leftJoin(GlobalKTable, KeyValueMapper, ValueJoiner)}).
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
+     * If this is not the case, you would need to call {@link #through(String)} for this {@code KStream} before doing
+     * the join, using a pre-created topic with the same number of partitions as the given {@link KTable}.
+     * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner);
+     * cf. {@link #join(GlobalKTable, KeyValueMapper, ValueJoiner)}.
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
@@ -1638,7 +1678,7 @@ public interface KStream<K, V> {
      * "-repartition" is a fixed suffix.
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      * <p>
-     * Repartitioning can happen only for this {@code KStream}s.
+     * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
