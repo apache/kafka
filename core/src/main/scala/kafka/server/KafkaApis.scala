@@ -1300,11 +1300,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val deleteRecordsRequest = request.body[DeleteRecordsRequest]
 
     val (authorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = deleteRecordsRequest.partitionOffsets.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
     }
 
     val (authorizedForDeleteTopics, unauthorizedForDeleteTopics) = authorizedForDescribeTopics.partition {
-      case (topicPartition, _) => authorize(request.session, Delete, new Resource(auth.Topic, topicPartition.topic))
+      case (topicPartition, _) => authorize(request.session, Delete, new Resource(Topic, topicPartition.topic))
     }
 
     // the callback for sending a DeleteRecordsResponse

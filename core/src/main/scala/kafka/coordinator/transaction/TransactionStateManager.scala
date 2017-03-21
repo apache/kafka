@@ -34,6 +34,13 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 
+
+object TransactionManager {
+  // default transaction management config values
+  val DefaultTransactionalIdExpirationMs = 604800000 // 7 days
+  val DefaultTransactionsMaxTimeoutMs = 900000 // 15 min
+}
+
 /*
  * Transaction manager is part of the transaction coordinator, it manages:
  *
@@ -93,6 +100,12 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
+  /**
+    * Validate the given pid metadata
+    */
+  def validateTransactionTimeoutMs(txnTimeoutMs: Int): Boolean =
+    txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0
+
   def transactionTopicConfigs: Properties = {
     val props = new Properties
 
@@ -101,8 +114,8 @@ class TransactionStateManager(brokerId: Int,
     props.put(LogConfig.CompressionTypeProp, NoCompressionCodec)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
 
-    props.put(LogConfig.MinInSyncReplicasProp, config.minInsyncReplicas.toString)
-    props.put(LogConfig.SegmentBytesProp, config.segmentBytes.toString)
+    props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
+    props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
 
     props
   }
@@ -127,7 +140,7 @@ class TransactionStateManager(brokerId: Int,
     * If the topic does not exist, the default partition count is returned.
     */
   private def getTransactionTopicPartitionCount: Int = {
-    zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName).getOrElse(config.numPartitions)
+    zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName).getOrElse(config.transactionLogNumPartitions)
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition) {
@@ -139,16 +152,16 @@ class TransactionStateManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        val buffer = ByteBuffer.allocate(config.loadBufferSize)
+        val buffer = ByteBuffer.allocate(config.transactionLogLoadBufferSize)
 
         val loadedTransactions = mutable.Map.empty[String, TransactionMetadata]
         val removedTransactionalIds = mutable.Set.empty[String]
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
-        var currOffset = log.logStartOffset.getOrElse(throw new IllegalStateException(s"Could not find log start offset for $topicPartition"))
+        var currOffset = log.logStartOffset
         while (currOffset < highWaterMark && !shuttingDown.get()) {
           buffer.clear()
-          val fileRecords = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true)
+          val fileRecords = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None, minOneMessage = true)
             .records.asInstanceOf[FileRecords]
           val bufferRead = fileRecords.readInto(buffer, 0)
 
@@ -302,8 +315,10 @@ class TransactionStateManager(brokerId: Int,
   }
 }
 
-private case class TransactionConfig(numPartitions: Int = TransactionLog.DefaultNumPartitions,
-                                     replicationFactor: Short = TransactionLog.DefaultReplicationFactor,
-                                     segmentBytes: Int = TransactionLog.DefaultSegmentBytes,
-                                     loadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                     minInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas)
+private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionManager.DefaultTransactionalIdExpirationMs,
+                                                  transactionMaxTimeoutMs: Int = TransactionManager.DefaultTransactionsMaxTimeoutMs,
+                                                  transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
+                                                  transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
+                                                  transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
+                                                  transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
+                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas)

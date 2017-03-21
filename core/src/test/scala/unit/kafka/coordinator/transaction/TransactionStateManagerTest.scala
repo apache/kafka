@@ -53,7 +53,8 @@ class TransactionStateManagerTest {
 
   EasyMock.replay(zkUtils)
 
-  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkUtils, scheduler, replicaManager, TransactionConfig(), time)
+  val txnConfig = TransactionConfig()
+  val transactionManager: TransactionStateManager = new TransactionStateManager(0, zkUtils, scheduler, replicaManager, txnConfig, time)
 
   val txnId1: String = "one"
   val txnId2: String = "two"
@@ -74,6 +75,15 @@ class TransactionStateManagerTest {
   def tearDown() {
     EasyMock.reset(zkUtils, replicaManager)
     transactionManager.shutdown()
+  }
+
+  @Test
+  def testValidateTransactionTimeout() {
+    assertTrue(transactionManager.validateTransactionTimeoutMs(1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(-1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(0))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs + 1))
   }
 
   @Test
@@ -181,7 +191,7 @@ class TransactionStateManagerTest {
     EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
     EasyMock.expect(replicaManager.getHighWatermark(topicPartition)).andStubReturn(Some(endOffset))
 
-    EasyMock.expect(logMock.logStartOffset).andStubReturn(Some(startOffset))
+    EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None), EasyMock.eq(true)))
       .andReturn(FetchDataInfo(LogOffsetMetadata(startOffset), fileRecordsMock))
     EasyMock.expect(fileRecordsMock.readInto(EasyMock.anyObject(classOf[ByteBuffer]), EasyMock.anyInt()))
