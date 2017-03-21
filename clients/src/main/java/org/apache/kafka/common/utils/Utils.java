@@ -514,15 +514,6 @@ public class Utils {
         return Arrays.asList(elems);
     }
 
-    /*
-     * Create a string from a collection
-     * @param coll the collection
-     * @param separator the separator
-     */
-    public static <T> CharSequence mkString(Collection<T> coll, String separator) {
-        return join(coll, separator);
-    }
-
     /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
