@@ -21,6 +21,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.StandardCharsets;
+
 public class ErrorLoggingCallback implements Callback {
     private static final Logger log = LoggerFactory.getLogger(ErrorLoggingCallback.class);
     private String topic;
@@ -44,9 +46,9 @@ public class ErrorLoggingCallback implements Callback {
     public void onCompletion(RecordMetadata metadata, Exception e) {
         if (e != null) {
             String keyString = (key == null) ? "null" :
-                    logAsString ? new String(key) : key.length + " bytes";
+                    logAsString ? new String(key, StandardCharsets.UTF_8) : key.length + " bytes";
             String valueString = (valueLength == -1) ? "null" :
-                    logAsString ? new String(value) : valueLength + " bytes";
+                    logAsString ? new String(value, StandardCharsets.UTF_8) : valueLength + " bytes";
             log.error("Error when sending message to topic {} with key: {}, value: {} with error:",
                     topic, keyString, valueString, e);
         }

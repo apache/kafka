@@ -53,6 +53,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -213,7 +214,7 @@ public class RestServer {
                 connection.setDoOutput(true);
 
                 OutputStream os = connection.getOutputStream();
-                os.write(serializedBody.getBytes());
+                os.write(serializedBody.getBytes(StandardCharsets.UTF_8));
                 os.flush();
                 os.close();
             }

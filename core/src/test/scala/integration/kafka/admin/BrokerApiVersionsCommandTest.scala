@@ -36,7 +36,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
   @Test(timeout=120000)
   def checkBrokerApiVersionCommandOutput() {
     val byteArrayOutputStream = new ByteArrayOutputStream
-    val printStream = new PrintStream(byteArrayOutputStream)
+    val printStream = new PrintStream(byteArrayOutputStream, false, StandardCharsets.UTF_8.name())
     BrokerApiVersionsCommand.execute(Array("--bootstrap-server", brokerList), printStream)
     val content = new String(byteArrayOutputStream.toByteArray, StandardCharsets.UTF_8)
     val lineIter = content.split("\n").iterator

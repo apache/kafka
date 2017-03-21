@@ -221,6 +221,10 @@
       <allow pkg="org.apache.kafka.connect.storage" />
     </subpackage>
 
+    <subpackage name="converters">
+      <allow pkg="org.apache.kafka.connect.storage" />
+    </subpackage>
+    
     <subpackage name="runtime">
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.reflections"/>

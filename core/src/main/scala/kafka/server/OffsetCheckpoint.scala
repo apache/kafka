@@ -25,6 +25,7 @@ import scala.collection._
 import kafka.utils.{Exit, Logging}
 import kafka.common._
 import java.io._
+import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.TopicPartition
 
@@ -47,7 +48,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
     lock synchronized {
       // write to temp file and then swap with the existing file
       val fileOutputStream = new FileOutputStream(tempPath.toFile)
-      val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream))
+      val writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))
       try {
         writer.write(CurrentVersion.toString)
         writer.newLine()
@@ -83,7 +84,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
       new IOException(s"Malformed line in offset checkpoint file: $line'")
 
     lock synchronized {
-      val reader = new BufferedReader(new FileReader(file))
+      val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
       var line: String = null
       try {
         line = reader.readLine()
