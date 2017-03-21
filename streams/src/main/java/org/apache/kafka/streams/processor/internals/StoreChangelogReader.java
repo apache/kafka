@@ -118,8 +118,14 @@ public class StoreChangelogReader implements ChangelogReader {
             for (final StateRestorer restorer : needsRestoring.values()) {
                 if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
                     consumer.seek(restorer.partition(), restorer.checkpoint());
+                    logRestoreOffsets(restorer.partition(),
+                                      restorer.checkpoint(),
+                                      endOffsets.get(restorer.partition()));
                 } else {
                     consumer.seekToBeginning(Collections.singletonList(restorer.partition()));
+                    logRestoreOffsets(restorer.partition(),
+                                      consumer.position(restorer.partition()),
+                                      endOffsets.get(restorer.partition()));
                 }
             }
 
@@ -135,6 +141,13 @@ public class StoreChangelogReader implements ChangelogReader {
             consumer.assign(Collections.<TopicPartition>emptyList());
             log.debug("Took {} ms to restore active state", time.milliseconds() - start);
         }
+    }
+
+    private void logRestoreOffsets(final TopicPartition partition, final long checkpoint, final Long aLong) {
+        log.debug("restoring partition {} from offset {} to endOffset {}",
+                  partition,
+                  checkpoint,
+                  aLong);
     }
 
     @Override
