@@ -49,6 +49,9 @@ class TransactionCoordinatorTest {
   EasyMock.expect(transactionManager.isCoordinatorLoadingInProgress(EasyMock.anyString()))
     .andReturn(false)
     .anyTimes()
+  EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
+    .andReturn(true)
+    .anyTimes()
 
   val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
   EasyMock.expect(transactionManager.addTransaction(EasyMock.eq("a"), EasyMock.capture(capturedTxn)))

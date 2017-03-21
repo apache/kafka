@@ -41,7 +41,7 @@ object TransactionLog {
   val DefaultNumPartitions: Int = 50
   val DefaultSegmentBytes: Int = 100 * 1024 * 1024
   val DefaultReplicationFactor: Short = 3.toShort
-  val DefaultMinInSyncReplicas: Int = 3
+  val DefaultMinInSyncReplicas: Int = 2
   val DefaultLoadBufferSize: Int = 5 * 1024 * 1024
 
   // log message formats

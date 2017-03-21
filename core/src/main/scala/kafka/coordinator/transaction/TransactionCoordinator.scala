@@ -37,7 +37,9 @@ object TransactionCoordinator {
 
   def apply(config: KafkaConfig, replicaManager: ReplicaManager, scheduler: Scheduler, zkUtils: ZkUtils, time: Time): TransactionCoordinator = {
 
-    val txnConfig = TransactionConfig(config.transactionTopicPartitions,
+    val txnConfig = TransactionConfig(config.transactionalIdExpirationMs,
+      config.transactionMaxTimeoutMs,
+      config.transactionTopicPartitions,
       config.transactionTopicReplicationFactor,
       config.transactionTopicSegmentBytes,
       config.transactionsLoadBufferSize,
@@ -73,12 +75,14 @@ class TransactionCoordinator(brokerId: Int,
       responseCallback(initTransactionError(Errors.NOT_COORDINATOR))
     } else if (txnManager.isCoordinatorLoadingInProgress(transactionalId)) {
       responseCallback(initTransactionError(Errors.COORDINATOR_LOAD_IN_PROGRESS))
+    } else if (!txnManager.validateTransactionTimeoutMs(transactionTimeoutMs)) {
+      // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
+      responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
       // only try to get a new pid and update the cache if the transactional id is unknown
       txnManager.getTransaction(transactionalId) match {
         case None =>
-          val pid: Long = pidManager.nextPid()
-          // TODO: check transactionTimeoutMs is not larger than the broker configured maximum allowed value
+          val pid = pidManager.nextPid()
           val newMetadata = new TransactionMetadata(pid, epoch = 0, transactionTimeoutMs)
           val metadata = txnManager.addTransaction(transactionalId, newMetadata)
 
