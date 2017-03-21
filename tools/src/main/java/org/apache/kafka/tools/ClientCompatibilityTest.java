@@ -208,7 +208,7 @@ public class ClientCompatibilityTest {
 
         @Override
         public String toString() {
-            return Utils.mkString(result);
+            return result.toString();
         }
     }
 
