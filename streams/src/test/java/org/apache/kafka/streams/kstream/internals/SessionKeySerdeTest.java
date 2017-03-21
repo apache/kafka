@@ -84,4 +84,12 @@ public class SessionKeySerdeTest {
         assertArrayEquals("blah".getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
     }
 
+    @Test
+    public void shouldExtractBytesKeyFromBinary() throws Exception {
+        final Bytes bytesKey = Bytes.wrap("key".getBytes());
+        final Windowed<Bytes> windowedBytesKey = new Windowed<>(bytesKey, new SessionWindow(0, 10));
+        final Bytes serialized = SessionKeySerde.bytesToBinary(windowedBytesKey);
+        assertEquals(windowedBytesKey, SessionKeySerde.fromBytes(serialized));
+    }
+
 }

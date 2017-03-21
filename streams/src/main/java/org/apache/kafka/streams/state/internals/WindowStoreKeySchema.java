@@ -24,12 +24,6 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.List;
 
 class WindowStoreKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
-    private static final HasNextCondition ITERATOR_HAS_NEXT = new HasNextCondition() {
-        @Override
-        public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-            return iterator.hasNext();
-        }
-    };
     private final StateSerdes<Bytes, byte[]> serdes = new StateSerdes<>("window-store-key-schema", Serdes.Bytes(), Serdes.ByteArray());
 
     @Override
@@ -49,7 +43,24 @@ class WindowStoreKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to) {
-        return ITERATOR_HAS_NEXT;
+        return new HasNextCondition() {
+            @Override
+            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
+                while (iterator.hasNext()) {
+                    final Bytes bytes = iterator.peekNextKey();
+                    final Bytes keyBytes = WindowStoreUtils.bytesKeyFromBinaryKey(bytes.get());
+                    final long time = WindowStoreUtils.timestampFromBinaryKey(bytes.get());
+                    if (keyBytes.equals(binaryKey)
+                            && time >= from
+                            && time <= to) {
+                        return true;
+                    }
+                    iterator.next();
+                }
+
+                return false;
+            }
+        };
     }
 
     @Override
