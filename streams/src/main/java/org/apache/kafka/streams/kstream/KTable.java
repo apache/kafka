@@ -629,19 +629,8 @@ public interface KTable<K, V> {
      * <td>&lt;K1:null&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
-     * <p>
-     * Repartitioning can happen both input {@code KTable}s.
-     * For this case, all data of a {@code KTable} will be redistributed through the repartitioning topic by writing all
-     * update records to and rereading all update records from it, such that the join input {@code KTable} is
-     * partitioned correctly on its key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -721,19 +710,8 @@ public interface KTable<K, V> {
      * <td></td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
-     * <p>
-     * Repartitioning can happen both input {@code KTable}s.
-     * For this case, all data of a {@code KTable} will be redistributed through the repartitioning topic by writing all
-     * update records to and rereading all update records from it, such that the join input {@code KTable} is
-     * partitioned correctly on its key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
@@ -813,19 +791,8 @@ public interface KTable<K, V> {
      * <td>&lt;K1:null&gt;</td>
      * </tr>
      * </table>
-     * Both input streams need to be co-partitioned on the join key.
-     * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
-     * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-XXX-repartition", where "applicationId" is
-     * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
-     * <p>
-     * Repartitioning can happen both input {@code KTable}s.
-     * For this case, all data of a {@code KTable} will be redistributed through the repartitioning topic by writing all
-     * update records to and rereading all update records from it, such that the join input {@code KTable} is
-     * partitioned correctly on its key.
+     * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
+     * partitions.
      *
      * @param other  the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
