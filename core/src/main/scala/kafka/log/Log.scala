@@ -21,7 +21,7 @@ import kafka.api.KAFKA_0_10_0_IV0
 import kafka.utils._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogOffsetMetadata}
 import java.io.{File, IOException}
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
@@ -370,12 +370,13 @@ class Log(@volatile var dir: File,
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             val messageTimestampDifferenceMaxMs = {
-              if (config.compact && !config.userSupplied(LogConfig.MessageTimestampDifferenceMaxMsProp))
+              if (config.compact && !config.userSupplied(LogConfig.MessageTimestampDifferenceMaxMsProp) &&
+                  !config.userSupplied(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp))
                 Long.MaxValue
               else
                 config.messageTimestampDifferenceMaxMs
             }
-            
+
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
                                                           offset,
                                                           now,
