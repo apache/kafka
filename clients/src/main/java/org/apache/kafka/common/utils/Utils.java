@@ -24,6 +24,7 @@ import java.io.Closeable;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
@@ -367,7 +368,7 @@ public class Utils {
      * Read a properties file from the given path
      * @param filename The path of the file to read
      */
-    public static Properties loadProps(String filename) throws IOException {
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
         Properties props = new Properties();
         try (InputStream propStream = new FileInputStream(filename)) {
             props.load(propStream);
