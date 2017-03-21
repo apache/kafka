@@ -108,7 +108,7 @@ object RequestChannel extends Logging {
       if (requestObj != null)
         requestObj.describe(details)
       else
-        s"$header -- ${body[AbstractRequest]}"
+        s"$header -- ${body[AbstractRequest].toString(details)}"
     }
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {

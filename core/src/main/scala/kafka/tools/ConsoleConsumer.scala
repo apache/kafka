@@ -18,8 +18,10 @@
 package kafka.tools
 
 import java.io.PrintStream
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.{Locale, Properties, Random}
+
 import joptsimple._
 import kafka.api.OffsetRequest
 import kafka.common.{MessageFormatter, StreamEndException}
@@ -33,6 +35,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
+
 import scala.collection.JavaConverters._
 
 /**
@@ -412,8 +415,8 @@ object ConsoleConsumer extends Logging {
 class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
   var printTimestamp = false
-  var keySeparator = "\t".getBytes
-  var lineSeparator = "\n".getBytes
+  var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
+  var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
 
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
@@ -424,9 +427,9 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (props.containsKey("print.key"))
       printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
-      keySeparator = props.getProperty("key.separator").getBytes
+      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
     if (props.containsKey("line.separator"))
-      lineSeparator = props.getProperty("line.separator").getBytes
+      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("key.deserializer"))
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
@@ -438,8 +441,9 @@ class DefaultMessageFormatter extends MessageFormatter {
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
 
     def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Array[Byte]) {
-      val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes)
-      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.getBytes).getOrElse(nonNullBytes)
+      val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
+      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.
+        getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
       output.write(separator)
     }
@@ -448,9 +452,9 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     if (printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
-        output.write(s"$timestampType:$timestamp".getBytes)
+        output.write(s"$timestampType:$timestamp".getBytes(StandardCharsets.UTF_8))
       else
-        output.write(s"NO_TIMESTAMP".getBytes)
+        output.write(s"NO_TIMESTAMP".getBytes(StandardCharsets.UTF_8))
       output.write(keySeparator)
     }
 
@@ -470,8 +474,8 @@ class LoggingMessageFormatter extends MessageFormatter   {
     defaultWriter.writeTo(consumerRecord, output)
     if (logger.isInfoEnabled)
       logger.info({if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp, " else ""} +
-                  s"key:${if (key == null) "null" else new String(key)}, " +
-                  s"value:${if (value == null) "null" else new String(value)}")
+                  s"key:${if (key == null) "null" else new String(key, StandardCharsets.UTF_8)}, " +
+                  s"value:${if (value == null) "null" else new String(value, StandardCharsets.UTF_8)}")
   }
 }
 

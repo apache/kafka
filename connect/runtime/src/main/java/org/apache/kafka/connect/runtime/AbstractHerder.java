@@ -37,6 +37,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -339,8 +340,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private String trace(Throwable t) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        t.printStackTrace(new PrintStream(output));
         try {
+            t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
             return output.toString("UTF-8");
         } catch (UnsupportedEncodingException e) {
             return null;
