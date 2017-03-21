@@ -268,7 +268,7 @@ public class StandbyTaskTest {
 
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(10L));
         consumer.commitSync(committedOffsets);
-        task.commit(); // update offset limits
+        task.commit(true); // update offset limits
 
         // The commit offset has not reached, yet.
         remaining = task.update(ktable, remaining);
@@ -276,7 +276,7 @@ public class StandbyTaskTest {
 
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(11L));
         consumer.commitSync(committedOffsets);
-        task.commit(); // update offset limits
+        task.commit(true); // update offset limits
 
         // one record should be processed.
         remaining = task.update(ktable, remaining);
@@ -284,7 +284,7 @@ public class StandbyTaskTest {
 
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(45L));
         consumer.commitSync(committedOffsets);
-        task.commit(); // update offset limits
+        task.commit(true); // update offset limits
 
         // The commit offset is now 45. All record except for the last one should be processed.
         remaining = task.update(ktable, remaining);
@@ -292,7 +292,7 @@ public class StandbyTaskTest {
 
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(50L));
         consumer.commitSync(committedOffsets);
-        task.commit(); // update offset limits
+        task.commit(true); // update offset limits
 
         // The commit offset is now 50. Still the last record remains.
         remaining = task.update(ktable, remaining);
@@ -300,7 +300,7 @@ public class StandbyTaskTest {
 
         committedOffsets.put(new TopicPartition(ktable.topic(), ktable.partition()), new OffsetAndMetadata(60L));
         consumer.commitSync(committedOffsets);
-        task.commit(); // update offset limits
+        task.commit(true); // update offset limits
 
         // The commit offset is now 60. No record should be left.
         remaining = task.update(ktable, remaining);
@@ -372,7 +372,7 @@ public class StandbyTaskTest {
                                                                            serializedValue)));
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
-        task.commit();
+        task.commit(true);
 
         final Map<TopicPartition, Long> checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
                                                                                    ProcessorStateManager.CHECKPOINT_FILE_NAME)).read();

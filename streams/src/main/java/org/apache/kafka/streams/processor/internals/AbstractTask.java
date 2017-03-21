@@ -18,10 +18,12 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -49,6 +51,7 @@ public abstract class AbstractTask {
     InternalProcessorContext processorContext;
     private final ThreadCache cache;
     final String logPrefix;
+    boolean eosEnabled;
 
     /**
      * @throws ProcessorStateException if the state manager cannot be created
@@ -61,28 +64,42 @@ public abstract class AbstractTask {
                  final ChangelogReader changelogReader,
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
-                 final ThreadCache cache) {
+                 final ThreadCache cache,
+                 final StreamsConfig config) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
         this.topology = topology;
         this.consumer = consumer;
         this.cache = cache;
+        eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
 
         // create the processor state manager
         try {
-            stateMgr = new ProcessorStateManager(id, partitions, isStandby, stateDirectory, topology.storeToChangelogTopic(), changelogReader);
+            stateMgr = new ProcessorStateManager(
+                id,
+                partitions,
+                isStandby,
+                stateDirectory,
+                topology.storeToChangelogTopic(),
+                changelogReader,
+                eosEnabled);
         } catch (final IOException e) {
             throw new ProcessorStateException(String.format("%s Error while creating the state manager", logPrefix), e);
         }
     }
 
     public abstract void resume();
-    public abstract void commit();
+
+    /**
+     * @param startNewTransaction {@link Producer#beginTransaction() start a new transaction} after successful commit
+     *                            (eos only -- otherwise ignored)
+     */
+    public abstract void commit(final boolean startNewTransaction);
     public abstract void suspend();
-    public abstract void close();
+    public abstract void close(final boolean clean);
 
     public final TaskId id() {
         return id;

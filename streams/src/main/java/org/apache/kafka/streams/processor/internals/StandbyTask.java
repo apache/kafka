@@ -59,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                 final StreamsConfig config,
                 final StreamsMetrics metrics,
                 final StateDirectory stateDirectory) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null);
+        super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null, config);
 
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
@@ -87,9 +87,10 @@ public class StandbyTask extends AbstractTask {
      * - checkpoint store
      * - update offset limits
      * </pre>
+     * @param startNewTransaction ignored by {@code StandbyTask}s
      */
     @Override
-    public void commit() {
+    public void commit(final boolean startNewTransaction) {
         log.trace("{} Committing", logPrefix);
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
@@ -110,12 +111,19 @@ public class StandbyTask extends AbstractTask {
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
 
+    /**
+     * <pre>
+     * - {@link #commit(boolean) commit(noNewTransaction)}
+     * - close state
+     * <pre>
+     * @param clean shut down cleanly if {@code true} -- otherwise, just clean up open resources
+     */
     @Override
-    public void close() {
+    public void close(final boolean clean) {
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
-            commit();
+            commit(false);
             committedSuccessfully = true;
         } finally {
             closeStateManager(committedSuccessfully);

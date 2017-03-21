@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -35,11 +36,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class StreamsConfigTest {
 
@@ -56,6 +60,18 @@ public class StreamsConfigTest {
         props.put("key.deserializer.encoding", "UTF8");
         props.put("value.deserializer.encoding", "UTF-16");
         streamsConfig = new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfApplicationIdIsNotSet() {
+        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionBootstrapServersIsNotSet() {
+        props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        new StreamsConfig(props);
     }
 
     @Test
@@ -267,6 +283,122 @@ public class StreamsConfigTest {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
         assertThat(consumerConfigs.get("internal.leave.group.on.close"), CoreMatchers.<Object>equalTo(false));
+    }
+
+    @Test
+    public void shouldAcceptAtLestOnce() {
+        // don't use `StreamsConfig.AT_LEAST_ONCE` to actually do a useful test
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "at_least_once");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptExactlyOnce() {
+        // don't use `StreamsConfig.EXACLTY_ONCE` to actually do a useful test
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfNotAtLestOnceOrExactlyOnce() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfConsumerIsolationLevelIsOverriddenIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+    }
+
+    @Test
+    public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+    }
+
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfProducerEnableIdempotenceIsOverriddenIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test
+    public void shouldAllowSettingProducerEnableIdempotenceIfEosDisabled() {
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfProducerMaxInFlightRequestPerConnectionsIsOverriddenIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test
+    public void shouldAllowSettingProducerMaxInFlightRequestPerConnectionsWhenEosDisabled() {
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfStandbyTasksAreUsedIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAllowSettingStandbyTasksIfEosDisabled() {
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldSetDifferentDefaultsIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+
+        assertThat((IsolationLevel) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(IsolationLevel.READ_COMMITTED));
+        assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
+        assertThat((Integer) producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(Integer.MAX_VALUE));
+        assertThat((Integer) producerConfigs.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION), equalTo(1));
+        assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
+    }
+
+    @Test
+    public void shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled() {
+        final int numberOfRetries = 42;
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.RETRIES_CONFIG, numberOfRetries);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+
+        assertThat((Integer) producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
+    }
+
+    @Test
+    public void shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceEnabled() {
+        final long commitIntervalMs = 73L;
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
     }
 
     static class MisconfiguredSerde implements Serde {

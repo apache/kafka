@@ -20,8 +20,10 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
@@ -56,6 +58,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
+    private final Producer<byte[], byte[]> producer;
     private final int maxBufferedSize;
     private final boolean exactlyOnceEnabled;
 
@@ -91,7 +94,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
-     * @param recordCollector       the instance of {@link RecordCollector} used to produce records
+     * @param producer              the instance of {@link Producer} used to produce records
      */
     public StreamTask(final TaskId id,
                       final String applicationId,
@@ -104,8 +107,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
-                      final RecordCollector recordCollector) {
-        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache);
+                      final Producer<byte[], byte[]> producer) {
+        super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache, config);
         punctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
@@ -128,8 +131,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the consumed offset cache
         consumedOffsets = new HashMap<>();
 
-        // create the record recordCollector that maintains the produced offsets
-        this.recordCollector = recordCollector;
+        this.producer = producer;
+        recordCollector = createRecordCollector();
 
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
@@ -137,16 +140,26 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.debug("{} Initializing", logPrefix);
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
+        if (exactlyOnceEnabled) {
+            producer.initTransactions();
+            producer.beginTransaction();
+        }
         initTopology();
         processorContext.initialized();
     }
 
     /**
-     * re-initialize the task
+     * <pre>
+     * - re-initialize the task
+     * - if (eos) begin new transaction
+     * </pre>
      */
     @Override
     public void resume() {
         log.debug("{} Resuming", logPrefix);
+        if (exactlyOnceEnabled) {
+            producer.beginTransaction();
+        }
         initTopology();
     }
 
@@ -229,13 +242,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     /**
      * <pre>
-     *  - flush state and producer
-     *  - write checkpoint
-     *  - commit offsets
+     * - flush state and producer
+     * - if(!eos) write checkpoint
+     * - commit offsets and maybe start new transaction
      * </pre>
      */
     @Override
-    public void commit() {
+    public void commit(final boolean startNewTransaction) {
         log.trace("{} Committing", logPrefix);
         metrics.metrics.measureLatencyNs(
             time,
@@ -243,8 +256,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 @Override
                 public void run() {
                     flushState();
-                    stateMgr.checkpoint(recordCollectorOffsets());
-                    commitOffsets();
+                    if (!eosEnabled) {
+                        stateMgr.checkpoint(recordCollectorOffsets());
+                    }
+                    commitOffsets(startNewTransaction);
                 }
             },
             metrics.taskCommitTimeSensor);
@@ -262,7 +277,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         recordCollector.flush();
     }
 
-    private void commitOffsets() {
+    private void commitOffsets(final boolean startNewTransaction) {
         if (commitOffsetNeeded) {
             log.debug("{} Committing offsets", logPrefix);
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
@@ -272,11 +287,20 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                 stateMgr.putOffsetLimit(partition, offset);
             }
-            try {
-                consumer.commitSync(consumedOffsetsAndMetadata);
-            } catch (final CommitFailedException cfe) {
-                log.warn("{} Failed offset commits: {} ", logPrefix, consumedOffsetsAndMetadata);
-                throw cfe;
+
+            if (exactlyOnceEnabled) {
+                producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
+                producer.commitTransaction();
+                if (startNewTransaction) {
+                    producer.beginTransaction();
+                }
+            } else {
+                try {
+                    consumer.commitSync(consumedOffsetsAndMetadata);
+                } catch (final CommitFailedException e) {
+                    log.warn("{} Failed offset commits {} due to {}", logPrefix, consumedOffsetsAndMetadata, e.getMessage());
+                    throw e;
+                }
             }
             commitOffsetNeeded = false;
         }
@@ -299,18 +323,33 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     /**
      * <pre>
-     *  - close topology
-     *  - {@link #commit()}
-     *    - flush state and producer
-     *    - write checkpoint
-     *    - commit offsets
+     * - close topology
+     * - {@link #commit(boolean) commit(noNewTransaction)}
+     *   - flush state and producer
+     *   - if (!eos) write checkpoint
+     *   - commit offsets
      * </pre>
      */
     @Override
     public void suspend() {
+        suspend(true);
+    }
+
+    /**
+     * <pre>
+     * - close topology
+     * - if (clean) {@link #commit(boolean) commit(noNewTransaction)}
+     *   - flush state and producer
+     *   - if (!eos) write checkpoint
+     *   - commit offsets
+     * </pre>
+     */
+    private void suspend(final boolean clean) {
         log.debug("{} Suspending", logPrefix);
-        closeTopology();
-        commit();
+        closeTopology(); // should we call this only on clean suspend?
+        if (clean) {
+            commit(false);
+        }
     }
 
     private void closeTopology() {
@@ -339,21 +378,22 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     /**
      * <pre>
-     *  - {@link #suspend()}
-     *    - close topology
-     *    - {@link #commit()}
-     *      - flush state and producer
-     *      - write checkpoint
-     *      - commit offsets
-     *  - close state
+     * - {@link #suspend(boolean) suspend(clean)}
+     *   - close topology
+     *   - if (clean) {@link #commit(boolean) commit(noNewTransaction)}
+     *     - flush state and producer
+     *     - if (!eos) write checkpoint
+     *     - commit offsets
+     * - close state
+     *   - if (clean) write checkpoint
      * </pre>
      */
     @Override
-    public void close() {
+    public void close(final boolean clean) {
         log.debug("{} Closing", logPrefix);
         try {
-            suspend();
-            closeStateManager(true);
+            suspend(clean);
+            closeStateManager(clean);
             partitionGroup.close();
             metrics.removeAllSensors();
         } catch (final RuntimeException e) {
@@ -361,6 +401,13 @@ public class StreamTask extends AbstractTask implements Punctuator {
             throw e;
         } finally {
             if (exactlyOnceEnabled) {
+                if (!clean) {
+                    try {
+                        producer.abortTransaction();
+                    } catch (final ProducerFencedException e) {
+                        // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
+                    }
+                }
                 try {
                     recordCollector.close();
                 } catch (final Throwable e) {
@@ -450,9 +497,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return processorContext;
     }
 
-    // for testing only
+    // visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
+    }
+
+    // visible for testing only
+    RecordCollector createRecordCollector() {
+        return new RecordCollectorImpl(producer, id.toString());
     }
 
 }

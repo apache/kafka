@@ -43,6 +43,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 
 /**
  * Configuration for a {@link KafkaStreams} instance.
@@ -79,6 +80,9 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
+
+    private final boolean eosEnabled;
+    private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
 
     /**
      * Prefix used to isolate {@link KafkaConsumer consumer} configs from {@link KafkaProducer producer} configs.
@@ -129,7 +133,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code commit.interval.ms} */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
-    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor.";
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor. (Note, if 'processing.guarantee' is set to '" + EXACTLY_ONCE + "', the default value is " + EOS_DEFAULT_COMMIT_INTERVAL_MS + ")";
 
     /** {@code connections.max.idle.ms} */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -517,6 +521,11 @@ public class StreamsConfig extends AbstractConfig {
      */
     public StreamsConfig(final Map<?, ?> props) {
         super(CONFIG, props);
+        eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+        if (eosEnabled && getInt(NUM_STANDBY_REPLICAS_CONFIG) > 0) {
+            throw new ConfigException("Unexpected user-specified streams config " + NUM_STANDBY_REPLICAS_CONFIG
+                + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' standby tasks are not available.");
+        }
     }
 
     private Map<String, Object> getCommonConsumerConfigs() throws ConfigException {
@@ -536,6 +545,13 @@ public class StreamsConfig extends AbstractConfig {
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // remove deprecate ZK config
         consumerProps.remove(ZOOKEEPER_CONNECT_CONFIG);
+        if (eosEnabled) {
+            if (clientProvidedProps.containsKey(ConsumerConfig.ISOLATION_LEVEL_CONFIG)) {
+                throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ISOLATION_LEVEL_CONFIG
+                    + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' consumers will always read committed data only.");
+            }
+            consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED);
+        }
 
         return consumerProps;
     }
@@ -604,6 +620,8 @@ public class StreamsConfig extends AbstractConfig {
      * @return Map of the producer configuration.
      */
     public Map<String, Object> getProducerConfigs(final String clientId) {
+        final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames());
+
         // generate producer configs from original properties and overridden maps
         final Map<String, Object> props = new HashMap<>(PRODUCER_DEFAULT_OVERRIDES);
         props.putAll(getClientPropsWithPrefix(PRODUCER_PREFIX, ProducerConfig.configNames()));
@@ -611,6 +629,25 @@ public class StreamsConfig extends AbstractConfig {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, originals().get(BOOTSTRAP_SERVERS_CONFIG));
         // add client id with stream client id prefix
         props.put(CommonClientConfigs.CLIENT_ID_CONFIG, clientId + "-producer");
+        if (eosEnabled) {
+            if (clientProvidedProps.containsKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
+                throw new ConfigException("Unexpected user-specified consumer config " + ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG
+                    + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' producer will always have idempotency enabled.");
+            }
+            props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+
+            if (clientProvidedProps.containsKey(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+                throw new ConfigException("Unexpected user-specified consumer config " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
+                    + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' producer will always have only one in-flight request per connection.");
+            }
+            props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
+
+            // only set `retries` to Integer.MAX_VALUE if no user config is set
+            if (!originals().containsKey(ProducerConfig.RETRIES_CONFIG)) {
+                props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+            }
+        }
+
 
         return props;
     }
@@ -726,6 +763,19 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         return parsed;
+    }
+
+    @Override
+    public Long getLong(final String key) {
+        // return different default value for `commit.interval.ms` if EOS enabled
+        if (StreamsConfig.COMMIT_INTERVAL_MS_CONFIG.equals(key)
+            && eosEnabled
+            // use EOS default value only if no user config is set
+            && !originals().containsKey(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)) {
+            return EOS_DEFAULT_COMMIT_INTERVAL_MS;
+        }
+        // return non-EOS default value or user specified value
+        return super.getLong(key);
     }
 
     public static void main(final String[] args) {

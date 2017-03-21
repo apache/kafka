@@ -65,6 +65,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionCommitted;
     private boolean transactionAborted;
     private boolean producerFenced;
+    private boolean sentOffsets;
+    private boolean flushed;
+    private long commitCount = 0L;
 
     /**
      * Create a mock producer
@@ -94,6 +97,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.consumerGroupOffsets = new ArrayList<>();
         this.uncommittedConsumerGroupOffsets = new HashMap<>();
         this.completions = new ArrayDeque<>();
+    }
+
+    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
+        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     /**
@@ -148,6 +155,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = true;
         this.transactionCommitted = false;
         this.transactionAborted = false;
+        sentOffsets = false;
     }
 
     @Override
@@ -162,6 +170,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
             this.uncommittedConsumerGroupOffsets.put(consumerGroupId, uncommittedOffsets);
         }
         uncommittedOffsets.putAll(offsets);
+        sentOffsets = true;
     }
 
     @Override
@@ -182,6 +191,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionAborted = false;
         this.transactionInFlight = false;
 
+        ++commitCount;
     }
 
     @Override
@@ -216,6 +226,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (!this.transactionInFlight) {
             throw new IllegalStateException("There is no open transaction.");
         }
+        // TODO double check transactionAborted = true;
     }
 
     /**
@@ -236,6 +247,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         verifyProducerState();
+        flushed = false;
         int partition = 0;
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
@@ -264,6 +276,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * Get the next offset for this topic/partition
      */
     private long nextOffset(TopicPartition tp) {
+        if (closed) {
+            throw new IllegalStateException("MockedProducer is already closed.");
+        }
         Long offset = this.offsets.get(tp);
         if (offset == null) {
             this.offsets.put(tp, 1L);
@@ -276,8 +291,15 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void flush() {
+        if (closed) {
+            throw new IllegalStateException("MockedProducer is already closed.");
+        }
+        if (producerFenced) {
+            throw new ProducerFencedException("MockProducer got fenced.");
+        }
         while (!this.completions.isEmpty())
             completeNext();
+        flushed = true;
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -301,6 +323,10 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (transactionInFlight)
             abortTransaction();
         this.closed = true;
+    }
+
+    public void fenceProducer() {
+        producerFenced = true;
     }
 
     public boolean closed() {
@@ -327,6 +353,34 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     public boolean transactionAborted() {
         return this.transactionAborted;
+    }
+
+    public boolean flushed() {
+        return flushed;
+    }
+
+    public boolean transactionInitialized() {
+        return transactionInitialized;
+    }
+
+    public boolean transactionStarted() {
+        return transactionStarted;
+    }
+
+    public boolean sentOffsets() {
+        return sentOffsets;
+    }
+
+    public boolean transactionCommitted() {
+        return transactionCommitted;
+    }
+
+    public long commitCount() {
+        return commitCount;
+    }
+
+    public boolean transactionAborted() {
+        return transactionAborted;
     }
 
     /**
