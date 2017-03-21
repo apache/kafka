@@ -422,7 +422,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public void setMaxTimestamp(TimestampType timestampType, long timestamp) {
             if (record.magic() == RecordBatch.MAGIC_VALUE_V0)
-                throw new IllegalArgumentException("Cannot set timestamp for a record with magic = 0");
+                throw new UnsupportedOperationException("Cannot set timestamp for a record with magic = 0");
 
             long currentTimestamp = record.timestamp();
             // We don't need to recompute crc if the timestamp is not updated.
@@ -438,8 +438,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         private void setTimestampAndUpdateCrc(TimestampType timestampType, long timestamp) {
-            byte attributes = record.attributes();
-            buffer.put(LOG_OVERHEAD + LegacyRecord.ATTRIBUTES_OFFSET, timestampType.updateAttributes(attributes));
+            byte attributes = LegacyRecord.computeAttributes(magic(), compressionType(), timestampType);
+            buffer.put(LOG_OVERHEAD + LegacyRecord.ATTRIBUTES_OFFSET, attributes);
             buffer.putLong(LOG_OVERHEAD + LegacyRecord.TIMESTAMP_OFFSET, timestamp);
             long crc = record.computeChecksum();
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);

@@ -47,7 +47,7 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(firstOffset, batch.baseOffset());
         assertTrue(batch.isValid());
 
-        List<RecordBatch.MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
+        List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
         assertEquals(1, recordBatches.size());
         assertEquals(lastOffset, recordBatches.get(0).lastOffset());
 
@@ -56,8 +56,65 @@ public class AbstractLegacyRecordBatchTest {
             assertEquals(offset++, record.offset());
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testSetNoTimestampTypeNotAllowed() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setMaxTimestamp(TimestampType.NO_TIMESTAMP_TYPE, RecordBatch.NO_TIMESTAMP);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testSetLogAppendTimeNotAllowedV0() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        long logAppendTime = 15L;
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setMaxTimestamp(TimestampType.LOG_APPEND_TIME, logAppendTime);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testSetCreateTimeNotAllowedV0() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        long createTime = 15L;
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setMaxTimestamp(TimestampType.CREATE_TIME, createTime);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testSetPartitionLeaderEpochNotAllowedV0() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setPartitionLeaderEpoch(15);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void testSetPartitionLeaderEpochNotAllowedV1() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setPartitionLeaderEpoch(15);
+    }
+
     @Test
-    public void testSetLogAppendTime() {
+    public void testSetLogAppendTimeV1() {
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
                 CompressionType.GZIP, TimestampType.CREATE_TIME,
                 new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
@@ -72,13 +129,39 @@ public class AbstractLegacyRecordBatchTest {
         assertEquals(logAppendTime, batch.maxTimestamp());
         assertTrue(batch.isValid());
 
-        List<RecordBatch.MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
+        List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
         assertEquals(1, recordBatches.size());
         assertEquals(TimestampType.LOG_APPEND_TIME, recordBatches.get(0).timestampType());
         assertEquals(logAppendTime, recordBatches.get(0).maxTimestamp());
 
         for (Record record : records.records())
             assertEquals(logAppendTime, record.timestamp());
+    }
+
+    @Test
+    public void testSetCreateTimeV1() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+
+        long createTime = 15L;
+
+        ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+        batch.setMaxTimestamp(TimestampType.CREATE_TIME, createTime);
+        assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
+        assertEquals(createTime, batch.maxTimestamp());
+        assertTrue(batch.isValid());
+
+        List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
+        assertEquals(1, recordBatches.size());
+        assertEquals(TimestampType.CREATE_TIME, recordBatches.get(0).timestampType());
+        assertEquals(createTime, recordBatches.get(0).maxTimestamp());
+
+        long expectedTimestamp = 1L;
+        for (Record record : records.records())
+            assertEquals(expectedTimestamp++, record.timestamp());
     }
 
 }

@@ -65,7 +65,7 @@ public class SimpleRecord {
     }
 
     public SimpleRecord(Record record) {
-        this(record.timestamp(), record.key(), record.value());
+        this(record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     public ByteBuffer key() {
@@ -90,11 +90,10 @@ public class SimpleRecord {
         if (o == null || getClass() != o.getClass()) return false;
 
         SimpleRecord that = (SimpleRecord) o;
-
-        if (timestamp != that.timestamp) return false;
-        if (key != null ? !key.equals(that.key) : that.key != null) return false;
-        if (value != null ? !value.equals(that.value) : that.value != null) return false;
-        return Arrays.equals(headers, that.headers);
+        return timestamp == that.timestamp &&
+                (key == null ? that.key == null : key.equals(that.key)) &&
+                (value == null ? that.value == null : value.equals(that.value)) &&
+                Arrays.equals(headers, that.headers);
     }
 
     @Override

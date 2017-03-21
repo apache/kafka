@@ -181,7 +181,7 @@ public class MemoryRecordsTest {
 
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-        List<RecordBatch.MutableRecordBatch> shallowBatches = TestUtils.toList(filteredRecords.batches());
+        List<MutableRecordBatch> shallowBatches = TestUtils.toList(filteredRecords.batches());
         final List<Long> expectedEndOffsets;
         final List<Long> expectedStartOffsets;
 
@@ -271,7 +271,7 @@ public class MemoryRecordsTest {
         filtered.flip();
         MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-        List<RecordBatch.MutableRecordBatch> shallowBatches = TestUtils.toList(filteredRecords.batches());
+        List<MutableRecordBatch> shallowBatches = TestUtils.toList(filteredRecords.batches());
         assertEquals(magic < RecordBatch.MAGIC_VALUE_V2 && compression == CompressionType.NONE ? 3 : 2, shallowBatches.size());
 
         for (RecordBatch shallowEntry : shallowBatches) {

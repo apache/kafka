@@ -19,7 +19,7 @@ package org.apache.kafka.common.record;
 import java.nio.ByteBuffer;
 
 /**
- * A record batch is a container for log records. In old versions of the message format (versions 0 and 1),
+ * A record batch is a container for records. In old versions of the record format (versions 0 and 1),
  * a batch consisted always of a single record if no compression was enabled, but could contain
  * many records otherwise. Newer versions (magic versions 2 and above) will generally contain many records
  * regardless of compression.
@@ -44,8 +44,8 @@ public interface RecordBatch extends Iterable<Record> {
     long NO_TIMESTAMP = -1L;
 
     /**
-     * Values used in the new message format by non-idempotent/non-transactional producers or when
-     * up-converting from an older message format.
+     * Values used in the v2 record format by non-idempotent/non-transactional producers or when
+     * up-converting from an older format.
      */
     long NO_PRODUCER_ID = -1L;
     short NO_PRODUCER_EPOCH = -1;
@@ -58,7 +58,7 @@ public interface RecordBatch extends Iterable<Record> {
     int UNKNOWN_PARTITION_LEADER_EPOCH = -1;
 
     /**
-     * Check whether the checksum of this entry is correct.
+     * Check whether the checksum of this batch is correct.
      *
      * @return true If so, false otherwise
      */
@@ -70,104 +70,104 @@ public interface RecordBatch extends Iterable<Record> {
     void ensureValid();
 
     /**
-     * Get the checksum of this entry, which covers the entry header as well as all of the records.
+     * Get the checksum of this record batch, which covers the batch header as well as all of the records.
      *
      * @return The 4-byte unsigned checksum represented as a long
      */
     long checksum();
 
     /**
-     * Get the timestamp of this entry. This is the max timestamp among all records contained in this log entry.
+     * Get the timestamp of this record batch. This is the max timestamp among all records contained in this batch.
      *
      * @return The max timestamp
      */
     long maxTimestamp();
 
     /**
-     * Get the timestamp type of this entry. This will be {@link TimestampType#NO_TIMESTAMP_TYPE}
-     * if the message has magic 0.
+     * Get the timestamp type of this record batch. This will be {@link TimestampType#NO_TIMESTAMP_TYPE}
+     * if the batch has magic 0.
      *
      * @return The timestamp type
      */
     TimestampType timestampType();
 
     /**
-     * Get the first offset contained in this log entry. For magic version prior to 2, this generally
-     * requires deep iteration and will return the offset of the first record in the message set. For
-     * magic version 2 and above, this will return the first offset of the original message set (i.e.
+     * Get the first offset contained in this record batch. For magic version prior to 2, this generally
+     * requires deep iteration and will return the offset of the first record in the record batch. For
+     * magic version 2 and above, this will return the first offset of the original record batch (i.e.
      * prior to compaction). For non-compacted topics, the behavior is equivalent.
      *
      * Because this requires deep iteration for older magic versions, this method should be used with
      * caution. Generally {@link #lastOffset()} is safer since access is efficient for all magic versions.
      *
-     * @return The base offset of this message set (which may or may not be the offset of the first record
+     * @return The base offset of this record batch (which may or may not be the offset of the first record
      *         as described above).
      */
     long baseOffset();
 
     /**
-     * Get the last offset in this record set (inclusive).
+     * Get the last offset in this record batch (inclusive).
      *
-     * @return The offset of the last record in this entry
+     * @return The offset of the last record in this batch
      */
     long lastOffset();
 
     /**
-     * Get the offset following this entry (i.e. the last offset contained in this entry plus one).
+     * Get the offset following this record batch (i.e. the last offset contained in this batch plus one).
      *
-     * @return the next consecutive offset following this entry
+     * @return the next consecutive offset following this batch
      */
     long nextOffset();
 
     /**
-     * Get the message format version of this entry (i.e its magic value).
+     * Get the record format version of this record batch (i.e its magic value).
      *
      * @return the magic byte
      */
     byte magic();
 
     /**
-     * Get the producer ID (PID) for this log entry. For older magic versions, this will return 0.
+     * Get the producer ID (PID) for this log record batch. For older magic versions, this will return 0.
      *
-     * @return The PID or 0 if there is none
+     * @return The PID or -1 if there is none
      */
     long producerId();
 
     /**
-     * Get the producer epoch for this log entry.
+     * Get the producer epoch for this log record batch.
      *
-     * @return The producer epoch, or 0 if there is none
+     * @return The producer epoch, or -1 if there is none
      */
     short producerEpoch();
 
     /**
-     * Get the first sequence number of this message set.
-     * @return The first sequence number
+     * Get the first sequence number of this record batch.
+     * @return The first sequence number or -1 if there is none
      */
     int baseSequence();
 
     /**
-     * Get the last sequence number of this message set.
+     * Get the last sequence number of this record batch.
      *
-     * @return The last sequence number
+     * @return The last sequence number or -1 if there is none
      */
     int lastSequence();
 
     /**
-     * Get the compression type of this log entry
+     * Get the compression type of this record batch.
      *
      * @return The compression type
      */
     CompressionType compressionType();
 
     /**
-     * Get the size in bytes of this entry, including the size of the record and the log overhead.
-     * @return The size in bytes of this entry
+     * Get the size in bytes of this batch, including the size of the record and the batch overhead.
+     * @return The size in bytes of this batch
      */
     int sizeInBytes();
 
     /**
-     * Get the count if it is efficiently supported by the message format (which is only the case
+     * Get the count if it is efficiently supported by the record format (which is only the case
      * for magic 2 and higher).
      *
      * @return The number of records in the batch or null for magic versions 0 and 1.
@@ -175,38 +175,27 @@ public interface RecordBatch extends Iterable<Record> {
     Integer countOrNull();
 
     /**
-     * Check whether this entry contains a compressed message set.
+     * Check whether this record batch is compressed.
      * @return true if so, false otherwise
      */
     boolean isCompressed();
 
     /**
-     * Write this entry into a buffer.
-     * @param buffer The buffer to write the entry to
+     * Write this record batch into a buffer.
+     * @param buffer The buffer to write the batch to
      */
     void writeTo(ByteBuffer buffer);
 
     /**
-     * Whether or not this log entry is part of a transaction.
+     * Whether or not this record batch is part of a transaction.
      * @return true if it is, false otherwise
      */
     boolean isTransactional();
 
     /**
-     * Get the partition leader epoch of this entry.
+     * Get the partition leader epoch of this record batch.
      * @return The leader epoch or -1 if it is unknown
      */
     int partitionLeaderEpoch();
-
-    /**
-     * A mutable log entry is one that can be modified in place (without copying).
-     */
-    interface MutableRecordBatch extends RecordBatch {
-        void setLastOffset(long offset);
-
-        void setMaxTimestamp(TimestampType timestampType, long maxTimestamp);
-
-        void setPartitionLeaderEpoch(int epoch);
-    }
 
 }

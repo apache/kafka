@@ -40,7 +40,7 @@ public class DefaultRecordBatchTest {
         builder.appendWithOffset(1234568, System.currentTimeMillis(), "b".getBytes(), "v".getBytes());
 
         MemoryRecords records = builder.build();
-        for (RecordBatch.MutableRecordBatch batch : records.batches()) {
+        for (MutableRecordBatch batch : records.batches()) {
             assertEquals(1234567, batch.baseOffset());
             assertEquals(1234568, batch.lastOffset());
             assertTrue(batch.isValid());
@@ -120,7 +120,7 @@ public class DefaultRecordBatchTest {
         assertEquals(firstOffset, batch.baseOffset());
         assertTrue(batch.isValid());
 
-        List<RecordBatch.MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
+        List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
         assertEquals(1, recordBatches.size());
         assertEquals(lastOffset, recordBatches.get(0).lastOffset());
 
@@ -144,7 +144,7 @@ public class DefaultRecordBatchTest {
         assertEquals(leaderEpoch, batch.partitionLeaderEpoch());
         assertTrue(batch.isValid());
 
-        List<RecordBatch.MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
+        List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
         assertEquals(1, recordBatches.size());
         assertEquals(leaderEpoch, recordBatches.get(0).partitionLeaderEpoch());
     }
@@ -165,13 +165,24 @@ public class DefaultRecordBatchTest {
         assertEquals(logAppendTime, batch.maxTimestamp());
         assertTrue(batch.isValid());
 
-        List<RecordBatch.MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
+        List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());
         assertEquals(1, recordBatches.size());
         assertEquals(logAppendTime, recordBatches.get(0).maxTimestamp());
         assertEquals(TimestampType.LOG_APPEND_TIME, recordBatches.get(0).timestampType());
 
         for (Record record : records.records())
             assertEquals(logAppendTime, record.timestamp());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testSetNoTimestampTypeNotAllowed() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+                CompressionType.NONE, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
+        batch.setMaxTimestamp(TimestampType.NO_TIMESTAMP_TYPE, RecordBatch.NO_TIMESTAMP);
     }
 
     @Test

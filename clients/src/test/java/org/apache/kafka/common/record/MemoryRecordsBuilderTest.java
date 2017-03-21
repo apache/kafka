@@ -71,7 +71,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(System.currentTimeMillis(), "foo".getBytes(), "bar".getBytes());
         MemoryRecords records = builder.build();
 
-        List<RecordBatch.MutableRecordBatch> batches = Utils.toList(records.batches().iterator());
+        List<MutableRecordBatch> batches = Utils.toList(records.batches().iterator());
         assertEquals(1, batches.size());
         assertTrue(batches.get(0).isTransactional());
     }

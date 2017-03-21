@@ -30,11 +30,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -81,11 +81,7 @@ public class Utils {
      * @return The string
      */
     public static String utf8(byte[] bytes) {
-        try {
-            return new String(bytes, "UTF8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        return new String(bytes, StandardCharsets.UTF_8);
     }
 
     /**
@@ -110,14 +106,10 @@ public class Utils {
      * @return The UTF8 string
      */
     public static String utf8(ByteBuffer buffer, int offset, int length) {
-        try {
-            if (buffer.hasArray())
-                return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, "UTF8");
-            else
-                return utf8(toArray(buffer, offset, length));
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        if (buffer.hasArray())
+            return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, StandardCharsets.UTF_8);
+        else
+            return utf8(toArray(buffer, offset, length));
     }
 
     /**
@@ -127,11 +119,7 @@ public class Utils {
      * @return The byte[]
      */
     public static byte[] utf8(String string) {
-        try {
-            return string.getBytes("UTF8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        return string.getBytes(StandardCharsets.UTF_8);
     }
 
     /**
@@ -719,30 +707,6 @@ public class Utils {
             b.rewind();
             return b;
         }
-    }
-
-    /**
-     * Compute the checksum of a range of data
-     * @param buffer Buffer containing the data to checksum
-     * @param start Offset in the buffer to read from
-     * @param size The number of bytes to include
-     * @return the computed checksum
-     */
-    public static long computeChecksum(ByteBuffer buffer, int start, int size) {
-        return computeChecksum(buffer.array(), buffer.arrayOffset() + start, size);
-    }
-
-    /**
-     * Compute the checksum of a range of data
-     * @param buffer Buffer containing the data to checksum
-     * @param start Offset in the buffer to read from
-     * @param size The number of bytes to include
-     * @return the computed checksum
-     */
-    public static long computeChecksum(byte[] buffer, int start, int size) {
-        Crc32 crc = new Crc32();
-        crc.update(buffer, start, size);
-        return crc.getValue();
     }
 
     /**

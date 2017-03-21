@@ -35,9 +35,9 @@ public class MemoryRecords extends AbstractRecords {
 
     private final ByteBuffer buffer;
 
-    private final Iterable<RecordBatch.MutableRecordBatch> logEntries = new Iterable<RecordBatch.MutableRecordBatch>() {
+    private final Iterable<MutableRecordBatch> logEntries = new Iterable<MutableRecordBatch>() {
         @Override
-        public Iterator<RecordBatch.MutableRecordBatch> iterator() {
+        public Iterator<MutableRecordBatch> iterator() {
             return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
         }
     };
@@ -116,7 +116,7 @@ public class MemoryRecords extends AbstractRecords {
         return filterTo(batches(), filter, destinationBuffer);
     }
 
-    private static FilterResult filterTo(Iterable<RecordBatch.MutableRecordBatch> batches, RecordFilter filter,
+    private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
                                          ByteBuffer destinationBuffer) {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long maxOffset = -1L;
@@ -126,7 +126,7 @@ public class MemoryRecords extends AbstractRecords {
         int messagesRetained = 0;
         int bytesRetained = 0;
 
-        for (RecordBatch.MutableRecordBatch batch : batches) {
+        for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
             // We use the absolute offset to decide whether to retain the message or not due to KAFKA-4298, we have to
@@ -203,7 +203,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public Iterable<RecordBatch.MutableRecordBatch> batches() {
+    public Iterable<MutableRecordBatch> batches() {
         return logEntries;
     }
 

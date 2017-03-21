@@ -16,27 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
-import org.junit.Test;
-
-import static org.junit.Assert.assertEquals;
-
 public class TimestampTypeTest {
 
-    @Test
-    public void toAndFromAttributesCreateTime() {
-        byte attributes = TimestampType.CREATE_TIME.updateAttributes((byte) 0);
-        assertEquals(TimestampType.CREATE_TIME, TimestampType.forAttributes(attributes));
-    }
-
-    @Test
-    public void toAndFromAttributesLogAppendTime() {
-        byte attributes = TimestampType.LOG_APPEND_TIME.updateAttributes((byte) 0);
-        assertEquals(TimestampType.LOG_APPEND_TIME, TimestampType.forAttributes(attributes));
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void updateAttributesNotAllowedForNoTimestampType() {
-        TimestampType.NO_TIMESTAMP_TYPE.updateAttributes((byte) 0);
-    }
 
 }

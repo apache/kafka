@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
@@ -63,7 +64,7 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
  *  -----------------------------------------------------------------------------------
  */
-public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBatch.MutableRecordBatch {
+public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRecordBatch {
     static final int BASE_OFFSET_OFFSET = 0;
     static final int BASE_OFFSET_LENGTH = 8;
     static final int LENGTH_OFFSET = BASE_OFFSET_OFFSET + BASE_OFFSET_LENGTH;
@@ -95,6 +96,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
+    private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
     private final ByteBuffer buffer;
 
@@ -129,7 +131,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public TimestampType timestampType() {
-        return TimestampType.forAttributes(attributes());
+        return (attributes() & TIMESTAMP_TYPE_MASK) == 0 ? TimestampType.CREATE_TIME : TimestampType.LOG_APPEND_TIME;
     }
 
     @Override
@@ -282,8 +284,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
-        byte attributes = attributes();
-        buffer.putShort(ATTRIBUTES_OFFSET, timestampType.updateAttributes(attributes));
+        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional());
+        buffer.putShort(ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
         ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
@@ -291,13 +293,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
 
     @Override
     public void setPartitionLeaderEpoch(int epoch) {
-        long currentEpoch = producerEpoch();
-        if (currentEpoch == epoch)
-            return;
-
         buffer.putInt(PARTITION_LEADER_EPOCH_OFFSET, epoch);
-        long crc = computeChecksum();
-        ByteUtils.writeUnsignedInt(buffer, CRC_OFFSET, crc);
     }
 
     @Override
@@ -310,7 +306,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     }
 
     private long computeChecksum() {
-        return Utils.computeChecksum(buffer, ATTRIBUTES_OFFSET, buffer.limit() - ATTRIBUTES_OFFSET);
+        return Crc32.crc32(buffer, ATTRIBUTES_OFFSET, buffer.limit() - ATTRIBUTES_OFFSET);
     }
 
     private byte attributes() {
@@ -333,10 +329,16 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
     }
 
     private static byte computeAttributes(CompressionType type, TimestampType timestampType, boolean isTransactional) {
+        if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
+            throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for message " +
+                    "format v2 and above");
+
         byte attributes = isTransactional ? TRANSACTIONAL_FLAG_MASK : 0;
         if (type.id > 0)
-            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
-        return timestampType.updateAttributes(attributes);
+            attributes |= COMPRESSION_CODEC_MASK & type.id;
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            attributes |= TIMESTAMP_TYPE_MASK;
+        return attributes;
     }
 
     static void writeHeader(ByteBuffer buffer,
@@ -374,7 +376,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements RecordBat
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
-        long crc = Utils.computeChecksum(buffer, position + ATTRIBUTES_OFFSET, size - ATTRIBUTES_OFFSET);
+        long crc = Crc32.crc32(buffer, ATTRIBUTES_OFFSET, size - ATTRIBUTES_OFFSET);
         buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
     }
 

@@ -25,9 +25,9 @@ import java.io.Closeable;
 import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
@@ -150,23 +150,23 @@ public class UtilsTest {
     }
 
     @Test
-    public void utf8ByteArraySerde() throws UnsupportedEncodingException {
+    public void utf8ByteArraySerde() {
         String utf8String = "A\u00ea\u00f1\u00fcC";
-        byte[] utf8Bytes = utf8String.getBytes("UTF8");
+        byte[] utf8Bytes = utf8String.getBytes(StandardCharsets.UTF_8);
         assertArrayEquals(utf8Bytes, Utils.utf8(utf8String));
         assertEquals(utf8Bytes.length, Utils.utf8Length(utf8String));
         assertEquals(utf8String, Utils.utf8(utf8Bytes));
     }
 
     @Test
-    public void utf8ByteBufferSerde() throws UnsupportedEncodingException {
+    public void utf8ByteBufferSerde() {
         doTestUtf8ByteBuffer(ByteBuffer.allocate(20));
         doTestUtf8ByteBuffer(ByteBuffer.allocateDirect(20));
     }
 
-    private void doTestUtf8ByteBuffer(ByteBuffer utf8Buffer) throws UnsupportedEncodingException {
+    private void doTestUtf8ByteBuffer(ByteBuffer utf8Buffer) {
         String utf8String = "A\u00ea\u00f1\u00fcC";
-        byte[] utf8Bytes = utf8String.getBytes("UTF8");
+        byte[] utf8Bytes = utf8String.getBytes(StandardCharsets.UTF_8);
 
         utf8Buffer.position(4);
         utf8Buffer.put(utf8Bytes);

@@ -76,11 +76,9 @@ public final class LegacyRecord {
     private static final int COMPRESSION_CODEC_MASK = 0x07;
 
     /**
-     * Specify the mask of timestamp type.
-     * 0 for CreateTime, 1 for LogAppendTime.
+     * Specify the mask of timestamp type: 0 for CreateTime, 1 for LogAppendTime.
      */
-    public static final byte TIMESTAMP_TYPE_MASK = 0x08;
-    public static final int TIMESTAMP_TYPE_ATTRIBUTE_OFFSET = 3;
+    private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
     /**
      * Timestamp value for records without a timestamp
@@ -105,7 +103,7 @@ public final class LegacyRecord {
      * Compute the checksum of the record from the record contents
      */
     public long computeChecksum() {
-        return Utils.computeChecksum(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
+        return Crc32.crc32(buffer, MAGIC_OFFSET, buffer.limit() - MAGIC_OFFSET);
     }
 
     /**
@@ -240,10 +238,7 @@ public final class LegacyRecord {
      * @return The timestamp type or {@link TimestampType#NO_TIMESTAMP_TYPE} if the magic is 0.
      */
     public TimestampType timestampType() {
-        if (magic() == 0)
-            return TimestampType.NO_TIMESTAMP_TYPE;
-        else
-            return wrapperRecordTimestampType == null ? TimestampType.forAttributes(attributes()) : wrapperRecordTimestampType;
+        return timestampType(magic(), wrapperRecordTimestampType, attributes());
     }
 
     /**
@@ -439,12 +434,13 @@ public final class LegacyRecord {
 
         // write the record header with a null value (the key is always null for the wrapper)
         write(buffer, magic, timestamp, null, null, compressionType, timestampType);
+        buffer.position(recordPosition);
 
         // now fill in the value size
         buffer.putInt(recordPosition + keyOffset(magic), valueSize);
 
         // compute and fill the crc from the beginning of the message
-        long crc = Utils.computeChecksum(buffer, recordPosition + MAGIC_OFFSET, recordSize - MAGIC_OFFSET);
+        long crc = Crc32.crc32(buffer, MAGIC_OFFSET, recordSize - MAGIC_OFFSET);
         ByteUtils.writeUnsignedInt(buffer, recordPosition + CRC_OFFSET, crc);
     }
 
@@ -575,9 +571,14 @@ public final class LegacyRecord {
     public static byte computeAttributes(byte magic, CompressionType type, TimestampType timestampType) {
         byte attributes = 0;
         if (type.id > 0)
-            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
-        if (magic > RecordBatch.MAGIC_VALUE_V0)
-            return timestampType.updateAttributes(attributes);
+            attributes |= COMPRESSION_CODEC_MASK & type.id;
+        if (magic > RecordBatch.MAGIC_VALUE_V0) {
+            if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
+                throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for " +
+                        "message format v1");
+            if (timestampType == TimestampType.LOG_APPEND_TIME)
+                attributes |= TIMESTAMP_TYPE_MASK;
+        }
         return attributes;
     }
 
@@ -624,6 +625,15 @@ public final class LegacyRecord {
         if (magic == 0)
             return KEY_OFFSET_V0;
         return KEY_OFFSET_V1;
+    }
+
+    public static TimestampType timestampType(byte magic, TimestampType wrapperRecordTimestampType, byte attributes) {
+        if (magic == 0)
+            return TimestampType.NO_TIMESTAMP_TYPE;
+        else if (wrapperRecordTimestampType != null)
+            return wrapperRecordTimestampType;
+        else
+            return (attributes & TIMESTAMP_TYPE_MASK) == 0 ? TimestampType.CREATE_TIME : TimestampType.LOG_APPEND_TIME;
     }
 
 }

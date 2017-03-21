@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -141,12 +142,12 @@ public class ProduceRequest extends AbstractRequest {
 
     private void validateRecords(short version, MemoryRecords records) {
         if (version >= 3) {
-            Iterator<RecordBatch.MutableRecordBatch> iterator = records.batches().iterator();
+            Iterator<MutableRecordBatch> iterator = records.batches().iterator();
             if (!iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
                         "one record batch");
 
-            RecordBatch.MutableRecordBatch entry = iterator.next();
+            MutableRecordBatch entry = iterator.next();
             if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                         "contain record batches with magic version 2");
