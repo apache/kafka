@@ -50,7 +50,7 @@ public class Decimal {
     public static SchemaBuilder builder(int scale) {
         return SchemaBuilder.bytes()
                 .name(LOGICAL_NAME)
-                .parameter(SCALE_FIELD, ((Integer) scale).toString())
+                .parameter(SCALE_FIELD, Integer.toString(scale))
                 .version(1);
     }
 
