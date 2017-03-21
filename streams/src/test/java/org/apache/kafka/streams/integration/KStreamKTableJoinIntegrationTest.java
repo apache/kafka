@@ -37,15 +37,13 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -59,8 +57,7 @@ import static org.junit.Assert.assertThat;
  * End-to-end integration test that demonstrates how to perform a join between a KStream and a
  * KTable (think: KStream.leftJoin(KTable)), i.e. an example of a stateful computation.
  */
-
-@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class KStreamKTableJoinIntegrationTest {
     private static final int NUM_BROKERS = 1;
     private static final long COMMIT_INTERVAL_MS = 300L;
@@ -95,7 +92,7 @@ public class KStreamKTableJoinIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
             TestUtils.tempDirectory().getPath());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
+
 
     }
 
@@ -105,16 +102,6 @@ public class KStreamKTableJoinIntegrationTest {
             kafkaStreams.close();
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
-    }
-
-    @Parameter
-    public long cacheSizeBytes;
-
-    //Single parameter, use Object[]
-    @Parameters
-    public static Object[] data() {
-        return new Object[] {0, 10 * 1024 * 1024L};
-
     }
 
     /**
@@ -147,7 +134,17 @@ public class KStreamKTableJoinIntegrationTest {
     }
 
     @Test
-    public void shouldCountClicksPerRegion() throws Exception {
+    public void shouldCountClicksPerRegionWithZeroByteCache() throws Exception {
+        countClicksPerRegion(0);
+    }
+
+    @Test
+    public void shouldCountClicksPerRegionWithNonZeroByteCache() throws Exception {
+        countClicksPerRegion(10 * 1024 * 1024);
+    }
+
+    private void countClicksPerRegion(final int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         // Input 1: Clicks per user (multiple records allowed per user).
         final List<KeyValue<String, Long>> userClicks = Arrays.asList(
             new KeyValue<>("alice", 13L),

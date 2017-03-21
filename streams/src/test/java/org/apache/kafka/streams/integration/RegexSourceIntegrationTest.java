@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -46,6 +47,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -65,6 +67,7 @@ import static org.junit.Assert.fail;
  * End-to-end integration test based on using regex and named topics for creating sources, using
  * an embedded Kafka cluster.
  */
+@Category({IntegrationTest.class})
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
