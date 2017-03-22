@@ -431,12 +431,11 @@ public class DefaultRecord implements Record {
         size += ByteUtils.sizeOfVarint(headers.length);
         for (Header header : headers) {
             String headerKey = header.key();
-            if (headerKey == null) {
-                size += NULL_VARINT_SIZE_BYTES;
-            } else {
-                int headerKeySize = Utils.utf8Length(headerKey);
-                size += ByteUtils.sizeOfVarint(headerKeySize) + headerKeySize;
-            }
+            if (headerKey == null)
+                throw new IllegalArgumentException("Invalid null header key found in headers");
+
+            int headerKeySize = Utils.utf8Length(headerKey);
+            size += ByteUtils.sizeOfVarint(headerKeySize) + headerKeySize;
 
             ByteBuffer headerValue = header.value();
             if (headerValue == null) {

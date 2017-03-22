@@ -299,8 +299,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                         LegacyRecord recordWithTimestamp = new LegacyRecord(
                                 record.buffer(),
                                 wrapperRecordTimestamp,
-                                wrapperRecord.timestampType()
-                        );
+                                wrapperRecord.timestampType());
                         batch = new BasicLegacyRecordBatch(batch.lastOffset(), recordWithTimestamp);
                     }
                     batches.addLast(batch);

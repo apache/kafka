@@ -442,12 +442,7 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void appendWithOffset(long offset, LegacyRecord record) {
-        if (record.magic() != magic)
-            throw new IllegalArgumentException("Inner log entries must have matching magic values as the wrapper");
-        if (lastOffset != null && offset <= lastOffset)
-            throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
-                    "(Offsets must increase monotonically).", offset, lastOffset));
-        appendUncheckedWithOffset(offset, record);
+        appendWithOffset(offset, record.timestamp(), record.key(), record.value());
     }
 
     /**

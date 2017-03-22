@@ -332,19 +332,6 @@ public class MemoryRecordsBuilderTest {
         builder.appendWithOffset(0L, System.currentTimeMillis(), "b".getBytes(), null);
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void testAppendWithInvalidMagic() {
-        ByteBuffer buffer = ByteBuffer.allocate(1024);
-        buffer.position(bufferOffset);
-
-        long logAppendTime = System.currentTimeMillis();
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
-                TimestampType.CREATE_TIME, 0L, logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-                false, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, buffer.capacity());
-
-        builder.append(LegacyRecord.create(RecordBatch.MAGIC_VALUE_V0, 0L, "a".getBytes(), null));
-    }
-
     @Test
     public void convertV2ToV1UsingMixedCreateAndLogAppendTime() {
         ByteBuffer buffer = ByteBuffer.allocate(512);
