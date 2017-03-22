@@ -903,20 +903,13 @@ public class TopologyBuilder {
                 sourceTopics.addAll(sourceNodeFactory.topics);
             }
         }
-
-        //If both aren't empty it will force and update to the map which according to the warning above we should not do.
-        if (!sourceTopics.isEmpty() && !sourcePatterns.isEmpty()) {
-            String message = "Attempting to connect a state store to both source topics and regex patterns. This will force an update " +
-                    "to the stateStoreNameToSourceTopics map once the Consumer retrieves subscribed topics " +
-                    "matching the provided pattern";
-            throw new TopologyBuilderException(message);
-        }
-
-
+        
         if (!sourceTopics.isEmpty()) {
             stateStoreNameToSourceTopics.put(stateStoreName,
                     Collections.unmodifiableSet(sourceTopics));
-        } else {
+        }
+
+        if (!sourcePatterns.isEmpty()) {
             stateStoreNameToSourceRegex.put(stateStoreName,
                     Collections.unmodifiableSet(sourcePatterns));
         }
@@ -1221,7 +1214,11 @@ public class TopologyBuilder {
                         }
                     }
                 }
-                if (!updatedTopicsForStateStore.isEmpty() && !stateStoreNameToSourceTopics.containsKey(storePattern.getKey())) {
+                if (!updatedTopicsForStateStore.isEmpty()) {
+                    Collection<String> storeTopics = stateStoreNameToSourceTopics.get(storePattern.getKey());
+                    if (storeTopics != null) {
+                        updatedTopicsForStateStore.addAll(storeTopics);
+                    }
                     stateStoreNameToSourceTopics.put(storePattern.getKey(), Collections.unmodifiableSet(updatedTopicsForStateStore));
                 }
             }
