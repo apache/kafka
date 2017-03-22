@@ -26,28 +26,37 @@ import java.util.List;
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 public class FileLogInputStreamTest {
 
     @Test
     public void testWriteTo() throws IOException {
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("foo".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("foo".getBytes()),
+                    new SimpleRecord("bar".getBytes())));
             fileRecords.flush();
 
             FileLogInputStream logInputStream = new FileLogInputStream(fileRecords.channel(), Integer.MAX_VALUE, 0,
                     fileRecords.sizeInBytes());
 
-            FileLogInputStream.FileChannelRecordBatch entry = logInputStream.nextBatch();
-            assertNotNull(entry);
+            FileLogInputStream.FileChannelRecordBatch batch = logInputStream.nextBatch();
+            assertNotNull(batch);
+            assertEquals(RecordBatch.MAGIC_VALUE_V2, batch.magic());
 
             ByteBuffer buffer = ByteBuffer.allocate(128);
-            entry.writeTo(buffer);
+            batch.writeTo(buffer);
             buffer.flip();
 
             MemoryRecords memRecords = MemoryRecords.readableRecords(buffer);
             List<Record> records = Utils.toList(memRecords.records().iterator());
-            assertEquals(1, records.size());
+            assertEquals(2, records.size());
+            Record record0 = records.get(0);
+            assertTrue(record0.hasMagic(RecordBatch.MAGIC_VALUE_V2));
+            assertEquals("foo", Utils.utf8(record0.value(), record0.valueSize()));
+            Record record1 = records.get(1);
+            assertTrue(record1.hasMagic(RecordBatch.MAGIC_VALUE_V2));
+            assertEquals("bar", Utils.utf8(record1.value(), record1.valueSize()));
         }
     }
 }

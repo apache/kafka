@@ -175,12 +175,6 @@ private[kafka] object LogValidator extends Logging {
                                                  messageFormatVersion: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
                                                  messageTimestampType: TimestampType,
                                                  messageTimestampDiffMaxMs: Long): ValidationAndOffsetAssignResult = {
-      // Deal with compressed messages
-      // We cannot do in place assignment in one of the following situations:
-      // 1. Source and target compression codec are different
-      // 2. When magic value to use is 0 because offsets need to be overwritten
-      // 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
-      // 4. Message format conversion is needed.
 
       // No in place assignment situation 1 and 2
       var inPlaceAssignment = sourceCodec == targetCodec && messageFormatVersion > RecordBatch.MAGIC_VALUE_V0

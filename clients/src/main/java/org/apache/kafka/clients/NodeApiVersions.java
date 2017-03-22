@@ -110,16 +110,6 @@ public class NodeApiVersions {
     }
 
     /**
-     * Ensure that a certain version of an API is usable by the broker.
-     */
-    public void ensureUsable(ApiKeys apiKey, short version) {
-        UsableVersion usableVersion = usableVersions.get(apiKey);
-        if (usableVersion == null)
-            throw new UnsupportedVersionException("The broker does not support " + apiKey);
-        usableVersion.ensureUsable(version);
-    }
-
-    /**
      * Convert the object to a string with no linebreaks.<p/>
      * <p>
      * This toString method is relatively expensive, so avoid calling it unless debug logging is turned on.

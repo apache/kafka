@@ -35,7 +35,7 @@ public class MemoryRecords extends AbstractRecords {
 
     private final ByteBuffer buffer;
 
-    private final Iterable<MutableRecordBatch> logEntries = new Iterable<MutableRecordBatch>() {
+    private final Iterable<MutableRecordBatch> batches = new Iterable<MutableRecordBatch>() {
         @Override
         public Iterator<MutableRecordBatch> iterator() {
             return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
@@ -204,7 +204,7 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public Iterable<MutableRecordBatch> batches() {
-        return logEntries;
+        return batches;
     }
 
     @Override
