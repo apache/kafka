@@ -54,6 +54,8 @@ public interface Processor<K, V> {
     /**
      * Close this processor and clean up any resources. Be aware that {@link #close()} is called after an internal cleanup.
      * Thus, it is not possible to write anything to Kafka as underlying clients are already closed.
+     * <p>
+     * The processor should <em>not</em> close any {@link StateStore}s as they may be re-used across rebalances.
      */
     void close();
 }
