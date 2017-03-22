@@ -39,7 +39,9 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireStruc
 
 public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transformation<R> {
 
-    public static final String OVERVIEW_DOC = "Filter or rename fields.";
+    public static final String OVERVIEW_DOC = "Filter or rename fields."
+            + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
+            + "or value (<code>" + Value.class.getName() + "</code>).";
 
     interface ConfigName {
         String BLACKLIST = "blacklist";
