@@ -1221,7 +1221,7 @@ public class StreamThread extends Thread {
 
             final long start = time.milliseconds();
             try {
-                storeChangelogReader = new StoreChangelogReader(restoreConsumer, time, requestTimeOut);
+                storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
                 setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
@@ -1237,7 +1237,7 @@ public class StreamThread extends Thread {
                 rebalanceException = t;
                 throw t;
             } finally {
-                log.debug("{} partition assignment took {} ms.\n" +
+                log.info("{} partition assignment took {} ms.\n" +
                         "\tcurrent active tasks: {}\n" +
                         "\tcurrent standby tasks: {}",
                         logPrefix, time.milliseconds() - start,
@@ -1267,7 +1267,7 @@ public class StreamThread extends Thread {
                 removeStreamTasks();
                 removeStandbyTasks();
 
-                log.debug("{} partition revocation took {} ms.\n" +
+                log.info("{} partition revocation took {} ms.\n" +
                                 "\tsuspended active tasks: {}\n" +
                                 "\tsuspended standby tasks: {}\n" +
                                 "\tprevious active tasks: {}\n",

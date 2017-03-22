@@ -125,7 +125,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         this.logPrefix = String.format("task [%s]", id);
 
-
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache

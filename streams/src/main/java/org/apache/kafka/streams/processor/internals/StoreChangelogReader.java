@@ -39,18 +39,23 @@ public class StoreChangelogReader implements ChangelogReader {
     private static final Logger log = LoggerFactory.getLogger(StoreChangelogReader.class);
 
     private final Consumer<byte[], byte[]> consumer;
+    private final String logPrefix;
     private final Time time;
     private final long partitionValidationTimeoutMs;
     private final Map<String, List<PartitionInfo>> partitionInfo = new HashMap<>();
     private final Map<TopicPartition, StateRestorer> stateRestorers = new HashMap<>();
 
-
-    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer, final Time time, final long partitionValidationTimeoutMs) {
-        this.consumer = consumer;
+    public StoreChangelogReader(final String threadId, final Consumer<byte[], byte[]> consumer, final Time time, final long partitionValidationTimeoutMs) {
         this.time = time;
+        this.consumer = consumer;
         this.partitionValidationTimeoutMs = partitionValidationTimeoutMs;
+
+        this.logPrefix = String.format("stream-thread [%s]", threadId);
     }
 
+    public StoreChangelogReader(final Consumer<byte[], byte[]> consumer, final Time time, final long partitionValidationTimeoutMs) {
+        this("", consumer, time, partitionValidationTimeoutMs);
+    }
 
     @Override
     public void validatePartitionExists(final TopicPartition topicPartition, final String storeName) {
@@ -60,7 +65,7 @@ public class StoreChangelogReader implements ChangelogReader {
             try {
                 partitionInfo.putAll(consumer.listTopics());
             } catch (final TimeoutException e) {
-                log.warn("Could not list topics so will fall back to partition by partition fetching");
+                log.warn("{} Could not list topics so will fall back to partition by partition fetching", logPrefix);
             }
         }
 
@@ -81,7 +86,7 @@ public class StoreChangelogReader implements ChangelogReader {
             throw new StreamsException(String.format("Store %s's change log (%s) does not contain partition %s",
                                                      storeName, topicPartition.topic(), topicPartition.partition()));
         }
-        log.debug("Took {} ms to validate that partition {} exists", time.milliseconds() - start, topicPartition);
+        log.debug("{} Took {} ms to validate that partition {} exists", logPrefix, time.milliseconds() - start, topicPartition);
     }
 
     @Override
@@ -112,7 +117,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 }
             }
 
-            log.info("Starting restoring state stores from changelog topics {}", needsRestoring.keySet());
+            log.info("{} Starting restoring state stores from changelog topics {}", logPrefix, needsRestoring.keySet());
 
             consumer.assign(needsRestoring.keySet());
 
@@ -128,6 +133,11 @@ public class StoreChangelogReader implements ChangelogReader {
                                       consumer.position(restorer.partition()),
                                       endOffsets.get(restorer.partition()));
                 }
+                // TODO: each consumer.position() call after seekToBeginning will cause
+                // a blocking round trip to reset the position for that partition; we should
+                // batch them into a single round trip to reset for all necessary partitions
+
+                restorer.setStartingOffset(consumer.position(restorer.partition()));
             }
 
             final Set<TopicPartition> partitions = new HashSet<>(needsRestoring.keySet());
@@ -140,12 +150,13 @@ public class StoreChangelogReader implements ChangelogReader {
             }
         } finally {
             consumer.assign(Collections.<TopicPartition>emptyList());
-            log.debug("Took {} ms to restore active state", time.milliseconds() - start);
+            log.debug("{} Took {} ms to restore all active states", logPrefix, time.milliseconds() - start);
         }
     }
 
     private void logRestoreOffsets(final TopicPartition partition, final long checkpoint, final Long aLong) {
-        log.debug("restoring partition {} from offset {} to endOffset {}",
+        log.debug("{} Restoring partition {} from offset {} to endOffset {}",
+                  logPrefix,
                   partition,
                   checkpoint,
                   aLong);
@@ -178,7 +189,16 @@ public class StoreChangelogReader implements ChangelogReader {
                                       endOffset,
                                       pos));
             }
+
             restorer.setRestoredOffset(pos);
+
+            log.debug("{} Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
+                    logPrefix,
+                    topicPartition,
+                    restorer.restoredNumRecords(),
+                    restorer.startingOffset(),
+                    restorer.restoredOffset());
+
             partitionIterator.remove();
         }
     }
@@ -210,6 +230,4 @@ public class StoreChangelogReader implements ChangelogReader {
         return false;
 
     }
-
-
 }
