@@ -23,6 +23,7 @@ import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -45,7 +46,6 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -94,14 +94,6 @@ public class ResetIntegrationTest {
     private final MockTime mockTime = CLUSTER.time;
     private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
 
-    @BeforeClass
-    public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2_RERUN);
-    }
-
     @AfterClass
     public static void globalCleanup() {
         if (adminClient != null) {
@@ -131,9 +123,7 @@ public class ResetIntegrationTest {
             break;
         }
 
-        if (testNo == 1) {
-            prepareInputData();
-        }
+        prepareInputData();
     }
 
     @Test
@@ -290,6 +280,31 @@ public class ResetIntegrationTest {
     }
 
     private void prepareInputData() throws Exception {
+        try {
+            CLUSTER.deleteTopic(INPUT_TOPIC);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        try {
+            CLUSTER.deleteTopic(OUTPUT_TOPIC);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        try {
+            CLUSTER.deleteTopic(OUTPUT_TOPIC_2);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        try {
+            CLUSTER.deleteTopic(OUTPUT_TOPIC_2_RERUN);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        CLUSTER.createTopic(INPUT_TOPIC);
+        CLUSTER.createTopic(OUTPUT_TOPIC);
+        CLUSTER.createTopic(OUTPUT_TOPIC_2);
+        CLUSTER.createTopic(OUTPUT_TOPIC_2_RERUN);
+
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class);
 
         mockTime.sleep(10);
