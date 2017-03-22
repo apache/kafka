@@ -136,7 +136,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        props.put(ProducerConfig.RETRIES_CONFIG, 5);
+        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
 

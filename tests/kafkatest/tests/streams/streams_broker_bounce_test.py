@@ -16,7 +16,7 @@
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
 from ducktape.mark import matrix
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, ignore
 from kafkatest.services.kafka import KafkaService
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.zookeeper import ZookeeperService
@@ -37,16 +37,19 @@ def broker_node(test, topic, broker_type):
 
     return node
 
+def signal_node(test, node, sig):
+    test.kafka.signal_node(node, sig)
+    
 def clean_shutdown(test, topic, broker_type):
     """Discover broker node of requested type and shut it down cleanly.
     """
     node = broker_node(test, topic, broker_type)
-    test.kafka.signal_node(node, sig=signal.SIGTERM)
+    signal_node(test, node, signal.SIGTERM)
 
 def hard_shutdown(test, topic, broker_type):
     """Discover broker node of requested type and shut it down with a hard kill."""
     node = broker_node(test, topic, broker_type)
-    test.kafka.signal_node(node, sig=signal.SIGKILL)
+    signal_node(test, node, signal.SIGKILL)
 
     
 failures = {
@@ -86,25 +89,31 @@ class StreamsBrokerBounceTest(Test):
                        'configs': {"min.insync.replicas": 2} }
         }
 
-    @cluster(num_nodes=7)
-    @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
-            broker_type=["leader", "controller"],
-            sleep_time_secs=[0, 15])
-    def test_broker_bounce(self, failure_mode, broker_type, sleep_time_secs):
-        """
-        Start a smoke test client, then kill a few brokers and ensure data is still received
-        Ensure that all records are delivered.
-        """
+    def fail_broker_type(self, failure_mode, broker_type):
+        # Pick a random topic and bounce it's leader
+        topic_index = randint(0, len(self.topics.keys()) - 1)
+        topic = self.topics.keys()[topic_index]
+        failures[failure_mode](self, topic, broker_type)
 
-        # Setup phase
+    def fail_many_brokers(self, failure_mode, num_failures):
+        sig = signal.SIGTERM
+        if (failure_mode == "clean_shutdown"):
+            sig = signal.SIGTERM
+        else:
+            sig = signal.SIGKILL
+            
+        for num in range(0, num_failures - 1):
+            signal_node(self, self.kafka.nodes[num], sig)
+
+        
+    def setup_system(self):
+         # Setup phase
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
         
         self.kafka = KafkaService(self.test_context, num_nodes=self.replication,
                                   zk=self.zk, topics=self.topics)
         self.kafka.start()
-        
-
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
@@ -113,15 +122,8 @@ class StreamsBrokerBounceTest(Test):
         self.driver.start()
         self.processor1.start()
 
-        # Sleep to allow test to run for a bit
-        time.sleep(sleep_time_secs)
-
-        # Pick a random topic and bounce it's leader
-        topic_index = randint(0, len(self.topics.keys()) - 1)
-        topic = self.topics.keys()[topic_index]
-        failures[failure_mode](self, topic, broker_type)
-
-        # End test
+    def collect_results(self):
+         # End test
         self.driver.wait()
         self.driver.stop()
 
@@ -129,11 +131,49 @@ class StreamsBrokerBounceTest(Test):
 
         node = self.driver.node
         
-        # Capture all three options for now, since for the purposes of this test, we are only testing Kafka Streams
-        # being robust in face of failure, not Kafka's data loss or duplicates.
-        output = node.account.ssh_capture("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED|PROCESSED-LESS-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
+        # Success is declared if all records are processed or if there are duplicates, but not if data is lost
+        # We have set up the test so that data is not lost
+        output = node.account.ssh_capture("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
 
         data = {}
         for line in output:
             data["result"] = line
         return data
+
+    @cluster(num_nodes=7)
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
+            broker_type=["leader", "controller"],
+            sleep_time_secs=[0, 15])
+    def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs):
+        """
+        Start a smoke test client, then kill a particular broker and ensure data is still received
+        Record if records are delivered
+        """
+        self.setup_system() 
+
+        # Sleep to allow test to run for a bit
+        time.sleep(sleep_time_secs)
+
+        # Fail brokers
+        self.fail_broker_type(failure_mode, broker_type);
+
+        return self.collect_results()
+
+    
+    @cluster(num_nodes=7)
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
+            num_failures=[2])
+    def test_many_brokers_bounce(self, failure_mode, num_failures):
+        """
+        Start a smoke test client, then kill a few brokers and ensure data is still received
+        Record if records are delivered
+        """
+        self.setup_system() 
+
+        # Sleep to allow test to run for a bit
+        time.sleep(15)
+
+        # Fail brokers
+        self.fail_many_brokers(failure_mode, num_failures);
+
+        return self.collect_results()
