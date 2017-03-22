@@ -219,6 +219,10 @@ public class ProcessorStateManager implements StateManager {
             } else {
                 restoreConsumer.seekToBeginning(singleton(storePartition));
             }
+            log.debug("restoring partition {} from offset {} to endOffset {}",
+                      storePartition,
+                      restoreConsumer.position(storePartition),
+                      endOffset);
 
             // restore its state from changelog records
             long limit = offsetLimit(storePartition);
