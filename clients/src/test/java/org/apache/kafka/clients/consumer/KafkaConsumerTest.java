@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
@@ -646,16 +647,16 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    public void testWakeupWithFetchDataAvailable() {
+    public void testWakeupWithFetchDataAvailable() throws Exception {
         int rebalanceTimeoutMs = 60000;
-        int sessionTimeoutMs = 30000;
+        final int sessionTimeoutMs = 30000;
         int heartbeatIntervalMs = 3000;
 
         // adjust auto commit interval lower than heartbeat so we don't need to deal with
         // a concurrent heartbeat request
         int autoCommitIntervalMs = 1000;
 
-        Time time = new MockTime();
+        final Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
         Node node = cluster.nodes().get(0);
 
@@ -692,6 +693,17 @@ public class KafkaConsumerTest {
         // the next poll should return the completed fetch
         ConsumerRecords<String, String> records = consumer.poll(0);
         assertEquals(5, records.count());
+        // Increment time asynchronously to clear timeouts in closing the consumer
+        final ScheduledExecutorService exec = Executors.newSingleThreadScheduledExecutor();
+        exec.scheduleAtFixedRate(new Runnable() {
+            @Override
+            public void run() {
+                time.sleep(sessionTimeoutMs);
+            }
+        }, 0L, 10L, TimeUnit.MILLISECONDS);
+        consumer.close();
+        exec.shutdownNow();
+        exec.awaitTermination(5L, TimeUnit.SECONDS);
     }
 
     @Test
