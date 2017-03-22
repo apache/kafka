@@ -65,5 +65,20 @@ public class StateRestorerTest {
         assertThat(restorer.restoredOffset(), equalTo(OFFSET_LIMIT));
     }
 
+    @Test
+    public void shouldSetStartingOffsetToMinOfLimitAndOffset() throws Exception {
+        restorer.setStartingOffset(20);
+        assertThat(restorer.startingOffset(), equalTo(20L));
+        restorer.setRestoredOffset(100);
+        assertThat(restorer.restoredOffset(), equalTo(OFFSET_LIMIT));
+    }
 
+    @Test
+    public void shouldReturnCorrectNumRestoredRecords() throws Exception {
+        restorer.setStartingOffset(20);
+        restorer.setRestoredOffset(40);
+        assertThat(restorer.restoredNumRecords(), equalTo(20L));
+        restorer.setRestoredOffset(100);
+        assertThat(restorer.restoredNumRecords(), equalTo(OFFSET_LIMIT - 20));
+    }
 }
