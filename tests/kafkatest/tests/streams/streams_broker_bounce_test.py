@@ -15,12 +15,15 @@
 
 from ducktape.tests.test import Test
 from ducktape.mark.resource import cluster
+from ducktape.mark import matrix
+from ducktape.mark import parametrize
 from kafkatest.services.kafka import KafkaService
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService
 import time
 import signal
+from random import randint
 
 def broker_node(test, topic, broker_type):
     """ Discover node of requested type. For leader type, discovers leader for our topic and partition 0
@@ -40,6 +43,16 @@ def clean_shutdown(test, topic, broker_type):
     node = broker_node(test, topic, broker_type)
     test.kafka.signal_node(node, sig=signal.SIGTERM)
 
+def hard_shutdown(test, topic, broker_type):
+    """Discover broker node of requested type and shut it down with a hard kill."""
+    node = broker_node(test, topic, broker_type)
+    test.kafka.signal_node(node, sig=signal.SIGKILL)
+
+    
+failures = {
+    "clean_shutdown": clean_shutdown,
+    "hard_shutdown": hard_shutdown
+}
         
 class StreamsBrokerBounceTest(Test):
     """
@@ -61,8 +74,11 @@ class StreamsBrokerBounceTest(Test):
             'tagg' : { 'partitions': 5, 'replication-factor': 2 }
         }
 
-    @cluster(num_nodes=5)
-    def test_broker_bounce(self):
+    @cluster(num_nodes=6)
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
+            broker_type=["leader", "controller"],
+            sleep_time_secs=[0, 10])
+    def test_broker_bounce(self, failure_mode, broker_type, sleep_time_secs):
         """
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Ensure that all records are delivered.
@@ -74,7 +90,7 @@ class StreamsBrokerBounceTest(Test):
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
         
-        self.kafka = KafkaService(self.test_context, num_nodes=2, zk=self.zk, topics=self.topics)
+        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics=self.topics)
         self.kafka.start()
         
 
@@ -85,8 +101,14 @@ class StreamsBrokerBounceTest(Test):
         self.driver.start()
         self.processor1.start()
 
-        for topic in self.topics.keys():
-            clean_shutdown(self, topic, "leader")
+        # sleep to allow test to run for a bit
+        time.sleep(sleep_time_secs)
+        
+
+        # pick a random topic and bounce it's leader
+        topic_index = randint(0, len(self.topics.keys()) - 1)
+        topic = self.topics.keys()[topic_index]
+        failures[failure_mode](self, topic, broker_type)
 
 
         self.driver.wait()
