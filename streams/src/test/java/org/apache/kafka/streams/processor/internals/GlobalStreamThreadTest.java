@@ -62,7 +62,7 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "client");
+                                                    "clientId");
     }
 
     @Test
@@ -93,7 +93,7 @@ public class GlobalStreamThreadTest {
                                                     new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "client");
+                                                    "clientId");
 
         try {
             globalStreamThread.start();
