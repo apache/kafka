@@ -1508,7 +1508,8 @@ public class KafkaConsumerTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 interceptors,
-                excludeInternalTopics);
+                excludeInternalTopics,
+                true);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
                 consumerClient,
