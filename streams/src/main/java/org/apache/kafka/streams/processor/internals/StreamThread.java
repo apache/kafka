@@ -259,7 +259,6 @@ public class StreamThread extends Thread {
         }
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, this.streamsMetrics);
 
-
         this.logPrefix = String.format("stream-thread [%s]", threadClientId);
 
         // set the producer and consumer clients
@@ -271,7 +270,7 @@ public class StreamThread extends Thread {
 
         if (!builder.latestResetTopicsPattern().pattern().equals("") || !builder.earliestResetTopicsPattern().pattern().equals("")) {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
-            log.info("{} custom offset resets specified updating configs original auto offset reset {}", logPrefix, originalReset);
+            log.info("{} Custom offset resets specified updating configs original auto offset reset {}", logPrefix, originalReset);
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
@@ -292,7 +291,7 @@ public class StreamThread extends Thread {
         // standby ktables
         this.standbyRecords = new HashMap<>();
 
-        this.stateDirectory = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
+        this.stateDirectory = new StateDirectory(applicationId, threadClientId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time);
         final Object maxPollInterval = consumerConfigs.get(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.rebalanceTimeoutMs =  (Integer) ConfigDef.parseType(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, maxPollInterval, Type.INT);
         this.pollTimeMs = config.getLong(StreamsConfig.POLL_MS_CONFIG);
@@ -693,7 +692,8 @@ public class StreamThread extends Thread {
     protected void maybeCommit(final long now) {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-            log.info("{} Committing all tasks because the commit interval {}ms has elapsed", logPrefix, commitTimeMs);
+            log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed",
+                    logPrefix, commitTimeMs, activeTasks, standbyTasks);
 
             commitAll();
             lastCommitMs = now;
@@ -717,7 +717,6 @@ public class StreamThread extends Thread {
      * Commit the states of all its tasks
      */
     private void commitAll() {
-        log.trace("{} Committing all its owned tasks", logPrefix);
         for (StreamTask task : activeTasks.values()) {
             commitOne(task);
         }
@@ -782,22 +781,6 @@ public class StreamThread extends Thread {
         return tasks;
     }
 
-    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
-        log.info("{} Creating active task {} with assigned partitions {}", logPrefix, id, partitions);
-
-        streamsMetrics.taskCreatedSensor.record();
-
-        final ProcessorTopology topology = builder.build(id.topicGroupId);
-        final RecordCollector recordCollector = new RecordCollectorImpl(producer, id.toString());
-        final long start = time.milliseconds();
-        try {
-            return new StreamTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
-        } finally {
-            log.debug("{} creation of active task {} took {} ms", logPrefix, id, time.milliseconds() - start);
-        }
-    }
-
-
     private StreamTask findMatchingSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspendedTasks.containsKey(taskId)) {
             final StreamTask task = suspendedTasks.get(taskId);
@@ -826,7 +809,7 @@ public class StreamThread extends Thread {
             final StreamTask task = next.getValue();
             final Set<TopicPartition> assignedPartitionsForTask = newTaskAssignment.get(next.getKey());
             if (!task.partitions().equals(assignedPartitionsForTask)) {
-                log.debug("{} closing suspended non-assigned task", logPrefix);
+                log.debug("{} Closing suspended non-assigned active task {}", logPrefix, task.id);
                 try {
                     task.close();
                     task.closeStateManager(true);
@@ -846,17 +829,31 @@ public class StreamThread extends Thread {
         while (standByTaskIterator.hasNext()) {
             final Map.Entry<TaskId, StandbyTask> suspendedTask = standByTaskIterator.next();
             if (!currentSuspendedTaskIds.contains(suspendedTask.getKey())) {
-                log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, suspendedTask.getKey());
                 final StandbyTask task = suspendedTask.getValue();
+                log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, task.id);
                 try {
                     task.close();
                     task.closeStateManager(true);
                 } catch (Exception e) {
-                    log.error("{} Failed to remove suspended task standby {}", logPrefix, suspendedTask.getKey(), e);
+                    log.error("{} Failed to remove suspended standby task {}", logPrefix, task.id, e);
                 } finally {
                     standByTaskIterator.remove();
                 }
             }
+        }
+    }
+
+    protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
+        log.debug("{} Creating new active task {} with assigned partitions {}", logPrefix, id, partitions);
+
+        streamsMetrics.taskCreatedSensor.record();
+
+        final ProcessorTopology topology = builder.build(id.topicGroupId);
+        final RecordCollector recordCollector = new RecordCollectorImpl(producer, id.toString());
+        try {
+            return new StreamTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory, cache, time, recordCollector);
+        } finally {
+            log.info("{} Created active task {} with assigned partitions {}", logPrefix, id, partitions);
         }
     }
 
@@ -898,19 +895,27 @@ public class StreamThread extends Thread {
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
+        log.debug("{} new active tasks to be created: {}", logPrefix, newTasks);
+
         taskCreator.retryWithBackoff(newTasks, start);
     }
 
-    StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
-        log.info("{} Creating new standby task {} with assigned partitions {}", logPrefix, id, partitions);
+    private StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
+        log.debug("{} Creating new standby task {} with assigned partitions {}", logPrefix, id, partitions);
 
         streamsMetrics.taskCreatedSensor.record();
 
         ProcessorTopology topology = builder.build(id.topicGroupId);
 
         if (!topology.stateStores().isEmpty()) {
-            return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
+            try {
+                return new StandbyTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, config, streamsMetrics, stateDirectory);
+            } finally {
+                log.info("{} Created standby task {} with assigned partitions {}", logPrefix, id, partitions);
+            }
         } else {
+            log.info("{} Skipped standby task {} with assigned partitions {} since it does not have any state stores to materialize", logPrefix, id, partitions);
+
             return null;
         }
     }
@@ -942,6 +947,8 @@ public class StreamThread extends Thread {
 
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
+        log.debug("{} new standby tasks to be created: {}", logPrefix, newStandbyTasks);
+
         new StandbyTaskCreator(checkpointedOffsets).retryWithBackoff(newStandbyTasks, start);
 
         restoreConsumer.assign(new ArrayList<>(checkpointedOffsets.keySet()));
@@ -1006,7 +1013,7 @@ public class StreamThread extends Thread {
         return performOnAllTasks(new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
-                log.info("{} Closing a task {}", StreamThread.this.logPrefix, task.id());
+                log.info("{} Closing task {}", StreamThread.this.logPrefix, task.id());
                 task.close();
                 streamsMetrics.tasksClosedSensor.record();
             }
@@ -1017,7 +1024,7 @@ public class StreamThread extends Thread {
         return performOnAllTasks(new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
-                log.info("{} Closing a task's topology {}", StreamThread.this.logPrefix, task.id());
+                log.info("{} Closing task's topology {}", StreamThread.this.logPrefix, task.id());
                 task.closeTopology();
                 streamsMetrics.tasksClosedSensor.record();
             }
@@ -1168,7 +1175,6 @@ public class StreamThread extends Thread {
 
     class TaskCreator extends AbstractTaskCreator {
         void createTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-            log.debug("{} creating new task {}", logPrefix, taskId);
             final StreamTask task = createStreamTask(taskId, partitions);
 
             activeTasks.put(taskId, task);
@@ -1187,7 +1193,6 @@ public class StreamThread extends Thread {
         }
 
         void createTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-            log.debug("{} creating new standby task {}", logPrefix, taskId);
             final StandbyTask task = createStandbyTask(taskId, partitions);
             updateStandByTaskMaps(checkpointedOffsets, taskId, partitions, task);
         }
@@ -1204,10 +1209,19 @@ public class StreamThread extends Thread {
 
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
+            log.info("{} at state {}: new partitions {} assigned at the end of consumer rebalance.\n" +
+                            "\tassigned active tasks: {}\n" +
+                            "\tassigned standby tasks: {}\n" +
+                            "\tcurrent suspended active tasks: {}\n" +
+                            "\tcurrent suspended standby tasks: {}\n" +
+                            "\tprevious active tasks: {}",
+                    logPrefix, state, assignment,
+                    partitionAssignor.activeTasks(), partitionAssignor.standbyTasks(),
+                    suspendedTasks, suspendedStandbyTasks, prevActiveTasks);
+
             final long start = time.milliseconds();
             try {
-                log.info("{} at state {}: new partitions {} assigned at the end of consumer rebalance.", logPrefix, state, assignment);
-                storeChangelogReader = new StoreChangelogReader(restoreConsumer, time, requestTimeOut);
+                storeChangelogReader = new StoreChangelogReader(getName(), restoreConsumer, time, requestTimeOut);
                 setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
@@ -1223,14 +1237,24 @@ public class StreamThread extends Thread {
                 rebalanceException = t;
                 throw t;
             } finally {
-                log.debug("{} partition assignment took {} ms", logPrefix, time.milliseconds() - start);
+                log.info("{} partition assignment took {} ms.\n" +
+                        "\tcurrent active tasks: {}\n" +
+                        "\tcurrent standby tasks: {}",
+                        logPrefix, time.milliseconds() - start,
+                        activeTasks, standbyTasks);
             }
         }
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
+            log.info("{} at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
+                            "\tcurrent assigned active tasks: {}\n" +
+                            "\tcurrent assigned standby tasks: {}\n",
+                    logPrefix, state, assignment,
+                    activeTasks, standbyTasks);
+
+            final long start = time.milliseconds();
             try {
-                log.info("{} at state {}: partitions {} revoked at the beginning of consumer rebalance.", logPrefix, state, assignment);
                 setStateWhenNotInPendingShutdown(State.PARTITIONS_REVOKED);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
@@ -1242,6 +1266,13 @@ public class StreamThread extends Thread {
                 streamsMetadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), partitionAssignor.clusterMetadata());
                 removeStreamTasks();
                 removeStandbyTasks();
+
+                log.info("{} partition revocation took {} ms.\n" +
+                                "\tsuspended active tasks: {}\n" +
+                                "\tsuspended standby tasks: {}\n" +
+                                "\tprevious active tasks: {}\n",
+                        logPrefix, time.milliseconds() - start,
+                        suspendedTasks, suspendedStandbyTasks, prevActiveTasks);
             }
         }
     }
