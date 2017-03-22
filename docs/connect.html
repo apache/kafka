@@ -114,15 +114,22 @@
         <li><code>transforms.$alias.$transformationSpecificConfig</code> Configuration properties for the transformation</li>
     </ul>
 
-    For example, lets take the built-in file source connector and use a transformation to add a static field. Since the file source connector reads each line as a String, we will use two transformations:
+    <p>For example, lets take the built-in file source connector and use a transformation to add a static field.</p>
+
+    <p>Throughout the example we'll use schemaless JSON data format. To use schemaless format, we changed the following two lines in <code>connect-standalone.properties</code> from true to false:</p>
+
+    <pre>
+        key.converter.schemas.enable
+        value.converter.schemas.enable
+    </pre>
+
+    The file source connector reads each line as a String. We will wrap each line in a Map and then add a second field to identify the origin of the event. To do this, we use two transformations:
     <ul>
-        <li><b>HoistField</b> to place the String inside a map, so we can add the static field to that map. Otherwise there's nothing to add the field to.</li>
-        <li><b>InsertFiled</b> to add the static field. In this example we'll indicate that the record came from a file connector</li>
+        <li><b>HoistField</b> to place the input line inside a Map</li>
+        <li><b>InsertField</b> to add the static field. In this example we'll indicate that the record came from a file connector</li>
     </ul>
 
-    Note that "InsertSource" and "MakeMap" are the alias that I chose to give the transformations. You can give a transformation any name you'd like.
-
-    After adding transformations, the <code>connect-file-source.properties</code> file looks as following:
+    After adding the transformations, <code>connect-file-source.properties</code> file looks as following:
 
     <pre>
         name=local-file-source
@@ -135,19 +142,12 @@
         transforms.MakeMap.field=line
         transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
         transforms.InsertSource.static.field=data_source
-        transforms.InsertSource.static.value="test-file-source"
+        transforms.InsertSource.static.value=test-file-source
     </pre>
 
-    <p>All the lines starting with <code>transforms</code> were added for the transformations. You can see the two transformations I created. The types are based on the list of built-in transformations you can see below. Each transformation type has additional configuration: HoistField requires a configuration called "field", which is the name of the field in the map that will include the original String from the file. InsertField transformation allowed me to specify the field name and the value that I am adding.</p>
+    <p>All the lines starting with <code>transforms</code> were added for the transformations. You can see the two transformations we created: "InsertSource" and "MakeMap" are aliases that we chose to give the transformations. The transformation types are based on the list of built-in transformations you can see below. Each transformation type has additional configuration: HoistField requires a configuration called "field", which is the name of the field in the map that will include the original String from the file. InsertField transformation lets us specify the field name and the value that we are adding.</p>
 
-    <p>Since the expected output is no longer a String but rather a JSON map with two fields, I also modified the framework configuration to make the output schemaless. This is easier to read and I don't plan to use the schema anyway. So I changed the following two lines in <code>connect-standalone.properties</code>:</p>
-
-    <pre>
-        key.converter.schemas.enable
-        value.converter.schemas.enable
-    </pre>
-
-    from true to false. When I ran the file source connector on my sample file before adding transformations, and then read them using <code>kafka-console-consumer.sh</code>, the results were:
+    When we ran the file source connector on my sample file without the transformations, and then read them using <code>kafka-console-consumer.sh</code>, the results were:
 
     <pre>
         "foo"
@@ -155,15 +155,15 @@
         "hello world"
    </pre>
 
-    After adding the transformations (and deleting the existing offsets from /tmp/connect.offsets, so I can re-run the connector from the beginning), I got:
+    We then create a new file connector, this time after adding the transformations to the configuration file. This time, the results will be:
 
     <pre>
-        {"line":"foo","data_source":"\"test-file-source\""}
-        {"line":"bar","data_source":"\"test-file-source\""}
-        {"line":"hello world","data_source":"\"test-file-source\""}
+        {"line":"foo","data_source":"test-file-source"}
+        {"line":"bar","data_source":"test-file-source"}
+        {"line":"hello world","data_source":"test-file-source"}
     </pre>
 
-    You can see that my strings are now part of a JSON map, and there is an extra field with the value I specified. This is just one example of what you can do with transformations.
+    You can see that the lines we've read are now part of a JSON map, and there is an extra field with the static value we specified. This is just one example of what you can do with transformations.
 
     Several widely-applicable data and routing transformations are included with Kafka Connect:
 
