@@ -61,39 +61,51 @@ class StreamsBrokerBounceTest(Test):
 
     def __init__(self, test_context):
         super(StreamsBrokerBounceTest, self).__init__(test_context)
+        self.replication = 3
+        self.partitions = 3
         self.topics = {
-            'echo' : { 'partitions': 5, 'replication-factor': 2 },
-            'data' : { 'partitions': 5, 'replication-factor': 2 },
-            'min' : { 'partitions': 5, 'replication-factor': 2 },
-            'max' : { 'partitions': 5, 'replication-factor': 2 },
-            'sum' : { 'partitions': 5, 'replication-factor': 2 },
-            'dif' : { 'partitions': 5, 'replication-factor': 2 },
-            'cnt' : { 'partitions': 5, 'replication-factor': 2 },
-            'avg' : { 'partitions': 5, 'replication-factor': 2 },
-            'wcnt' : { 'partitions': 5, 'replication-factor': 2 },
-            'tagg' : { 'partitions': 5, 'replication-factor': 2 }
+            'echo' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                       'configs': {"min.insync.replicas": 2}},
+            'data' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                       'configs': {"min.insync.replicas": 2} },
+            'min' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                      'configs': {"min.insync.replicas": 2} },
+            'max' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                      'configs': {"min.insync.replicas": 2} },
+            'sum' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                      'configs': {"min.insync.replicas": 2} },
+            'dif' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                      'configs': {"min.insync.replicas": 2} },
+            'cnt' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                      'configs': {"min.insync.replicas": 2} },
+            'avg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                      'configs': {"min.insync.replicas": 2} },
+            'wcnt' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                       'configs': {"min.insync.replicas": 2} },
+            'tagg' : { 'partitions': self.partitions, 'replication-factor': self.replication,
+                       'configs': {"min.insync.replicas": 2} }
         }
 
-    @cluster(num_nodes=6)
+    @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
             broker_type=["leader", "controller"],
-            sleep_time_secs=[0, 10])
+            sleep_time_secs=[0, 15])
     def test_broker_bounce(self, failure_mode, broker_type, sleep_time_secs):
         """
         Start a smoke test client, then kill a few brokers and ensure data is still received
         Ensure that all records are delivered.
         """
 
-        #############
-        # SETUP PHASE
-        #############
+        # Setup phase
         self.zk = ZookeeperService(self.test_context, num_nodes=1)
         self.zk.start()
         
-        self.kafka = KafkaService(self.test_context, num_nodes=3, zk=self.zk, topics=self.topics)
+        self.kafka = KafkaService(self.test_context, num_nodes=self.replication,
+                                  zk=self.zk, topics=self.topics)
         self.kafka.start()
         
 
+        # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
 
@@ -101,20 +113,27 @@ class StreamsBrokerBounceTest(Test):
         self.driver.start()
         self.processor1.start()
 
-        # sleep to allow test to run for a bit
+        # Sleep to allow test to run for a bit
         time.sleep(sleep_time_secs)
-        
 
-        # pick a random topic and bounce it's leader
+        # Pick a random topic and bounce it's leader
         topic_index = randint(0, len(self.topics.keys()) - 1)
         topic = self.topics.keys()[topic_index]
         failures[failure_mode](self, topic, broker_type)
 
-
+        # End test
         self.driver.wait()
         self.driver.stop()
 
         self.processor1.stop()
 
         node = self.driver.node
-        node.account.ssh("grep ALL-RECORDS-DELIVERED %s" % self.driver.STDOUT_FILE, allow_fail=False)
+        
+        # Capture all three options for now, since for the purposes of this test, we are only testing Kafka Streams
+        # being robust in face of failure, not Kafka's data loss or duplicates.
+        output = node.account.ssh_capture("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED|PROCESSED-LESS-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
+
+        data = {}
+        for line in output:
+            data["result"] = line
+        return data
