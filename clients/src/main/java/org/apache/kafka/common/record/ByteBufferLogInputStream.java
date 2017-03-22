@@ -44,28 +44,29 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
             return null;
 
         int recordSize = buffer.getInt(buffer.position() + SIZE_OFFSET);
+        // V0 has the smallest overhead, stricter checking is done later
         if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
             throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
         if (recordSize > maxMessageSize)
             throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
 
-        int entrySize = recordSize + LOG_OVERHEAD;
-        if (remaining < entrySize)
+        int batchSize = recordSize + LOG_OVERHEAD;
+        if (remaining < batchSize)
             return null;
 
         byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
 
-        ByteBuffer entrySlice = buffer.slice();
-        entrySlice.limit(entrySize);
-        buffer.position(buffer.position() + entrySize);
+        ByteBuffer batchSlice = buffer.slice();
+        batchSlice.limit(batchSize);
+        buffer.position(buffer.position() + batchSize);
 
         if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
             throw new CorruptRecordException("Invalid magic found in record: " + magic);
 
         if (magic > RecordBatch.MAGIC_VALUE_V1)
-            return new DefaultRecordBatch(entrySlice);
+            return new DefaultRecordBatch(batchSlice);
         else
-            return new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(entrySlice);
+            return new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(batchSlice);
     }
 
 }

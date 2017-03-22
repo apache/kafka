@@ -171,6 +171,9 @@ public class DefaultRecord implements Record {
         return headers;
     }
 
+    /**
+     * Write the record to `out` and return its crc.
+     */
     public static long writeTo(DataOutputStream out,
                                boolean isControlRecord,
                                int offsetDelta,
@@ -230,6 +233,9 @@ public class DefaultRecord implements Record {
         return computeChecksum(timestampDelta, key, value);
     }
 
+    /**
+     * Write the record to `out` and return its crc.
+     */
     public static long writeTo(ByteBuffer out,
                                boolean isControlRecord,
                                int offsetDelta,
@@ -444,11 +450,9 @@ public class DefaultRecord implements Record {
     }
 
     static int recordSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        int size = MAX_RECORD_OVERHEAD;
         int keySize = key == null ? -1 : key.length;
         int valueSize = value == null ? -1 : value.length;
-        size += sizeOf(keySize, valueSize, headers);
-        return size;
+        return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
     }
 
 }

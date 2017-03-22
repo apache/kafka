@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -74,7 +74,8 @@ class ProduceRequestTest extends BaseRequestTest {
     val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
       new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
     // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
-    memoryRecords.buffer.array.update(40, 3)
+    val lz4ChecksumOffset = 6
+    memoryRecords.buffer.array.update(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset, 0)
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
     val produceResponse = sendProduceRequest(leader, 

@@ -70,7 +70,6 @@ public class RequestResponseTest {
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
         checkRequest(createFetchRequest(4));
         checkErrorResponse(createFetchRequest(4), new UnknownServerException());
-        checkResponse(createFetchResponse(), 0);
         checkRequest(createHeartBeatRequest());
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException());
         checkResponse(createHeartBeatResponse(), 0);
@@ -185,6 +184,7 @@ public class RequestResponseTest {
         for (int i = 0; i < latestVersion; ++i) {
             checkErrorResponse(createFetchRequest(i), new UnknownServerException());
             checkRequest(createFetchRequest(i));
+            checkResponse(createFetchResponse(), i);
         }
     }
 

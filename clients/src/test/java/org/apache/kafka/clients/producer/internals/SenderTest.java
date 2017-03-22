@@ -164,7 +164,7 @@ public class SenderTest {
     @Test
     public void testDownConversionForMismatchedMagicValues() throws Exception {
         // it can happen that we construct a record set with mismatching magic values (perhaps
-        // because the partition leader changed after the record set was initially constructed.
+        // because the partition leader changed after the record set was initially constructed)
         // in this case, we down-convert record sets with newer magic values to match the oldest
         // created record set
 

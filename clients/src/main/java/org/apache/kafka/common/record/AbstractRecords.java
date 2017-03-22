@@ -82,6 +82,10 @@ public abstract class AbstractRecords implements Records {
         return MemoryRecords.readableRecords(buffer);
     }
 
+    /**
+     * Return a buffer containing the converted record batches. The returned buffer may not be the same as the received
+     * one (e.g. it may require expansion).
+     */
     private ByteBuffer convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
         RecordBatch batch = recordBatchAndRecords.batch;
         final TimestampType timestampType = batch.timestampType();

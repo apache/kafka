@@ -441,14 +441,16 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
 
             LogEntryPosition that = (LogEntryPosition) o;
 
-            if (offset != that.offset) return false;
-            if (position != that.position) return false;
-            return size == that.size;
+            return offset == that.offset &&
+                    position == that.position &&
+                    size == that.size;
 
         }
 

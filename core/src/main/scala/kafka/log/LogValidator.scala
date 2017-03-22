@@ -191,10 +191,10 @@ private[kafka] object LogValidator extends Logging {
           validateKey(record, compactedTopic)
 
           if (!record.hasMagic(RecordBatch.MAGIC_VALUE_V0) && messageFormatVersion > RecordBatch.MAGIC_VALUE_V0) {
-            // No in place assignment situation 3
             // Validate the timestamp
             validateTimestamp(batch, record, currentTimestamp, messageTimestampType, messageTimestampDiffMaxMs)
             // Check if we need to overwrite offset
+            // No in place assignment situation 3
             if (record.offset != expectedInnerOffset.getAndIncrement())
               inPlaceAssignment = false
             if (record.timestamp > maxTimestamp)
@@ -217,7 +217,7 @@ private[kafka] object LogValidator extends Logging {
         buildRecordsAndAssignOffsets(messageFormatVersion, offsetCounter, messageTimestampType,
           CompressionType.forId(targetCodec.codec), currentTimestamp, validatedRecords)
       } else {
-        // we can update the wrapper message only and write the compressed payload as is
+        // we can update the batch only and write the compressed payload as is
         val batch = records.batches.iterator.next()
         val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
 

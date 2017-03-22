@@ -338,32 +338,8 @@ public final class LegacyRecord {
         return new LegacyRecord(buffer);
     }
 
-    public static LegacyRecord create(long timestamp, byte[] key, byte[] value) {
-        return create(RecordBatch.MAGIC_VALUE_V1, timestamp, key, value, CompressionType.NONE, TimestampType.CREATE_TIME);
-    }
-
     public static LegacyRecord create(byte magic, long timestamp, byte[] key, byte[] value) {
         return create(magic, timestamp, key, value, CompressionType.NONE, TimestampType.CREATE_TIME);
-    }
-
-    public static LegacyRecord create(byte magic, TimestampType timestampType, long timestamp, byte[] key, byte[] value) {
-        return create(magic, timestamp, key, value, CompressionType.NONE, timestampType);
-    }
-
-    public static LegacyRecord create(byte magic, long timestamp, byte[] value) {
-        return create(magic, timestamp, null, value, CompressionType.NONE, TimestampType.CREATE_TIME);
-    }
-
-    public static LegacyRecord create(byte magic, byte[] key, byte[] value) {
-        return create(magic, RecordBatch.NO_TIMESTAMP, key, value);
-    }
-
-    public static LegacyRecord create(byte[] key, byte[] value) {
-        return create(RecordBatch.NO_TIMESTAMP, key, value);
-    }
-
-    public static LegacyRecord create(byte[] value) {
-        return create(RecordBatch.MAGIC_VALUE_V1, RecordBatch.NO_TIMESTAMP, null, value, CompressionType.NONE, TimestampType.CREATE_TIME);
     }
 
     /**

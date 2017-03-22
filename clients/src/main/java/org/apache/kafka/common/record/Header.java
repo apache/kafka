@@ -45,8 +45,10 @@ public class Header {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
 
         Header header = (Header) o;
         return (key == null ? header.key == null : key.equals(header.key)) &&

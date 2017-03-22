@@ -316,8 +316,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
 
         DefaultRecordBatch that = (DefaultRecordBatch) o;
         return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
@@ -344,7 +346,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     static void writeHeader(ByteBuffer buffer,
                             long baseOffset,
                             int lastOffsetDelta,
-                            int size,
+                            int sizeInBytes,
                             byte magic,
                             CompressionType compressionType,
                             TimestampType timestampType,
@@ -365,7 +367,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         int position = buffer.position();
         buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
-        buffer.putInt(position + LENGTH_OFFSET, size - LOG_OVERHEAD);
+        buffer.putInt(position + LENGTH_OFFSET, sizeInBytes - LOG_OVERHEAD);
         buffer.putInt(position + PARTITION_LEADER_EPOCH_OFFSET, partitionLeaderEpoch);
         buffer.put(position + MAGIC_OFFSET, magic);
         buffer.putShort(position + ATTRIBUTES_OFFSET, attributes);
@@ -376,8 +378,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
-        long crc = Crc32.crc32(buffer, ATTRIBUTES_OFFSET, size - ATTRIBUTES_OFFSET);
-        buffer.putInt(position + CRC_OFFSET, (int) (crc & 0xffffffffL));
+        long crc = Crc32.crc32(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
+        buffer.putInt(position + CRC_OFFSET, (int) crc);
     }
 
     @Override

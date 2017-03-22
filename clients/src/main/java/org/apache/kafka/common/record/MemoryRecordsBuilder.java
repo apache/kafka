@@ -116,7 +116,7 @@ public class MemoryRecordsBuilder {
         }
 
         if (producerId != RecordBatch.NO_PRODUCER_ID) {
-            if (producerEpoch  < 0)
+            if (producerEpoch < 0)
                 throw new IllegalArgumentException("Invalid negative producer epoch");
 
             if (baseSequence < 0)
@@ -398,7 +398,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Add a record without doing offset/magic validation (this should only be used in testing).
+     * Add a legacy record without doing offset/magic validation (this should only be used in testing).
      * @param offset The offset of the record
      * @param record The record to add
      */
@@ -492,7 +492,10 @@ public class MemoryRecordsBuilder {
 
     private void recordWritten(long offset, long timestamp, int size) {
         if (numRecords == Integer.MAX_VALUE)
-            throw new IllegalArgumentException("Maximum number of records per batch exceeded");
+            throw new IllegalArgumentException("Maximum number of records per batch exceeded, max records: " + Integer.MAX_VALUE);
+        if (offset - baseOffset > Integer.MAX_VALUE)
+            throw new IllegalArgumentException("Maximum offset delta exceeded, base offset: " + baseOffset +
+                    ", last offset: " + offset);
 
         numRecords += 1;
         writtenUncompressed += size;
@@ -537,7 +540,7 @@ public class MemoryRecordsBuilder {
         if (magic < RecordBatch.MAGIC_VALUE_V2) {
             recordSize = Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
         } else {
-            int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset + 1 - baseOffset);
+            int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
         }

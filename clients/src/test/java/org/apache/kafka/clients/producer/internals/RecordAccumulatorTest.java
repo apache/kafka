@@ -489,7 +489,6 @@ public class RecordAccumulatorTest {
         // test case assumes that the records do not fill the batch completely
         int batchSize = 1025;
 
-
         RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, 10, 100L, metrics, time, new ApiVersions());
         int appends = expectedNumAppends(batchSize);
@@ -520,6 +519,9 @@ public class RecordAccumulatorTest {
         assertTrue("The batch should have been drained.", drained.get(node1.id()).size() > 0);
     }
 
+    /**
+     * Return the offset delta.
+     */
     private int expectedNumAppends(int batchSize) {
         int size = 0;
         int offsetDelta = 0;

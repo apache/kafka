@@ -84,10 +84,10 @@ public class FileRecordsTest {
         fileRecords.channel().write(buffer);
 
         // appending those bytes should not change the contents
-        Iterator<Record> logRecords = fileRecords.records().iterator();
+        Iterator<Record> records = fileRecords.records().iterator();
         for (byte[] value : values) {
-            assertTrue(logRecords.hasNext());
-            assertEquals(logRecords.next().value(), ByteBuffer.wrap(value));
+            assertTrue(records.hasNext());
+            assertEquals(records.next().value(), ByteBuffer.wrap(value));
         }
     }
 
@@ -97,10 +97,10 @@ public class FileRecordsTest {
     @Test
     public void testIterationDoesntChangePosition() throws IOException {
         long position = fileRecords.channel().position();
-        Iterator<Record> logRecords = fileRecords.records().iterator();
+        Iterator<Record> records = fileRecords.records().iterator();
         for (byte[] value : values) {
-            assertTrue(logRecords.hasNext());
-            assertEquals(logRecords.next().value(), ByteBuffer.wrap(value));
+            assertTrue(records.hasNext());
+            assertEquals(records.next().value(), ByteBuffer.wrap(value));
         }
         assertEquals(position, fileRecords.channel().position());
     }
@@ -134,25 +134,25 @@ public class FileRecordsTest {
         SimpleRecord lastMessage = new SimpleRecord("test".getBytes());
         fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
 
-        List<RecordBatch> entries = batches(fileRecords);
+        List<RecordBatch> batches = batches(fileRecords);
         int position = 0;
 
-        int message1Size = entries.get(0).sizeInBytes();
+        int message1Size = batches.get(0).sizeInBytes();
         assertEquals("Should be able to find the first message by its offset",
                 new FileRecords.LogEntryPosition(0L, position, message1Size),
                 fileRecords.searchForOffsetWithSize(0, 0));
         position += message1Size;
 
-        int message2Size = entries.get(1).sizeInBytes();
+        int message2Size = batches.get(1).sizeInBytes();
         assertEquals("Should be able to find second message when starting from 0",
                 new FileRecords.LogEntryPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, 0));
         assertEquals("Should be able to find second message starting from its offset",
                 new FileRecords.LogEntryPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, position));
-        position += message2Size + entries.get(2).sizeInBytes();
+        position += message2Size + batches.get(2).sizeInBytes();
 
-        int message4Size = entries.get(3).sizeInBytes();
+        int message4Size = batches.get(3).sizeInBytes();
         assertEquals("Should be able to find fourth message from a non-existant offset",
                 new FileRecords.LogEntryPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(3, position));
@@ -166,11 +166,11 @@ public class FileRecordsTest {
      */
     @Test
     public void testIteratorWithLimits() throws IOException {
-        RecordBatch entry = batches(fileRecords).get(1);
+        RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = entry.sizeInBytes();
+        int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size);
-        assertEquals(Collections.singletonList(entry), batches(slice));
+        assertEquals(Collections.singletonList(batch), batches(slice));
         FileRecords slice2 = fileRecords.read(start, size - 1);
         assertEquals(Collections.emptyList(), batches(slice2));
     }
@@ -180,11 +180,11 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncate() throws IOException {
-        RecordBatch entry = batches(fileRecords).get(0);
+        RecordBatch batch = batches(fileRecords).get(0);
         int end = fileRecords.searchForOffsetWithSize(1, 0).position;
         fileRecords.truncateTo(end);
-        assertEquals(Collections.singletonList(entry), batches(fileRecords));
-        assertEquals(entry.sizeInBytes(), fileRecords.sizeInBytes());
+        assertEquals(Collections.singletonList(batch), batches(fileRecords));
+        assertEquals(batch.sizeInBytes(), fileRecords.sizeInBytes());
     }
 
     /**
@@ -304,9 +304,9 @@ public class FileRecordsTest {
 
     @Test
     public void testFormatConversionWithPartialMessage() throws IOException {
-        RecordBatch entry = batches(fileRecords).get(1);
+        RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = entry.sizeInBytes();
+        int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
         Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0);
         assertTrue("No message should be there", batches(messageV0).isEmpty());

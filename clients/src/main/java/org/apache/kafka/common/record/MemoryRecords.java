@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A {@link Records} implementation backed by a ByteBuffer. This is used only for reading or
@@ -46,6 +47,7 @@ public class MemoryRecords extends AbstractRecords {
 
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer) {
+        Objects.requireNonNull(buffer, "buffer should not be null");
         this.buffer = buffer;
     }
 
@@ -129,12 +131,12 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
-            // We use the absolute offset to decide whether to retain the message or not due to KAFKA-4298, we have to
-            // allow for the possibility that a previous version corrupted the log by writing a compressed message
-            // set with a wrapper magic value not matching the magic of the inner messages. This will be fixed as we
+            // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
+            // allow for the possibility that a previous version corrupted the log by writing a compressed record batch
+            // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
             // recopy the messages to the destination buffer.
 
-            byte shallowMagic = batch.magic();
+            byte batchMagic = batch.magic();
             boolean writeOriginalEntry = true;
             long firstOffset = -1;
             List<Record> retainedRecords = new ArrayList<>();
@@ -148,7 +150,7 @@ public class MemoryRecords extends AbstractRecords {
                 if (filter.shouldRetain(record)) {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
-                    if (!record.hasMagic(shallowMagic))
+                    if (!record.hasMagic(batchMagic))
                         writeOriginalEntry = false;
 
                     if (record.offset() > maxOffset)
@@ -227,8 +229,10 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
 
         MemoryRecords that = (MemoryRecords) o;
 
@@ -287,8 +291,7 @@ public class MemoryRecords extends AbstractRecords {
                                                CompressionType compressionType,
                                                TimestampType timestampType,
                                                long baseOffset) {
-        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset,
-                System.currentTimeMillis(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
+        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -296,8 +299,7 @@ public class MemoryRecords extends AbstractRecords {
                                                CompressionType compressionType,
                                                TimestampType timestampType,
                                                long baseOffset) {
-        return builder(buffer, magic, compressionType, timestampType, baseOffset, System.currentTimeMillis(),
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
+        return builder(buffer, magic, compressionType, timestampType, baseOffset, System.currentTimeMillis());
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -330,11 +332,6 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withRecords(byte magic, CompressionType compressionType, SimpleRecord... records) {
         return withRecords(magic, 0L, compressionType, TimestampType.CREATE_TIME, records);
-    }
-
-    public static MemoryRecords withRecords(byte magic, CompressionType compressionType, TimestampType timestampType,
-                                            SimpleRecord... records) {
-        return withRecords(magic, 0L, compressionType, timestampType, records);
     }
 
     public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, SimpleRecord... records) {

@@ -365,14 +365,15 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
 
             BasicLegacyRecordBatch that = (BasicLegacyRecordBatch) o;
 
-            if (offset != that.offset) return false;
-            return record != null ? record.equals(that.record) : that.record == null;
-
+            return offset == that.offset &&
+                    (record != null ? record.equals(that.record) : that.record == null);
         }
 
         @Override
@@ -435,14 +436,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);
         }
 
-        public ByteBuffer buffer() {
-            return buffer;
-        }
-
         @Override
         public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
 
             ByteBufferLegacyRecordBatch that = (ByteBufferLegacyRecordBatch) o;
 

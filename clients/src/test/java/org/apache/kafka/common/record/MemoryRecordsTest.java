@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -93,6 +94,8 @@ public class MemoryRecordsTest {
                     assertEquals(firstSequence + total, batch.baseSequence());
                     assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
                     assertEquals(records.length, batch.countOrNull().intValue());
+                    assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
+                    assertEquals(records[records.length - 1].timestamp(), batch.maxTimestamp());
                 } else {
                     assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
                     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
@@ -224,29 +227,29 @@ public class MemoryRecordsTest {
         assertEquals(1L, first.offset());
         if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(11L, first.timestamp());
-        assertEquals(ByteBuffer.wrap("1".getBytes()), first.key());
-        assertEquals(ByteBuffer.wrap("b".getBytes()), first.value());
+        assertEquals("1", Utils.utf8(first.key(), first.keySize()));
+        assertEquals("b", Utils.utf8(first.value(), first.valueSize()));
 
         Record second = records.get(1);
         assertEquals(4L, second.offset());
         if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(20L, second.timestamp());
-        assertEquals(ByteBuffer.wrap("4".getBytes()), second.key());
-        assertEquals(ByteBuffer.wrap("e".getBytes()), second.value());
+        assertEquals("4", Utils.utf8(second.key(), second.keySize()));
+        assertEquals("e", Utils.utf8(second.value(), second.valueSize()));
 
         Record third = records.get(2);
         assertEquals(5L, third.offset());
         if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(15L, third.timestamp());
-        assertEquals(ByteBuffer.wrap("5".getBytes()), third.key());
-        assertEquals(ByteBuffer.wrap("f".getBytes()), third.value());
+        assertEquals("5", Utils.utf8(third.key(), third.keySize()));
+        assertEquals("f", Utils.utf8(third.value(), third.valueSize()));
 
         Record fourth = records.get(3);
         assertEquals(6L, fourth.offset());
         if (magic > RecordBatch.MAGIC_VALUE_V0)
             assertEquals(16L, fourth.timestamp());
-        assertEquals(ByteBuffer.wrap("6".getBytes()), fourth.key());
-        assertEquals(ByteBuffer.wrap("g".getBytes()), fourth.value());
+        assertEquals("6", Utils.utf8(fourth.key(), fourth.keySize()));
+        assertEquals("g", Utils.utf8(fourth.value(), fourth.valueSize()));
     }
 
     @Test
