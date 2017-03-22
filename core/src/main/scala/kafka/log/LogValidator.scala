@@ -32,16 +32,13 @@ private[kafka] object LogValidator extends Logging {
   /**
    * Update the offsets for this message set and do further validation on messages including:
    * 1. Messages for compacted topics must have keys
-   * 2. When magic value = 1, inner messages of a compressed message set must have monotonically increasing offsets
+   * 2. When magic value >= 1, inner messages of a compressed message set must have monotonically increasing offsets
    *    starting from 0.
-   * 3. When magic value = 1, validate and maybe overwrite timestamps of messages.
+   * 3. When magic value >= 1, validate and maybe overwrite timestamps of messages.
    *
-   * This method will convert the messages in the following scenarios:
-   * A. Magic value of a message = 0 and messageFormatVersion is 1
-   * B. Magic value of a message = 1 and messageFormatVersion is 0
-   *
-   * If no format conversion or value overwriting is required for messages, this method will perform in-place
-   * operations and avoid re-compression.
+   * This method will convert messages as necessary to the topic's configured message format version. If no format
+   * conversion or value overwriting is required for messages, this method will perform in-place operations to
+   * avoid expensive re-compression.
    *
    * Returns a ValidationAndOffsetAssignResult containing the validated message set, maximum timestamp, the offset
    * of the shallow message with the max timestamp and a boolean indicating whether the message sizes may have changed.
@@ -165,7 +162,6 @@ private[kafka] object LogValidator extends Logging {
    * 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
    * 4. Message format conversion is needed.
    */
-
   def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
                                                  offsetCounter: LongRef,
                                                  currentTimestamp: Long,

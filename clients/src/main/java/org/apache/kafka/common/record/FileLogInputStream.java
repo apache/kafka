@@ -253,7 +253,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
             try {
                 Utils.readFully(channel, buffer, position);
             } catch (IOException e) {
-                throw new KafkaException("Failed to read log entry at position " + position + " from file channel " +
+                throw new KafkaException("Failed to read record batch at position " + position + " from file channel " +
                         channel, e);
             }
         }
