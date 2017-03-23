@@ -27,8 +27,6 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.util.Map;
@@ -48,7 +46,6 @@ public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> 
 
     public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
 
-        private static final Logger log = LoggerFactory.getLogger(KStreamTransformValuesProcessor.class);
         private final ValueTransformer<V, R> valueTransformer;
         private ProcessorContext context;
 
