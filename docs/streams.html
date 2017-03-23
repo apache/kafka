@@ -355,8 +355,9 @@ public class MyProcessor implements Processor&lt;String, String&gt; {
 
     @Override
     public void close() {
-        // close the key-value store
-        this.kvStore.close();
+        // close any resources managed by this processor.
+        // Note: Do not close any StateStores as these are managed
+        // by the library
     }
 };
 </pre>

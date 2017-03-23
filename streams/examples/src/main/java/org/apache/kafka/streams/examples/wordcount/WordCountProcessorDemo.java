@@ -95,9 +95,7 @@ public class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void close() {
-                    this.kvStore.close();
-                }
+                public void close() {}
             };
         }
     }
