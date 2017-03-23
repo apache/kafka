@@ -175,7 +175,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @SuppressWarnings("unchecked")
     public int process() {
-
         // get the next record to process
         StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
@@ -197,11 +196,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
             updateProcessorContext(recordContext, currNode);
             currNode.process(record.key(), record.value());
 
-            //log.trace("{} Completed processing one record [{}]", logPrefix, record);
+            log.trace("{} Completed processing one record [{}]", logPrefix, record);
 
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
             commitOffsetNeeded = true;
+
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() == this.maxBufferedSize) {
