@@ -65,8 +65,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private boolean requiresPoll = true;
     private final Time time;
     private final TaskMetrics metrics;
-    private long sum1 = 0, sum2 = 0, sum3 = 0;
-    private long stats = 0;
     private Runnable commitDelegate = new Runnable() {
         @Override
         public void run() {
@@ -164,7 +162,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
         if (newQueueSize > this.maxBufferedSize) {
-            //System.out.println("addRecords: pausing " + newQueueSize + " > " + this.maxBufferedSize);
             consumer.pause(singleton(partition));
         }
 
@@ -178,8 +175,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @SuppressWarnings("unchecked")
     public int process() {
-        //long start1, end1, end2, end3;
-        //start1 = end1 = end2 = end3 = time.nanoseconds();
 
         // get the next record to process
         StampedRecord record = partitionGroup.nextRecord(recordInfo);
@@ -197,10 +192,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             final ProcessorNode currNode = recordInfo.node();
             TopicPartition partition = recordInfo.partition();
 
-            //log.trace("{} Start processing one record [{}]", logPrefix, record);
+            log.trace("{} Start processing one record [{}]", logPrefix, record);
             final ProcessorRecordContext recordContext = createRecordContext(record);
             updateProcessorContext(recordContext, currNode);
-           // end1 = time.nanoseconds();
             currNode.process(record.key(), record.value());
 
             //log.trace("{} Completed processing one record [{}]", logPrefix, record);
@@ -208,12 +202,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
             // update the consumed offset map after processing is done
             consumedOffsets.put(partition, record.offset());
             commitOffsetNeeded = true;
-            //end2 = time.nanoseconds();
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
             if (recordInfo.queue().size() == this.maxBufferedSize) {
                 consumer.resume(singleton(partition));
-                //System.out.println("process: resuming " + recordInfo.queue().size() + " == " + this.maxBufferedSize);
                 requiresPoll = true;
             }
 
@@ -231,14 +223,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         } finally {
             processorContext.setCurrentNode(null);
         }
-       // end3 = time.nanoseconds();
-        //sum1 += (end1 - start1);
-        //sum2 += (end2 - end1);
-        //sum3 += (end3 - end2);
-        //stats++;
-        //if (stats % 1000000 == 0) {
-        //    System.out.println("Tasks: " + sum1 + "\t" + sum2 + "\t" + sum3);
-        //}
 
         return partitionGroup.numBuffered();
     }
