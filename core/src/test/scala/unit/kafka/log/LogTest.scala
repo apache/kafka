@@ -18,9 +18,11 @@
 package kafka.log
 
 import java.io._
+import java.util
+import java.util.HashSet
 import java.util.Properties
 
-import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
+import org.apache.kafka.common.errors._
 import kafka.api.ApiVersion
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
@@ -1300,16 +1302,40 @@ class LogTest extends JUnitSuite {
     log.deleteOldSegments()
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
+  
+  @Test
+  def testAppendToCompactedTopicWithoutSpecifyingMessageTimestampMaxMs() {
+    val set = TestUtils.singletonRecords(value = "test".getBytes, key = "key".getBytes, 
+      timestamp = time.milliseconds + 100000)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, set.sizeInBytes * 5: Integer)
+    logProps.put(LogConfig.RetentionMsProp, 10000: Integer)
+    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, 10000.toString)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    val logWithOnlyCompaction = createLog(logProps, new util.HashSet[String])
+    logWithOnlyCompaction.append(set)
+
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+    val logWithCompactionAndRetention = createLog(logProps, new util.HashSet[String])
+    intercept[InvalidTimestampException] {
+      logWithCompactionAndRetention.append(set)
+    }
+  }
 
   def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
-                retentionBytes: Int = -1, cleanupPolicy: String = "delete"): Log = {
+                retentionBytes: Int = -1, cleanupPolicy: String = "delete",
+                messageTimestampDifferenceMaxMs: Long = Long.MaxValue): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * 5: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
     logProps.put(LogConfig.RetentionBytesProp, retentionBytes: Integer)
     logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
-    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
-    val config = LogConfig(logProps)
+    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, messageTimestampDifferenceMaxMs.toString)
+    createLog(logProps, new util.HashSet[String])
+  }
+  
+  def createLog(logProps: Properties, userSuppliedProps: java.util.Set[String]): Log = {
+    val config = LogConfig(logProps, userSuppliedProps)
     val log = new Log(logDir,
       config,
       recoveryPoint = 0L,
