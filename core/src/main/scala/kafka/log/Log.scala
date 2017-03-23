@@ -370,7 +370,7 @@ class Log(@volatile var dir: File,
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             val messageTimestampDifferenceMaxMs = {
-              if (config.compact && !config.userSupplied(LogConfig.MessageTimestampDifferenceMaxMsProp) &&
+              if (!config.delete && !config.userSupplied(LogConfig.MessageTimestampDifferenceMaxMsProp) &&
                   !config.userSupplied(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp))
                 Long.MaxValue
               else
