@@ -251,6 +251,12 @@ public class VerifiableProducer {
         return toJsonString(data);
     }
 
+    String startupString() {
+        Map<String, Object> data = new HashMap<>();
+        data.put("name", "startup_complete");
+        return toJsonString(data);
+    }
+
     /**
      * Return JSON string encapsulating basic information about the exception, as well
      * as the key and value which triggered the exception.
@@ -352,6 +358,7 @@ public class VerifiableProducer {
         });
 
         ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
+        System.out.println(producer.startupString());
         long maxMessages = infinite ? Long.MAX_VALUE : producer.maxMessages;
         for (long i = 0; i < maxMessages; i++) {
             if (producer.stopProducing) {

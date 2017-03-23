@@ -307,7 +307,7 @@
         </p>
 
 <pre>
-public class MyProcessor extends Processor&lt;String, String&gt; {
+public class MyProcessor implements Processor&lt;String, String&gt; {
     private ProcessorContext context;
     private KeyValueStore&lt;String, Long&gt; kvStore;
 

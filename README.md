@@ -14,38 +14,42 @@ Java 7 should be used for building in order to support both Java 7 and Java 8 at
 
 Now everything else will work.
 
-### Building a jar and running it ###
+### Build a jar and run it ###
     ./gradlew jar
 
 Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 
-### Building source jar ###
+### Build source jar ###
     ./gradlew srcJar
 
-### Building aggregated javadoc ###
+### Build aggregated javadoc ###
     ./gradlew aggregatedJavadoc
 
-### Building javadoc and scaladoc ###
+### Build javadoc and scaladoc ###
     ./gradlew javadoc
     ./gradlew javadocJar # builds a javadoc jar for each module
     ./gradlew scaladoc
     ./gradlew scaladocJar # builds a scaladoc jar for each module
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
-### Running unit tests ###
-    ./gradlew test
-
-### Forcing re-running unit tests w/o code change ###
+### Run unit/integration tests ###
+    ./gradlew test # runs both unit and integration tests
+    ./gradlew unitTest
+    ./gradlew integrationTest
+    
+### Force re-running tests without code change ###
     ./gradlew cleanTest test
+    ./gradlew cleanTest unitTest
+    ./gradlew cleanTest integrationTest
 
-### Running a particular unit test ###
+### Running a particular unit/integration test ###
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
-### Running a particular test method within a unit test ###
+### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
-### Running a particular unit test with log4j output ###
+### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
 
     ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
@@ -103,7 +107,7 @@ to avoid known issues with this configuration.
 ### Building the jar for all scala versions and for all projects ###
     ./gradlew jarAll
 
-### Running unit tests for all scala versions and for all projects ###
+### Running unit/integration tests for all scala versions and for all projects ###
     ./gradlew testAll
 
 ### Building a binary release gzipped tar ball for all scala versions ###
@@ -136,7 +140,7 @@ Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradl
 ### Running code quality checks ###
 There are two code quality analysis tools that we regularly run, findbugs and checkstyle.
 
-#### Checkstyle
+#### Checkstyle ####
 Checkstyle enforces a consistent coding style in Kafka.
 You can run checkstyle using:
 
@@ -145,7 +149,7 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
 
-#### Findbugs
+#### Findbugs ####
 Findbugs uses static analysis to look for bugs in the code.
 You can run findbugs using:
 

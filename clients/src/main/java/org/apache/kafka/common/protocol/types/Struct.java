@@ -349,7 +349,7 @@ public class Struct {
             } else {
                 Object thisField = this.get(f);
                 Object otherField = other.get(f);
-                result = (thisField == null && otherField == null) || thisField.equals(otherField);
+                return (thisField == null) ? (otherField == null) : thisField.equals(otherField);
             }
             if (!result)
                 return false;

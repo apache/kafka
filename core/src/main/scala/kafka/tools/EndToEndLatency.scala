@@ -17,6 +17,7 @@
 
 package kafka.tools
 
+import java.nio.charset.StandardCharsets
 import java.util.{Arrays, Collections, Properties}
 
 import kafka.utils.Exit
@@ -113,8 +114,8 @@ object EndToEndLatency {
       }
 
       //Check result matches the original record
-      val sent = new String(message)
-      val read = new String(recordIter.next().value())
+      val sent = new String(message, StandardCharsets.UTF_8)
+      val read = new String(recordIter.next().value(), StandardCharsets.UTF_8)
       if (!read.equals(sent)) {
         finalise()
         throw new RuntimeException(s"The message read [$read] did not match the message sent [$sent]")

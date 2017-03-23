@@ -70,7 +70,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private Runnable commitDelegate = new Runnable() {
         @Override
         public void run() {
-            log.debug("{} Committing its state", logPrefix);
             // 1) flush local state
             stateMgr.flush(processorContext);
 
@@ -91,7 +90,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param partitions            the collection of assigned {@link TopicPartition}
      * @param topology              the instance of {@link ProcessorTopology}
      * @param consumer              the instance of {@link Consumer}
-     * @param restoreConsumer       the instance of {@link Consumer} used when restoring state
+     * @param changelogReader       the instance of {@link ChangelogReader} used for restoring state
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
@@ -127,7 +126,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
 
         this.logPrefix = String.format("task [%s]", id);
-
 
         this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 

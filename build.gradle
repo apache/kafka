@@ -27,6 +27,7 @@ buildscript {
     classpath "org.ajoberstar:grgit:1.7.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.13.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
   }
 }
 
@@ -167,6 +168,10 @@ subprojects {
     }
   }
 
+  def testLoggingEvents = ["passed", "skipped", "failed"]
+  def testShowStandardStreams = false
+  def testExceptionFormat = 'full'
+
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -175,11 +180,45 @@ subprojects {
     jvmArgs = maxPermSizeArgs
 
     testLogging {
-      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
-      showStandardStreams = userShowStandardStreams ?: false
-      exceptionFormat = 'full'
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
     }
 
+  }
+
+  task integrationTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+    }
+    useJUnit {
+      includeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
+  }
+
+  task unitTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+    }
+    useJUnit {
+      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
   }
 
   jar {
@@ -822,6 +861,48 @@ project(':streams:examples') {
   }
 }
 
+project(':jmh-benchmarks') {
+
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  shadowJar {
+    baseName = 'kafka-jmh-benchmarks-all'
+    classifier = null
+    version = null
+  }
+
+  dependencies {
+      compile project(':clients')
+      compile project(':streams')
+      compile 'org.openjdk.jmh:jmh-core:1.17.5'
+      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.17.5'
+      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.17.5'
+  }
+
+  jar {
+    manifest {
+      attributes "Main-Class": "org.openjdk.jmh.Main"
+    }
+  }
+
+
+  task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
+
+    main="-jar"
+
+    doFirst {
+      if (System.getProperty("jmhArgs")) {
+          args System.getProperty("jmhArgs").split(',')
+      }
+      args = [shadowJar.archivePath, *args]
+    }
+  }
+
+  javadoc {
+     enabled = false
+  }
+}
+
 project(':log4j-appender') {
   archivesBaseName = "kafka-log4j-appender"
 
@@ -849,6 +930,7 @@ project(':connect:api') {
     testCompile libs.junit
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -886,6 +968,7 @@ project(':connect:transforms') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -923,6 +1006,7 @@ project(':connect:json') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -973,6 +1057,7 @@ project(':connect:runtime') {
     testCompile libs.powermockEasymock
 
     testCompile project(":connect:json")
+    testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }
@@ -1025,6 +1110,7 @@ project(':connect:file') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {

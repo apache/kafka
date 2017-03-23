@@ -94,15 +94,17 @@ public class InternalTopicManager {
     private Map<InternalTopicConfig, Integer> validateTopicPartitions(final Map<InternalTopicConfig, Integer> topicsPartitionsMap,
                                                                       final Map<String, Integer> existingTopicNamesPartitions) {
         final Map<InternalTopicConfig, Integer> topicsToBeCreated = new HashMap<>();
-        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsPartitionsMap.entrySet()) {
+            InternalTopicConfig topic = entry.getKey();
+            Integer partition = entry.getValue();
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
-                if (!existingTopicNamesPartitions.get(topic.name()).equals(topicsPartitionsMap.get(topic))) {
+                if (!existingTopicNamesPartitions.get(topic.name()).equals(partition)) {
                     throw new StreamsException("Existing internal topic " + topic.name() + " has invalid partitions." +
-                            " Expected: " + topicsPartitionsMap.get(topic) + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
+                            " Expected: " + partition + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
                             ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             } else {
-                topicsToBeCreated.put(topic, topicsPartitionsMap.get(topic));
+                topicsToBeCreated.put(topic, partition);
             }
         }
 

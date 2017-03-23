@@ -22,7 +22,8 @@ import kafka.tools.StreamsResetter;
 import kafka.utils.MockTime;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -39,14 +40,15 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -60,6 +62,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 /**
  * Tests local state store and global application cleanup.
  */
+@Category({IntegrationTest.class})
 public class ResetIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
@@ -91,14 +94,6 @@ public class ResetIntegrationTest {
     private final MockTime mockTime = CLUSTER.time;
     private final WaitUntilConsumerGroupGotClosed consumerGroupInactive = new WaitUntilConsumerGroupGotClosed();
 
-    @BeforeClass
-    public static void startKafkaCluster() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2);
-        CLUSTER.createTopic(OUTPUT_TOPIC_2_RERUN);
-    }
-
     @AfterClass
     public static void globalCleanup() {
         if (adminClient != null) {
@@ -122,17 +117,13 @@ public class ResetIntegrationTest {
             try {
                 TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
                         "Test consumer group active even after waiting " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-            } catch (GroupCoordinatorNotAvailableException e) {
-                continue;
-            } catch (IllegalArgumentException e) {
+            } catch (TimeoutException e) {
                 continue;
             }
             break;
         }
 
-        if (testNo == 1) {
-            prepareInputData();
-        }
+        prepareInputData();
     }
 
     @Test
@@ -289,6 +280,31 @@ public class ResetIntegrationTest {
     }
 
     private void prepareInputData() throws Exception {
+        try {
+            CLUSTER.deleteTopic(INPUT_TOPIC);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        try {
+            CLUSTER.deleteTopic(OUTPUT_TOPIC);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        try {
+            CLUSTER.deleteTopic(OUTPUT_TOPIC_2);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        try {
+            CLUSTER.deleteTopic(OUTPUT_TOPIC_2_RERUN);
+        } catch (final UnknownTopicOrPartitionException e) {
+            // ignore
+        }
+        CLUSTER.createTopic(INPUT_TOPIC);
+        CLUSTER.createTopic(OUTPUT_TOPIC);
+        CLUSTER.createTopic(OUTPUT_TOPIC_2);
+        CLUSTER.createTopic(OUTPUT_TOPIC_2_RERUN);
+
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, StringSerializer.class);
 
         mockTime.sleep(10);
@@ -421,7 +437,7 @@ public class ResetIntegrationTest {
     private class WaitUntilConsumerGroupGotClosed implements TestCondition {
         @Override
         public boolean conditionMet() {
-            return adminClient.describeConsumerGroup(APP_ID + testNo).consumers().get().isEmpty();
+            return adminClient.describeConsumerGroup(APP_ID + testNo, 0).consumers().get().isEmpty();
         }
     }
 

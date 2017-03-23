@@ -31,13 +31,11 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.test.IntegrationTest;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.experimental.categories.Category;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -67,9 +65,11 @@ import static org.junit.Assert.assertThat;
  * }
  * </pre>
  */
-@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class FanoutIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final long COMMIT_INTERVAL_MS = 300L;
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
@@ -82,15 +82,6 @@ public class FanoutIntegrationTest {
         CLUSTER.createTopic(INPUT_TOPIC_A);
         CLUSTER.createTopic(OUTPUT_TOPIC_B);
         CLUSTER.createTopic(OUTPUT_TOPIC_C);
-    }
-
-    @Parameter
-    public long cacheSizeBytes;
-
-    //Single parameter, use Object[]
-    @Parameters
-    public static Object[] data() {
-        return new Object[] {0, 10 * 1024 * 1024L};
     }
 
     @Test
@@ -112,8 +103,8 @@ public class FanoutIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "fanout-integration-test");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
 
         final KStream<byte[], String> stream1 = builder.stream(INPUT_TOPIC_A);
         final KStream<byte[], String> stream2 = stream1.mapValues(
@@ -174,5 +165,4 @@ public class FanoutIntegrationTest {
         streams.close();
         assertThat(actualValuesForC, equalTo(expectedValuesForC));
     }
-
 }

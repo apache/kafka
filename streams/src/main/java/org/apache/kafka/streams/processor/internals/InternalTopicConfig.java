@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.internals.Topic;
+
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -36,6 +38,8 @@ public class InternalTopicConfig {
 
     public InternalTopicConfig(final String name, final Set<CleanupPolicy> defaultCleanupPolicies, final Map<String, String> logConfig) {
         Objects.requireNonNull(name, "name can't be null");
+        Topic.validate(name);
+
         if (defaultCleanupPolicies.isEmpty()) {
             throw new IllegalArgumentException("Must provide at least one cleanup policy");
         }

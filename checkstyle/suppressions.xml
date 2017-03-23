@@ -32,7 +32,7 @@
               files=".*/protocol/Errors.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="KafkaLZ4BlockOutputStream.java"/>
+              files="(Utils|KafkaLZ4BlockOutputStream).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="ConsumerCoordinator.java"/>

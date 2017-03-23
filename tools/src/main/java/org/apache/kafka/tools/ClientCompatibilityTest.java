@@ -139,7 +139,7 @@ public class ClientCompatibilityTest {
         try {
             test.run();
         } catch (Throwable t) {
-            System.out.printf("FAILED: Caught exception %s\n\n", t.getMessage());
+            System.out.printf("FAILED: Caught exception %s%n%n", t.getMessage());
             t.printStackTrace();
             Exit.exit(1);
         }

@@ -98,7 +98,7 @@ public class StreamsKafkaClient {
             streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG)
         );
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
+        metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), time.milliseconds());
 
         final MetricConfig metricConfig = new MetricConfig().samples(streamsConfig.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(streamsConfig.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -144,14 +144,16 @@ public class StreamsKafkaClient {
                              final long windowChangeLogAdditionalRetention, final MetadataResponse metadata) {
 
         final Map<String, CreateTopicsRequest.TopicDetails> topicRequestDetails = new HashMap<>();
-        for (InternalTopicConfig internalTopicConfig:topicsMap.keySet()) {
+        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsMap.entrySet()) {
+            InternalTopicConfig internalTopicConfig = entry.getKey();
+            Integer partitions = entry.getValue();
             final Properties topicProperties = internalTopicConfig.toProperties(windowChangeLogAdditionalRetention);
             final Map<String, String> topicConfig = new HashMap<>();
             for (String key : topicProperties.stringPropertyNames()) {
                 topicConfig.put(key, topicProperties.getProperty(key));
             }
             final CreateTopicsRequest.TopicDetails topicDetails = new CreateTopicsRequest.TopicDetails(
-                topicsMap.get(internalTopicConfig),
+                partitions,
                 (short) replicationFactor,
                 topicConfig);
 
@@ -226,7 +228,7 @@ public class StreamsKafkaClient {
             streamsConfig.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG),
             streamsConfig.getLong(StreamsConfig.METADATA_MAX_AGE_CONFIG));
         final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(streamsConfig.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        metadata.update(Cluster.bootstrap(addresses), Time.SYSTEM.milliseconds());
+        metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), Time.SYSTEM.milliseconds());
 
         final List<Node> nodes = metadata.fetch().nodes();
         return ensureOneNodeIsReady(nodes);

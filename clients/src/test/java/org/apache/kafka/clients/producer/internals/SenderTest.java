@@ -88,7 +88,7 @@ public class SenderTest {
                             time,
                             REQUEST_TIMEOUT);
 
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
     }
 
     @After
@@ -103,9 +103,11 @@ public class SenderTest {
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
+        assertTrue(client.hasInFlightRequests());
         client.respond(produceResponse(tp, offset, Errors.NONE, 0));
         sender.run(time.milliseconds());
-        assertEquals("All requests completed.", offset, (long) client.inFlightRequestCount());
+        assertEquals("All requests completed.", 0, client.inFlightRequestCount());
+        assertFalse(client.hasInFlightRequests());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
         assertEquals(offset, future.get().offset());
@@ -151,16 +153,19 @@ public class SenderTest {
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
             String id = client.requests().peek().destination();
-            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
             client.disconnect(id);
             assertEquals(0, client.inFlightRequestCount());
+            assertFalse(client.hasInFlightRequests());
             assertFalse("Client ready status should be false", client.isReady(node, 0L));
             sender.run(time.milliseconds()); // receive error
             sender.run(time.milliseconds()); // reconnect
             sender.run(time.milliseconds()); // resend
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
             long offset = 0;
             client.respond(produceResponse(tp, offset, Errors.NONE, 0));
             sender.run(time.milliseconds());
@@ -201,7 +206,7 @@ public class SenderTest {
 
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             Cluster cluster1 = TestUtils.clusterWith(2, "test", 2);
-            metadata.update(cluster1, time.milliseconds());
+            metadata.update(cluster1, Collections.<String>emptySet(), time.milliseconds());
 
             // Send the first message.
             TopicPartition tp2 = new TopicPartition("test", 1);
@@ -210,8 +215,9 @@ public class SenderTest {
             sender.run(time.milliseconds()); // send produce request
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
-            Node node = new Node(Integer.valueOf(id), "localhost", 0);
+            Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
             time.sleep(900);
@@ -220,10 +226,11 @@ public class SenderTest {
 
             // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
             Cluster cluster2 = TestUtils.singletonCluster("test", 2);
-            metadata.update(cluster2, time.milliseconds());
+            metadata.update(cluster2, Collections.<String>emptySet(), time.milliseconds());
             // Sender should not send the second message to node 0.
             sender.run(time.milliseconds());
             assertEquals(1, client.inFlightRequestCount());
+            assertTrue(client.hasInFlightRequests());
         } finally {
             m.close();
         }
@@ -236,31 +243,33 @@ public class SenderTest {
     @Test
     public void testMetadataTopicExpiry() throws Exception {
         long offset = 0;
-        metadata.update(Cluster.empty(), time.milliseconds());
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time.milliseconds());
 
         Future<RecordMetadata> future = accumulator.append(tp, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp.topic()));
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         sender.run(time.milliseconds());  // send produce request
         client.respond(produceResponse(tp, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("Request completed.", 0, client.inFlightRequestCount());
+        assertFalse(client.hasInFlightRequests());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
 
         assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp.topic()));
         time.sleep(Metadata.TOPIC_EXPIRY_MS);
-        metadata.update(Cluster.empty(), time.milliseconds());
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time.milliseconds());
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp.topic()));
         future = accumulator.append(tp, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp.topic()));
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
         sender.run(time.milliseconds());  // send produce request
         client.respond(produceResponse(tp, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
         assertEquals("Request completed.", 0, client.inFlightRequestCount());
+        assertFalse(client.hasInFlightRequests());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
     }
