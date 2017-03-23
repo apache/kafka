@@ -344,13 +344,14 @@ public class KafkaStreams {
 
 
         if (globalTaskTopology != null) {
+            final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
                                                         clientSupplier.getRestoreConsumer(config.getRestoreConsumerConfigs(clientId + "-global")),
-                                                        new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time),
+                                                        new StateDirectory(applicationId, globalThreadId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time),
                                                         metrics,
                                                         time,
-                                                        clientId);
+                                                        globalThreadId);
         }
 
         for (int i = 0; i < threads.length; i++) {
@@ -568,7 +569,7 @@ public class KafkaStreams {
             localApplicationDir,
             appId);
 
-        final StateDirectory stateDirectory = new StateDirectory(appId, stateDir, Time.SYSTEM);
+        final StateDirectory stateDirectory = new StateDirectory(appId, "cleanup", stateDir, Time.SYSTEM);
         stateDirectory.cleanRemovedTasks(0);
     }
 

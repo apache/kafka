@@ -22,13 +22,15 @@ from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.utils.util import wait_until
 
-from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin, TOOLS_JAR_NAME, TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2
+from kafkatest.version import DEV_BRANCH
 from kafkatest.utils.remote_account import line_count
 
 
-class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
+
+class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
@@ -123,55 +125,38 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
         self.produced_count[idx] = 0
         last_produced_time = time.time()
         prev_msg = None
-        node.account.ssh(cmd)
 
-        # Ensure that STDOUT_CAPTURE exists before try to read from it
-        # Note that if max_messages is configured, it's possible for the process to exit before this
-        # wait_until condition is checked
-        start = time.time()
-        wait_until(lambda: node.account.isfile(VerifiableProducer.STDOUT_CAPTURE) and
-                           line_count(node, VerifiableProducer.STDOUT_CAPTURE) > 0,
-                   timeout_sec=10, err_msg="%s: VerifiableProducer took too long to start" % node.account)
-        self.logger.debug("%s: VerifiableProducer took %s seconds to start" % (node.account, time.time() - start))
+        for line in node.account.ssh_capture(cmd):
+            line = line.strip()
 
-        with node.account.open(VerifiableProducer.STDOUT_CAPTURE, 'r') as f:
-            while True:
-                line = f.readline()
-                if line == '' and not self.alive(node):
-                    # The process is gone, and we've reached the end of the output file, so we don't expect
-                    # any more output to appear in the STDOUT_CAPTURE file
-                    break
+            data = self.try_parse_json(line)
+            if data is not None:
 
-                line = line.strip()
+                with self.lock:
+                    if data["name"] == "producer_send_error":
+                        data["node"] = idx
+                        self.not_acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
-                data = self.try_parse_json(line)
-                if data is not None:
+                    elif data["name"] == "producer_send_success":
+                        self.acked_values.append(self.message_validator(data["value"]))
+                        self.produced_count[idx] += 1
 
-                    with self.lock:
-                        if data["name"] == "producer_send_error":
-                            data["node"] = idx
-                            self.not_acked_values.append(self.message_validator(data["value"]))
-                            self.produced_count[idx] += 1
+                        # Log information if there is a large gap between successively acknowledged messages
+                        t = time.time()
+                        time_delta_sec = t - last_produced_time
+                        if time_delta_sec > 2 and prev_msg is not None:
+                            self.logger.debug(
+                                "Time delta between successively acked messages is large: " +
+                                "delta_t_sec: %s, prev_message: %s, current_message: %s" % (str(time_delta_sec), str(prev_msg), str(data)))
 
-                        elif data["name"] == "producer_send_success":
-                            self.acked_values.append(self.message_validator(data["value"]))
-                            self.produced_count[idx] += 1
+                        last_produced_time = t
+                        prev_msg = data
 
-                            # Log information if there is a large gap between successively acknowledged messages
-                            t = time.time()
-                            time_delta_sec = t - last_produced_time
-                            if time_delta_sec > 2 and prev_msg is not None:
-                                self.logger.debug(
-                                    "Time delta between successively acked messages is large: " +
-                                    "delta_t_sec: %s, prev_message: %s, current_message: %s" % (str(time_delta_sec), str(prev_msg), str(data)))
-
-                            last_produced_time = t
-                            prev_msg = data
-
-                        elif data["name"] == "shutdown_complete":
-                            if node in self.clean_shutdown_nodes:
-                                raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
-                            self.clean_shutdown_nodes.add(node)
+                    elif data["name"] == "shutdown_complete":
+                        if node in self.clean_shutdown_nodes:
+                            raise Exception("Unexpected shutdown event from producer, already shutdown. Producer index: %d" % idx)
+                        self.clean_shutdown_nodes.add(node)
 
     def _has_output(self, node):
         """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
@@ -182,22 +167,10 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             return True
 
     def start_cmd(self, node, idx):
-        cmd = ""
-        if node.version <= LATEST_0_8_2:
-            # 0.8.2.X releases do not have VerifiableProducer.java, so cheat and add
-            # the tools jar from the development branch to the classpath
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
-
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
-            cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar
-            cmd += "export CLASSPATH; "
-
-        cmd += "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
+        cmd  = "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
-        cmd += " " + self.path.script("kafka-run-class.sh", node)
-        cmd += " org.apache.kafka.tools.VerifiableProducer"
+        cmd += self.impl.exec_cmd(node)
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
@@ -209,24 +182,16 @@ class VerifiableProducer(KafkaPathResolverMixin, BackgroundThreadService):
             cmd += " --acks %s " % str(self.acks)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
-        cmd += " 2>> %s 1>> %s &" % (VerifiableProducer.STDERR_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
+        cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
 
     def kill_node(self, node, clean_shutdown=True, allow_fail=False):
-        if clean_shutdown:
-            sig = signal.SIGTERM
-        else:
-            sig = signal.SIGKILL
+        sig = self.impl.kill_signal(clean_shutdown)
         for pid in self.pids(node):
             node.account.signal(pid, sig, allow_fail)
 
     def pids(self, node):
-        try:
-            cmd = "jps | grep -i VerifiableProducer | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return self.impl.pids(node)
 
     def alive(self, node):
         return len(self.pids(node)) > 0

@@ -30,8 +30,8 @@ import static org.apache.kafka.connect.transforms.util.Requirements.requireSchem
 public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R> {
 
     public static final String OVERVIEW_DOC =
-            "Set the schema name, version or both on the record's key (<code>" + Key.class.getCanonicalName() + "</code>)"
-                    + " or value (<code>" + Value.class.getCanonicalName() + "</code>) schema.";
+            "Set the schema name, version or both on the record's key (<code>" + Key.class.getName() + "</code>)"
+                    + " or value (<code>" + Value.class.getName() + "</code>) schema.";
 
     private interface ConfigName {
         String SCHEMA_NAME = "schema.name";

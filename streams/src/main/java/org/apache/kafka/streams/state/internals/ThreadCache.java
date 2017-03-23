@@ -96,7 +96,7 @@ public class ThreadCache {
         }
         cache.flush();
 
-        log.debug("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
+        log.trace("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
                   name, puts(), gets(), evicts(), flushes());
     }
 
