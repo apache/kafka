@@ -315,15 +315,15 @@ public class FileRecordsTest {
 
     @Test
     public void testConversion() throws IOException {
-        testConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V0);
-        testConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V0);
-        testConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V1);
-        testConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
-        testConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
-        testConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V0);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V0);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V1);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
     }
 
-    private void testConversion(CompressionType compressionType, byte toMagic) throws IOException {
+    private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
         List<Long> offsets = Arrays.asList(0L, 2L, 3L, 9L, 11L, 15L);
         List<SimpleRecord> records = Arrays.asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
@@ -354,20 +354,19 @@ public class FileRecordsTest {
 
         buffer.flip();
 
-        // down conversion for non-compressed messages
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
             fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
             Records convertedRecords = fileRecords.downConvert(toMagic);
-            verifyConvertedMessageSet(records, offsets, convertedRecords, compressionType, toMagic);
+            verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
         }
     }
 
-    private void verifyConvertedMessageSet(List<SimpleRecord> initialRecords,
-                                           List<Long> initialOffsets,
-                                           Records convertedRecords,
-                                           CompressionType compressionType,
-                                           byte magicByte) {
+    private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
+                                        List<Long> initialOffsets,
+                                        Records convertedRecords,
+                                        CompressionType compressionType,
+                                        byte magicByte) {
         int i = 0;
         for (RecordBatch batch : convertedRecords.batches()) {
             assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
