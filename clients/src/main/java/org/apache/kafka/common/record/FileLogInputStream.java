@@ -255,7 +255,10 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         @Override
         public void writeTo(ByteBuffer buffer) {
             try {
+                int limit = buffer.limit();
+                buffer.limit(buffer.position() + sizeInBytes());
                 Utils.readFully(channel, buffer, position);
+                buffer.limit(limit);
             } catch (IOException e) {
                 throw new KafkaException("Failed to read record batch at position " + position + " from file channel " +
                         channel, e);

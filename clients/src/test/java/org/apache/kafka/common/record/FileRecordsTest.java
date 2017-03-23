@@ -314,64 +314,73 @@ public class FileRecordsTest {
     }
 
     @Test
-    public void testConvertNonCompressedToMagic0() throws IOException {
-        List<Long> offsets = Arrays.asList(0L, 2L);
+    public void testConversion() throws IOException {
+        testConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V0);
+        testConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V0);
+        testConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V1);
+        testConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
+        testConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
+        testConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
+    }
+
+    private void testConversion(CompressionType compressionType, byte toMagic) throws IOException {
+        List<Long> offsets = Arrays.asList(0L, 2L, 3L, 9L, 11L, 15L);
         List<SimpleRecord> records = Arrays.asList(
                 new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
-                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
+                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()),
+                new SimpleRecord(3L, "k3".getBytes(), "hello again".getBytes()),
+                new SimpleRecord(4L, "k4".getBytes(), "goodbye for now".getBytes()),
+                new SimpleRecord(5L, "k5".getBytes(), "hello again".getBytes()),
+                new SimpleRecord(6L, "k6".getBytes(), "goodbye forever".getBytes()));
 
-        ByteBuffer buffer = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE,
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
                 TimestampType.CREATE_TIME, 0L);
-        for (int i = 0; i < offsets.size(); i++)
+        for (int i = 0; i < 2; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L);
+        for (int i = 2; i < 4; i++)
+            builder.appendWithOffset(offsets.get(i), records.get(i));
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
+                TimestampType.CREATE_TIME, 0L);
+        for (int i = 4; i < 6; i++)
+            builder.appendWithOffset(offsets.get(i), records.get(i));
+        builder.close();
+
+        buffer.flip();
 
         // down conversion for non-compressed messages
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(builder.build());
+            fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(RecordBatch.MAGIC_VALUE_V0);
-            verifyConvertedMessageSet(records, offsets, convertedRecords, RecordBatch.MAGIC_VALUE_V0);
-        }
-    }
-
-    @Test
-    public void testConvertCompressedToMagic0() throws IOException {
-        List<Long> offsets = Arrays.asList(0L, 2L);
-        List<SimpleRecord> records = Arrays.asList(
-                new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
-                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()));
-
-        ByteBuffer buffer = ByteBuffer.allocate(512);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP,
-                TimestampType.CREATE_TIME, 0L);
-        for (int i = 0; i < offsets.size(); i++)
-            builder.appendWithOffset(offsets.get(i), records.get(i));
-
-        // down conversion for compressed messages
-        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(builder.build());
-            fileRecords.flush();
-            Records convertedRecords = fileRecords.downConvert(RecordBatch.MAGIC_VALUE_V0);
-            verifyConvertedMessageSet(records, offsets, convertedRecords, RecordBatch.MAGIC_VALUE_V0);
+            Records convertedRecords = fileRecords.downConvert(toMagic);
+            verifyConvertedMessageSet(records, offsets, convertedRecords, compressionType, toMagic);
         }
     }
 
     private void verifyConvertedMessageSet(List<SimpleRecord> initialRecords,
                                            List<Long> initialOffsets,
                                            Records convertedRecords,
+                                           CompressionType compressionType,
                                            byte magicByte) {
         int i = 0;
         for (RecordBatch batch : convertedRecords.batches()) {
-            assertEquals("magic byte should be " + magicByte, magicByte, batch.magic());
+            assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
+            assertEquals("Compression type should not be affected by conversion", compressionType, batch.compressionType());
             for (Record record : batch) {
-                assertTrue("Inner record should have magic " + magicByte, record.hasMagic(magicByte));
-                assertEquals("offset should not change", initialOffsets.get(i).longValue(), record.offset());
-                assertEquals("key should not change", initialRecords.get(i).key(), record.key());
-                assertEquals("value should not change", initialRecords.get(i).value(), record.value());
+                assertTrue("Inner record should have magic " + magicByte, record.hasMagic(batch.magic()));
+                assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
+                assertEquals("Key should not change", initialRecords.get(i).key(), record.key());
+                assertEquals("Value should not change", initialRecords.get(i).value(), record.value());
                 i += 1;
             }
         }
+        assertEquals(initialOffsets.size(), i);
     }
 
     private static List<RecordBatch> batches(Records buffer) {

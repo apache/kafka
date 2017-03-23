@@ -97,12 +97,7 @@ public abstract class AbstractRecords implements Records {
             // control messages are only supported in v2 and above, so skip when down-converting
             if (magic < RecordBatch.MAGIC_VALUE_V2 && record.isControlRecord())
                 continue;
-
-            if (magic < RecordBatch.MAGIC_VALUE_V2) {
-                builder.appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value());
-            } else {
-                builder.append(record);
-            }
+            builder.append(record);
         }
 
         builder.close();
