@@ -23,7 +23,7 @@ import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.{After, Test}
 import org.junit.Assert._
 
-class PidManagerTest {
+class ProducerIdManagerTest {
 
   val zkUtils: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
 
@@ -66,25 +66,25 @@ class PidManagerTest {
 
     EasyMock.replay(zkUtils)
 
-    val manager1: PidManager = new PidManager(0, zkUtils)
-    val manager2: PidManager = new PidManager(1, zkUtils)
+    val manager1: ProducerIdManager = new ProducerIdManager(0, zkUtils)
+    val manager2: ProducerIdManager = new ProducerIdManager(1, zkUtils)
 
-    var pid1: Long = manager1.getNewPid()
-    var pid2: Long = manager2.getNewPid()
+    val pid1 = manager1.nextPid()
+    val pid2 = manager2.nextPid()
 
     assertEquals(0, pid1)
-    assertEquals(PidManager.PidBlockSize, pid2)
+    assertEquals(ProducerIdManager.PidBlockSize, pid2)
 
-    for (i <- 1 until PidManager.PidBlockSize.asInstanceOf[Int]) {
-      assertEquals(pid1 + i, manager1.getNewPid())
+    for (i <- 1 until ProducerIdManager.PidBlockSize.asInstanceOf[Int]) {
+      assertEquals(pid1 + i, manager1.nextPid())
     }
 
-    for (i <- 1 until PidManager.PidBlockSize.asInstanceOf[Int]) {
-      assertEquals(pid2 + i, manager2.getNewPid())
+    for (i <- 1 until ProducerIdManager.PidBlockSize.asInstanceOf[Int]) {
+      assertEquals(pid2 + i, manager2.nextPid())
     }
 
-    assertEquals(pid2 + PidManager.PidBlockSize, manager1.getNewPid())
-    assertEquals(pid2 + PidManager.PidBlockSize * 2, manager2.getNewPid())
+    assertEquals(pid2 + ProducerIdManager.PidBlockSize, manager1.nextPid())
+    assertEquals(pid2 + ProducerIdManager.PidBlockSize * 2, manager2.nextPid())
   }
 
   @Test(expected = classOf[KafkaException])
@@ -92,15 +92,14 @@ class PidManagerTest {
     EasyMock.expect(zkUtils.readDataAndVersionMaybeNull(EasyMock.anyString()))
       .andAnswer(new IAnswer[(Option[String], Int)] {
         override def answer(): (Option[String], Int) = {
-          (Some(PidManager.generatePidBlockJson(PidBlock(0,
-            Long.MaxValue - PidManager.PidBlockSize,
+          (Some(ProducerIdManager.generatePidBlockJson(ProducerIdBlock(0,
+            Long.MaxValue - ProducerIdManager.PidBlockSize,
             Long.MaxValue))), 0)
         }
       })
       .anyTimes()
     EasyMock.replay(zkUtils)
-
-    val manager: PidManager = new PidManager(0, zkUtils)
+    new ProducerIdManager(0, zkUtils)
   }
 }
 

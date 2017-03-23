@@ -261,9 +261,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
 
-            this.maxBlockTimeMs = getMaxBlockTime(config, userProvidedConfigs);
-            this.requestTimeoutMs = getRequestTimeout(config, userProvidedConfigs);
-            this.transactionState = getTransactionState(config);
+            this.maxBlockTimeMs = configureMaxBlockTime(config, userProvidedConfigs);
+            this.requestTimeoutMs = configureRequestTimeout(config, userProvidedConfigs);
+            this.transactionState = configureTransactionState(config, time);
 
             this.apiVersions = new ApiVersions();
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -319,57 +319,50 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    private long getMaxBlockTime(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
+    private static long configureMaxBlockTime(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
         /* check for user defined settings.
          * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
          * This should be removed with release 0.9 when the deprecated configs are removed.
          */
-        long maxBlockTimeMs;
         if (userProvidedConfigs.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
             log.warn(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG + " config is deprecated and will be removed soon. " +
                     "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
             boolean blockOnBufferFull = config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG);
             if (blockOnBufferFull) {
-                maxBlockTimeMs = Long.MAX_VALUE;
+                return Long.MAX_VALUE;
             } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
                 log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
                         "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-                maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
+                return config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
             } else {
-                maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+                return config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             }
         } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
             log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
                     "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-            maxBlockTimeMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
+            return config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
         } else {
-            maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            return config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
         }
-        return maxBlockTimeMs;
-
     }
 
-    private int getRequestTimeout(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
+    private static int configureRequestTimeout(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
         /* check for user defined settings.
          * If the TIME_OUT config is set use that for request timeout.
          * This should be removed with release 0.9
          */
-        int requestTimeoutMs;
         if (userProvidedConfigs.containsKey(ProducerConfig.TIMEOUT_CONFIG)) {
             log.warn(ProducerConfig.TIMEOUT_CONFIG + " config is deprecated and will be removed soon. Please use " +
                     ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-            requestTimeoutMs = config.getInt(ProducerConfig.TIMEOUT_CONFIG);
+            return config.getInt(ProducerConfig.TIMEOUT_CONFIG);
         } else {
-            requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+            return config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         }
-        return requestTimeoutMs;
     }
 
-    private TransactionState getTransactionState(ProducerConfig config) {
+    private static TransactionState configureTransactionState(ProducerConfig config, Time time) {
         boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
-        TransactionState transactionState;
         if (idempotenceEnabled) {
-            transactionState = new TransactionState(time);
             if (config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
                 throw new ConfigException("Need to set '" + ProducerConfig.RETRIES_CONFIG
                         + "' to greater than zero in order to use the idempotent producer. With idempotence " +
@@ -380,10 +373,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new ConfigException("Must set '" + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
                         + "' to 1 inorder to use the idempotent producer, otherwise we cannot guarantee idempotence.");
             }
+            return new TransactionState(time);
         } else {
-            transactionState = null;
+            return null;
         }
-        return transactionState;
     }
 
     private static int parseAcks(String acksString) {
@@ -615,11 +608,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private long maybeWaitOnPid(long maxWaitMs) throws InterruptedException {
-        if (transactionState == null) {
+        if (transactionState == null || transactionState.hasPid()) {
             return maxWaitMs;
         }
         long start = time.milliseconds();
-        TransactionState.PidAndEpoch pidAndEpoch = transactionState.pidAndEpoch(maxWaitMs);
+        TransactionState.PidAndEpoch pidAndEpoch = transactionState.awaitPidAndEpoch(maxWaitMs);
         if (!pidAndEpoch.isValid()) {
             throw new TimeoutException("Could not retrieve a pid within " + maxWaitMs + " ms");
         }

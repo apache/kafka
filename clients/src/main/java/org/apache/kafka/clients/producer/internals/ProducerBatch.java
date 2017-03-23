@@ -234,7 +234,7 @@ public final class ProducerBatch {
     }
 
     public void setProducerState(TransactionState.PidAndEpoch pidAndEpoch, int baseSequence) {
-        recordsBuilder.setProducerState(pidAndEpoch.pid, pidAndEpoch.epoch, baseSequence);
+        recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
     }
 
     public void close() {
@@ -265,7 +265,7 @@ public final class ProducerBatch {
     /**
      * Return the ProducerId (Pid) of the current batch.
      */
-    public long pid() {
+    public long producerId() {
         return recordsBuilder.producerId();
     }
 }

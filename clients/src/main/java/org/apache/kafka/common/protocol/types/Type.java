@@ -224,7 +224,6 @@ public abstract class Type {
         }
     };
 
-
     public static final Type INT64 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {

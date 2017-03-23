@@ -77,15 +77,19 @@ object ProducerIdMapping {
   def validatePidEntries(pid: Long, existingEntry: PidEntry, incomingEntry: PidEntry): Unit = {
     // Zombie writer
     if (existingEntry.epoch > incomingEntry.epoch)
-      throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${incomingEntry.epoch} (request epoch), ${existingEntry.epoch}")
+      throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${incomingEntry.epoch} (request epoch), " +
+        s"${existingEntry.epoch}")
     if (existingEntry.epoch < incomingEntry.epoch) {
       if (incomingEntry.firstSeq != 0)
-        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: ${incomingEntry.epoch} (request epoch), ${incomingEntry.firstSeq} (seq. number)")
+        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: ${incomingEntry.epoch} " +
+          s"(request epoch), ${incomingEntry.firstSeq} (seq. number)")
     } else {
       if (incomingEntry.firstSeq > existingEntry.lastSeq + 1L)
-        throw new OutOfOrderSequenceException(s"Invalid sequence number: $pid (id), ${incomingEntry.firstSeq} (seq. number), ${existingEntry.lastSeq} (expected seq. number)")
+        throw new OutOfOrderSequenceException(s"Invalid sequence number: $pid (id), ${incomingEntry.firstSeq} " +
+          s"(seq. number), ${existingEntry.lastSeq} (expected seq. number)")
       else if (incomingEntry.firstSeq <= existingEntry.lastSeq)
-        throw new DuplicateSequenceNumberException(s"Duplicate sequence number: $pid (id), ${incomingEntry.firstSeq} (seq. number), ${existingEntry.firstSeq} (expected seq. number)")
+        throw new DuplicateSequenceNumberException(s"Duplicate sequence number: $pid (id), ${incomingEntry.firstSeq} " +
+          s"(seq. number), ${existingEntry.firstSeq} (expected seq. number)")
     }
   }
 
@@ -169,10 +173,6 @@ object ProducerIdMapping {
  * The sequence number is the last number successfully appended to the partition for the given identifier.
  * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
  * appended to the partition.
- *
- * @param topicPartition
- * @param config
- * @param snapParentDir
  */
 @nonthreadsafe
 class ProducerIdMapping(val config: LogConfig,
@@ -198,8 +198,6 @@ class ProducerIdMapping(val config: LogConfig,
   /**
    * Load a snapshot of the id mapping or return empty maps
    * in the case the snapshot doesn't exist (first time).
-   *
-   * @return
    */
   private def loadFromSnapshot(logEndOffset: Long) {
     pidMap.clear()
@@ -257,7 +255,6 @@ class ProducerIdMapping(val config: LogConfig,
   /**
    * Verify the epoch and next expected sequence number. Invoked prior to appending the entries to
    * the log.
-   * @param pid
    */
   def checkSeqAndEpoch(pid: Long, incomingEntry: PidEntry) {
     if (pid != RecordBatch.NO_PRODUCER_ID) {
@@ -270,7 +267,6 @@ class ProducerIdMapping(val config: LogConfig,
      }
     }
   }
-
 
   def entryForPid(pid: Long): Option[PidEntry] = {
     pidMap.get(pid)

@@ -111,7 +111,6 @@ public enum Errors {
             new GroupLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
     GROUP_COORDINATOR_NOT_AVAILABLE(15,
             new GroupCoordinatorNotAvailableException("The group coordinator is not available.")),
-    // TODO: maybe rename to NOT_COORDINATOR?
     NOT_COORDINATOR_FOR_GROUP(16,
             new NotCoordinatorForGroupException("This is not the correct coordinator for this group.")),
     INVALID_TOPIC_EXCEPTION(17,

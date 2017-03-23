@@ -34,15 +34,11 @@ public class TransactionStateTest {
         topicPartition = new TopicPartition("topic-0", 0);
     }
 
-    @Test
-    public void testBasicSequenceIncrement() {
+    @Test(expected = IllegalStateException.class)
+    public void testInvalidSequenceIncrement() {
         TransactionState transactionState = new TransactionState(new MockTime());
         transactionState.incrementSequenceNumber(topicPartition, 3333);
-
-        assertEquals((int) transactionState.sequenceNumber(topicPartition), 3333);
-
     }
-
 
     @Test
     public void testDefaultSequenceNumber() {

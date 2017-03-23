@@ -24,6 +24,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -31,9 +32,9 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.Time;
@@ -97,7 +98,7 @@ public final class RecordAccumulator {
      * @param metrics The metrics
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
-     * @param transactionState the shared transaction state object which tracks Pids, epochs, and sequence numbers per
+     * @param transactionState The shared transaction state object which tracks Pids, epochs, and sequence numbers per
      *                         partition.
      */
     public RecordAccumulator(int batchSize,
@@ -208,7 +209,7 @@ public final class RecordAccumulator {
                     return appendResult;
                 }
 
-                MemoryRecordsBuilder recordsBuilder = getRecordsBuilder(buffer, maxUsableMagic, tp);
+                MemoryRecordsBuilder recordsBuilder = getRecordsBuilder(buffer, maxUsableMagic);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
 
@@ -227,9 +228,10 @@ public final class RecordAccumulator {
         }
     }
 
-    private MemoryRecordsBuilder getRecordsBuilder(ByteBuffer buffer, byte maxUsableMagic, TopicPartition topicPartition) {
+    private MemoryRecordsBuilder getRecordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
         if (transactionState != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
-            throw new IllegalStateException("Attempting to use idempotence with an incompatible version of the message format");
+            throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
+                    "support the required message format (v2). The broker must be version 0.11 or later.");
         }
         return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, this.batchSize);
     }
@@ -429,14 +431,20 @@ public final class RecordAccumulator {
                                         // request
                                         break;
                                     } else {
-                                        ProducerBatch batch = deque.pollFirst();
+                                        TransactionState.PidAndEpoch pidAndEpoch = null;
                                         if (transactionState != null) {
+                                            pidAndEpoch = transactionState.pidAndEpoch();
+                                            if (!pidAndEpoch.isValid())
+                                                // we cannot send the batch until we have refreshed the PID
+                                                break;
+                                        }
+
+                                        ProducerBatch batch = deque.pollFirst();
+                                        if (pidAndEpoch != null) {
                                             int sequenceNumber = transactionState.sequenceNumber(batch.topicPartition);
-                                            TransactionState.PidAndEpoch pidAndEpoch = transactionState.pidAndEpoch();
-                                            log.debug("Dest: {} : pid: {}, epoch: {}, Assigning sequence for {}-{} : {}", node,
-                                                    pidAndEpoch.pid, pidAndEpoch.epoch,
-                                                    batch.topicPartition.topic(), batch.topicPartition.partition(),
-                                                    sequenceNumber);
+                                            log.debug("Dest: {} : pid: {}, epoch: {}, Assigning sequence for {}: {}",
+                                                    node, pidAndEpoch.producerId, pidAndEpoch.epoch,
+                                                    batch.topicPartition, sequenceNumber);
                                             batch.setProducerState(pidAndEpoch, sequenceNumber);
                                         }
                                         batch.close();

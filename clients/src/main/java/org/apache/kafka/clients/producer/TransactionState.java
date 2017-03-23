@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
 /**
@@ -33,22 +34,22 @@ public class TransactionState {
     private final Time time;
 
     public static class PidAndEpoch {
-        public final long pid;
+        public final long producerId;
         public final short epoch;
 
-        PidAndEpoch(long pid, short epoch) {
-            this.pid = pid;
+        PidAndEpoch(long producerId, short epoch) {
+            this.producerId = producerId;
             this.epoch = epoch;
         }
 
         public boolean isValid() {
-            return pid != NO_PRODUCER_ID;
+            return producerId != NO_PRODUCER_ID;
         }
     }
 
     public TransactionState(Time time) {
-        pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, (short) 0);
-        sequenceNumbers = new HashMap<>();
+        this.pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.sequenceNumbers = new HashMap<>();
         this.time = time;
     }
 
@@ -64,24 +65,23 @@ public class TransactionState {
      * @return a PidAndEpoch object. Callers must call the 'isValid' method fo the returned object to ensure that a
      *         valid Pid and epoch is actually returned.
      */
-    public synchronized PidAndEpoch pidAndEpoch(long maxWaitTimeMs) throws InterruptedException {
-        while (!hasPid() && 0 < maxWaitTimeMs) {
-            long start = time.milliseconds();
+    public synchronized PidAndEpoch awaitPidAndEpoch(long maxWaitTimeMs) throws InterruptedException {
+        long start = time.milliseconds();
+        long elapsed = 0;
+        while (!hasPid() && elapsed < maxWaitTimeMs) {
             wait(maxWaitTimeMs);
-            maxWaitTimeMs = maxWaitTimeMs - (time.milliseconds() - start);
+            elapsed = time.milliseconds() - start;
         }
         return pidAndEpoch;
     }
 
+    /**
+     * Get the current pid and epoch without blocking. Callers must use {@link PidAndEpoch#isValid()} to
+     * verify that the result is valid.
+     *
+     * @return the current PidAndEpoch.
+     */
     public PidAndEpoch pidAndEpoch() {
-        PidAndEpoch pidAndEpoch = null;
-        while (pidAndEpoch == null) {
-            try {
-                pidAndEpoch = pidAndEpoch(Long.MAX_VALUE);
-            } catch (InterruptedException e) {
-                // swallow
-            }
-        }
         return pidAndEpoch;
     }
 
@@ -100,7 +100,7 @@ public class TransactionState {
      * from the broker.
     */
     public synchronized void reset() {
-        setPidAndEpoch(NO_PRODUCER_ID, (short) 0);
+        setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers.clear();
     }
 
@@ -108,17 +108,19 @@ public class TransactionState {
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     public synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        if (!sequenceNumbers.containsKey(topicPartition)) {
-            sequenceNumbers.put(topicPartition, 0);
+        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        if (currentSequenceNumber == null) {
+            currentSequenceNumber = 0;
+            sequenceNumbers.put(topicPartition, currentSequenceNumber);
         }
-        return sequenceNumbers.get(topicPartition);
+        return currentSequenceNumber;
     }
 
     public synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
-        if (!sequenceNumbers.containsKey(topicPartition)) {
-            sequenceNumbers.put(topicPartition, 0);
-        }
-        int currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        if (currentSequenceNumber == null)
+            throw new IllegalStateException("Attempt to increment sequence number for a partition with no current sequence.");
+
         currentSequenceNumber += increment;
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }

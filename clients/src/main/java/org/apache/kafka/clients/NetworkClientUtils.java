@@ -23,6 +23,9 @@ import org.apache.kafka.common.utils.Time;
 import java.io.IOException;
 import java.util.List;
 
+/**
+ * Provides additional utilities for {@link NetworkClient} (e.g. to implement blocking behaviour).
+ */
 public class NetworkClientUtils {
 
     /**
@@ -32,7 +35,7 @@ public class NetworkClientUtils {
      * This method can be used to check the status of a connection prior to calling the blocking version to be able
      * to tell whether the latter completed a new connection.
      */
-    private static boolean isReady(KafkaClient client, Node node, long currentTime) {
+    public static boolean isReady(KafkaClient client, Node node, long currentTime) {
         client.poll(0, currentTime);
         return client.isReady(node, currentTime);
     }
@@ -56,20 +59,19 @@ public class NetworkClientUtils {
         long startTime = time.milliseconds();
         long expiryTime = startTime + timeoutMs;
 
-        if (!isReady(client, node, startTime))
-            client.ready(node, startTime);
+        if (isReady(client, node, startTime) ||  client.ready(node, startTime))
+            return true;
 
         long attemptStartTime = time.milliseconds();
-
         while (!client.isReady(node, attemptStartTime) && attemptStartTime < expiryTime) {
             if (client.connectionFailed(node)) {
                 throw new IOException("Connection to " + node + " failed.");
             }
             long pollTimeout = expiryTime - attemptStartTime;
-            client.poll(pollTimeout, time.milliseconds());
+            client.poll(pollTimeout, attemptStartTime);
             attemptStartTime = time.milliseconds();
         }
-        return client.isReady(node, time.milliseconds());
+        return client.isReady(node, attemptStartTime);
     }
 
     /**
@@ -88,7 +90,7 @@ public class NetworkClientUtils {
             for (ClientResponse response : responses) {
                 if (response.requestHeader().correlationId() == request.correlationId()) {
                     if (response.wasDisconnected()) {
-                        throw new IOException("Connection to {} " + response.destination() + " was disconnected before the response was read");
+                        throw new IOException("Connection to " + response.destination() + " was disconnected before the response was read");
                     }
                     if (response.versionMismatch() != null) {
                         throw response.versionMismatch();

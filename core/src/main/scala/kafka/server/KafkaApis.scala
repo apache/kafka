@@ -104,7 +104,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-        case ApiKeys.INIT_PRODUCER_ID => handleInitPIDRequest(request)
+        case ApiKeys.INIT_PRODUCER_ID => handleInitPidRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -144,15 +144,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         updatedLeaders.foreach { partition =>
           if (partition.topic == Topic.GroupMetadataTopicName)
             groupCoordinator.handleGroupImmigration(partition.partitionId)
-          if (partition.topic == Topic.TransactionStateTopicName)
-            txnCoordinator.handleTxnImmigration(partition.partitionId)
-
         }
         updatedFollowers.foreach { partition =>
           if (partition.topic == Topic.GroupMetadataTopicName)
             groupCoordinator.handleGroupEmigration(partition.partitionId)
-          if (partition.topic == Topic.TransactionStateTopicName)
-            txnCoordinator.handleTxnEmigration(partition.partitionId)
         }
       }
 
@@ -1317,7 +1312,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseCallback)
     }
 
-  def handleInitPIDRequest(request: RequestChannel.Request): Unit = {
+  def handleInitPidRequest(request: RequestChannel.Request): Unit = {
     val initPidRequest = request.body[InitPidRequest]
     // Send response callback
     def sendResponseCallback(result: InitPidResult): Unit = {

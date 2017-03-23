@@ -386,7 +386,7 @@ public class SenderTest {
         }, new InitPidResponse(Errors.NONE, producerId, (short) 0));
         sender.run(time.milliseconds());
         assertTrue(transactionState.hasPid());
-        assertEquals(transactionState.pidAndEpoch().pid, producerId);
+        assertEquals(transactionState.pidAndEpoch().producerId, producerId);
     }
 
     @Test
