@@ -376,6 +376,8 @@ public class FileRecordsTest {
                 assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
                 assertEquals("Key should not change", initialRecords.get(i).key(), record.key());
                 assertEquals("Value should not change", initialRecords.get(i).value(), record.value());
+                if (batch.magic() > RecordBatch.MAGIC_VALUE_V0)
+                    assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
                 i += 1;
             }
         }
