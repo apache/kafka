@@ -187,14 +187,12 @@ object DumpLogSegments {
       val batches = partialFileRecords.batches.asScala
       var maxTimestamp = RecordBatch.NO_TIMESTAMP
       // We first find the message by offset then check if the timestamp is correct.
-      val maybeLogEntry = batches.find(_.lastOffset >= entry.offset + timeIndex.baseOffset)
-      maybeLogEntry match {
+      batches.find(_.lastOffset >= entry.offset + timeIndex.baseOffset) match {
         case None =>
           timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
             -1.toLong)
-        case Some(logEntry) if logEntry.lastOffset != entry.offset + timeIndex.baseOffset =>
-          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset,
-            logEntry.lastOffset)
+        case Some(batch) if batch.lastOffset != entry.offset + timeIndex.baseOffset =>
+          timeIndexDumpErrors.recordShallowOffsetNotFound(file, entry.offset + timeIndex.baseOffset, batch.lastOffset)
         case Some(batch) =>
           for (record <- batch.asScala)
             maxTimestamp = math.max(maxTimestamp, record.timestamp)

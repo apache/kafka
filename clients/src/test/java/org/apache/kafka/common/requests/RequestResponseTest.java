@@ -69,6 +69,7 @@ public class RequestResponseTest {
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
         checkRequest(createFetchRequest(4));
+        checkResponse(createFetchResponse(), 4);
         checkErrorResponse(createFetchRequest(4), new UnknownServerException());
         checkRequest(createHeartBeatRequest());
         checkErrorResponse(createHeartBeatRequest(), new UnknownServerException());

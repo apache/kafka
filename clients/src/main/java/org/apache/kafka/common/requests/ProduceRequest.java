@@ -186,8 +186,8 @@ public class ProduceRequest extends AbstractRequest {
             for (Map.Entry<Integer, MemoryRecords> partitionEntry : topicEntry.getValue().entrySet()) {
                 MemoryRecords records = partitionEntry.getValue();
                 Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
-                        .set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                part.set(RECORD_SET_KEY_NAME, records);
+                        .set(PARTITION_KEY_NAME, partitionEntry.getKey())
+                        .set(RECORD_SET_KEY_NAME, records);
                 partitionArray.add(part);
             }
             topicData.set(PARTITION_DATA_KEY_NAME, partitionArray.toArray());

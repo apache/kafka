@@ -649,10 +649,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val largeRecord = new ProducerRecord(tp.topic(), tp.partition(), "large".getBytes,
       new Array[Byte](largeProducerRecordSize))
 
-    this.producers.head.send(smallRecord)
-    this.producers.head.flush()
-    this.producers.head.send(largeRecord)
-    this.producers.head.flush()
+    this.producers.head.send(smallRecord).get
+    this.producers.head.send(largeRecord).get
 
     // we should only get the small record in the first `poll`
     consumer0.assign(List(tp).asJava)
