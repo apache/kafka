@@ -575,7 +575,7 @@ class Log(@volatile var dir: File,
               if (assignOffsets) {
                 // This request is coming straight from the client.
                 if (incomingEntries.first != incomingEntries.last) {
-                  throw new InvalidRecordException("Got multiple LogEntries in a single ProduceRequest. This indicates a bad client.")
+                  throw new InvalidRecordException("Got multiple RecordBatches in a single ProduceRequest. This indicates a bad client.")
                 }
                 val incomingEntryInfo = incomingEntries.first
                 if (!(incomingEntryInfo.firstSeq == lastAppendedEntry.firstSeq
@@ -592,9 +592,7 @@ class Log(@volatile var dir: File,
                 appendInfo.firstOffset = lastAppendedEntry.firstOffset
                 appendInfo.lastOffset =  lastAppendedEntry.lastOffset
                 appendInfo.maxTimestamp = lastAppendedEntry.timestamp
-                // TODO(apurva) : Make this log line trace or debug. I am leaving it on error level now so that these
-                // messages don't get lost in the crowd during this stabilization phase.
-                error(s"Leader received a duplicate for ${topicPartition.topic()}-${topicPartition.partition} with " +
+                debug(s"Leader received a duplicate for ${topicPartition.topic()}-${topicPartition.partition} with " +
                   s"(pid, firstOffset, lastOffset) => ($pid, ${appendInfo.firstOffset}, ${appendInfo.lastOffset}). " +
                   "Will drop the incoming record.")
               } else {
