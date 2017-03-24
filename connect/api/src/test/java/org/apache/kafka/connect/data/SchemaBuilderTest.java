@@ -293,6 +293,18 @@ public class SchemaBuilderTest {
         new Struct(emptyStructSchema);
     }
 
+    @Test(expected = SchemaBuilderException.class)
+    public void testDuplicateFields() {
+        final Schema schema = SchemaBuilder.struct()
+                .name("testing")
+                .field("id", SchemaBuilder.string().doc("").build())
+                .field("id", SchemaBuilder.string().doc("").build())
+                .build();
+        final Struct struct = new Struct(schema)
+                .put("id", "testing");
+        struct.validate();
+    }
+
     private void assertTypeAndDefault(Schema schema, Schema.Type type, boolean optional, Object defaultValue) {
         assertEquals(type, schema.type());
         assertEquals(optional, schema.isOptional());

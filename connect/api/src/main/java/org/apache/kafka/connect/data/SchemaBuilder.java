@@ -320,6 +320,10 @@ public class SchemaBuilder implements Schema {
         if (type != Type.STRUCT)
             throw new SchemaBuilderException("Cannot create fields on type " + type);
         int fieldIndex = fields.size();
+        for (Field elements : fields) {
+            if (elements.name().equals(fieldName))
+                throw new SchemaBuilderException("Cannot create field because of field name duplication " + fieldName);
+        }
         fields.add(new Field(fieldName, fieldIndex, fieldSchema));
         return this;
     }
