@@ -87,7 +87,7 @@ public enum CompressionType {
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
                 return (OutputStream) LZ4_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer,
-                        messageVersion == Record.MAGIC_VALUE_V0);
+                        messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -97,7 +97,7 @@ public enum CompressionType {
         public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             try {
                 return (InputStream) LZ4_INPUT_STREAM_SUPPLIER.get().newInstance(buffer,
-                        messageVersion == Record.MAGIC_VALUE_V0);
+                        messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Exception e) {
                 throw new KafkaException(e);
             }

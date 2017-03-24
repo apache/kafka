@@ -26,10 +26,10 @@ import com.yammer.metrics.core.Gauge
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.record.{FileRecords, LogEntry, MemoryRecords}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Record}
 import org.apache.kafka.common.utils.Time
-import MemoryRecords.LogEntryFilter
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 
 import scala.collection._
 import JavaConverters._
@@ -450,9 +450,8 @@ private[log] class Cleaner(val id: Int,
                              retainDeletes: Boolean,
                              maxLogMessageSize: Int,
                              stats: CleanerStats) {
-
-    val logCleanerFilter = new LogEntryFilter {
-      def shouldRetain(logEntry: LogEntry): Boolean = shouldRetainMessage(source, map, retainDeletes, logEntry, stats)
+    val logCleanerFilter = new RecordFilter {
+      def shouldRetain(record: Record): Boolean = shouldRetainMessage(source, map, retainDeletes, record, stats)
     }
 
     var position = 0
@@ -475,7 +474,7 @@ private[log] class Cleaner(val id: Int,
       if (writeBuffer.position > 0) {
         writeBuffer.flip()
         val retained = MemoryRecords.readableRecords(writeBuffer)
-        dest.append(firstOffset = retained.deepEntries.iterator.next().offset,
+        dest.append(firstOffset = retained.batches.iterator.next().baseOffset,
           largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
@@ -493,22 +492,24 @@ private[log] class Cleaner(val id: Int,
   private def shouldRetainMessage(source: kafka.log.LogSegment,
                                   map: kafka.log.OffsetMap,
                                   retainDeletes: Boolean,
-                                  entry: LogEntry,
+                                  record: Record,
                                   stats: CleanerStats): Boolean = {
-    val pastLatestOffset = entry.offset > map.latestOffset
+    if (record.isControlRecord)
+      return true
+
+    val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
       return true
 
-
-    if (entry.record.hasKey) {
-      val key = entry.record.key
+    if (record.hasKey) {
+      val key = record.key
       val foundOffset = map.get(key)
       /* two cases in which we can get rid of a message:
        *   1) if there exists a message with the same key but higher offset
        *   2) if the message is a delete "tombstone" marker and enough time has passed
        */
-      val redundant = foundOffset >= 0 && entry.offset < foundOffset
-      val obsoleteDelete = !retainDeletes && entry.record.hasNullValue
+      val redundant = foundOffset >= 0 && record.offset < foundOffset
+      val obsoleteDelete = !retainDeletes && !record.hasValue
       !redundant && !obsoleteDelete
     } else {
       stats.invalidMessage()
@@ -630,11 +631,10 @@ private[log] class Cleaner(val id: Int,
       throttler.maybeThrottle(records.sizeInBytes)
 
       val startPosition = position
-      for (entry <- records.deepEntries.asScala) {
-        val message = entry.record
-        if (message.hasKey && entry.offset >= start) {
+      for (record <- records.records.asScala) {
+        if (!record.isControlRecord && record.hasKey && record.offset >= start) {
           if (map.size < maxDesiredMapSize)
-            map.put(message.key, entry.offset)
+            map.put(record.key, record.offset)
           else
             return true
         }

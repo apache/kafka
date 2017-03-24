@@ -54,7 +54,7 @@ class ConsumerFetcherThread(name: String,
     replicaId(Request.OrdinaryConsumerId).
     maxWait(config.fetchWaitMaxMs).
     minBytes(config.fetchMinBytes).
-    requestVersion(kafka.api.FetchRequest.CurrentVersion)
+    requestVersion(3) // for now, the old consumer is pinned to the old message format through the fetch request
 
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()

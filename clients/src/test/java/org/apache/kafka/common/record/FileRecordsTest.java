@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import static org.apache.kafka.test.TestUtils.tempFile;
@@ -37,16 +38,16 @@ import static org.junit.Assert.fail;
 
 public class FileRecordsTest {
 
-    private Record[] records = new Record[] {
-            Record.create("abcd".getBytes()),
-            Record.create("efgh".getBytes()),
-            Record.create("ijkl".getBytes())
+    private byte[][] values = new byte[][] {
+            "abcd".getBytes(),
+            "efgh".getBytes(),
+            "ijkl".getBytes()
     };
     private FileRecords fileRecords;
 
     @Before
     public void setup() throws IOException {
-        this.fileRecords = createFileRecords(records);
+        this.fileRecords = createFileRecords(values);
     }
 
     /**
@@ -56,7 +57,7 @@ public class FileRecordsTest {
     public void testFileSize() throws IOException {
         assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         for (int i = 0; i < 20; i++) {
-            fileRecords.append(MemoryRecords.withRecords(Record.create("abcd".getBytes())));
+            fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("abcd".getBytes())));
             assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         }
     }
@@ -83,7 +84,11 @@ public class FileRecordsTest {
         fileRecords.channel().write(buffer);
 
         // appending those bytes should not change the contents
-        TestUtils.checkEquals(Arrays.asList(records), fileRecords.records());
+        Iterator<Record> records = fileRecords.records().iterator();
+        for (byte[] value : values) {
+            assertTrue(records.hasNext());
+            assertEquals(records.next().value(), ByteBuffer.wrap(value));
+        }
     }
 
     /**
@@ -92,7 +97,11 @@ public class FileRecordsTest {
     @Test
     public void testIterationDoesntChangePosition() throws IOException {
         long position = fileRecords.channel().position();
-        TestUtils.checkEquals(Arrays.asList(records), fileRecords.records());
+        Iterator<Record> records = fileRecords.records().iterator();
+        for (byte[] value : values) {
+            assertTrue(records.hasNext());
+            assertEquals(records.next().value(), ByteBuffer.wrap(value));
+        }
         assertEquals(position, fileRecords.channel().position());
     }
 
@@ -102,18 +111,18 @@ public class FileRecordsTest {
     @Test
     public void testRead() throws IOException {
         FileRecords read = fileRecords.read(0, fileRecords.sizeInBytes());
-        TestUtils.checkEquals(fileRecords.shallowEntries(), read.shallowEntries());
+        TestUtils.checkEquals(fileRecords.batches(), read.batches());
 
-        List<LogEntry> items = shallowEntries(read);
-        LogEntry second = items.get(1);
+        List<RecordBatch> items = batches(read);
+        RecordBatch second = items.get(1);
 
         read = fileRecords.read(second.sizeInBytes(), fileRecords.sizeInBytes());
         assertEquals("Try a read starting from the second message",
-                items.subList(1, 3), shallowEntries(read));
+                items.subList(1, 3), batches(read));
 
         read = fileRecords.read(second.sizeInBytes(), second.sizeInBytes());
         assertEquals("Try a read of a single message starting from the second message",
-                Collections.singletonList(second), shallowEntries(read));
+                Collections.singletonList(second), batches(read));
     }
 
     /**
@@ -122,28 +131,28 @@ public class FileRecordsTest {
     @Test
     public void testSearch() throws IOException {
         // append a new message with a high offset
-        Record lastMessage = Record.create("test".getBytes());
-        fileRecords.append(MemoryRecords.withRecords(50L, lastMessage));
+        SimpleRecord lastMessage = new SimpleRecord("test".getBytes());
+        fileRecords.append(MemoryRecords.withRecords(50L, CompressionType.NONE, lastMessage));
 
-        List<LogEntry> entries = shallowEntries(fileRecords);
+        List<RecordBatch> batches = batches(fileRecords);
         int position = 0;
 
-        int message1Size = entries.get(0).sizeInBytes();
+        int message1Size = batches.get(0).sizeInBytes();
         assertEquals("Should be able to find the first message by its offset",
                 new FileRecords.LogEntryPosition(0L, position, message1Size),
                 fileRecords.searchForOffsetWithSize(0, 0));
         position += message1Size;
 
-        int message2Size = entries.get(1).sizeInBytes();
+        int message2Size = batches.get(1).sizeInBytes();
         assertEquals("Should be able to find second message when starting from 0",
                 new FileRecords.LogEntryPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, 0));
         assertEquals("Should be able to find second message starting from its offset",
                 new FileRecords.LogEntryPosition(1L, position, message2Size),
                 fileRecords.searchForOffsetWithSize(1, position));
-        position += message2Size + entries.get(2).sizeInBytes();
+        position += message2Size + batches.get(2).sizeInBytes();
 
-        int message4Size = entries.get(3).sizeInBytes();
+        int message4Size = batches.get(3).sizeInBytes();
         assertEquals("Should be able to find fourth message from a non-existant offset",
                 new FileRecords.LogEntryPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(3, position));
@@ -157,13 +166,13 @@ public class FileRecordsTest {
      */
     @Test
     public void testIteratorWithLimits() throws IOException {
-        LogEntry entry = shallowEntries(fileRecords).get(1);
+        RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = entry.sizeInBytes();
+        int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size);
-        assertEquals(Collections.singletonList(entry), shallowEntries(slice));
+        assertEquals(Collections.singletonList(batch), batches(slice));
         FileRecords slice2 = fileRecords.read(start, size - 1);
-        assertEquals(Collections.emptyList(), shallowEntries(slice2));
+        assertEquals(Collections.emptyList(), batches(slice2));
     }
 
     /**
@@ -171,11 +180,11 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncate() throws IOException {
-        LogEntry entry = shallowEntries(fileRecords).get(0);
+        RecordBatch batch = batches(fileRecords).get(0);
         int end = fileRecords.searchForOffsetWithSize(1, 0).position;
         fileRecords.truncateTo(end);
-        assertEquals(Collections.singletonList(entry), shallowEntries(fileRecords));
-        assertEquals(entry.sizeInBytes(), fileRecords.sizeInBytes());
+        assertEquals(Collections.singletonList(batch), batches(fileRecords));
+        assertEquals(batch.sizeInBytes(), fileRecords.sizeInBytes());
     }
 
     /**
@@ -274,14 +283,14 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateClearShutdown() throws IOException {
         File temp = tempFile();
-        FileRecords set = FileRecords.open(temp, false, 512 * 1024 * 1024, true);
-        set.append(MemoryRecords.withRecords(records));
+        FileRecords fileRecords = FileRecords.open(temp, false, 512 * 1024 * 1024, true);
+        append(fileRecords, values);
 
-        int oldPosition = (int) set.channel().position();
-        int oldSize = set.sizeInBytes();
-        assertEquals(fileRecords.sizeInBytes(), oldPosition);
-        assertEquals(fileRecords.sizeInBytes(), oldSize);
-        set.close();
+        int oldPosition = (int) fileRecords.channel().position();
+        int oldSize = fileRecords.sizeInBytes();
+        assertEquals(this.fileRecords.sizeInBytes(), oldPosition);
+        assertEquals(this.fileRecords.sizeInBytes(), oldSize);
+        fileRecords.close();
 
         File tempReopen = new File(temp.getAbsolutePath());
         FileRecords setReopen = FileRecords.open(tempReopen, true, 512 * 1024 * 1024, true);
@@ -295,104 +304,106 @@ public class FileRecordsTest {
 
     @Test
     public void testFormatConversionWithPartialMessage() throws IOException {
-        LogEntry entry = shallowEntries(fileRecords).get(1);
+        RecordBatch batch = batches(fileRecords).get(1);
         int start = fileRecords.searchForOffsetWithSize(1, 0).position;
-        int size = entry.sizeInBytes();
+        int size = batch.sizeInBytes();
         FileRecords slice = fileRecords.read(start, size - 1);
-        Records messageV0 = slice.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
-        assertTrue("No message should be there", shallowEntries(messageV0).isEmpty());
+        Records messageV0 = slice.downConvert(RecordBatch.MAGIC_VALUE_V0);
+        assertTrue("No message should be there", batches(messageV0).isEmpty());
         assertEquals("There should be " + (size - 1) + " bytes", size - 1, messageV0.sizeInBytes());
     }
 
     @Test
-    public void testConvertNonCompressedToMagic1() throws IOException {
-        List<LogEntry> entries = Arrays.asList(
-                LogEntry.create(0L, Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "k1".getBytes(), "hello".getBytes())),
-                LogEntry.create(2L, Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "k2".getBytes(), "goodbye".getBytes())));
-        MemoryRecords records = MemoryRecords.withLogEntries(CompressionType.NONE, entries);
+    public void testConversion() throws IOException {
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V0);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V0);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V1);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
+        doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
+        doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
+    }
 
-        // Up conversion. In reality we only do down conversion, but up conversion should work as well.
-        // up conversion for non-compressed messages
+    private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
+        List<Long> offsets = Arrays.asList(0L, 2L, 3L, 9L, 11L, 15L);
+        List<SimpleRecord> records = Arrays.asList(
+                new SimpleRecord(1L, "k1".getBytes(), "hello".getBytes()),
+                new SimpleRecord(2L, "k2".getBytes(), "goodbye".getBytes()),
+                new SimpleRecord(3L, "k3".getBytes(), "hello again".getBytes()),
+                new SimpleRecord(4L, "k4".getBytes(), "goodbye for now".getBytes()),
+                new SimpleRecord(5L, "k5".getBytes(), "hello again".getBytes()),
+                new SimpleRecord(6L, "k6".getBytes(), "goodbye forever".getBytes()));
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                TimestampType.CREATE_TIME, 0L);
+        for (int i = 0; i < 2; i++)
+            builder.appendWithOffset(offsets.get(i), records.get(i));
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
+                TimestampType.CREATE_TIME, 0L);
+        for (int i = 2; i < 4; i++)
+            builder.appendWithOffset(offsets.get(i), records.get(i));
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
+                TimestampType.CREATE_TIME, 0L);
+        for (int i = 4; i < 6; i++)
+            builder.appendWithOffset(offsets.get(i), records.get(i));
+        builder.close();
+
+        buffer.flip();
+
         try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(records);
+            fileRecords.append(MemoryRecords.readableRecords(buffer));
             fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
-            verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V1);
+            Records convertedRecords = fileRecords.downConvert(toMagic);
+            verifyConvertedRecords(records, offsets, convertedRecords, compressionType, toMagic);
         }
     }
 
-    @Test
-    public void testConvertCompressedToMagic1() throws IOException {
-        List<LogEntry> entries = Arrays.asList(
-                LogEntry.create(0L, Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "k1".getBytes(), "hello".getBytes())),
-                LogEntry.create(2L, Record.create(Record.MAGIC_VALUE_V0, Record.NO_TIMESTAMP, "k2".getBytes(), "goodbye".getBytes())));
-        MemoryRecords records = MemoryRecords.withLogEntries(CompressionType.GZIP, entries);
-
-        // up conversion for compressed messages
-        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(records);
-            fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME);
-            verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V1);
-        }
-    }
-
-    @Test
-    public void testConvertNonCompressedToMagic0() throws IOException {
-        List<LogEntry> entries = Arrays.asList(
-                LogEntry.create(0L, Record.create(Record.MAGIC_VALUE_V1, 1L, "k1".getBytes(), "hello".getBytes())),
-                LogEntry.create(2L, Record.create(Record.MAGIC_VALUE_V1, 2L, "k2".getBytes(), "goodbye".getBytes())));
-        MemoryRecords records = MemoryRecords.withLogEntries(CompressionType.NONE, entries);
-
-        // down conversion for non-compressed messages
-        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(records);
-            fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
-            verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V0);
-        }
-    }
-
-    @Test
-    public void testConvertCompressedToMagic0() throws IOException {
-        List<LogEntry> entries = Arrays.asList(
-                LogEntry.create(0L, Record.create(Record.MAGIC_VALUE_V1, 1L, "k1".getBytes(), "hello".getBytes())),
-                LogEntry.create(2L, Record.create(Record.MAGIC_VALUE_V1, 2L, "k2".getBytes(), "goodbye".getBytes())));
-        MemoryRecords records = MemoryRecords.withLogEntries(CompressionType.GZIP, entries);
-
-        // down conversion for compressed messages
-        try (FileRecords fileRecords = FileRecords.open(tempFile())) {
-            fileRecords.append(records);
-            fileRecords.flush();
-            Records convertedRecords = fileRecords.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE);
-            verifyConvertedMessageSet(entries, convertedRecords, Record.MAGIC_VALUE_V0);
-        }
-    }
-
-    private void verifyConvertedMessageSet(List<LogEntry> initialEntries, Records convertedRecords, byte magicByte) {
+    private void verifyConvertedRecords(List<SimpleRecord> initialRecords,
+                                        List<Long> initialOffsets,
+                                        Records convertedRecords,
+                                        CompressionType compressionType,
+                                        byte magicByte) {
         int i = 0;
-        for (LogEntry logEntry : deepEntries(convertedRecords)) {
-            assertEquals("magic byte should be " + magicByte, magicByte, logEntry.record().magic());
-            assertEquals("offset should not change", initialEntries.get(i).offset(), logEntry.offset());
-            assertEquals("key should not change", initialEntries.get(i).record().key(), logEntry.record().key());
-            assertEquals("payload should not change", initialEntries.get(i).record().value(), logEntry.record().value());
-            i += 1;
+        for (RecordBatch batch : convertedRecords.batches()) {
+            assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
+            assertEquals("Compression type should not be affected by conversion", compressionType, batch.compressionType());
+            for (Record record : batch) {
+                assertTrue("Inner record should have magic " + magicByte, record.hasMagic(batch.magic()));
+                assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
+                assertEquals("Key should not change", initialRecords.get(i).key(), record.key());
+                assertEquals("Value should not change", initialRecords.get(i).value(), record.value());
+                if (batch.magic() > RecordBatch.MAGIC_VALUE_V0)
+                    assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
+                i += 1;
+            }
         }
+        assertEquals(initialOffsets.size(), i);
     }
 
-    private static List<LogEntry> shallowEntries(Records buffer) {
-        return TestUtils.toList(buffer.shallowEntries());
+    private static List<RecordBatch> batches(Records buffer) {
+        return TestUtils.toList(buffer.batches());
     }
 
-    private static List<LogEntry> deepEntries(Records buffer) {
-        return TestUtils.toList(buffer.deepEntries());
-    }
-
-    private FileRecords createFileRecords(Record ... records) throws IOException {
+    private FileRecords createFileRecords(byte[][] values) throws IOException {
         FileRecords fileRecords = FileRecords.open(tempFile());
-        fileRecords.append(MemoryRecords.withRecords(records));
-        fileRecords.flush();
+        append(fileRecords, values);
         return fileRecords;
+    }
+
+    private void append(FileRecords fileRecords, byte[][] values) throws IOException {
+        long offset = 0L;
+        for (byte[] value : values) {
+            ByteBuffer buffer = ByteBuffer.allocate(128);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
+                    CompressionType.NONE, TimestampType.CREATE_TIME, offset);
+            builder.appendWithOffset(offset++, System.currentTimeMillis(), null, value);
+            fileRecords.append(builder.build());
+        }
+        fileRecords.flush();
     }
 
 }

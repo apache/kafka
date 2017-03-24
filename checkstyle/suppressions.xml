@@ -11,6 +11,8 @@
               files="(Fetcher|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator).java"/>
     <suppress checks="ClassFanOutComplexity"
               files=".*/protocol/Errors.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files=".*/common/utils/Utils.java"/>
 
     <suppress checks="MethodLength"
               files="KerberosLogin.java"/>
@@ -25,6 +27,8 @@
               files="Fetcher.java"/>
     <suppress checks="ParameterNumber"
               files="ConfigDef.java"/>
+    <suppress checks="ParameterNumber"
+              files="DefaultRecordBatch.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse).java"/>
@@ -79,7 +83,7 @@
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse)Test.java"/>
+              files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher)Test.java"/>

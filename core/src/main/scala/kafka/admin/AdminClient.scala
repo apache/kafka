@@ -293,7 +293,8 @@ object AdminClient {
       DefaultReceiveBufferBytes,
       DefaultRequestTimeoutMs,
       time,
-      true)
+      true,
+      new ApiVersions)
 
     val highLevelClient = new ConsumerNetworkClient(
       networkClient,

@@ -26,7 +26,7 @@ import joptsimple._
 import kafka.log._
 import kafka.message._
 import kafka.utils._
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.math._
@@ -102,8 +102,12 @@ object TestLinearWriteSpeed {
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
-    val messageSet = MemoryRecords.withRecords(CompressionType.forId(compressionCodec.codec),
-      (0 until numMessages).map(_ => Record.create(new Array[Byte](messageSize))): _*)
+    val createTime = System.currentTimeMillis
+    val messageSet = {
+      val compressionType = CompressionType.forId(compressionCodec.codec)
+      val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
+      MemoryRecords.withRecords(compressionType, records: _*)
+    }
 
     val writables = new Array[Writable](numFiles)
     val scheduler = new KafkaScheduler(1)

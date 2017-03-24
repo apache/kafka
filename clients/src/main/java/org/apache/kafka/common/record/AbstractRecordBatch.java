@@ -16,27 +16,16 @@
  */
 package org.apache.kafka.common.record;
 
-import org.junit.Test;
+abstract class AbstractRecordBatch implements RecordBatch {
 
-import static org.junit.Assert.assertEquals;
-
-public class TimestampTypeTest {
-
-    @Test
-    public void toAndFromAttributesCreateTime() {
-        byte attributes = TimestampType.CREATE_TIME.updateAttributes((byte) 0);
-        assertEquals(TimestampType.CREATE_TIME, TimestampType.forAttributes(attributes));
+    @Override
+    public long nextOffset() {
+        return lastOffset() + 1;
     }
 
-    @Test
-    public void toAndFromAttributesLogAppendTime() {
-        byte attributes = TimestampType.LOG_APPEND_TIME.updateAttributes((byte) 0);
-        assertEquals(TimestampType.LOG_APPEND_TIME, TimestampType.forAttributes(attributes));
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void updateAttributesNotAllowedForNoTimestampType() {
-        TimestampType.NO_TIMESTAMP_TYPE.updateAttributes((byte) 0);
+    @Override
+    public boolean isCompressed() {
+        return compressionType() != CompressionType.NONE;
     }
 
 }

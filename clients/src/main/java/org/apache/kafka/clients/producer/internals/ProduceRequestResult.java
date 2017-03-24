@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 
 /**
@@ -35,7 +35,7 @@ public final class ProduceRequestResult {
     private final TopicPartition topicPartition;
 
     private volatile Long baseOffset = null;
-    private volatile long logAppendTime = Record.NO_TIMESTAMP;
+    private volatile long logAppendTime = RecordBatch.NO_TIMESTAMP;
     private volatile RuntimeException error;
 
     /**
@@ -97,7 +97,7 @@ public final class ProduceRequestResult {
      * Return true if log append time is being used for this topic
      */
     public boolean hasLogAppendTime() {
-        return logAppendTime != Record.NO_TIMESTAMP;
+        return logAppendTime != RecordBatch.NO_TIMESTAMP;
     }
 
     /**
