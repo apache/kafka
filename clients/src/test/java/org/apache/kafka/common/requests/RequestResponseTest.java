@@ -92,10 +92,10 @@ public class RequestResponseTest {
         checkErrorResponse(createListOffsetRequest(1), new UnknownServerException());
         checkResponse(createListOffsetResponse(1), 1);
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2));
-        checkRequest(createMetadataRequest(1, asList("topic1")));
-        checkErrorResponse(createMetadataRequest(1, asList("topic1")), new UnknownServerException());
+        checkRequest(createMetadataRequest(1, Collections.singletonList("topic1")));
+        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException());
         checkResponse(createMetadataResponse(), 2);
-        checkErrorResponse(createMetadataRequest(2, asList("topic1")), new UnknownServerException());
+        checkErrorResponse(createMetadataRequest(2, Collections.singletonList("topic1")), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(2));
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 0);
@@ -142,7 +142,7 @@ public class RequestResponseTest {
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0);
         checkResponse(createMetadataResponse(), 1);
-        checkErrorResponse(createMetadataRequest(1, asList("topic1")), new UnknownServerException());
+        checkErrorResponse(createMetadataRequest(1, Collections.singletonList("topic1")), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(0));
         checkErrorResponse(createOffsetCommitRequest(0), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(1));
@@ -494,7 +494,10 @@ public class RequestResponseTest {
     private WriteTxnMarkerRequest createWriteTxnMarkerRequest() {
         List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
                 new TopicPartition("foo", 2));
-        return new WriteTxnMarkerRequest.Builder(23437L, (short) 99, 437, TransactionResult.COMMIT, partitions).build();
+
+        List<WriteTxnMarkerRequest.TxnMarkerEntry> entries = Collections.singletonList(new WriteTxnMarkerRequest.TxnMarkerEntry(23437L, (short) 99, TransactionResult.COMMIT, partitions));
+
+        return new WriteTxnMarkerRequest.Builder(437, entries).build();
     }
 
     private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
@@ -523,7 +526,8 @@ public class RequestResponseTest {
         errors.put(new TopicPartition("foo", 2), Errors.NONE);
         errors.put(new TopicPartition("bar", 1), Errors.DUPLICATE_SEQUENCE_NUMBER);
         errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
-        return new WriteTxnMarkerResponse(errors);
+        Map<Long, Map<TopicPartition, Errors>> responses = Collections.singletonMap(23437L, errors);
+        return new WriteTxnMarkerResponse(responses);
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
@@ -602,7 +606,7 @@ public class RequestResponseTest {
     }
 
     private ListGroupsResponse createListGroupsResponse() {
-        List<ListGroupsResponse.Group> groups = asList(new ListGroupsResponse.Group("test-group", "consumer"));
+        List<ListGroupsResponse.Group> groups = Collections.singletonList(new ListGroupsResponse.Group("test-group", "consumer"));
         return new ListGroupsResponse(Errors.NONE, groups);
     }
 
@@ -617,7 +621,7 @@ public class RequestResponseTest {
         DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
                 clientId, clientHost, empty, empty);
         DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member));
+                "STABLE", "consumer", "roundrobin", Collections.singletonList(member));
         return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
     }
 
@@ -650,7 +654,7 @@ public class RequestResponseTest {
         if (version == 0) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
             responseData.put(new TopicPartition("test", 0),
-                    new ListOffsetResponse.PartitionData(Errors.NONE, asList(100L)));
+                    new ListOffsetResponse.PartitionData(Errors.NONE, Collections.singletonList(100L)));
             return new ListOffsetResponse(responseData);
         } else if (version == 1) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
@@ -668,16 +672,16 @@ public class RequestResponseTest {
 
     private MetadataResponse createMetadataResponse() {
         Node node = new Node(1, "host1", 1001);
-        List<Node> replicas = asList(node);
-        List<Node> isr = asList(node);
+        List<Node> replicas = Collections.singletonList(node);
+        List<Node> isr = Collections.singletonList(node);
 
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
-                asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr))));
+                Collections.singletonList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, replicas, isr))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.<MetadataResponse.PartitionMetadata>emptyList()));
 
-        return new MetadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return new MetadataResponse(Collections.singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(int version) {
@@ -826,7 +830,7 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse createApiVersionResponse() {
-        List<ApiVersionsResponse.ApiVersion> apiVersions = asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
+        List<ApiVersionsResponse.ApiVersion> apiVersions = Collections.singletonList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
         return new ApiVersionsResponse(Errors.NONE, apiVersions);
     }
 
