@@ -40,11 +40,13 @@ import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -56,6 +58,7 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -73,6 +76,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.util.Collections.singleton;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -157,6 +161,46 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetcherIgnoresControlRecords() {
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
+        builder.append(0L, "key".getBytes(), null);
+        builder.appendControlRecord(0L, ControlRecordType.COMMIT, null);
+        builder.append(0L, "key".getBytes(), null);
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 3L);
+        builder.appendControlRecord(0L, ControlRecordType.ABORT, null);
+        builder.close();
+
+        buffer.flip();
+
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetcher.fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp));
+
+        List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp);
+        assertEquals(2, records.size());
+
+        // TODO: currently the offset does not advance beyond the control record until a record
+        // with a larger offset is fetched. In the worst case, we may fetch the control record
+        // again after a rebalance, but that should be fine since we just discard it anyway
+        assertEquals(3L, subscriptions.position(tp).longValue());
+        for (ConsumerRecord<byte[], byte[]> record : records)
+            assertArrayEquals("key".getBytes(), record.key());
+    }
+
+    @Test
     public void testFetchError() {
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
@@ -220,27 +264,55 @@ public class FetcherTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(buffer));
 
-        byte magic = Record.CURRENT_MAGIC_VALUE;
+        byte magic = RecordBatch.MAGIC_VALUE_V1;
         byte[] key = "foo".getBytes();
         byte[] value = "baz".getBytes();
         long offset = 0;
         long timestamp = 500L;
 
-        int size = Record.recordSize(key, value);
-        byte attributes = Record.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
-        long crc = Record.computeChecksum(magic, attributes, timestamp, key, value);
+        int size = LegacyRecord.recordSize(key, value);
+        byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
+        long crc = LegacyRecord.computeChecksum(magic, attributes, timestamp, key, value);
 
         // write one valid record
         out.writeLong(offset);
         out.writeInt(size);
-        Record.write(out, magic, crc, Record.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
+        LegacyRecord.write(out, magic, crc, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
 
         // and one invalid record (note the crc)
         out.writeLong(offset);
         out.writeInt(size);
-        Record.write(out, magic, crc + 1, Record.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
+        LegacyRecord.write(out, magic, crc + 1, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
 
         buffer.flip();
+
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+        try {
+            fetcher.fetchedRecords();
+            fail("fetchedRecords should have raised");
+        } catch (KafkaException e) {
+            // the position should not advance since no data has been returned
+            assertEquals(0, subscriptions.position(tp).longValue());
+        }
+    }
+
+    @Test
+    public void testParseInvalidRecordBatch() throws Exception {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+                CompressionType.NONE, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        ByteBuffer buffer = records.buffer();
+
+        // flip some bits to fail the crc
+        buffer.putInt(32, buffer.get(32) ^ 87238423);
 
         subscriptions.assignFromUser(singleton(tp));
         subscriptions.seek(tp, 0);
@@ -298,7 +370,8 @@ public class FetcherTest {
         // if we are fetching from a compacted topic, there may be gaps in the returned records
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case
 
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
         builder.appendWithOffset(15L, 0L, "key".getBytes(), "value-1".getBytes());
         builder.appendWithOffset(20L, 0L, "key".getBytes(), "value-2".getBytes());
         builder.appendWithOffset(30L, 0L, "key".getBytes(), "value-3".getBytes());
@@ -741,9 +814,10 @@ public class FetcherTest {
         for (int i = 1; i < 4; i++) {
             // We need to make sure the message offset grows. Otherwise they will be considered as already consumed
             // and filtered out by consumer.
-            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                    TimestampType.CREATE_TIME, 0L);
             for (int v = 0; v < 3; v++)
-                builder.appendWithOffset((long) i * 3 + v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+                builder.appendWithOffset((long) i * 3 + v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
             List<ConsumerRecord<byte[], byte[]>> records = fetchRecords(builder.build(), Errors.NONE, 100L, 100 * i).get(tp);
             assertEquals(3, records.size());
         }
@@ -780,9 +854,10 @@ public class FetcherTest {
         assertEquals(100, partitionLag.value(), EPSILON);
 
         // recordsFetchLagMax should be hw - offset of the last message after receiving a non-empty FetchResponse
-        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                TimestampType.CREATE_TIME, 0L);
         for (int v = 0; v < 3; v++)
-            builder.appendWithOffset((long) v, Record.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
+            builder.appendWithOffset((long) v, RecordBatch.NO_TIMESTAMP, "key".getBytes(), String.format("value-%d", v).getBytes());
         fetchRecords(builder.build(), Errors.NONE, 200L, 0);
         assertEquals(197, recordsFetchLagMax.value(), EPSILON);
 
@@ -890,9 +965,9 @@ public class FetcherTest {
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {
-        return new FetchResponse(
-                new LinkedHashMap<>(Collections.singletonMap(tp, new FetchResponse.PartitionData(error, hw, records))),
-                throttleTime);
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
+                new FetchResponse.PartitionData(error, hw, FetchResponse.INVALID_LSO, null, records));
+        return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
     }
 
     private MetadataResponse newMetadataResponse(String topic, Errors error) {

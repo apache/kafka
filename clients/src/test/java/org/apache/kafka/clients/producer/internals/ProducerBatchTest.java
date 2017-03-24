@@ -18,8 +18,8 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
@@ -31,8 +31,8 @@ public class ProducerBatchTest {
 
     private final long now = 1488748346917L;
 
-    private final MemoryRecordsBuilder memoryRecordsBuilder = new MemoryRecordsBuilder(ByteBuffer.allocate(0),
-            Record.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME, 0L, Record.NO_TIMESTAMP, 0);
+    private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(128),
+            CompressionType.NONE, TimestampType.CREATE_TIME, 128);
 
     /**
      * A {@link ProducerBatch} configured using a very large linger value and a timestamp preceding its create

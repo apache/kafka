@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -29,11 +23,18 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
+    private static final String ISOLATION_LEVEL_KEY_NAME = "isolation_level";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // request and partition level name
@@ -54,6 +55,7 @@ public class FetchRequest extends AbstractRequest {
     private final int maxWait;
     private final int minBytes;
     private final int maxBytes;
+    private final IsolationLevel isolationLevel;
     private final LinkedHashMap<TopicPartition, PartitionData> fetchData;
 
     public static final class PartitionData {
@@ -159,6 +161,7 @@ public class FetchRequest extends AbstractRequest {
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
         this.fetchData = fetchData;
+        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
     }
 
     public FetchRequest(Struct struct, short version) {
@@ -170,6 +173,12 @@ public class FetchRequest extends AbstractRequest {
             maxBytes = struct.getInt(MAX_BYTES_KEY_NAME);
         else
             maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
+
+        if (struct.hasField(ISOLATION_LEVEL_KEY_NAME))
+            isolationLevel = IsolationLevel.forId(struct.getByte(ISOLATION_LEVEL_KEY_NAME));
+        else
+            isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+
         fetchData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -191,8 +200,7 @@ public class FetchRequest extends AbstractRequest {
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e),
-                    FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY);
-
+                    FetchResponse.INVALID_LSO, FetchResponse.INVALID_HIGHWATERMARK, null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
         return new FetchResponse(responseData, 0);
@@ -222,6 +230,10 @@ public class FetchRequest extends AbstractRequest {
         return replicaId >= 0;
     }
 
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
+    }
+
     public static FetchRequest parse(ByteBuffer buffer, short version) {
         return new FetchRequest(ApiKeys.FETCH.parseRequest(version, buffer), version);
     }
@@ -237,6 +249,9 @@ public class FetchRequest extends AbstractRequest {
         struct.set(MIN_BYTES_KEY_NAME, minBytes);
         if (version >= 3)
             struct.set(MAX_BYTES_KEY_NAME, maxBytes);
+        if (version >= 4)
+            struct.set(ISOLATION_LEVEL_KEY_NAME, IsolationLevel.READ_UNCOMMITTED.id());
+
         List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);

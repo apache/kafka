@@ -39,7 +39,7 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import org.apache.kafka.common.TopicPartition
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Record.NO_TIMESTAMP, -1L, Record.NO_TIMESTAMP,
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
     NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
@@ -332,7 +332,7 @@ class Log(@volatile var dir: File,
    * Close this log
    */
   def close() {
-    debug("Closing log " + name)
+    debug(s"Closing log $name")
     lock synchronized {
       logSegments.foreach(_.close())
     }
@@ -391,27 +391,26 @@ class Log(@volatile var dir: File,
           // re-validate message sizes if there's a possibility that they have changed (due to re-compression or message
           // format conversion)
           if (validateAndOffsetAssignResult.messageSizeMaybeChanged) {
-            for (logEntry <- validRecords.shallowEntries.asScala) {
-              if (logEntry.sizeInBytes > config.maxMessageSize) {
+            for (batch <- validRecords.batches.asScala) {
+              if (batch.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
                 BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
                 BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-                throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
-                  .format(logEntry.sizeInBytes, config.maxMessageSize))
+                throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
+                  .format(batch.sizeInBytes, config.maxMessageSize))
               }
             }
           }
-
         } else {
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
-            throw new IllegalArgumentException("Out of order offsets found in " + records.deepEntries.asScala.map(_.offset))
+            throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
         }
 
         // check messages set size may be exceed config.segmentSize
         if (validRecords.sizeInBytes > config.segmentSize) {
-          throw new RecordBatchTooLargeException("Message set size is %d bytes which exceeds the maximum configured segment size of %d."
+          throw new RecordBatchTooLargeException("Message batch size is %d bytes which exceeds the maximum configured segment size of %d."
             .format(validRecords.sizeInBytes, config.segmentSize))
         }
 
@@ -468,39 +467,42 @@ class Log(@volatile var dir: File,
     var lastOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
-    var maxTimestamp = Record.NO_TIMESTAMP
+    var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    for (entry <- records.shallowEntries.asScala) {
-      // update the first offset if on the first message
-      if(firstOffset < 0)
-        firstOffset = entry.offset
+
+    for (batch <- records.batches.asScala) {
+      // update the first offset if on the first message. For magic versions older than 2, we use the last offset
+      // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
+      // For magic version 2, we can get the first offset directly from the batch header.
+      if (firstOffset < 0)
+        firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
+
       // check that offsets are monotonically increasing
-      if(lastOffset >= entry.offset)
+      if (lastOffset >= batch.lastOffset)
         monotonic = false
       // update the last offset seen
-      lastOffset = entry.offset
-
-      val record = entry.record
+      lastOffset = batch.lastOffset
 
       // Check if the message sizes are valid.
-      val messageSize = entry.sizeInBytes
-      if(messageSize > config.maxMessageSize) {
+      val batchSize = batch.sizeInBytes
+      if (batchSize > config.maxMessageSize) {
         BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-        throw new RecordTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
-          .format(messageSize, config.maxMessageSize))
+        throw new RecordTooLargeException(s"Message size is $batchSize bytes which exceeds the maximum configured " +
+          s"message size of ${config.maxMessageSize}.")
       }
 
       // check the validity of the message by checking CRC
-      record.ensureValid()
-      if (record.timestamp > maxTimestamp) {
-        maxTimestamp = record.timestamp
+      batch.ensureValid()
+
+      if (batch.maxTimestamp > maxTimestamp) {
+        maxTimestamp = batch.maxTimestamp
         offsetOfMaxTimestamp = lastOffset
       }
       shallowMessageCount += 1
-      validBytesCount += messageSize
+      validBytesCount += batchSize
 
-      val messageCodec = CompressionCodec.getCompressionCodec(record.compressionType.id)
+      val messageCodec = CompressionCodec.getCompressionCodec(batch.compressionType.id)
       if (messageCodec != NoCompressionCodec)
         sourceCodec = messageCodec
     }
@@ -508,7 +510,7 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
 
-    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, Record.NO_TIMESTAMP, sourceCodec,
+    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
       targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
@@ -624,9 +626,9 @@ class Log(@volatile var dir: File,
     val segmentsCopy = logSegments.toBuffer
     // For the earliest and latest, we do not need to return the timestamp.
     if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(Record.NO_TIMESTAMP, segmentsCopy.head.baseOffset))
+        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, segmentsCopy.head.baseOffset))
     else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-        return Some(TimestampOffset(Record.NO_TIMESTAMP, logEndOffset))
+        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logEndOffset))
 
     val targetSeg = {
       // Get all the segments whose largest timestamp is smaller than target timestamp
@@ -1152,4 +1154,3 @@ object Log {
   }
 
 }
-

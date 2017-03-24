@@ -42,7 +42,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -99,7 +98,7 @@ public class NetworkClient implements KafkaClient {
      */
     private final boolean discoverBrokerVersions;
 
-    private final Map<String, NodeApiVersions> nodeApiVersions = new HashMap<>();
+    private final ApiVersions apiVersions;
 
     private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
@@ -114,9 +113,10 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
-                         boolean discoverBrokerVersions) {
-        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
-                reconnectBackoffMs, socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions);
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions) {
+        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
     }
 
     public NetworkClient(Selectable selector,
@@ -128,9 +128,10 @@ public class NetworkClient implements KafkaClient {
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
-                         boolean discoverBrokerVersions) {
+                         boolean discoverBrokerVersions,
+                         ApiVersions apiVersions) {
         this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -143,7 +144,8 @@ public class NetworkClient implements KafkaClient {
                           int socketReceiveBuffer,
                           int requestTimeoutMs,
                           Time time,
-                          boolean discoverBrokerVersions) {
+                          boolean discoverBrokerVersions,
+                          ApiVersions apiVersions) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -167,6 +169,7 @@ public class NetworkClient implements KafkaClient {
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
+        this.apiVersions = apiVersions;
     }
 
     /**
@@ -285,7 +288,7 @@ public class NetworkClient implements KafkaClient {
         }
         AbstractRequest.Builder<?> builder = clientRequest.requestBuilder();
         try {
-            NodeApiVersions versionInfo = nodeApiVersions.get(nodeId);
+            NodeApiVersions versionInfo = apiVersions.get(nodeId);
             short version;
             // Note: if versionInfo is null, we have no server version information. This would be
             // the case when sending the initial ApiVersionRequest which fetches the version
@@ -296,7 +299,7 @@ public class NetworkClient implements KafkaClient {
                     log.trace("No version information found when sending message of type {} to node {}. " +
                             "Assuming version {}.", clientRequest.apiKey(), nodeId, version);
             } else {
-                version = versionInfo.usableVersion(clientRequest.apiKey());
+                version = versionInfo.usableVersion(clientRequest.apiKey(), builder.desiredVersion());
             }
             // The call to build may also throw UnsupportedVersionException, if there are essential
             // fields that cannot be represented in the chosen version.
@@ -482,7 +485,7 @@ public class NetworkClient implements KafkaClient {
      */
     private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
         connectionStates.disconnected(nodeId, now);
-        nodeApiVersions.remove(nodeId);
+        apiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request.request, nodeId);
@@ -568,7 +571,7 @@ public class NetworkClient implements KafkaClient {
             return;
         }
         NodeApiVersions nodeVersionInfo = new NodeApiVersions(apiVersionsResponse.apiVersions());
-        nodeApiVersions.put(node, nodeVersionInfo);
+        apiVersions.update(node, nodeVersionInfo);
         this.connectionStates.ready(node);
         if (log.isDebugEnabled()) {
             log.debug("Recorded API versions for node {}: {}", node, nodeVersionInfo);
