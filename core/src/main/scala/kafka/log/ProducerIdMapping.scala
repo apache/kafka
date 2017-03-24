@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.utils.{ByteUtils, Utils}
+import org.apache.kafka.common.utils.{ByteUtils, Crc32}
 
 import scala.collection.{immutable, mutable}
 
@@ -102,7 +102,7 @@ object ProducerIdMapping {
       throw new IllegalArgumentException(s"Unhandled snapshot file version $version")
 
     val crc = struct.getUnsignedInt(CrcField)
-    if (crc != Utils.computeChecksum(buffer, PidEntriesOffset, buffer.length - PidEntriesOffset))
+    if (crc != Crc32.crc32(buffer, PidEntriesOffset, buffer.length - PidEntriesOffset))
       throw new CorruptSnapshotException("Snapshot file is corrupted (CRC is no longer valid)")
 
     struct.getArray(PidEntriesField).foreach { pidEntryObj =>
@@ -139,7 +139,7 @@ object ProducerIdMapping {
     buffer.flip()
 
     // now fill in the CRC
-    val crc = Utils.computeChecksum(buffer, PidEntriesOffset, buffer.limit - PidEntriesOffset)
+    val crc = Crc32.crc32(buffer, PidEntriesOffset, buffer.limit - PidEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
     val fos = new FileOutputStream(file)
