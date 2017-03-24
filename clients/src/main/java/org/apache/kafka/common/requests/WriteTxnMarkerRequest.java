@@ -29,97 +29,123 @@ import java.util.List;
 import java.util.Map;
 
 public class WriteTxnMarkerRequest extends AbstractRequest {
+    private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
+    private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
+
     private static final String PID_KEY_NAME = "pid";
     private static final String EPOCH_KEY_NAME = "epoch";
-    private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    public static class Builder extends AbstractRequest.Builder<WriteTxnMarkerRequest> {
+    public class TxnMarkerEntry {
         private final long pid;
         private final short epoch;
-        private final int coordinatorEpoch;
         private final TransactionResult result;
         private final List<TopicPartition> partitions;
 
-        public Builder(long pid, short epoch, int coordinatorEpoch, TransactionResult result, List<TopicPartition> partitions) {
-            super(ApiKeys.WRITE_TXN_MARKER);
+        public TxnMarkerEntry(long pid, short epoch, TransactionResult result, List<TopicPartition> partitions) {
             this.pid = pid;
             this.epoch = epoch;
-            this.coordinatorEpoch = coordinatorEpoch;
             this.result = result;
             this.partitions = partitions;
         }
 
-        @Override
-        public WriteTxnMarkerRequest build(short version) {
-            return new WriteTxnMarkerRequest(version, pid, epoch, coordinatorEpoch, result, partitions);
+        public long pid() {
+            return pid;
+        }
+
+        public short epoch() {
+            return epoch;
+        }
+
+        public TransactionResult transactionResult() {
+            return result;
+        }
+
+        public List<TopicPartition> partitions() {
+            return partitions;
         }
     }
 
-    private final long pid;
-    private final short epoch;
-    private final int coordinatorEpoch;
-    private final TransactionResult result;
-    private final List<TopicPartition> partitions;
+    public static class Builder extends AbstractRequest.Builder<WriteTxnMarkerRequest> {
+        private final int coordinatorEpoch;
+        private final List<TxnMarkerEntry> markers;
 
-    private WriteTxnMarkerRequest(short version, long pid, short epoch, int coordinatorEpoch, TransactionResult result,
-                                  List<TopicPartition> partitions) {
+        public Builder(int coordinatorEpoch, List<TxnMarkerEntry> markers) {
+            super(ApiKeys.WRITE_TXN_MARKER);
+
+            this.markers = markers;
+            this.coordinatorEpoch = coordinatorEpoch;
+        }
+
+        @Override
+        public WriteTxnMarkerRequest build(short version) {
+            return new WriteTxnMarkerRequest(version, coordinatorEpoch, markers);
+        }
+    }
+
+    private final int coordinatorEpoch;
+    private final List<TxnMarkerEntry> markers;
+
+    private WriteTxnMarkerRequest(short version, int coordinatorEpoch, List<TxnMarkerEntry> markers) {
         super(version);
-        this.pid = pid;
-        this.epoch = epoch;
+
+        this.markers = markers;
         this.coordinatorEpoch = coordinatorEpoch;
-        this.result = result;
-        this.partitions = partitions;
     }
 
     public WriteTxnMarkerRequest(Struct struct, short version) {
         super(version);
-        this.pid = struct.getLong(PID_KEY_NAME);
-        this.epoch = struct.getShort(EPOCH_KEY_NAME);
         this.coordinatorEpoch = struct.getInt(COORDINATOR_EPOCH_KEY_NAME);
-        this.result = TransactionResult.forId(struct.getByte(TRANSACTION_RESULT_KEY_NAME));
 
-        List<TopicPartition> partitions = new ArrayList<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
-        for (Object topicPartitionObj : topicPartitionsArray) {
-            Struct topicPartitionStruct = (Struct) topicPartitionObj;
-            String topic = topicPartitionStruct.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
-                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
+        List<TxnMarkerEntry> markers = new ArrayList<>();
+        Object[] markersArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
+        for (Object markerObj : markersArray) {
+            Struct markerStruct = (Struct) markerObj;
+
+            long pid = markerStruct.getLong(PID_KEY_NAME);
+            short epoch = markerStruct.getShort(EPOCH_KEY_NAME);
+            TransactionResult result = TransactionResult.forId(markerStruct.getByte(TRANSACTION_RESULT_KEY_NAME));
+
+            List<TopicPartition> partitions = new ArrayList<>();
+            Object[] topicPartitionsArray = markerStruct.getArray(TOPIC_PARTITIONS_KEY_NAME);
+            for (Object topicPartitionObj : topicPartitionsArray) {
+                Struct topicPartitionStruct = (Struct) topicPartitionObj;
+                String topic = topicPartitionStruct.getString(TOPIC_KEY_NAME);
+                for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
+                    partitions.add(new TopicPartition(topic, (Integer) partitionObj));
+                }
             }
+
+            markers.add(new TxnMarkerEntry(pid, epoch, result, partitions));
         }
-        this.partitions = partitions;
-    }
 
-    public long pid() {
-        return pid;
-    }
-
-    public short epoch() {
-        return epoch;
+        this.markers = markers;
     }
 
     public int coordinatorEpoch() {
         return coordinatorEpoch;
     }
 
-    public TransactionResult transactionResult() {
-        return result;
-    }
-
-    public List<TopicPartition> partitions() {
-        return partitions;
-    }
-
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKER.requestSchema(version()));
+        struct.set(COORDINATOR_EPOCH_KEY_NAME, coordinatorEpoch);
+
+
+        Object[] markersArray = new Object[markers.size()];
+        int i = 0;
+        for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {
+            Struct topicPartitionsStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
+            topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
+            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, topicAndPartitions.getValue().toArray());
+            partitionsArray[i++] = topicPartitionsStruct;
+        }
+
         struct.set(PID_KEY_NAME, pid);
         struct.set(EPOCH_KEY_NAME, epoch);
-        struct.set(COORDINATOR_EPOCH_KEY_NAME, coordinatorEpoch);
         struct.set(TRANSACTION_RESULT_KEY_NAME, result.id);
 
         Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(partitions);
