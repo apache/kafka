@@ -27,6 +27,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class WriteTxnMarkerResponse extends AbstractResponse {
+    private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
+
+    private static final String PID_KEY_NAME = "pid";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";
@@ -44,57 +47,80 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
     //   NotEnoughReplicasAfterAppend
     //   InvalidRequiredAcks
 
-    private final Map<TopicPartition, Errors> errors;
+    private final Map<Long, Map<TopicPartition, Errors>> errors;
 
-    public WriteTxnMarkerResponse(Map<TopicPartition, Errors> errors) {
+    public WriteTxnMarkerResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
         this.errors = errors;
     }
 
     public WriteTxnMarkerResponse(Struct struct) {
-        Map<TopicPartition, Errors> errors = new HashMap<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
-        for (Object topicPartitionObj : topicPartitionsArray) {
-            Struct topicPartitionStruct = (Struct) topicPartitionObj;
-            String topic = topicPartitionStruct.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
-                Struct partitionStruct = (Struct) partitionObj;
-                Integer partition = partitionStruct.getInt(PARTITION_KEY_NAME);
-                Errors error = Errors.forCode(partitionStruct.getShort(ERROR_CODE_KEY_NAME));
-                errors.put(new TopicPartition(topic, partition), error);
+        Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
+
+        Object[] responseArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
+        for (Object responseObj : responseArray) {
+            Struct responseStruct = (Struct) responseObj;
+
+            long pid = responseStruct.getLong(PID_KEY_NAME);
+
+            Map<TopicPartition, Errors> errorPerPartition = new HashMap<>();
+            Object[] topicPartitionsArray = responseStruct.getArray(TOPIC_PARTITIONS_KEY_NAME);
+            for (Object topicPartitionObj : topicPartitionsArray) {
+                Struct topicPartitionStruct = (Struct) topicPartitionObj;
+                String topic = topicPartitionStruct.getString(TOPIC_KEY_NAME);
+                for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
+                    Struct partitionStruct = (Struct) partitionObj;
+                    Integer partition = partitionStruct.getInt(PARTITION_KEY_NAME);
+                    Errors error = Errors.forCode(partitionStruct.getShort(ERROR_CODE_KEY_NAME));
+                    errorPerPartition.put(new TopicPartition(topic, partition), error);
+                }
             }
+            errors.put(pid, errorPerPartition);
         }
+
         this.errors = errors;
     }
 
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKER.responseSchema(version));
-        Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupDataByTopic(errors);
-        Object[] partitionsArray = new Object[mappedPartitions.size()];
-        int i = 0;
-        for (Map.Entry<String, Map<Integer, Errors>> topicAndPartitions : mappedPartitions.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
-            topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
-            Map<Integer, Errors> partitionAndErrors = topicAndPartitions.getValue();
 
-            Object[] partitionAndErrorsArray = new Object[partitionAndErrors.size()];
-            int j = 0;
-            for (Map.Entry<Integer, Errors> partitionAndError : partitionAndErrors.entrySet()) {
-                Struct partitionAndErrorStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
-                partitionAndErrorStruct.set(PARTITION_KEY_NAME, partitionAndError.getKey());
-                partitionAndErrorStruct.set(ERROR_CODE_KEY_NAME, partitionAndError.getValue().code());
-                partitionAndErrorsArray[j++] = partitionAndErrorStruct;
+        Object[] responsesArray = new Object[errors.size()];
+        int k = 0;
+        for (Map.Entry<Long, Map<TopicPartition, Errors>> responseEntry : errors.entrySet()) {
+            Struct responseStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
+            responseStruct.set(PID_KEY_NAME, responseEntry.getKey());
+
+            Map<TopicPartition, Errors> partitionAndErrors = responseEntry.getValue();
+            Map<String, Map<Integer, Errors>> mappedPartitions = CollectionUtils.groupDataByTopic(partitionAndErrors);
+            Object[] partitionsArray = new Object[mappedPartitions.size()];
+            int i = 0;
+            for (Map.Entry<String, Map<Integer, Errors>> topicAndPartitions : mappedPartitions.entrySet()) {
+                Struct topicPartitionsStruct = responseStruct.instance(TOPIC_PARTITIONS_KEY_NAME);
+                topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
+                Map<Integer, Errors> partitionIdAndErrors = topicAndPartitions.getValue();
+
+                Object[] partitionAndErrorsArray = new Object[partitionIdAndErrors.size()];
+                int j = 0;
+                for (Map.Entry<Integer, Errors> partitionAndError : partitionIdAndErrors.entrySet()) {
+                    Struct partitionAndErrorStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
+                    partitionAndErrorStruct.set(PARTITION_KEY_NAME, partitionAndError.getKey());
+                    partitionAndErrorStruct.set(ERROR_CODE_KEY_NAME, partitionAndError.getValue().code());
+                    partitionAndErrorsArray[j++] = partitionAndErrorStruct;
+                }
+                topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionAndErrorsArray);
+                partitionsArray[i++] = topicPartitionsStruct;
             }
-            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionAndErrorsArray);
-            partitionsArray[i++] = topicPartitionsStruct;
+            responseStruct.set(TOPIC_PARTITIONS_KEY_NAME, partitionsArray);
+
+            responsesArray[k++] = responseStruct;
         }
 
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, partitionsArray);
+        struct.set(TXN_MARKER_ENTRY_KEY_NAME, responsesArray);
         return struct;
     }
 
-    public Map<TopicPartition, Errors> errors() {
-        return errors;
+    public Map<TopicPartition, Errors> errors(long pid) {
+        return errors.get(pid);
     }
 
     public static WriteTxnMarkerResponse parse(ByteBuffer buffer, short version) {

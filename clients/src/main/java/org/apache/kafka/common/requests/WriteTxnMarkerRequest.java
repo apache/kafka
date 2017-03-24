@@ -39,7 +39,7 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    public class TxnMarkerEntry {
+    public static class TxnMarkerEntry {
         private final long pid;
         private final short epoch;
         private final TransactionResult result;
@@ -134,40 +134,44 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
         Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKER.requestSchema(version()));
         struct.set(COORDINATOR_EPOCH_KEY_NAME, coordinatorEpoch);
 
-
         Object[] markersArray = new Object[markers.size()];
         int i = 0;
-        for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
-            topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
-            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, topicAndPartitions.getValue().toArray());
-            partitionsArray[i++] = topicPartitionsStruct;
+        for (TxnMarkerEntry entry : markers) {
+            Struct markerStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
+            markerStruct.set(PID_KEY_NAME, entry.pid);
+            markerStruct.set(EPOCH_KEY_NAME, entry.epoch);
+            markerStruct.set(TRANSACTION_RESULT_KEY_NAME, entry.result.id);
+
+            Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(entry.partitions);
+            Object[] partitionsArray = new Object[mappedPartitions.size()];
+            int j = 0;
+            for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {
+                Struct topicPartitionsStruct = markerStruct.instance(TOPIC_PARTITIONS_KEY_NAME);
+                topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
+                topicPartitionsStruct.set(PARTITIONS_KEY_NAME, topicAndPartitions.getValue().toArray());
+                partitionsArray[j++] = topicPartitionsStruct;
+            }
+            markerStruct.set(TOPIC_PARTITIONS_KEY_NAME, partitionsArray);
+            markersArray[i++] = markerStruct;
         }
+        struct.set(TXN_MARKER_ENTRY_KEY_NAME, markersArray);
 
-        struct.set(PID_KEY_NAME, pid);
-        struct.set(EPOCH_KEY_NAME, epoch);
-        struct.set(TRANSACTION_RESULT_KEY_NAME, result.id);
-
-        Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(partitions);
-        Object[] partitionsArray = new Object[mappedPartitions.size()];
-        int i = 0;
-        for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
-            topicPartitionsStruct.set(TOPIC_KEY_NAME, topicAndPartitions.getKey());
-            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, topicAndPartitions.getValue().toArray());
-            partitionsArray[i++] = topicPartitionsStruct;
-        }
-
-        struct.set(TOPIC_PARTITIONS_KEY_NAME, partitionsArray);
         return struct;
     }
 
     @Override
     public WriteTxnMarkerResponse getErrorResponse(Throwable e) {
         Errors error = Errors.forException(e);
-        Map<TopicPartition, Errors> errors = new HashMap<>(partitions.size());
-        for (TopicPartition partition : partitions)
-            errors.put(partition, error);
+
+        Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>(markers.size());
+        for (TxnMarkerEntry entry : markers) {
+            Map<TopicPartition, Errors> errorsPerPartition = new HashMap<>(entry.partitions.size());
+            for (TopicPartition partition : entry.partitions)
+                errorsPerPartition.put(partition, error);
+
+            errors.put(entry.pid, errorsPerPartition);
+        }
+
         return new WriteTxnMarkerResponse(errors);
     }
 

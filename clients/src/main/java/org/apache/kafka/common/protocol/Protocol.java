@@ -1285,7 +1285,7 @@ public class Protocol {
     public static final Schema[] END_TXN_REQUEST = new Schema[] {END_TXN_REQUEST_V0};
     public static final Schema[] END_TXN_RESPONSE = new Schema[] {END_TXN_RESPONSE_V0};
 
-    public static final Schema TXN_MARKER_ENTRY = new Schema(
+    public static final Schema TXN_MARKER_ENTRY_V0 = new Schema(
             new Field("pid",
                     INT64,
                     "Current PID in use by the transactional id"),
@@ -1307,7 +1307,7 @@ public class Protocol {
                     INT32,
                     "Epoch associated with the transaction state partition hosted by this transaction coordinator"),
             new Field("transaction_markers",
-                    new ArrayOf(TXN_MARKER_ENTRY),
+                    new ArrayOf(TXN_MARKER_ENTRY_V0),
                     "The transaction markers to be written")
     );
 
@@ -1316,12 +1316,19 @@ public class Protocol {
             new Field("error_code", INT16)
     );
 
-    public static final Schema WRITE_TXN_MARKER_RESPONSE_V0 = new Schema(
+    public static final Schema WRITE_TXN_MARKER_ENTRY_RESPONSE_V0 = new Schema(
+            new Field("pid",
+                    INT64,
+                    "Current PID in use by the transactional id"),
             new Field("topic_partitions",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(WRITE_TXN_MARKER_PARTITION_ERROR_RESPONSE_V0)))),
                     "Errors per partition from writing markers")
+    );
+
+    public static final Schema WRITE_TXN_MARKER_RESPONSE_V0 = new Schema(
+            new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKER_ENTRY_RESPONSE_V0),"Errors per partition from writing markers")
     );
 
     public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKER_REQUEST_V0};
