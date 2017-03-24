@@ -324,6 +324,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
       val log = new Log(dir = dir,
                         LogConfig(logConfigProperties(propertyOverrides, maxMessageSize, minCleanableDirtyRatio)),
+                        logStartOffset = 0L,
                         recoveryPoint = 0L,
                         scheduler = time.scheduler,
                         time = time)
