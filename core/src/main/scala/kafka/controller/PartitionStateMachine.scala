@@ -266,42 +266,52 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * OfflinePartition state.
    * @param topicAndPartition   The topic/partition whose leader and isr path is to be initialized
    */
-  private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) {
-    val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
+  private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) = {
+    val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition).toList
     val liveAssignedReplicas = replicaAssignment.filter(r => controllerContext.liveBrokerIds.contains(r))
-    liveAssignedReplicas.size match {
-      case 0 =>
-        val failMsg = ("encountered error during state change of partition %s from New to Online, assigned replicas are [%s], " +
-                       "live brokers are [%s]. No assigned replica is alive.")
-                         .format(topicAndPartition, replicaAssignment.mkString(","), controllerContext.liveBrokerIds)
-        stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
+    liveAssignedReplicas.headOption match {
+      case None =>
+        val failMsg = s"encountered error during state change of partition $topicAndPartition from New to Online," +
+          s"assigned replicas are [${replicaAssignment.mkString(",")}], live brokers are " +
+          s"[${controllerContext.liveBrokerIds}]. No assigned replica is alive."
+
+        stateChangeLogger.error(s"Controller $controllerId epoch ${controller.epoch}.\n $failMsg")
         throw new StateChangeFailedException(failMsg)
-      case _ =>
-        debug("Live assigned replicas for partition %s are: [%s]".format(topicAndPartition, liveAssignedReplicas))
-        // make the first replica in the list of assigned replicas, the leader
-        val leader = liveAssignedReplicas.head
-        val leaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, liveAssignedReplicas.toList),
-          controller.epoch)
-        debug("Initializing leader and isr for partition %s to %s".format(topicAndPartition, leaderIsrAndControllerEpoch))
+
+      // leader is the first replica in the list of assigned replicas
+      case Some(head) =>
+        debug(s"Live assigned replicas for partition $topicAndPartition are: [$liveAssignedReplicas]")
+        val leaderAndIsr = LeaderAndIsr(head, liveAssignedReplicas)
+        val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controller.epoch)
+        debug(s"Initializing leader and isr for partition $topicAndPartition to $leaderAndIsr")
+
         try {
           zkUtils.createPersistentPath(
             getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
-            zkUtils.leaderAndIsrZkData(leaderIsrAndControllerEpoch.leaderAndIsr, controller.epoch))
+            zkUtils.leaderAndIsrZkData(leaderAndIsr, controller.epoch)
+          )
           // NOTE: the above write can fail only if the current controller lost its zk session and the new controller
           // took over and initialized this partition. This can happen if the current controller went into a long
           // GC pause
           controllerContext.partitionLeadershipInfo.put(topicAndPartition, leaderIsrAndControllerEpoch)
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topicAndPartition.topic,
-            topicAndPartition.partition, leaderIsrAndControllerEpoch, replicaAssignment)
+          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+            liveAssignedReplicas,
+            topicAndPartition.topic,
+            topicAndPartition.partition,
+            leaderIsrAndControllerEpoch,
+            replicaAssignment
+          )
         } catch {
           case _: ZkNodeExistsException =>
             // read the controller epoch
             val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topicAndPartition.topic,
               topicAndPartition.partition).get
-            val failMsg = ("encountered error while changing partition %s's state from New to Online since LeaderAndIsr path already " +
-                           "exists with value %s and controller epoch %d")
-                             .format(topicAndPartition, leaderIsrAndEpoch.leaderAndIsr.toString(), leaderIsrAndEpoch.controllerEpoch)
-            stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
+
+            val failMsg = s"encountered error while changing partition $topicAndPartition's state from New to Online " +
+              s"since LeaderAndIsr path already exists with value ${leaderIsrAndEpoch.leaderAndIsr} and controller " +
+              s"epoch ${leaderIsrAndEpoch.controllerEpoch}"
+
+            stateChangeLogger.error(s"Controller $controllerId epoch ${controller.epoch}.\n $failMsg")
             throw new StateChangeFailedException(failMsg)
         }
     }
@@ -339,12 +349,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
         val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
           leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion)
-        newLeaderAndIsr = leaderAndIsr
-        newLeaderAndIsr.zkVersion = newVersion
+        newLeaderAndIsr = leaderAndIsr.newZkVersion(newVersion)
         zookeeperPathUpdateSucceeded = updateSucceeded
         replicasForThisPartition = replicas
       }
-      val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
+      val newLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
       // update the leader cache
       controllerContext.partitionLeadershipInfo.put(TopicAndPartition(topic, partition), newLeaderIsrAndControllerEpoch)
       stateChangeLogger.trace("Controller %d epoch %d elected leader %d for Offline partition %s"
