@@ -402,14 +402,11 @@ public class Sender implements Runnable {
                 else
                     exception = error.exception();
 
-                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionState.pidAndEpoch().producerId) {
-                    // Reset the transactional state and get a new pid, since we can't recover from an out of order
-                    // sequence error.
+                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionState.pidAndEpoch().producerId)
                     log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
                                     "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
                             correlationId, batch.topicPartition, response.baseOffset);
-                    transactionState.reset();
-                }
+
 
                 // tell the user the result of their request
                 failBatch(batch, response, exception);
@@ -448,6 +445,12 @@ public class Sender implements Runnable {
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
+        if (transactionState != null && batch.producerId() == transactionState.pidAndEpoch().producerId) {
+            // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
+            // about the previously committed message. Note that this will discard the producer id and sequence
+            // numbers for all existing partitions.
+            transactionState.reset();
+        }
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }

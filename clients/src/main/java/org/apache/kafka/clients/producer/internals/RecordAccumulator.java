@@ -440,7 +440,12 @@ public final class RecordAccumulator {
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
-                                        if (pidAndEpoch != null) {
+                                        if (pidAndEpoch != null && !batch.inRetry()) {
+                                            // If the batch is in retry, then we should not change the pid and
+                                            // sequence number, since this may introduce duplicates. In particular,
+                                            // the previous attempt may actually have been accepted, and if we change
+                                            // the pid and sequence here, this attempt will also be accepted, causing
+                                            // a duplicate.
                                             int sequenceNumber = transactionState.sequenceNumber(batch.topicPartition);
                                             log.debug("Dest: {} : pid: {}, epoch: {}, Assigning sequence for {}: {}",
                                                     node, pidAndEpoch.producerId, pidAndEpoch.epoch,
