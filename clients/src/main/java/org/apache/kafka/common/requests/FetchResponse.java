@@ -86,6 +86,25 @@ public class FetchResponse extends AbstractResponse {
         }
 
         @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+
+            AbortedTransaction that = (AbortedTransaction) o;
+
+            return pid == that.pid && firstOffset == that.firstOffset;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = (int) (pid ^ (pid >>> 32));
+            result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+            return result;
+        }
+
+        @Override
         public String toString() {
             return "(pid=" + pid + ", firstOffset=" + firstOffset + ")";
         }
@@ -108,6 +127,32 @@ public class FetchResponse extends AbstractResponse {
             this.lastStableOffset = lastStableOffset;
             this.abortedTransactions = abortedTransactions;
             this.records = records;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+
+            PartitionData that = (PartitionData) o;
+
+            return error == that.error &&
+                    highWatermark == that.highWatermark &&
+                    lastStableOffset == that.lastStableOffset &&
+                    (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
+                    (records == null ? that.records == null : records.equals(that.records));
+        }
+
+        @Override
+        public int hashCode() {
+            int result = error != null ? error.hashCode() : 0;
+            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
+            result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
+            result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
+            result = 31 * result + (records != null ? records.hashCode() : 0);
+            return result;
         }
 
         @Override
@@ -144,14 +189,14 @@ public class FetchResponse extends AbstractResponse {
                 Errors error = Errors.forCode(partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME));
                 long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
                 long lastStableOffset = INVALID_LSO;
-                if (partitionResponse.hasField(LAST_STABLE_OFFSET_KEY_NAME))
-                    lastStableOffset = partitionResponse.getLong(LAST_STABLE_OFFSET_KEY_NAME);
+                if (partitionResponseHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME))
+                    lastStableOffset = partitionResponseHeader.getLong(LAST_STABLE_OFFSET_KEY_NAME);
 
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
 
-                List<AbortedTransaction> abortedTransactions = Collections.emptyList();
-                if (partitionResponse.hasField(ABORTED_TRANSACTIONS_KEY_NAME)) {
-                    Object[] abortedTransactionsArray = partitionResponse.getArray(ABORTED_TRANSACTIONS_KEY_NAME);
+                List<AbortedTransaction> abortedTransactions = null;
+                if (partitionResponseHeader.hasField(ABORTED_TRANSACTIONS_KEY_NAME)) {
+                    Object[] abortedTransactionsArray = partitionResponseHeader.getArray(ABORTED_TRANSACTIONS_KEY_NAME);
                     if (abortedTransactionsArray != null) {
                         abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
                         for (Object abortedTransactionObj : abortedTransactionsArray) {
