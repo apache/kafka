@@ -129,15 +129,15 @@ class ConsumerEventHandler(object):
             return None
 
 
-"""
-This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
-system testing. 
-
-NOTE: this class should be treated as a PUBLIC API. Downstream users use
-this service both directly and through class extension, so care must be 
-taken to ensure compatibility.
-"""
 class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
+    """This service wraps org.apache.kafka.tools.VerifiableConsumer for use in
+    system testing. 
+    
+    NOTE: this class should be treated as a PUBLIC API. Downstream users use
+    this service both directly and through class extension, so care must be 
+    taken to ensure compatibility.
+    """
+
     PERSISTENT_ROOT = "/mnt/verifiable_consumer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_consumer.stderr")
