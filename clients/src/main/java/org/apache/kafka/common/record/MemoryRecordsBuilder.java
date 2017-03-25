@@ -194,13 +194,11 @@ public class MemoryRecordsBuilder {
     }
 
     public void setProducerState(long pid, short epoch, int baseSequence) {
-        if (isClosed() && (this.producerId != pid || this.producerEpoch != epoch || this.baseSequence != baseSequence)) {
+        if (isClosed()) {
             // Sequence numbers are assigned when the batch is closed while the accumulator is being drained.
             // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
-            // be re queued. When it is drained again, we expect it to receive the same sequence number as before.
-            // If this does not happen, it means that some other batch was written in the intervening period, which
-            // should not happen with a correctly configured producer (in particular for a producer which has
-            // max.in.light.requests == 1).
+            // be re queued. In this case, we should not attempt to set the state again, since changing the pid and sequence
+            // once a batch has been sent to the broker risks introducing duplicates.
             throw new IllegalStateException("Attempting to close the same batch with a different base sequence. "
                     + "Being in this situation indicates data corruption is afoot.");
         }

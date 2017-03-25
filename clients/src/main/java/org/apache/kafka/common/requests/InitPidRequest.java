@@ -31,6 +31,8 @@ public class InitPidRequest extends AbstractRequest {
         private final String transactionalId;
         public Builder(String transactionalId) {
             super(ApiKeys.INIT_PRODUCER_ID);
+            if (transactionalId != null && transactionalId.isEmpty())
+                throw new IllegalArgumentException("Must set either a null or a non-empty transactional id.");
             this.transactionalId = transactionalId;
         }
 
