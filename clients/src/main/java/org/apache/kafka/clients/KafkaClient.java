@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.clients;
 
-import java.io.Closeable;
-import java.util.List;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
+
+import java.io.Closeable;
+import java.util.List;
 
 /**
  * The interface for {@link NetworkClient}

@@ -1445,10 +1445,18 @@ public class KafkaConsumerTest {
             TopicPartition partition = fetchEntry.getKey();
             long fetchOffset = fetchEntry.getValue().offset;
             int fetchCount = fetchEntry.getValue().count;
-            MemoryRecordsBuilder records = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, fetchOffset);
-            for (int i = 0; i < fetchCount; i++)
-                records.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE, 0, records.build()));
+            final MemoryRecords records;
+            if (fetchCount == 0) {
+                records = MemoryRecords.EMPTY;
+            } else {
+                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                        TimestampType.CREATE_TIME, fetchOffset);
+                for (int i = 0; i < fetchCount; i++)
+                    builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
+                records = builder.build();
+            }
+            tpResponses.put(partition, new FetchResponse.PartitionData(Errors.NONE, 0, FetchResponse.INVALID_LSO,
+                    null, records));
         }
         return new FetchResponse(tpResponses, 0);
     }

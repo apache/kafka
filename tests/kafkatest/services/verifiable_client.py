@@ -228,7 +228,7 @@ class VerifiableClientJava (VerifiableClientMixin):
         """
         super(VerifiableClientJava, self).__init__()
         self.parent = parent
-        self.java_class_name = self.parent.__class__.__name__
+        self.java_class_name = parent.java_class_name()
         self.conf = conf
 
     def exec_cmd (self, node):

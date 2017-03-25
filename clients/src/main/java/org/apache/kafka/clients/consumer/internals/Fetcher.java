@@ -45,7 +45,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.LogEntry;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
@@ -769,21 +769,34 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 boolean skippedRecords = false;
-                for (LogEntry logEntry : partition.records.deepEntries()) {
-                    // Skip the messages earlier than current position.
-                    if (logEntry.offset() >= position) {
-                        parsed.add(parseRecord(tp, logEntry));
-                        bytes += logEntry.sizeInBytes();
-                    } else
-                        skippedRecords = true;
+                for (RecordBatch batch : partition.records.batches()) {
+                    if (this.checkCrcs && batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+                        try {
+                            batch.ensureValid();
+                        } catch (InvalidRecordException e) {
+                            throw new KafkaException("Record batch for partition " + partition + " at offset " +
+                                    batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                        }
+                    }
+
+                    for (Record record : batch) {
+                        // control records should not be returned to the user. also skip anything out of range
+                        if (record.isControlRecord() || record.offset() < position) {
+                            skippedRecords = true;
+                        } else {
+                            parsed.add(parseRecord(tp, batch, record));
+                            bytes += record.sizeInBytes();
+                        }
+                    }
                 }
 
                 recordsCount = parsed.size();
 
-                log.trace("Adding fetched record for partition {} with offset {} to buffered record list", tp, position);
+                log.trace("Adding {} fetched record(s) for partition {} with offset {} to buffered record list",
+                        parsed.size(), tp, position);
                 parsedRecords = new PartitionRecords<>(fetchOffset, tp, parsed);
 
-                if (parsed.isEmpty() && !skippedRecords && (partition.records.sizeInBytes() > 0)) {
+                if (parsed.isEmpty() && !skippedRecords && partition.records.sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
                         // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
                         Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
@@ -842,25 +855,22 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         return parsedRecords;
     }
 
-    /**
-     * Parse the record entry, deserializing the key / value fields if necessary
-     */
-    private ConsumerRecord<K, V> parseRecord(TopicPartition partition, LogEntry logEntry) {
-        Record record = logEntry.record();
-
+    private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
+                                             RecordBatch batch,
+                                             Record record) {
         if (this.checkCrcs) {
             try {
                 record.ensureValid();
             } catch (InvalidRecordException e) {
-                throw new KafkaException("Record for partition " + partition + " at offset " + logEntry.offset()
+                throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
                         + " is invalid, cause: " + e.getMessage());
             }
         }
 
         try {
-            long offset = logEntry.offset();
+            long offset = record.offset();
             long timestamp = record.timestamp();
-            TimestampType timestampType = record.timestampType();
+            TimestampType timestampType = batch.timestampType();
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
             K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), keyByteArray);
@@ -875,7 +885,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                                         key, value);
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition +
-                    " at offset " + logEntry.offset(), e);
+                    " at offset " + record.offset(), e);
         }
     }
 

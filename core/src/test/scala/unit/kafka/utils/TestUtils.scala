@@ -312,10 +312,28 @@ object TestUtils extends Logging {
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
-                       timestamp: Long = Record.NO_TIMESTAMP,
-                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE) = {
-    val record = Record.create(magicValue, timestamp, key, value)
-    MemoryRecords.withRecords(codec, record)
+                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+    records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
+  }
+
+  def recordsWithValues(magicValue: Byte,
+                        codec: CompressionType,
+                        values: Array[Byte]*): MemoryRecords = {
+    records(values.map(value => new SimpleRecord(value)), magicValue, codec)
+  }
+
+  def records(records: Iterable[SimpleRecord],
+              magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+              codec: CompressionType = CompressionType.NONE,
+              pid: Long = RecordBatch.NO_PRODUCER_ID,
+              epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+              sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
+      System.currentTimeMillis, pid, epoch, sequence)
+    records.foreach(builder.append)
+    builder.build()
   }
 
   /**
@@ -1022,7 +1040,7 @@ object TestUtils extends Logging {
           var i = 0
           while ((shouldGetAllMessages && iterator.hasNext()) || (i < nMessagesPerThread)) {
             assertTrue(iterator.hasNext)
-            val message = iterator.next.message // will throw a timeout exception if the message isn't there
+            val message = iterator.next().message // will throw a timeout exception if the message isn't there
             messages ::= message
             debug("received message: " + message)
             i += 1

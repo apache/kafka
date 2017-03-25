@@ -98,7 +98,7 @@
     <module name="MethodLength"/>
     <module name="ParameterNumber">
       <!-- default is 8 -->
-      <property name="max" value="10"/>
+      <property name="max" value="12"/>
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->

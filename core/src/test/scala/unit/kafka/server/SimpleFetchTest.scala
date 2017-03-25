@@ -19,7 +19,6 @@ package kafka.server
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
-import kafka.common.TopicAndPartition
 import kafka.log.Log
 import kafka.server.QuotaFactory.UnboundedQuota
 import org.apache.kafka.common.metrics.Metrics
@@ -29,7 +28,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
 import org.easymock.EasyMock
 import org.junit.Assert._
 
@@ -53,8 +52,8 @@ class SimpleFetchTest {
   val partitionHW = 5
 
   val fetchSize = 100
-  val messagesToHW = Record.create("messageToHW".getBytes())
-  val messagesToLEO = Record.create("messageToLEO".getBytes())
+  val recordToHW = new SimpleRecord("recordToHW".getBytes())
+  val recordToLEO = new SimpleRecord("recordToLEO".getBytes())
 
   val topic = "test-topic"
   val partitionId = 0
@@ -81,12 +80,12 @@ class SimpleFetchTest {
     EasyMock.expect(log.read(0, fetchSize, Some(partitionHW), true)).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(messagesToHW)
+        MemoryRecords.withRecords(CompressionType.NONE, recordToHW)
       )).anyTimes()
     EasyMock.expect(log.read(0, fetchSize, None, true)).andReturn(
       FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        MemoryRecords.withRecords(messagesToLEO)
+        MemoryRecords.withRecords(CompressionType.NONE, recordToLEO)
       )).anyTimes()
     EasyMock.replay(log)
 
@@ -149,24 +148,30 @@ class SimpleFetchTest {
     val initialTopicCount = BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count()
     val initialAllTopicsCount = BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count()
 
-    assertEquals("Reading committed data should return messages only up to high watermark", messagesToHW,
-      replicaManager.readFromLocalLog(
-        replicaId = Request.OrdinaryConsumerId,
-        fetchOnlyFromLeader = true,
-        readOnlyCommitted = true,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        readPartitionInfo = fetchInfo,
-        quota = UnboundedQuota).find(_._1 == topicPartition).get._2.info.records.shallowEntries.iterator.next().record)
-    assertEquals("Reading any data can return messages up to the end of the log", messagesToLEO,
-      replicaManager.readFromLocalLog(
-        replicaId = Request.OrdinaryConsumerId,
-        fetchOnlyFromLeader = true,
-        readOnlyCommitted = false,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        readPartitionInfo = fetchInfo,
-        quota = UnboundedQuota).find(_._1 == topicPartition).get._2.info.records.shallowEntries.iterator.next().record)
+    val readCommittedRecords = replicaManager.readFromLocalLog(
+      replicaId = Request.OrdinaryConsumerId,
+      fetchOnlyFromLeader = true,
+      readOnlyCommitted = true,
+      fetchMaxBytes = Int.MaxValue,
+      hardMaxBytesLimit = false,
+      readPartitionInfo = fetchInfo,
+      quota = UnboundedQuota).find(_._1 == topicPartition)
+    val firstReadRecord = readCommittedRecords.get._2.info.records.records.iterator.next()
+    assertEquals("Reading committed data should return messages only up to high watermark", recordToHW,
+      new SimpleRecord(firstReadRecord))
+
+    val readAllRecords = replicaManager.readFromLocalLog(
+      replicaId = Request.OrdinaryConsumerId,
+      fetchOnlyFromLeader = true,
+      readOnlyCommitted = false,
+      fetchMaxBytes = Int.MaxValue,
+      hardMaxBytesLimit = false,
+      readPartitionInfo = fetchInfo,
+      quota = UnboundedQuota).find(_._1 == topicPartition)
+
+    val firstRecord = readAllRecords.get._2.info.records.records.iterator.next()
+    assertEquals("Reading any data can return messages up to the end of the log", recordToLEO,
+      new SimpleRecord(firstRecord))
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.count())

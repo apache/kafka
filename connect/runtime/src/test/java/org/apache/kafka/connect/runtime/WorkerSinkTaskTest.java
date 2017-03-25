@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -533,7 +533,7 @@ public class WorkerSinkTaskTest {
     @Test
     public void testMissingTimestampPropagation() throws Exception {
         expectInitializeTask();
-        expectConsumerPoll(1, Record.NO_TIMESTAMP, TimestampType.CREATE_TIME);
+        expectConsumerPoll(1, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME);
         expectConversionAndTransformation(1);
 
         Capture<Collection<SinkRecord>> records = EasyMock.newCapture(CaptureType.ALL);
@@ -662,7 +662,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectConsumerPoll(final int numMessages) {
-        expectConsumerPoll(numMessages, Record.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
+        expectConsumerPoll(numMessages, RecordBatch.NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE);
     }
 
     private void expectConsumerPoll(final int numMessages, final long timestamp, final TimestampType timestampType) {

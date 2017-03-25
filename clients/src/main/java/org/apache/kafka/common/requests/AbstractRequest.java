@@ -46,6 +46,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             return desiredVersion == null ? apiKey.latestVersion() : desiredVersion;
         }
 
+        public Short desiredVersion() {
+            return desiredVersion;
+        }
+
         public T build() {
             return build(desiredOrLatestVersion());
         }

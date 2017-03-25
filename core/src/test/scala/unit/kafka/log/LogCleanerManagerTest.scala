@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{MemoryRecords, Record}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -100,7 +100,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     while(log.numberOfSegments < 8)
-      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = time.milliseconds))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()))
 
     val topicPartition = new TopicPartition("log", 0)
     val lastClean = Map(topicPartition -> 0L)
@@ -123,7 +123,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val t0 = time.milliseconds
     while(log.numberOfSegments < 4)
-      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t0))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0))
 
     val activeSegAtT0 = log.activeSegment
 
@@ -131,7 +131,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val t1 = time.milliseconds
 
     while (log.numberOfSegments < 8)
-      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t1))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1))
 
     val topicPartition = new TopicPartition("log", 0)
     val lastClean = Map(topicPartition -> 0L)
@@ -155,7 +155,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val t0 = time.milliseconds
     while (log.numberOfSegments < 8)
-      log.append(logEntries(log.logEndOffset.toInt, log.logEndOffset.toInt, timestamp = t0))
+      log.append(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0))
 
     time.sleep(compactionLag + 1)
 
@@ -192,7 +192,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
-  private def logEntries(key: Int, value: Int, timestamp: Long) =
-    MemoryRecords.withRecords(Record.create(timestamp, key.toString.getBytes, value.toString.getBytes))
+  private def records(key: Int, value: Int, timestamp: Long) =
+    MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
 
 }

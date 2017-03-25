@@ -21,6 +21,9 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.InvalidRecordException;
+import org.apache.kafka.common.record.MutableRecordBatch;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -29,10 +32,12 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 public class ProduceRequest extends AbstractRequest {
+    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
     private static final String ACKS_KEY_NAME = "acks";
     private static final String TIMEOUT_KEY_NAME = "timeout";
     private static final String TOPIC_DATA_KEY_NAME = "topic_data";
@@ -46,12 +51,17 @@ public class ProduceRequest extends AbstractRequest {
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
+        private final byte magic;
         private final short acks;
         private final int timeout;
         private final Map<TopicPartition, MemoryRecords> partitionRecords;
 
-        public Builder(short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
-            super(ApiKeys.PRODUCE);
+        public Builder(byte magic,
+                       short acks,
+                       int timeout,
+                       Map<TopicPartition, MemoryRecords> partitionRecords) {
+            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
+            this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
             this.partitionRecords = partitionRecords;
@@ -69,6 +79,7 @@ public class ProduceRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=ProduceRequest")
+                    .append(", magic=").append(magic)
                     .append(", acks=").append(acks)
                     .append(", timeout=").append(timeout)
                     .append(", partitionRecords=(").append(Utils.mkString(partitionRecords))
@@ -79,6 +90,7 @@ public class ProduceRequest extends AbstractRequest {
 
     private final short acks;
     private final int timeout;
+    private final String transactionalId;
 
     private final Map<TopicPartition, Integer> partitionSizes;
 
@@ -91,8 +103,14 @@ public class ProduceRequest extends AbstractRequest {
         super(version);
         this.acks = acks;
         this.timeout = timeout;
+
+        // TODO: Include transactional id in constructor once transactions are supported
+        this.transactionalId = null;
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
+
+        for (MemoryRecords records : partitionRecords.values())
+            validateRecords(version, records);
     }
 
     private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
@@ -112,12 +130,36 @@ public class ProduceRequest extends AbstractRequest {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
                 MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
+                validateRecords(version, records);
                 partitionRecords.put(new TopicPartition(topic, partition), records);
             }
         }
         partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
+        transactionalId = struct.hasField(TRANSACTIONAL_ID_KEY_NAME) ? struct.getString(TRANSACTIONAL_ID_KEY_NAME) : null;
+    }
+
+    private void validateRecords(short version, MemoryRecords records) {
+        if (version >= 3) {
+            Iterator<MutableRecordBatch> iterator = records.batches().iterator();
+            if (!iterator.hasNext())
+                throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
+                        "one record batch");
+
+            MutableRecordBatch entry = iterator.next();
+            if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                        "contain record batches with magic version 2");
+
+            if (iterator.hasNext())
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                        "contain exactly one record batch");
+        }
+
+        // Note that we do not do similar validation for older versions to ensure compatibility with
+        // clients which send the wrong magic version in the wrong version of the produce request. The broker
+        // did not do this validation before, so we maintain that behavior here.
     }
 
     /**
@@ -127,16 +169,21 @@ public class ProduceRequest extends AbstractRequest {
     public Struct toStruct() {
         // Store it in a local variable to protect against concurrent updates
         Map<TopicPartition, MemoryRecords> partitionRecords = partitionRecordsOrFail();
-        Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version()));
+        short version = version();
+        Struct struct = new Struct(ApiKeys.PRODUCE.requestSchema(version));
         Map<String, Map<Integer, MemoryRecords>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
+
+        if (struct.hasField(TRANSACTIONAL_ID_KEY_NAME))
+            struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
+
         List<Struct> topicDatas = new ArrayList<>(recordsByTopic.size());
-        for (Map.Entry<String, Map<Integer, MemoryRecords>> entry : recordsByTopic.entrySet()) {
+        for (Map.Entry<String, Map<Integer, MemoryRecords>> topicEntry : recordsByTopic.entrySet()) {
             Struct topicData = struct.instance(TOPIC_DATA_KEY_NAME);
-            topicData.set(TOPIC_KEY_NAME, entry.getKey());
+            topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
             List<Struct> partitionArray = new ArrayList<>();
-            for (Map.Entry<Integer, MemoryRecords> partitionEntry : entry.getValue().entrySet()) {
+            for (Map.Entry<Integer, MemoryRecords> partitionEntry : topicEntry.getValue().entrySet()) {
                 MemoryRecords records = partitionEntry.getValue();
                 Struct part = topicData.instance(PARTITION_DATA_KEY_NAME)
                         .set(PARTITION_KEY_NAME, partitionEntry.getKey())
@@ -183,6 +230,7 @@ public class ProduceRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
+            case 3:
                 return new ProduceResponse(responseMap);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -200,6 +248,10 @@ public class ProduceRequest extends AbstractRequest {
 
     public int timeout() {
         return timeout;
+    }
+
+    public String transactionalId() {
+        return transactionalId;
     }
 
     /**
@@ -221,4 +273,26 @@ public class ProduceRequest extends AbstractRequest {
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
         return new ProduceRequest(ApiKeys.PRODUCE.parseRequest(version, buffer), version);
     }
+
+    public static byte requiredMagicForVersion(short produceRequestVersion) {
+        switch (produceRequestVersion) {
+            case 0:
+            case 1:
+                return RecordBatch.MAGIC_VALUE_V0;
+
+            case 2:
+                return RecordBatch.MAGIC_VALUE_V1;
+
+            case 3:
+                return RecordBatch.MAGIC_VALUE_V2;
+
+            default:
+                // raise an exception if the version has not been explicitly added to this method.
+                // this ensures that we cannot accidentally use the wrong magic value if we forget
+                // to update this method on a bump to the produce request version.
+                throw new IllegalArgumentException("Magic value to use for produce request version " +
+                        produceRequestVersion + " is not known");
+        }
+    }
+
 }

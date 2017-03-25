@@ -91,7 +91,8 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
         override def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = throw new FatalExitError
         override protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] = {
           fetchRequest.underlying.fetchData.asScala.keys.toSeq.map { tp =>
-            (tp, new PartitionData(new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, -1, null)))
+            (tp, new PartitionData(new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE,
+              FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LSO, null, null)))
           }
         }
       }
