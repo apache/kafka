@@ -191,11 +191,7 @@ public class FetcherTest {
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp);
         assertEquals(2, records.size());
-
-        // TODO: currently the offset does not advance beyond the control record until a record
-        // with a larger offset is fetched. In the worst case, we may fetch the control record
-        // again after a rebalance, but that should be fine since we just discard it anyway
-        assertEquals(3L, subscriptions.position(tp).longValue());
+        assertEquals(4L, subscriptions.position(tp).longValue());
         for (ConsumerRecord<byte[], byte[]> record : records)
             assertArrayEquals("key".getBytes(), record.key());
     }
