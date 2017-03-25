@@ -35,6 +35,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -635,7 +636,7 @@ public class RequestResponseTest {
     }
 
     private StopReplicaRequest createStopReplicaRequest(boolean deletePartitions) {
-        Set<TopicPartition> partitions = new HashSet<>(asList(new TopicPartition("test", 0)));
+        Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
         return new StopReplicaRequest.Builder(0, 1, deletePartitions, partitions).build();
     }
 
@@ -650,10 +651,10 @@ public class RequestResponseTest {
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
-        HashSet<TopicPartition> topicPartitions = new HashSet<>(asList(
+        Set<TopicPartition> topicPartitions = Utils.mkSet(
                 new TopicPartition("test2", 5),
                 new TopicPartition("test1", 10)
-        ));
+        );
         return new ControlledShutdownResponse(Errors.NONE, topicPartitions);
     }
 
@@ -668,10 +669,10 @@ public class RequestResponseTest {
         partitionStates.put(new TopicPartition("topic20", 1),
                 new PartitionState(1, 0, 1, new ArrayList<>(isr), 2, new HashSet<>(replicas)));
 
-        Set<Node> leaders = new HashSet<>(asList(
+        Set<Node> leaders = Utils.mkSet(
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
-        ));
+        );
 
         return new LeaderAndIsrRequest.Builder(1, 10, partitionStates, leaders).build();
     }
@@ -709,10 +710,10 @@ public class RequestResponseTest {
                     new ListenerName("CLIENT")));
         }
 
-        Set<UpdateMetadataRequest.Broker> liveBrokers = new HashSet<>(asList(
+        Set<UpdateMetadataRequest.Broker> liveBrokers = Utils.mkSet(
                 new UpdateMetadataRequest.Broker(0, endPoints1, rack),
                 new UpdateMetadataRequest.Broker(1, endPoints2, rack)
-        ));
+        );
         return new UpdateMetadataRequest.Builder((short) version, 1, 10, partitionStates,
                 liveBrokers).build();
     }
@@ -768,8 +769,7 @@ public class RequestResponseTest {
     }
 
     private DeleteTopicsRequest createDeleteTopicsRequest() {
-        return new DeleteTopicsRequest.Builder(new HashSet<>(asList("my_t1", "my_t2")), 10000).
-                build();
+        return new DeleteTopicsRequest.Builder(Utils.mkSet("my_t1", "my_t2"), 10000).build();
     }
 
     private DeleteTopicsResponse createDeleteTopicsResponse() {
