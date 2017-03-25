@@ -19,7 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32;
+import org.apache.kafka.common.utils.Crc32C;
 
 import java.io.DataInputStream;
 import java.io.IOException;
@@ -270,7 +270,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     private long computeChecksum() {
-        return Crc32.crc32(buffer, ATTRIBUTES_OFFSET, buffer.limit() - ATTRIBUTES_OFFSET);
+        return Crc32C.compute(buffer, ATTRIBUTES_OFFSET, buffer.limit() - ATTRIBUTES_OFFSET);
     }
 
     private byte attributes() {
@@ -342,7 +342,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
-        long crc = Crc32.crc32(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
+        long crc = Crc32C.compute(buffer, ATTRIBUTES_OFFSET, sizeInBytes - ATTRIBUTES_OFFSET);
         buffer.putInt(position + CRC_OFFSET, (int) crc);
     }
 

@@ -17,7 +17,6 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.ByteBuffer;
-import java.util.zip.Checksum;
 
 /**
  * This class was taken from Hadoop org.apache.hadoop.util.PureJavaCrc32
@@ -31,7 +30,7 @@ import java.util.zip.Checksum;
  * 
  * @see java.util.zip.CRC32
  */
-public class Crc32 implements Checksum {
+public class Crc32 extends AbstractChecksum {
 
     /**
      * Compute the CRC32 of the byte array
@@ -89,20 +88,6 @@ public class Crc32 implements Checksum {
         crc = 0xffffffff;
     }
 
-    public void update(ByteBuffer buffer, int length) {
-        update(buffer, 0, length);
-    }
-
-    public void update(ByteBuffer buffer, int offset, int length) {
-        if (buffer.hasArray()) {
-            update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
-        } else {
-            int start = buffer.position() + offset;
-            for (int i = start; i < start + length; i++)
-                update(buffer.get(i));
-        }
-    }
-
     @Override
     public void update(byte[] b, int off, int len) {
         if (off < 0 || len < 0 || off > b.length - len)
@@ -155,27 +140,6 @@ public class Crc32 implements Checksum {
     @Override
     final public void update(int b) {
         crc = (crc >>> 8) ^ T[T8_0_START + ((crc ^ b) & 0xff)];
-    }
-
-    /**
-     * Update the CRC32 given an integer
-     */
-    final public void updateInt(int input) {
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
-    }
-
-    final public void updateLong(long input) {
-        update((byte) (input >> 56));
-        update((byte) (input >> 48));
-        update((byte) (input >> 40));
-        update((byte) (input >> 32));
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
     }
 
     /*

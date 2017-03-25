@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.AbstractChecksum;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32;
+import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
@@ -258,7 +259,7 @@ public class DefaultRecord implements Record {
     private static long computeChecksum(long timestamp,
                                         ByteBuffer key,
                                         ByteBuffer value) {
-        Crc32 crc = new Crc32();
+        AbstractChecksum crc = Crc32C.create();
         crc.updateLong(timestamp);
 
         if (key != null)

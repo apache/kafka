@@ -16,20 +16,20 @@
  */
 package org.apache.kafka.common.utils;
 
-public class Crc32Test extends AbstractChecksumTest {
+public class Crc32CTest extends AbstractChecksumTest {
 
     @Override
     protected AbstractChecksum createChecksum() {
-        return new Crc32();
+        return Crc32C.create();
     }
 
     @Override
     protected long computeChecksum(byte[] bytes) {
-        return Crc32.crc32(bytes);
+        return computeChecksum(bytes, 0, bytes.length);
     }
 
     @Override
     protected long computeChecksum(byte[] bytes, int offset, int length) {
-        return Crc32.crc32(bytes, offset, length);
+        return Crc32C.compute(bytes, offset, length);
     }
 }
