@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -55,6 +56,13 @@ public class SmokeTestClient extends SmokeTestUtil {
             }
         });
 
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                close();
+            }
+        }));
+
         thread = new Thread() {
             public void run() {
                 streams.start();
@@ -64,10 +72,14 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        streams.close();
+        streams.close(5, TimeUnit.SECONDS);
+        // do not remove these printouts since they are needed for health scripts
+        System.out.println("SMOKE-TEST-CLIENT-CLOSED");
         try {
             thread.join();
         } catch (Exception ex) {
+            // do not remove these printouts since they are needed for health scripts
+            System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
             // ignore
         }
     }
@@ -78,11 +90,15 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
+        //props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
         props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60 * 1000);
+        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
 
         KStreamBuilder builder = new KStreamBuilder();
 

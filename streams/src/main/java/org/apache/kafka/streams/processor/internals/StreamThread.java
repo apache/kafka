@@ -575,6 +575,10 @@ public class StreamThread extends Thread {
 
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
+                        if (task == null) {
+                            log.warn("No active tasks for partition " + partition);
+                            continue;
+                        }
                         numAddedRecords += task.addRecords(partition, records.records(partition));
                     }
                     streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);

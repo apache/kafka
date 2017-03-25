@@ -139,6 +139,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
         props.put(ProducerConfig.ACKS_CONFIG, "all");
         props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, 1);
+        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60 * 1000);
 
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
 
