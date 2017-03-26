@@ -128,14 +128,36 @@ public class ConfigDef {
      * @param displayName   the name suitable for display
      * @param dependents    the configurations that are dependents of this configuration
      * @param recommender   the recommender provides valid values given the parent configuration values
+     * @param deprecated    the config is deprecated and should not be used any longer
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
+                            String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender, boolean deprecated) {
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, deprecated));
+    }
+
+    /**
+     * Define a new configuration
+     * @param name          the name of the config parameter
+     * @param type          the type of the config
+     * @param defaultValue  the default value to use if this config isn't present
+     * @param validator     the validator to use in checking the correctness of the config
+     * @param importance    the importance of this config
+     * @param documentation the documentation string for the config
+     * @param group         the group this config belongs to
+     * @param orderInGroup  the order of this config in the group
+     * @param width         the width of the config
+     * @param displayName   the name suitable for display
+     * @param dependents    the configurations that are dependents of this configuration
+     * @param recommender   the recommender provides valid values given the parent configuration values
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false));
     }
-
     /**
+     *
      * Define a new configuration with no custom recommender
      * @param name          the name of the config parameter
      * @param type          the type of the config
@@ -900,11 +922,12 @@ public class ConfigDef {
         public final String displayName;
         public final List<String> dependents;
         public final Recommender recommender;
+        public final boolean deprecated;
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
-                         List<String> dependents, Recommender recommender) {
+                         List<String> dependents, Recommender recommender, boolean deprecated) {
             this.name = name;
             this.type = type;
             this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
@@ -919,6 +942,7 @@ public class ConfigDef {
             this.width = width;
             this.displayName = displayName;
             this.recommender = recommender;
+            this.deprecated = deprecated;
         }
 
         public boolean hasDefault() {
@@ -971,6 +995,9 @@ public class ConfigDef {
         }
         b.append("</tr>\n");
         for (ConfigKey key : configs) {
+            if (key.deprecated) {
+                continue;
+            }
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
@@ -991,6 +1018,9 @@ public class ConfigDef {
     public String toRst() {
         StringBuilder b = new StringBuilder();
         for (ConfigKey key : sortedConfigs()) {
+            if (key.deprecated) {
+                continue;
+            }
             getConfigKeyRst(key, b);
             b.append("\n");
         }
@@ -1006,6 +1036,9 @@ public class ConfigDef {
 
         String lastKeyGroupName = "";
         for (ConfigKey key : sortedConfigs()) {
+            if (key.deprecated) {
+                continue;
+            }
             if (key.group != null) {
                 if (!lastKeyGroupName.equalsIgnoreCase(key.group)) {
                     b.append(key.group).append("\n");
@@ -1114,7 +1147,8 @@ public class ConfigDef {
                     key.width,
                     key.displayName,
                     embeddedDependents(keyPrefix, key.dependents),
-                    embeddedRecommender(keyPrefix, key.recommender)
+                    embeddedRecommender(keyPrefix, key.recommender),
+                    key.deprecated
             ));
         }
     }
