@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils;
 
 import java.nio.ByteBuffer;
+import java.util.zip.Checksum;
 
 /**
  * This class was taken from Hadoop org.apache.hadoop.util.PureJavaCrc32
@@ -30,7 +31,7 @@ import java.nio.ByteBuffer;
  * 
  * @see java.util.zip.CRC32
  */
-public class Crc32 extends AbstractChecksum {
+public class Crc32 implements Checksum {
 
     /**
      * Compute the CRC32 of the byte array
@@ -66,7 +67,7 @@ public class Crc32 extends AbstractChecksum {
      */
     public static long crc32(ByteBuffer buffer, int offset, int size) {
         Crc32 crc = new Crc32();
-        crc.update(buffer, offset, size);
+        Checksums.update(crc, buffer, offset, size);
         return crc.getValue();
     }
 

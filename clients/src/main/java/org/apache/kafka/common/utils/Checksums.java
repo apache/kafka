@@ -19,41 +19,43 @@ package org.apache.kafka.common.utils;
 import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
-public abstract class AbstractChecksum implements Checksum {
+public final class Checksums {
 
-    public final void update(ByteBuffer buffer, int length) {
-        update(buffer, 0, length);
+    private Checksums() {
     }
 
-    public final void update(ByteBuffer buffer, int offset, int length) {
+    public static void update(Checksum checksum, ByteBuffer buffer, int length) {
+        update(checksum, buffer, 0, length);
+    }
+
+    public static void update(Checksum checksum, ByteBuffer buffer, int offset, int length) {
         if (buffer.hasArray()) {
-            update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
+            checksum.update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
         } else {
             int start = buffer.position() + offset;
             for (int i = start; i < start + length; i++)
-                update(buffer.get(i));
+                checksum.update(buffer.get(i));
         }
     }
 
     /**
      * Update the CRC32 given an integer
      */
-    public final void updateInt(int input) {
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
+    public static void updateInt(Checksum checksum, int input) {
+        checksum.update((byte) (input >> 24));
+        checksum.update((byte) (input >> 16));
+        checksum.update((byte) (input >> 8));
+        checksum.update((byte) input /* >> 0 */);
     }
 
-    public final void updateLong(long input) {
-        update((byte) (input >> 56));
-        update((byte) (input >> 48));
-        update((byte) (input >> 40));
-        update((byte) (input >> 32));
-        update((byte) (input >> 24));
-        update((byte) (input >> 16));
-        update((byte) (input >> 8));
-        update((byte) input /* >> 0 */);
+    public static void updateLong(Checksum checksum, long input) {
+        checksum.update((byte) (input >> 56));
+        checksum.update((byte) (input >> 48));
+        checksum.update((byte) (input >> 40));
+        checksum.update((byte) (input >> 32));
+        checksum.update((byte) (input >> 24));
+        checksum.update((byte) (input >> 16));
+        checksum.update((byte) (input >> 8));
+        checksum.update((byte) input /* >> 0 */);
     }
-
 }

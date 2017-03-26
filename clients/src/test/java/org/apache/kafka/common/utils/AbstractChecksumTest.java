@@ -19,12 +19,13 @@ package org.apache.kafka.common.utils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.zip.Checksum;
 
 import static org.junit.Assert.assertEquals;
 
 public abstract class AbstractChecksumTest {
 
-    protected abstract AbstractChecksum createChecksum();
+    protected abstract Checksum createChecksum();
 
     protected abstract long computeChecksum(byte[] bytes);
 
@@ -40,8 +41,8 @@ public abstract class AbstractChecksumTest {
     private void doTestUpdateByteBuffer(byte[] bytes, ByteBuffer buffer) {
         buffer.put(bytes);
         buffer.flip();
-        AbstractChecksum bufferCrc = createChecksum();
-        bufferCrc.update(buffer, buffer.remaining());
+        Checksum bufferCrc = createChecksum();
+        Checksums.update(bufferCrc, buffer, buffer.remaining());
         assertEquals(computeChecksum(bytes), bufferCrc.getValue());
         assertEquals(0, buffer.position());
     }
@@ -58,9 +59,9 @@ public abstract class AbstractChecksumTest {
         final byte[] bytes = "Any String you want".getBytes();
         final int len = bytes.length;
 
-        AbstractChecksum crc1 = createChecksum();
-        AbstractChecksum crc2 = createChecksum();
-        AbstractChecksum crc3 = createChecksum();
+        Checksum crc1 = createChecksum();
+        Checksum crc2 = createChecksum();
+        Checksum crc3 = createChecksum();
 
         crc1.update(bytes, 0, len);
         for (int i = 0; i < len; i++)
@@ -78,10 +79,10 @@ public abstract class AbstractChecksumTest {
         final ByteBuffer buffer = ByteBuffer.allocate(4);
         buffer.putInt(value);
 
-        AbstractChecksum crc1 = createChecksum();
-        AbstractChecksum crc2 = createChecksum();
+        Checksum crc1 = createChecksum();
+        Checksum crc2 = createChecksum();
 
-        crc1.updateInt(value);
+        Checksums.updateInt(crc1, value);
         crc2.update(buffer.array(), buffer.arrayOffset(), 4);
 
         assertEquals("Crc values should be the same", crc1.getValue(), crc2.getValue());
@@ -92,8 +93,8 @@ public abstract class AbstractChecksumTest {
         buffer.flip();
         buffer.position(offset);
 
-        AbstractChecksum bufferCrc = createChecksum();
-        bufferCrc.update(buffer, buffer.remaining());
+        Checksum bufferCrc = createChecksum();
+        Checksums.update(bufferCrc, buffer, buffer.remaining());
         assertEquals(computeChecksum(bytes, offset, buffer.remaining()), bufferCrc.getValue());
         assertEquals(offset, buffer.position());
     }

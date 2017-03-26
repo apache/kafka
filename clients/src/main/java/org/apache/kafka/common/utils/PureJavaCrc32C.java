@@ -20,6 +20,8 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.zip.Checksum;
+
 /**
  * This class was taken from Hadoop: org.apache.hadoop.util.PureJavaCrc32C.
  *
@@ -29,7 +31,7 @@ package org.apache.kafka.common.utils;
  */
 // The exact version that was retrieved from Hadoop:
 // https://github.com/apache/hadoop/blob/224de4f92c222a7b915e9c5d6bdd1a4a3fcbcf31/hadoop-common-project/hadoop-common/src/main/java/org/apache/hadoop/util/PureJavaCrc32C.java
-public class PureJavaCrc32C extends AbstractChecksum {
+public class PureJavaCrc32C implements Checksum {
 
     /** the current CRC value, bit-flipped */
     private int crc;

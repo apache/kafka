@@ -16,10 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.zip.Checksum;
+
 public class Crc32Test extends AbstractChecksumTest {
 
     @Override
-    protected AbstractChecksum createChecksum() {
+    protected Checksum createChecksum() {
         return new Crc32();
     }
 

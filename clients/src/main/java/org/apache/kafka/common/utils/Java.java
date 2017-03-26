@@ -16,22 +16,29 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.zip.Checksum;
+import java.util.StringTokenizer;
 
-public class Crc32CTest extends AbstractChecksumTest {
+public final class Java {
 
-    @Override
-    protected Checksum createChecksum() {
-        return Crc32C.create();
+    private Java() {
     }
 
-    @Override
-    protected long computeChecksum(byte[] bytes) {
-        return computeChecksum(bytes, 0, bytes.length);
+    public static final String JVM_SPEC_VERSION = System.getProperty("java.specification.version");
+
+    private static final int JVM_MAJOR_VERSION;
+    private static final int JVM_MINOR_VERSION;
+
+    static {
+        final StringTokenizer st = new StringTokenizer(JVM_SPEC_VERSION, ".");
+        JVM_MAJOR_VERSION = Integer.parseInt(st.nextToken());
+        if (st.hasMoreTokens()) {
+            JVM_MINOR_VERSION = Integer.parseInt(st.nextToken());
+        } else {
+            JVM_MINOR_VERSION = 0;
+        }
     }
 
-    @Override
-    protected long computeChecksum(byte[] bytes, int offset, int length) {
-        return Crc32C.compute(bytes, offset, length);
-    }
+    public static final boolean IS_JAVA9_COMPATIBLE = JVM_MAJOR_VERSION > 1 ||
+            (JVM_MAJOR_VERSION == 1 && JVM_MINOR_VERSION >= 9);
+
 }
