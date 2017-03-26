@@ -169,9 +169,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
+     * @return The number of records left in the buffer of this task's partition group
+     */
+    public int numBuffered() {
+        return partitionGroup.numBuffered();
+    }
+
+    /**
      * Process one record
      *
-     * @return number of records left in the buffer of this task's partition group after the processing is done
+     * @return number of records processed
      */
     @SuppressWarnings("unchecked")
     public int process() {
@@ -224,7 +231,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             processorContext.setCurrentNode(null);
         }
 
-        return partitionGroup.numBuffered();
+        return 1;
     }
 
     private void updateProcessorContext(final ProcessorRecordContext recordContext, final ProcessorNode currNode) {

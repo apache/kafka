@@ -591,25 +591,24 @@ public class StreamThread extends Thread {
                                      final long recordsProcessedBeforeCommit) {
 
         long totalProcessedEachRound;
-        long totalProcessedSinceLastCommit = 0;
+        long totalProcessedSinceLastMaybeCommit = 0;
         // Round-robin scheduling by taking one record from each task repeatedly
         // until no task has any records left
         do {
             totalProcessedEachRound = 0;
             for (StreamTask task : tasks.values()) {
-                int numBuffered = task.process();
                 // we processed one record,
                 // and more are buffered waiting for the next round
-                if (numBuffered > 0) {
+                if (task.process() > 0) {
                     totalProcessedEachRound++;
-                    totalProcessedSinceLastCommit++;
+                    totalProcessedSinceLastMaybeCommit++;
                 }
             }
             if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
-                totalProcessedSinceLastCommit >= recordsProcessedBeforeCommit) {
-                totalProcessedSinceLastCommit = 0;
+                totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
+                totalProcessedSinceLastMaybeCommit = 0;
                 long processLatency = computeLatency();
-                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastCommit,
+                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit,
                     timerStartedMs);
                 maybeCommit(this.timerStartedMs);
             }
@@ -622,7 +621,7 @@ public class StreamThread extends Thread {
                 commitOne(task);
         }
 
-        return totalProcessedSinceLastCommit;
+        return totalProcessedSinceLastMaybeCommit;
     }
 
     /**
