@@ -145,6 +145,7 @@ public class FetchResponse extends AbstractResponse {
             return error == that.error &&
                     highWatermark == that.highWatermark &&
                     lastStableOffset == that.lastStableOffset &&
+                    logStartOffset == that.logStartOffset &&
                     (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
                     (records == null ? that.records == null : records.equals(that.records));
         }
@@ -152,8 +153,9 @@ public class FetchResponse extends AbstractResponse {
         @Override
         public int hashCode() {
             int result = error != null ? error.hashCode() : 0;
-            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
             result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
+            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
+            result = 31 * result + (int) (logStartOffset ^ (logStartOffset >>> 32));
             result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
             result = 31 * result + (records != null ? records.hashCode() : 0);
             return result;
@@ -162,8 +164,9 @@ public class FetchResponse extends AbstractResponse {
         @Override
         public String toString() {
             return "(error=" + error + ", highWaterMark=" + highWatermark +
-                    ", lastStableOffset = " + lastStableOffset + ", " +
-                    "abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
+                    ", lastStableOffset = " + lastStableOffset +
+                    ", logStartOffset = " + logStartOffset +
+                    ", abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
         }
     }
 
