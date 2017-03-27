@@ -134,16 +134,18 @@ class StreamsBrokerBounceTest(Test):
         
         # Success is declared if all records are processed or if there are duplicates, but not if data is lost
         # We have set up the test so that data is not lost
-        output = node.account.ssh_capture("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
+        # Also check that streams didn't throw exceptions
+        output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+        for line in output_streams:
+            data["Client closed"] = line
+        
+        output = node.account.ssh_capture("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED|PROCESSED-LESS-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
         for line in output:
             data["Records Delivered"] = line
         output = node.account.ssh_capture("grep -E 'SUCCESS|FAILURE' %s" % self.driver.STDOUT_FILE, allow_fail=False)
         for line in output:
             data["Logic Success/Failure"] = line
             
-        # Also check that streams didn't throw exceptions
-        output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
-        
         
         return data
 
@@ -170,7 +172,6 @@ class StreamsBrokerBounceTest(Test):
 
         return self.collect_results()
 
-    @ignore
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
             num_failures=[2])

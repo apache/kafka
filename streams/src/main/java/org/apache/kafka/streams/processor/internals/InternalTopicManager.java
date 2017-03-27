@@ -55,15 +55,28 @@ public class InternalTopicManager {
      * If a topic exists already but has different number of partitions we fail and throw exception requesting user to reset the app before restarting again.
      */
     public void makeReady(final Map<InternalTopicConfig, Integer> topics) {
+        int actualReplicationFactor = replicationFactor;
         for (int i = 0; i < MAX_TOPIC_READY_TRY; i++) {
             try {
                 final MetadataResponse metadata = streamsKafkaClient.fetchMetadata();
                 final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
-                streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
+                if (metadata.brokers().size() > 0 && metadata.brokers().size() < replicationFactor) {
+                    log.warn("The number of available brokers {} is less than the desired replication " +
+                            "factor for streams internal topics {}. If running in production, consider " +
+                            "increasing the number of available brokers.",
+                        metadata.brokers().size(), replicationFactor);
+                    actualReplicationFactor = metadata.brokers().size();
+                }
+                streamsKafkaClient.createTopics(topicsToBeCreated, actualReplicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;
             } catch (StreamsException ex) {
                 log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
+            }
+            try {
+                Thread.sleep(1000L);
+            } catch (InterruptedException e) {
+                // ignore
             }
         }
         throw new StreamsException("Could not create internal topics.");

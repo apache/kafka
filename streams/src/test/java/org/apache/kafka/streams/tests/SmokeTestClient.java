@@ -40,6 +40,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     private final File stateDir;
     private KafkaStreams streams;
     private Thread thread;
+    private boolean uncaughtException = false;
 
     public SmokeTestClient(File stateDir, String kafka) {
         super();
@@ -52,6 +53,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
+                System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
+                uncaughtException = true;
                 e.printStackTrace();
             }
         });
@@ -74,7 +77,9 @@ public class SmokeTestClient extends SmokeTestUtil {
     public void close() {
         streams.close(5, TimeUnit.SECONDS);
         // do not remove these printouts since they are needed for health scripts
-        System.out.println("SMOKE-TEST-CLIENT-CLOSED");
+        if (!uncaughtException) {
+            System.out.println("SMOKE-TEST-CLIENT-CLOSED");
+        }
         try {
             thread.join();
         } catch (Exception ex) {
@@ -90,15 +95,11 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
-        //props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
+        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
-        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
-        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60 * 1000);
-        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
-        props.put(ProducerConfig.ACKS_CONFIG, "all");
+        //props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60 * 1000);
 
         KStreamBuilder builder = new KStreamBuilder();
 
