@@ -27,6 +27,7 @@ import java.text.SimpleDateFormat
 import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
 import kafka.common.Topic
 import java.io.{BufferedOutputStream, OutputStream}
+import java.nio.charset.StandardCharsets
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).
@@ -147,7 +148,7 @@ object StateChangeLogMerger extends Logging {
 
     while (pqueue.nonEmpty) {
       val lineItr = pqueue.dequeue()
-      output.write((lineItr.line + "\n").getBytes)
+      output.write((lineItr.line + "\n").getBytes(StandardCharsets.UTF_8))
       val nextLineItr = getNextLine(lineItr.itr)
       if (!nextLineItr.isEmpty)
         pqueue.enqueue(nextLineItr)

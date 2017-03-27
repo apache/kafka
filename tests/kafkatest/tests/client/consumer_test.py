@@ -180,7 +180,8 @@ class OffsetValidationTest(VerifiableConsumerTest):
         # stop the partition owner and await its shutdown
         consumer.kill_node(partition_owner, clean_shutdown=clean_shutdown)
         wait_until(lambda: len(consumer.joined_nodes()) == (self.num_consumers - 1) and consumer.owner(partition) != None,
-                   timeout_sec=self.session_timeout_sec+5, err_msg="Timed out waiting for consumer to close")
+                   timeout_sec=self.session_timeout_sec*2+5,
+                   err_msg="Timed out waiting for consumer to close")
 
         # ensure that the remaining consumer does some work after rebalancing
         self.await_consumed_messages(consumer, min_messages=1000)
@@ -309,5 +310,7 @@ class AssignmentValidationTest(VerifiableConsumerTest):
         for num_started, node in enumerate(consumer.nodes, 1):
             consumer.start_node(node)
             self.await_members(consumer, num_started)
-            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment())
-
+            assert self.valid_assignment(self.TOPIC, self.NUM_PARTITIONS, consumer.current_assignment()), \
+                "expected valid assignments of %d partitions when num_started %d: %s" % \
+                (self.NUM_PARTITIONS, num_started, \
+                 [(str(node.account), a) for node, a in consumer.current_assignment().items()])

@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util._
 import java.text.SimpleDateFormat
 import java.math.BigInteger
+import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
@@ -245,7 +246,7 @@ object ProducerPerformance extends Logging {
 
       val seqMsgString = String.format("%1$-" + msgSize + "s", msgHeader).replace(' ', 'x')
       debug(seqMsgString)
-      seqMsgString.getBytes()
+      seqMsgString.getBytes(StandardCharsets.UTF_8)
     }
 
     private def generateProducerData(topic: String, messageId: Long): Array[Byte] = {
@@ -276,7 +277,7 @@ object ProducerPerformance extends Logging {
                 Thread.sleep(config.messageSendGapMs)
             })
         } catch {
-          case e: Throwable => error("Error when sending message " + new String(message), e)
+          case e: Throwable => error("Error when sending message " + new String(message, StandardCharsets.UTF_8), e)
         }
         i += 1
       }

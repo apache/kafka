@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
 /**
@@ -56,6 +57,20 @@ public class Crc32 implements Checksum {
         return crc.getValue();
     }
 
+    /**
+     * Compute the CRC32 of a byte buffer from a given offset (relative to the buffer's current position)
+     *
+     * @param buffer The buffer with the underlying data
+     * @param offset The offset relative to the current position
+     * @param size The number of bytes beginning from the offset to include
+     * @return The CRC32
+     */
+    public static long crc32(ByteBuffer buffer, int offset, int size) {
+        Crc32 crc = new Crc32();
+        crc.update(buffer, offset, size);
+        return crc.getValue();
+    }
+
     /** the current CRC value, bit-flipped */
     private int crc;
 
@@ -72,6 +87,20 @@ public class Crc32 implements Checksum {
     @Override
     public void reset() {
         crc = 0xffffffff;
+    }
+
+    public void update(ByteBuffer buffer, int length) {
+        update(buffer, 0, length);
+    }
+
+    public void update(ByteBuffer buffer, int offset, int length) {
+        if (buffer.hasArray()) {
+            update(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, length);
+        } else {
+            int start = buffer.position() + offset;
+            for (int i = start; i < start + length; i++)
+                update(buffer.get(i));
+        }
     }
 
     @Override

@@ -49,9 +49,18 @@ public class FetchResponse extends AbstractResponse {
     private static final String PARTITION_HEADER_KEY_NAME = "partition_header";
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
+    private static final String LAST_STABLE_OFFSET_KEY_NAME = "last_stable_offset";
+    private static final String ABORTED_TRANSACTIONS_KEY_NAME = "aborted_transactions";
+    private static final String RECORD_SET_KEY_NAME = "record_set";
 
-    // Default throttle time
+    // aborted transaction field names
+    private static final String PID_KEY_NAME = "pid";
+    private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
+
     private static final int DEFAULT_THROTTLE_TIME = 0;
+    public static final long INVALID_HIGHWATERMARK = -1L;
+    public static final long INVALID_LSO = -1L;
 
     /**
      * Possible error codes:
@@ -63,29 +72,93 @@ public class FetchResponse extends AbstractResponse {
      *  UNKNOWN (-1)
      */
 
-    private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
-    private static final String RECORD_SET_KEY_NAME = "record_set";
-
-    public static final long INVALID_HIGHWATERMARK = -1L;
-
     private final LinkedHashMap<TopicPartition, PartitionData> responseData;
     private final int throttleTimeMs;
 
-    public static final class PartitionData {
-        public final Errors error;
-        public final long highWatermark;
-        public final Records records;
+    public static final class AbortedTransaction {
+        public final long pid;
+        public final long firstOffset;
 
-        public PartitionData(Errors error, long highWatermark, Records records) {
-            this.error = error;
-            this.highWatermark = highWatermark;
-            this.records = records;
+        public AbortedTransaction(long pid, long firstOffset) {
+            this.pid = pid;
+            this.firstOffset = firstOffset;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+
+            AbortedTransaction that = (AbortedTransaction) o;
+
+            return pid == that.pid && firstOffset == that.firstOffset;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = (int) (pid ^ (pid >>> 32));
+            result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+            return result;
         }
 
         @Override
         public String toString() {
-            return "(error=" + error.toString() + ", highWaterMark=" + highWatermark +
-                    ", records=" + records + ")";
+            return "(pid=" + pid + ", firstOffset=" + firstOffset + ")";
+        }
+    }
+
+    public static final class PartitionData {
+        public final Errors error;
+        public final long lastStableOffset;
+        public final long highWatermark;
+        public final List<AbortedTransaction> abortedTransactions;
+        public final Records records;
+
+        public PartitionData(Errors error,
+                             long highWatermark,
+                             long lastStableOffset,
+                             List<AbortedTransaction> abortedTransactions,
+                             Records records) {
+            this.error = error;
+            this.highWatermark = highWatermark;
+            this.lastStableOffset = lastStableOffset;
+            this.abortedTransactions = abortedTransactions;
+            this.records = records;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+
+            PartitionData that = (PartitionData) o;
+
+            return error == that.error &&
+                    highWatermark == that.highWatermark &&
+                    lastStableOffset == that.lastStableOffset &&
+                    (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
+                    (records == null ? that.records == null : records.equals(that.records));
+        }
+
+        @Override
+        public int hashCode() {
+            int result = error != null ? error.hashCode() : 0;
+            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
+            result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
+            result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
+            result = 31 * result + (records != null ? records.hashCode() : 0);
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "(error=" + error + ", highWaterMark=" + highWatermark +
+                    ", lastStableOffset = " + lastStableOffset + ", " +
+                    "abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
         }
     }
 
@@ -114,8 +187,28 @@ public class FetchResponse extends AbstractResponse {
                 int partition = partitionResponseHeader.getInt(PARTITION_KEY_NAME);
                 Errors error = Errors.forCode(partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME));
                 long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
+                long lastStableOffset = INVALID_LSO;
+                if (partitionResponseHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME))
+                    lastStableOffset = partitionResponseHeader.getLong(LAST_STABLE_OFFSET_KEY_NAME);
+
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
-                PartitionData partitionData = new PartitionData(error, highWatermark, records);
+
+                List<AbortedTransaction> abortedTransactions = null;
+                if (partitionResponseHeader.hasField(ABORTED_TRANSACTIONS_KEY_NAME)) {
+                    Object[] abortedTransactionsArray = partitionResponseHeader.getArray(ABORTED_TRANSACTIONS_KEY_NAME);
+                    if (abortedTransactionsArray != null) {
+                        abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
+                        for (Object abortedTransactionObj : abortedTransactionsArray) {
+                            Struct abortedTransactionStruct = (Struct) abortedTransactionObj;
+                            long pid = abortedTransactionStruct.getLong(PID_KEY_NAME);
+                            long firstOffset = abortedTransactionStruct.getLong(FIRST_OFFSET_KEY_NAME);
+                            abortedTransactions.add(new AbortedTransaction(pid, firstOffset));
+                        }
+                    }
+                }
+
+                PartitionData partitionData = new PartitionData(error, highWatermark, lastStableOffset,
+                        abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
@@ -225,6 +318,24 @@ public class FetchResponse extends AbstractResponse {
                 partitionDataHeader.set(PARTITION_KEY_NAME, partitionEntry.getKey());
                 partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
+
+                if (version >= 4) {
+                    partitionDataHeader.set(LAST_STABLE_OFFSET_KEY_NAME, fetchPartitionData.lastStableOffset);
+
+                    if (fetchPartitionData.abortedTransactions == null) {
+                        partitionDataHeader.set(ABORTED_TRANSACTIONS_KEY_NAME, null);
+                    } else {
+                        List<Struct> abortedTransactionStructs = new ArrayList<>(fetchPartitionData.abortedTransactions.size());
+                        for (AbortedTransaction abortedTransaction : fetchPartitionData.abortedTransactions) {
+                            Struct abortedTransactionStruct = partitionDataHeader.instance(ABORTED_TRANSACTIONS_KEY_NAME);
+                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.pid);
+                            abortedTransactionStruct.set(FIRST_OFFSET_KEY_NAME, abortedTransaction.firstOffset);
+                            abortedTransactionStructs.add(abortedTransactionStruct);
+                        }
+                        partitionDataHeader.set(ABORTED_TRANSACTIONS_KEY_NAME, abortedTransactionStructs.toArray());
+                    }
+                }
+
                 partitionData.set(PARTITION_HEADER_KEY_NAME, partitionDataHeader);
                 partitionData.set(RECORD_SET_KEY_NAME, fetchPartitionData.records);
                 partitionArray.add(partitionData);

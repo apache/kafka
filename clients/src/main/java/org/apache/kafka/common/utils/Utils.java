@@ -21,6 +21,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.io.DataOutput;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
@@ -29,11 +30,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -80,11 +81,35 @@ public class Utils {
      * @return The string
      */
     public static String utf8(byte[] bytes) {
-        try {
-            return new String(bytes, "UTF8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        return new String(bytes, StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Read a UTF8 string from a byte buffer. Note that the position of the byte buffer is not affected
+     * by this method.
+     *
+     * @param buffer The buffer to read from
+     * @param length The length of the string in bytes
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer, int length) {
+        return utf8(buffer, 0, length);
+    }
+
+    /**
+     * Read a UTF8 string from a byte buffer at a given offset. Note that the position of the byte buffer
+     * is not affected by this method.
+     *
+     * @param buffer The buffer to read from
+     * @param offset The offset relative to the current position in the buffer
+     * @param length The length of the string in bytes
+     * @return The UTF8 string
+     */
+    public static String utf8(ByteBuffer buffer, int offset, int length) {
+        if (buffer.hasArray())
+            return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, StandardCharsets.UTF_8);
+        else
+            return utf8(toArray(buffer, offset, length));
     }
 
     /**
@@ -94,11 +119,7 @@ public class Utils {
      * @return The byte[]
      */
     public static byte[] utf8(String string) {
-        try {
-            return string.getBytes("UTF8");
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("This shouldn't happen.", e);
-        }
+        return string.getBytes(StandardCharsets.UTF_8);
     }
 
     /**
@@ -153,10 +174,11 @@ public class Utils {
     }
 
     /**
-     * Read the given byte buffer into a byte array
+     * Read the given byte buffer from its current position to its limit into a byte array.
+     * @param buffer The buffer to read from
      */
     public static byte[] toArray(ByteBuffer buffer) {
-        return toArray(buffer, 0, buffer.limit());
+        return toArray(buffer, 0, buffer.remaining());
     }
 
     /**
@@ -179,13 +201,17 @@ public class Utils {
 
     /**
      * Read a byte array from the given offset and size in the buffer
+     * @param buffer The buffer to read from
+     * @param offset The offset relative to the current position of the buffer
+     * @param size The number of bytes to read into the array
      */
     public static byte[] toArray(ByteBuffer buffer, int offset, int size) {
         byte[] dest = new byte[size];
         if (buffer.hasArray()) {
-            System.arraycopy(buffer.array(), buffer.arrayOffset() + offset, dest, 0, size);
+            System.arraycopy(buffer.array(), buffer.position() + buffer.arrayOffset() + offset, dest, 0, size);
         } else {
             int pos = buffer.position();
+            buffer.position(pos + offset);
             buffer.get(dest);
             buffer.position(pos);
         }
@@ -684,16 +710,6 @@ public class Utils {
     }
 
     /**
-     * Compute the checksum of a range of data
-     * @param buffer Buffer containing the data to checksum
-     * @param start Offset in the buffer to read from
-     * @param size The number of bytes to include
-     */
-    public static long computeChecksum(ByteBuffer buffer, int start, int size) {
-        return Crc32.crc32(buffer.array(), buffer.arrayOffset() + start, size);
-    }
-
-    /**
      * Read data from the channel to the given byte buffer until there are no bytes remaining in the buffer. If the end
      * of the file is reached while there are bytes remaining in the buffer, an EOFException is thrown.
      *
@@ -743,6 +759,31 @@ public class Utils {
             bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
+
+    /**
+     * Write the contents of a buffer to an output stream. The bytes are copied from the current position
+     * in the buffer.
+     * @param out The output to write to
+     * @param buffer The buffer to write from
+     * @param length The number of bytes to write
+     * @throws IOException For any errors writing to the output
+     */
+    public static void writeTo(DataOutput out, ByteBuffer buffer, int length) throws IOException {
+        if (buffer.hasArray()) {
+            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
+        } else {
+            int pos = buffer.position();
+            for (int i = pos; i < length + pos; i++)
+                out.writeByte(buffer.get(i));
+        }
+    }
+
+    public static <T> List<T> toList(Iterator<T> iterator) {
+        List<T> res = new ArrayList<>();
+        while (iterator.hasNext())
+            res.add(iterator.next());
+        return res;
     }
 
 }

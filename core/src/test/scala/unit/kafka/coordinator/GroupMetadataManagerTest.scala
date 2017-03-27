@@ -24,19 +24,19 @@ import kafka.cluster.Partition
 import kafka.common.{OffsetAndMetadata, Topic}
 import kafka.log.{Log, LogAppendInfo}
 import kafka.server.{FetchDataInfo, KafkaConfig, LogOffsetMetadata, ReplicaManager}
+import kafka.utils.TestUtils.fail
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Record, TimestampType}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.{Capture, EasyMock, IAnswer}
-import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import kafka.utils.TestUtils.fail
+import org.junit.{Before, Test}
 
+import scala.collection.JavaConverters._
 import scala.collection._
-import JavaConverters._
 
 class GroupMetadataManagerTest {
 
@@ -94,7 +94,7 @@ class GroupMetadataManagerTest {
     )
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
-    val records = MemoryRecords.withRecords(startOffset, offsetCommitRecords: _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, offsetCommitRecords: _*)
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
     EasyMock.replay(replicaManager)
@@ -123,8 +123,9 @@ class GroupMetadataManagerTest {
     )
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
-    val tombstone = Record.create(GroupMetadataManager.offsetCommitKey(groupId, tombstonePartition), null)
-    val records = MemoryRecords.withRecords(startOffset, offsetCommitRecords ++ Seq(tombstone): _*)
+    val tombstone = new SimpleRecord(GroupMetadataManager.offsetCommitKey(groupId, tombstonePartition), null)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      offsetCommitRecords ++ Seq(tombstone): _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -157,7 +158,8 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
-    val records = MemoryRecords.withRecords(startOffset, offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -183,8 +185,9 @@ class GroupMetadataManagerTest {
 
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
-    val groupMetadataTombstone = Record.create(GroupMetadataManager.groupMetadataKey(groupId), null)
-    val records = MemoryRecords.withRecords(startOffset, Seq(groupMetadataRecord, groupMetadataTombstone): _*)
+    val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
+      Seq(groupMetadataRecord, groupMetadataTombstone): _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
 
@@ -212,8 +215,8 @@ class GroupMetadataManagerTest {
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
     val memberId = "98098230493"
     val groupMetadataRecord = buildStableGroupRecordWithMember(memberId)
-    val groupMetadataTombstone = Record.create(GroupMetadataManager.groupMetadataKey(groupId), null)
-    val records = MemoryRecords.withRecords(startOffset,
+    val groupMetadataTombstone = new SimpleRecord(GroupMetadataManager.groupMetadataKey(groupId), null)
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE,
       Seq(groupMetadataRecord, groupMetadataTombstone) ++ offsetCommitRecords: _*)
 
     expectGroupMetadataLoad(groupMetadataTopicPartition, startOffset, records)
@@ -538,7 +541,7 @@ class GroupMetadataManagerTest {
     EasyMock.reset(partition)
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(Record.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andStubReturn(Some(partition))
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
@@ -549,13 +552,15 @@ class GroupMetadataManagerTest {
     assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
+    recordsCapture.getValue.batches.asScala.foreach { batch =>
+      assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, batch.magic)
+      assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
+    }
     assertEquals(1, records.size)
 
     val metadataTombstone = records.head
     assertTrue(metadataTombstone.hasKey)
-    assertTrue(metadataTombstone.hasNullValue)
-    assertEquals(Record.MAGIC_VALUE_V1, metadataTombstone.magic)
-    assertEquals(TimestampType.CREATE_TIME, metadataTombstone.timestampType)
+    assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
     val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
@@ -583,7 +588,7 @@ class GroupMetadataManagerTest {
     EasyMock.reset(partition)
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(Record.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andStubReturn(Some(partition))
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
@@ -594,14 +599,16 @@ class GroupMetadataManagerTest {
     assertTrue(recordsCapture.hasCaptured)
 
     val records = recordsCapture.getValue.records.asScala.toList
+    recordsCapture.getValue.batches.asScala.foreach { batch =>
+      assertEquals(RecordBatch.CURRENT_MAGIC_VALUE, batch.magic)
+      // Use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+      assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
+    }
     assertEquals(1, records.size)
 
     val metadataTombstone = records.head
     assertTrue(metadataTombstone.hasKey)
-    assertTrue(metadataTombstone.hasNullValue)
-    assertEquals(Record.MAGIC_VALUE_V1, metadataTombstone.magic)
-    // Use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
-    assertEquals(TimestampType.CREATE_TIME, metadataTombstone.timestampType)
+    assertFalse(metadataTombstone.hasValue)
     assertTrue(metadataTombstone.timestamp > 0)
 
     val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
@@ -672,7 +679,7 @@ class GroupMetadataManagerTest {
     assertEquals(2, records.size)
     records.foreach { message =>
       assertTrue(message.hasKey)
-      assertTrue(message.hasNullValue)
+      assertFalse(message.hasValue)
       val offsetKey = GroupMetadataManager.readMessageKey(message.key).asInstanceOf[OffsetKey]
       assertEquals(groupId, offsetKey.key.group)
       assertEquals("foo", offsetKey.key.topicPartition.topic)
@@ -758,13 +765,13 @@ class GroupMetadataManagerTest {
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
-          new PartitionResponse(error, 0L, Record.NO_TIMESTAMP)
+          new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
         )
       )})
-    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(Record.MAGIC_VALUE_V1))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
   }
 
-  private def buildStableGroupRecordWithMember(memberId: String): Record = {
+  private def buildStableGroupRecordWithMember(memberId: String): SimpleRecord = {
     val group = new GroupMetadata(groupId)
     group.transitionTo(PreparingRebalance)
     val memberProtocols = List(("roundrobin", Array.emptyByteArray))
@@ -776,13 +783,13 @@ class GroupMetadataManagerTest {
 
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
     val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> Array.empty[Byte]))
-    Record.create(groupMetadataKey, groupMetadataValue)
+    new SimpleRecord(groupMetadataKey, groupMetadataValue)
   }
 
   private def expectGroupMetadataLoad(groupMetadataTopicPartition: TopicPartition,
                                       startOffset: Long,
                                       records: MemoryRecords): Unit = {
-    val endOffset = startOffset + records.deepEntries.asScala.size
+    val endOffset = startOffset + records.records.asScala.size
     val logMock =  EasyMock.mock(classOf[Log])
     val fileRecordsMock = EasyMock.mock(classOf[FileRecords])
 
@@ -798,12 +805,12 @@ class GroupMetadataManagerTest {
   }
 
   private def createCommittedOffsetRecords(committedOffsets: Map[TopicPartition, Long],
-                                           groupId: String = groupId): Seq[Record] = {
+                                           groupId: String = groupId): Seq[SimpleRecord] = {
     committedOffsets.map { case (topicPartition, offset) =>
       val offsetAndMetadata = OffsetAndMetadata(offset)
       val offsetCommitKey = GroupMetadataManager.offsetCommitKey(groupId, topicPartition)
       val offsetCommitValue = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
-      Record.create(offsetCommitKey, offsetCommitValue)
+      new SimpleRecord(offsetCommitKey, offsetCommitValue)
     }.toSeq
   }
 

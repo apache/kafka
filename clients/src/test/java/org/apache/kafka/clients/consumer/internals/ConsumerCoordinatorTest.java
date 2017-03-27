@@ -801,7 +801,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testRebalanceAfterNotMatchingTopicUnavailableWithPatternSSubscribe() {
-        unavailableTopicTest(true, false, Collections.<String>singleton("notmatching"));
+        unavailableTopicTest(true, false, Collections.singleton("notmatching"));
     }
 
     @Test

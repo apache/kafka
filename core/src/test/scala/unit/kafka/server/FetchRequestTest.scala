@@ -25,7 +25,7 @@ import kafka.utils.TestUtils._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.LogEntry
+import org.apache.kafka.common.record.Record
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.Assert._
@@ -53,7 +53,6 @@ class FetchRequestTest extends BaseRequestTest {
     super.tearDown()
   }
 
-
   private def createFetchRequest(maxResponseBytes: Int, maxPartitionBytes: Int, topicPartitions: Seq[TopicPartition],
                                  offsetMap: Map[TopicPartition, Long] = Map.empty): FetchRequest =
     FetchRequest.Builder.forConsumer(Int.MaxValue, 0, createPartitionMap(maxPartitionBytes, topicPartitions, offsetMap))
@@ -68,9 +67,10 @@ class FetchRequestTest extends BaseRequestTest {
     partitionMap
   }
 
-  private def sendFetchRequest(leaderId: Int, request: FetchRequest): FetchResponse = {
+  private def sendFetchRequest(leaderId: Int, request: FetchRequest,
+                               version: Short = ApiKeys.FETCH.latestVersion): FetchResponse = {
     val response = connectAndSend(request, ApiKeys.FETCH, destination = brokerSocketServer(leaderId))
-    FetchResponse.parse(response, ApiKeys.FETCH.latestVersion)
+    FetchResponse.parse(response, version)
   }
 
   @Test
@@ -121,13 +121,13 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse3 = sendFetchRequest(leaderId, fetchRequest3)
     assertEquals(shuffledTopicPartitions3, fetchResponse3.responseData.keySet.asScala.toSeq)
     val responseSize3 = fetchResponse3.responseData.asScala.values.map { partitionData =>
-      logEntries(partitionData).map(_.sizeInBytes).sum
+      records(partitionData).map(_.sizeInBytes).sum
     }.sum
     assertTrue(responseSize3 <= maxResponseBytes)
     val partitionData3 = fetchResponse3.responseData.get(partitionWithLargeMessage1)
     assertEquals(Errors.NONE, partitionData3.error)
     assertTrue(partitionData3.highWatermark > 0)
-    val size3 = logEntries(partitionData3).map(_.sizeInBytes).sum
+    val size3 = records(partitionData3).map(_.sizeInBytes).sum
     assertTrue(s"Expected $size3 to be smaller than $maxResponseBytes", size3 <= maxResponseBytes)
     assertTrue(s"Expected $size3 to be larger than $maxPartitionBytes", size3 > maxPartitionBytes)
     assertTrue(maxPartitionBytes < partitionData3.records.sizeInBytes)
@@ -139,13 +139,13 @@ class FetchRequestTest extends BaseRequestTest {
     val fetchResponse4 = sendFetchRequest(leaderId, fetchRequest4)
     assertEquals(shuffledTopicPartitions4, fetchResponse4.responseData.keySet.asScala.toSeq)
     val nonEmptyPartitions4 = fetchResponse4.responseData.asScala.toSeq.collect {
-      case (tp, partitionData) if logEntries(partitionData).map(_.sizeInBytes).sum > 0 => tp
+      case (tp, partitionData) if records(partitionData).map(_.sizeInBytes).sum > 0 => tp
     }
     assertEquals(Seq(partitionWithLargeMessage2), nonEmptyPartitions4)
     val partitionData4 = fetchResponse4.responseData.get(partitionWithLargeMessage2)
     assertEquals(Errors.NONE, partitionData4.error)
     assertTrue(partitionData4.highWatermark > 0)
-    val size4 = logEntries(partitionData4).map(_.sizeInBytes).sum
+    val size4 = records(partitionData4).map(_.sizeInBytes).sum
     assertTrue(s"Expected $size4 to be larger than $maxResponseBytes", size4 > maxResponseBytes)
     assertTrue(maxResponseBytes < partitionData4.records.sizeInBytes)
   }
@@ -158,16 +158,16 @@ class FetchRequestTest extends BaseRequestTest {
       "key", new String(new Array[Byte](maxPartitionBytes + 1)))).get
     val fetchRequest = FetchRequest.Builder.forConsumer(Int.MaxValue, 0,
       createPartitionMap(maxPartitionBytes, Seq(topicPartition))).build(2)
-    val fetchResponse = sendFetchRequest(leaderId, fetchRequest)
+    val fetchResponse = sendFetchRequest(leaderId, fetchRequest, version = 2)
     val partitionData = fetchResponse.responseData.get(topicPartition)
     assertEquals(Errors.NONE, partitionData.error)
     assertTrue(partitionData.highWatermark > 0)
     assertEquals(maxPartitionBytes, partitionData.records.sizeInBytes)
-    assertEquals(0, logEntries(partitionData).map(_.sizeInBytes).sum)
+    assertEquals(0, records(partitionData).map(_.sizeInBytes).sum)
   }
 
-  private def logEntries(partitionData: FetchResponse.PartitionData): Seq[LogEntry] = {
-    partitionData.records.deepEntries.asScala.toIndexedSeq
+  private def records(partitionData: FetchResponse.PartitionData): Seq[Record] = {
+    partitionData.records.records.asScala.toIndexedSeq
   }
 
   private def checkFetchResponse(expectedPartitions: Seq[TopicPartition], fetchResponse: FetchResponse,
@@ -185,23 +185,22 @@ class FetchRequestTest extends BaseRequestTest {
       val records = partitionData.records
       responseBufferSize += records.sizeInBytes
 
-      val entries = records.shallowEntries.asScala.toIndexedSeq
-      assertTrue(entries.size < numMessagesPerPartition)
-      val entriesSize = entries.map(_.sizeInBytes).sum
-      responseSize += entriesSize
-      if (entriesSize == 0 && !emptyResponseSeen) {
+      val batches = records.batches.asScala.toIndexedSeq
+      assertTrue(batches.size < numMessagesPerPartition)
+      val batchesSize = batches.map(_.sizeInBytes).sum
+      responseSize += batchesSize
+      if (batchesSize == 0 && !emptyResponseSeen) {
         assertEquals(0, records.sizeInBytes)
         emptyResponseSeen = true
       }
-      else if (entriesSize != 0 && !emptyResponseSeen) {
-        assertTrue(entriesSize <= maxPartitionBytes)
+      else if (batchesSize != 0 && !emptyResponseSeen) {
+        assertTrue(batchesSize <= maxPartitionBytes)
         assertEquals(maxPartitionBytes, records.sizeInBytes)
       }
-      else if (entriesSize != 0 && emptyResponseSeen)
-        fail(s"Expected partition with size 0, but found $tp with size $entriesSize")
+      else if (batchesSize != 0 && emptyResponseSeen)
+        fail(s"Expected partition with size 0, but found $tp with size $batchesSize")
       else if (records.sizeInBytes != 0 && emptyResponseSeen)
         fail(s"Expected partition buffer with size 0, but found $tp with size ${records.sizeInBytes}")
-
     }
 
     assertEquals(maxResponseBytes - maxResponseBytes % maxPartitionBytes, responseBufferSize)
@@ -227,7 +226,7 @@ class FetchRequestTest extends BaseRequestTest {
       val suffix = s"$tp-$messageIndex"
       new ProducerRecord(tp.topic, tp.partition, s"key $suffix", s"value $suffix")
     }
-    records.map(producer.send).foreach(_.get)
+    records.map(producer.send(_).get)
     records
   }
 

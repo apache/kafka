@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -95,6 +96,9 @@ public class Sender implements Runnable {
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
 
+    /* current request API versions supported by the known brokers */
+    private final ApiVersions apiVersions;
+
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
@@ -104,7 +108,8 @@ public class Sender implements Runnable {
                   int retries,
                   Metrics metrics,
                   Time time,
-                  int requestTimeout) {
+                  int requestTimeout,
+                  ApiVersions apiVersions) {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
@@ -116,6 +121,7 @@ public class Sender implements Runnable {
         this.time = time;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
+        this.apiVersions = apiVersions;
     }
 
     /**
@@ -162,8 +168,7 @@ public class Sender implements Runnable {
     /**
      * Run a single iteration of sending
      * 
-     * @param now
-     *            The current POSIX time in milliseconds
+     * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
         Cluster cluster = metadata.fetch();
@@ -347,16 +352,38 @@ public class Sender implements Runnable {
      * Create a produce request from the given record batches
      */
     private void sendProduceRequest(long now, int destination, short acks, int timeout, List<ProducerBatch> batches) {
+        if (batches.isEmpty())
+            return;
+
         Map<TopicPartition, MemoryRecords> produceRecordsByPartition = new HashMap<>(batches.size());
         final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
+
+        // find the minimum magic version used when creating the record sets
+        byte minUsedMagic = apiVersions.maxUsableProduceMagic();
+        for (ProducerBatch batch : batches) {
+            if (batch.magic() < minUsedMagic)
+                minUsedMagic = batch.magic();
+        }
+
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;
-            produceRecordsByPartition.put(tp, batch.records());
+            MemoryRecords records = batch.records();
+
+            // down convert if necessary to the minimum magic used. In general, there can be a delay between the time
+            // that the producer starts building the batch and the time that we send the request, and we may have
+            // chosen the message format based on out-dated metadata. In the worst case, we optimistically chose to use
+            // the new message format, but found that the broker didn't support it, so we need to down-convert on the
+            // client before sending. This is intended to handle edge cases around cluster upgrades where brokers may
+            // not all support the same message format version. For example, if a partition migrates from a broker
+            // which is supporting the new magic version to one which doesn't, then we will need to convert.
+            if (!records.hasMatchingMagic(minUsedMagic))
+                records = batch.records().downConvert(minUsedMagic);
+            produceRecordsByPartition.put(tp, records);
             recordsByPartition.put(tp, batch);
         }
 
-        ProduceRequest.Builder requestBuilder =
-                new ProduceRequest.Builder(acks, timeout, produceRecordsByPartition);
+        ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(minUsedMagic, acks, timeout,
+                produceRecordsByPartition);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());

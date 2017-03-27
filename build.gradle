@@ -168,6 +168,10 @@ subprojects {
     }
   }
 
+  def testLoggingEvents = ["passed", "skipped", "failed"]
+  def testShowStandardStreams = false
+  def testExceptionFormat = 'full'
+
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -176,11 +180,45 @@ subprojects {
     jvmArgs = maxPermSizeArgs
 
     testLogging {
-      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
-      showStandardStreams = userShowStandardStreams ?: false
-      exceptionFormat = 'full'
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
     }
 
+  }
+
+  task integrationTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+    }
+    useJUnit {
+      includeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
+  }
+
+  task unitTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+    }
+    useJUnit {
+      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
   }
 
   jar {
@@ -892,6 +930,7 @@ project(':connect:api') {
     testCompile libs.junit
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -929,6 +968,7 @@ project(':connect:transforms') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -966,6 +1006,7 @@ project(':connect:json') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -1016,6 +1057,7 @@ project(':connect:runtime') {
     testCompile libs.powermockEasymock
 
     testCompile project(":connect:json")
+    testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }
@@ -1068,6 +1110,7 @@ project(':connect:file') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {

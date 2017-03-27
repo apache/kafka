@@ -96,8 +96,10 @@ public class RecordCollectorImpl implements RecordCollector {
                             TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
-                            sendException = exception;
-                            log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
+                            if (sendException == null) {
+                                sendException = exception;
+                                log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
+                            }
                         }
                     }
                 });
