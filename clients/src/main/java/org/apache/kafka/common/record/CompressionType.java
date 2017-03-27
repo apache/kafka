@@ -149,7 +149,7 @@ public enum CompressionType {
     }
 
     // Dynamically load the Snappy and LZ4 classes so that we only have a runtime dependency on compression algorithms
-    // that are being used. This is important for platforms that are not supported by the underlying libraries.
+    // that are used. This is important for platforms that are not supported by the underlying libraries.
     // Note that we are using the initialization-on-demand holder idiom, so it's important that the initialisation
     // is done in separate classes (one per compression type).
 
