@@ -599,7 +599,7 @@ public class StreamThread extends Thread {
             for (StreamTask task : tasks.values()) {
                 // we processed one record,
                 // and more are buffered waiting for the next round
-                if (task.process() > 0) {
+                if (task.process()) {
                     totalProcessedEachRound++;
                     totalProcessedSinceLastMaybeCommit++;
                 }

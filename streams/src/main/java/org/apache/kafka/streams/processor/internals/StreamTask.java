@@ -176,19 +176,19 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * Process one record
+     * Process one record.
      *
-     * @return number of records processed
+     * @return true if this method processes a record, false if it does not process a record.
      */
     @SuppressWarnings("unchecked")
-    public int process() {
+    public boolean process() {
         // get the next record to process
         StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
         // if there is no record to process, return immediately
         if (record == null) {
             requiresPoll = true;
-            return 0;
+            return false;
         }
 
         requiresPoll = false;
@@ -231,7 +231,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             processorContext.setCurrentNode(null);
         }
 
-        return 1;
+        return true;
     }
 
     private void updateProcessorContext(final ProcessorRecordContext recordContext, final ProcessorNode currNode) {
