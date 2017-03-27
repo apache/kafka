@@ -401,24 +401,21 @@ public class Sender implements Runnable {
                     exception = new TopicAuthorizationException(batch.topicPartition.topic());
                 else
                     exception = error.exception();
-
                 if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionState.pidAndEpoch().producerId)
                     log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
                                     "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
                             correlationId, batch.topicPartition, response.baseOffset);
-
-
                 // tell the user the result of their request
                 failBatch(batch, response, exception);
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
-
-                if (error.exception() instanceof InvalidMetadataException) {
-                    if (error.exception() instanceof UnknownTopicOrPartitionException)
-                        log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
-                                "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
-                    metadata.requestUpdate();
-                }
             }
+            if (error.exception() instanceof InvalidMetadataException) {
+                if (error.exception() instanceof UnknownTopicOrPartitionException)
+                    log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
+                            "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
+                metadata.requestUpdate();
+            }
+
         } else {
             completeBatch(batch, response);
 
