@@ -22,7 +22,9 @@ import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.lang.reflect.Constructor;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -66,8 +68,8 @@ public enum CompressionType {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
-                return (OutputStream) SNAPPY_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer, bufferSize);
-            } catch (Exception e) {
+                return (OutputStream) SnappyConstructors.OUTPUT.invoke(buffer, bufferSize);
+            } catch (Throwable e) {
                 throw new KafkaException(e);
             }
         }
@@ -75,8 +77,8 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             try {
-                return (InputStream) SNAPPY_INPUT_STREAM_SUPPLIER.get().newInstance(buffer);
-            } catch (Exception e) {
+                return (InputStream) SnappyConstructors.INPUT.invoke(buffer);
+            } catch (Throwable e) {
                 throw new KafkaException(e);
             }
         }
@@ -86,9 +88,9 @@ public enum CompressionType {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
-                return (OutputStream) LZ4_OUTPUT_STREAM_SUPPLIER.get().newInstance(buffer,
+                return (OutputStream) LZ4Constructors.OUTPUT.invoke(buffer,
                         messageVersion == RecordBatch.MAGIC_VALUE_V0);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 throw new KafkaException(e);
             }
         }
@@ -96,9 +98,9 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
             try {
-                return (InputStream) LZ4_INPUT_STREAM_SUPPLIER.get().newInstance(buffer,
+                return (InputStream) LZ4Constructors.INPUT.invoke(buffer,
                         messageVersion == RecordBatch.MAGIC_VALUE_V0);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 throw new KafkaException(e);
             }
         }
@@ -146,64 +148,34 @@ public enum CompressionType {
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
 
-    // dynamically load the snappy and lz4 classes to avoid runtime dependency if we are not using compression
-    // caching constructors to avoid invoking of Class.forName method for each batch
-    private static final MemoizingConstructorSupplier SNAPPY_OUTPUT_STREAM_SUPPLIER = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.xerial.snappy.SnappyOutputStream")
-                    .getConstructor(OutputStream.class, Integer.TYPE);
-        }
-    });
+    // Dynamically load the Snappy and LZ4 classes so that we only have a runtime dependency on compression algorithms
+    // that are used. This is important for platforms that are not supported by the underlying libraries.
+    // Note that we are using the initialization-on-demand holder idiom, so it's important that the initialisation
+    // is done in separate classes (one per compression type).
 
-    private static final MemoizingConstructorSupplier LZ4_OUTPUT_STREAM_SUPPLIER = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream")
-                    .getConstructor(OutputStream.class, Boolean.TYPE);
-        }
-    });
+    private static class LZ4Constructors {
+        static final MethodHandle INPUT = findConstructor(
+                "org.apache.kafka.common.record.KafkaLZ4BlockInputStream",
+                MethodType.methodType(void.class, InputStream.class, Boolean.TYPE));
 
-    private static final MemoizingConstructorSupplier SNAPPY_INPUT_STREAM_SUPPLIER = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.xerial.snappy.SnappyInputStream")
-                    .getConstructor(InputStream.class);
-        }
-    });
+        static final MethodHandle OUTPUT = findConstructor(
+                "org.apache.kafka.common.record.KafkaLZ4BlockOutputStream",
+                MethodType.methodType(void.class, OutputStream.class, Boolean.TYPE));
 
-    private static final MemoizingConstructorSupplier LZ4_INPUT_STREAM_SUPPLIER = new MemoizingConstructorSupplier(new ConstructorSupplier() {
-        @Override
-        public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
-            return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
-                    .getConstructor(InputStream.class, Boolean.TYPE);
-        }
-    });
-
-    private interface ConstructorSupplier {
-        Constructor get() throws ClassNotFoundException, NoSuchMethodException;
     }
 
-    // this code is based on Guava's @see{com.google.common.base.Suppliers.MemoizingSupplier}
-    private static class MemoizingConstructorSupplier {
-        final ConstructorSupplier delegate;
-        transient volatile boolean initialized;
-        transient Constructor value;
+    private static class SnappyConstructors {
+        static final MethodHandle INPUT = findConstructor("org.xerial.snappy.SnappyInputStream",
+                MethodType.methodType(void.class, InputStream.class));
+        static final MethodHandle OUTPUT = findConstructor("org.xerial.snappy.SnappyOutputStream",
+                MethodType.methodType(void.class, OutputStream.class, Integer.TYPE));
+    }
 
-        public MemoizingConstructorSupplier(ConstructorSupplier delegate) {
-            this.delegate = delegate;
-        }
-
-        public Constructor get() throws NoSuchMethodException, ClassNotFoundException {
-            if (!initialized) {
-                synchronized (this) {
-                    if (!initialized) {
-                        value = delegate.get();
-                        initialized = true;
-                    }
-                }
-            }
-            return value;
+    private static MethodHandle findConstructor(String className, MethodType methodType) {
+        try {
+            return MethodHandles.publicLookup().findConstructor(Class.forName(className), methodType);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException(e);
         }
     }
 
