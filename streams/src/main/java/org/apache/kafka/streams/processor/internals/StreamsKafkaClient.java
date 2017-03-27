@@ -203,7 +203,11 @@ public class StreamsKafkaClient {
                     break;
                 }
             }
-            kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            try {
+                kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            } catch (Exception e) {
+                throw new StreamsException("Could not poll.");
+            }
         }
         if (brokerId == null) {
             throw new StreamsException("Could not find any available broker.");
@@ -268,7 +272,12 @@ public class StreamsKafkaClient {
             new MetadataRequest.Builder(null),
             Time.SYSTEM.milliseconds(),
             true);
-        final ClientResponse clientResponse = sendRequest(clientRequest);
+        ClientResponse clientResponse;
+        try {
+            clientResponse = sendRequest(clientRequest);
+        } catch (Exception e) {
+            throw new StreamsException("Failed to send request");
+        }
         if (!clientResponse.hasResponse()) {
             throw new StreamsException("Empty response for client request.");
         }
