@@ -27,7 +27,10 @@ import kafka.integration.KafkaServerTestHarness
 
 
 class DeleteConsumerGroupTest extends KafkaServerTestHarness {
-  def generateConfigs() = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)
+  def generateConfigs() = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map { config =>
+    config.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "5")//TODO don't merge me - us seperate fix in https://github.com/apache/kafka/pull/2734
+    KafkaConfig.fromProps(config)
+  }
 
   @Test
   def testGroupWideDeleteInZK() {
