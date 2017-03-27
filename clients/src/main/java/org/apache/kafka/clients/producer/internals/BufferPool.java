@@ -118,7 +118,7 @@ public class BufferPool {
                 // we are out of memory and will have to block
                 int accumulated = 0;
                 ByteBuffer buffer = null;
-                boolean restoreAvailableMemoryOnFailure = true;
+                boolean hasError = true;
                 Condition moreMemory = this.lock.newCondition();
                 try {
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
@@ -161,24 +161,22 @@ public class BufferPool {
 
                     if (buffer == null)
                         buffer = allocateByteBuffer(size);
-                    restoreAvailableMemoryOnFailure = false;
+                    hasError = false;
                     //unlock happens in top-level, enclosing finally
                     return buffer;
                 } finally {
                     // When this loop was not able to successfully terminate don't loose available memory
-                    if (restoreAvailableMemoryOnFailure)
+                    if (hasError)
                         this.availableMemory += accumulated;
                     this.waiters.remove(moreMemory);
                 }
             }
         } finally {
-            if (lock.isHeldByCurrentThread()) {
-                // signal any additional waiters if there is more memory left
-                // over for them
-                if (!(this.availableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
-                    this.waiters.peekFirst().signal();
-                lock.unlock();
-            }
+            // signal any additional waiters if there is more memory left
+            // over for them
+            if (!(this.availableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
+                this.waiters.peekFirst().signal();
+            lock.unlock();
         }
     }
 
