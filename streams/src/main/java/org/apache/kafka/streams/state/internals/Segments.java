@@ -175,7 +175,7 @@ class Segments {
                 try {
                     segment.destroy();
                 } catch (IOException e) {
-                    log.error("Error destroying segment id {}", segment.id, e);
+                    log.error("Error destroying {}", segment, e);
                 }
             }
         }
