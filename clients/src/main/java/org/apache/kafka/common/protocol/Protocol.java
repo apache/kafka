@@ -493,7 +493,7 @@ public class Protocol {
                                                                                  "Maximum bytes to fetch."));
 
     // FETCH_REQUEST_PARTITION_V1 added log_start_offset field - the earliest available offset of partition data that can be consumed.
-    public static final Schema FETCH_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+    public static final Schema FETCH_REQUEST_PARTITION_V5 = new Schema(new Field("partition",
                                                                                  INT32,
                                                                                  "Topic partition id."),
                                                                        new Field("fetch_offset",
@@ -512,9 +512,9 @@ public class Protocol {
                                                                              new ArrayOf(FETCH_REQUEST_PARTITION_V0),
                                                                              "Partitions to fetch."));
 
-    public static final Schema FETCH_REQUEST_TOPIC_V1 = new Schema(new Field("topic", STRING, "Topic to fetch."),
+    public static final Schema FETCH_REQUEST_TOPIC_V5 = new Schema(new Field("topic", STRING, "Topic to fetch."),
                                                                    new Field("partitions",
-                                                                             new ArrayOf(FETCH_REQUEST_PARTITION_V1),
+                                                                             new ArrayOf(FETCH_REQUEST_PARTITION_V5),
                                                                              "Partitions to fetch."));
 
     public static final Schema FETCH_REQUEST_V0 = new Schema(new Field("replica_id",
@@ -610,7 +610,7 @@ public class Protocol {
                      "and enables the inclusion of the list of aborted transactions in the result, which allows " +
                      "consumers to discard ABORTED transactional records"),
             new Field("topics",
-                    new ArrayOf(FETCH_REQUEST_TOPIC_V1),
+                    new ArrayOf(FETCH_REQUEST_TOPIC_V5),
                     "Topics to fetch in the order provided."));
 
     public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(new Field("partition",
