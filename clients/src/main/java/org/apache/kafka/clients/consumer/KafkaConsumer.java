@@ -1030,7 +1030,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
-        client.poll(0L);
+        client.maybeTriggerWakeup();
         coordinator.poll(time.milliseconds());
 
         // fetch positions if we have partitions we're subscribed to that we
