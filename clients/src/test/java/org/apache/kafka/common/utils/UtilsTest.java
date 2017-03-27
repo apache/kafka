@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
@@ -429,12 +430,23 @@ public class UtilsTest {
     @Test(timeout = 120000)
     public void testRecursiveDelete() throws IOException {
         Utils.delete(null); // delete of null does nothing.
-        Utils.delete(TestUtils.tempFile()); // deleting a temporary file works
+
+        // Test that deleting a temporary file works.
+        File tempFile = TestUtils.tempFile();
+        Utils.delete(tempFile);
+        assertFalse(Files.exists(tempFile.toPath()));
+
+        // Test recursive deletes
         File tempDir = TestUtils.tempDirectory();
         File tempDir2 = TestUtils.tempDirectory(tempDir.toPath(), "a");
         TestUtils.tempDirectory(tempDir.toPath(), "b");
         TestUtils.tempDirectory(tempDir2.toPath(), "c");
-        Utils.delete(tempDir); // deleting a directory hierarchy works
-        Utils.delete(tempDir); // deleting a non-existent directory hierarchy works
+        Utils.delete(tempDir);
+        assertFalse(Files.isDirectory(tempDir.toPath()));
+        assertFalse(Files.isDirectory(tempDir2.toPath()));
+
+        // Test that deleting a non-existent directory hierarchy works.
+        Utils.delete(tempDir);
+        assertFalse(Files.isDirectory(tempDir.toPath()));
     }
 }
