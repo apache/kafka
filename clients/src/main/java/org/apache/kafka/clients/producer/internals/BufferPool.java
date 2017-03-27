@@ -50,6 +50,7 @@ public class BufferPool {
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
+    /** This memory is accounted for separately from the poolable buffers in free. */
     private long availableMemory;
     private final Metrics metrics;
     private final Time time;
@@ -118,23 +119,36 @@ public class BufferPool {
                 int accumulated = 0;
                 ByteBuffer buffer = null;
                 boolean restoreAvailableMemoryOnFailure = true;
+                Condition moreMemory = this.lock.newCondition();
                 try {
-                    Condition moreMemory = this.lock.newCondition();
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
                     this.waiters.addLast(moreMemory);
                     // loop over and over until we have a buffer or have reserved
                     // enough memory to allocate one
                     while (accumulated < size) {
-                        long timeNs = waitForMoreMemory(maxTimeToBlockMs, moreMemory, remainingTimeToBlockNs);
+                        long startWaitNs = time.nanoseconds();
+                        long timeNs;
+                        boolean waitingTimeElapsed;
+                        try {
+                            waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
+                        } finally {
+                            long endWaitNs = time.nanoseconds();
+                            timeNs = Math.max(0L, endWaitNs - startWaitNs);
+                            this.waitTime.record(timeNs, time.milliseconds());
+                        }
+
+                        if (waitingTimeElapsed) {
+                            throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                        }
 
                         remainingTimeToBlockNs -= timeNs;
+
                         // check if we can satisfy this request from the free list,
                         // otherwise allocate memory
                         if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
                             // just grab a buffer from the free list
                             buffer = this.free.pollFirst();
                             accumulated = size;
-                            restoreAvailableMemoryOnFailure = false;
                         } else {
                             // we'll need to allocate memory, but we may only get
                             // part of what we need on this iteration
@@ -145,74 +159,27 @@ public class BufferPool {
                         }
                     }
 
-                    // remove the condition for this thread to let the next thread
-                    // in line start getting memory
-                    Condition removed = this.waiters.removeFirst();
-                    if (removed != moreMemory)
-                        throw new IllegalStateException("Wrong condition: this shouldn't happen.");
-
                     if (buffer == null)
                         buffer = allocateByteBuffer(size);
                     restoreAvailableMemoryOnFailure = false;
                     //unlock happens in top-level, enclosing finally
                     return buffer;
                 } finally {
+                    // When this loop was not able to successfully terminate don't loose available memory
                     if (restoreAvailableMemoryOnFailure)
                         this.availableMemory += accumulated;
+                    this.waiters.remove(moreMemory);
                 }
             }
         } finally {
             if (lock.isHeldByCurrentThread()) {
                 // signal any additional waiters if there is more memory left
                 // over for them
-                if (this.availableMemory > 0 && !this.waiters.isEmpty())
+                if (!(this.availableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
                     this.waiters.peekFirst().signal();
                 lock.unlock();
             }
         }
-    }
-
-    /**
-     * Wait for remainingTimeToBlockNs for more memory to be available.  On a throwable this removes the
-     * condition variable, moreMemory, from this.waiters.
-     *
-     * @param maxTimeToBlockMs Used for error reporting only.
-     * @param moreMemory The blocking condition variable used to coordinate with threads that are freeing memory.
-     * @param remainingTimeToBlockNs The maximum amount of time to wait for the condition variable to be notified.
-     * @return the amount of time remaining
-     * @throws InterruptedException Waiting on the condition variable may produce this exception.
-     * @throws TimeoutException If the thread waits remainingTimeToBlock or longer.
-     */
-    private long waitForMoreMemory(long maxTimeToBlockMs, Condition moreMemory, long remainingTimeToBlockNs)
-        throws InterruptedException {
-        long startWaitNs = time.nanoseconds();
-        long timeNs;
-        boolean waitingTimeElapsed = false;
-        boolean awaitSuccess = false;
-        try {
-            waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
-            awaitSuccess = true;
-        } finally {
-            long endWaitNs = time.nanoseconds();
-            timeNs = Math.max(0L, endWaitNs - startWaitNs);
-            boolean recordSuccess = false;
-            try {
-                this.waitTime.record(timeNs, time.milliseconds());
-                recordSuccess = true;
-            } finally {
-                // If some kind of error condition occurred then remove this thread's condition variable from the list
-                // of waiters and potentally signal other threads waiting for more memory.
-                if (!awaitSuccess || !recordSuccess || waitingTimeElapsed) {
-                    this.waiters.remove(moreMemory);
-                }
-            }
-        }
-
-        if (waitingTimeElapsed) {
-            throw new TimeoutException("Failed to allocate memory within the configured max blocking time "
-              + maxTimeToBlockMs + " ms.");
-        }
-        return timeNs;
     }
 
     // Protected for testing.
