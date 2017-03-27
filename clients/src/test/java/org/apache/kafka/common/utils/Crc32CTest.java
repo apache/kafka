@@ -16,22 +16,37 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.junit.Test;
+
 import java.util.zip.Checksum;
 
-public class Crc32CTest extends AbstractChecksumTest {
+import static org.junit.Assert.assertEquals;
 
-    @Override
-    protected Checksum createChecksum() {
-        return Crc32C.create();
+public class Crc32CTest {
+
+    @Test
+    public void testUpdate() {
+        final byte[] bytes = "Any String you want".getBytes();
+        final int len = bytes.length;
+
+        Checksum crc1 = Crc32C.create();
+        Checksum crc2 = Crc32C.create();
+        Checksum crc3 = Crc32C.create();
+
+        crc1.update(bytes, 0, len);
+        for (int i = 0; i < len; i++)
+            crc2.update(bytes[i]);
+        crc3.update(bytes, 0, len / 2);
+        crc3.update(bytes, len / 2, len - len / 2);
+
+        assertEquals("Crc values should be the same", crc1.getValue(), crc2.getValue());
+        assertEquals("Crc values should be the same", crc1.getValue(), crc3.getValue());
     }
 
-    @Override
-    protected long computeChecksum(byte[] bytes) {
-        return computeChecksum(bytes, 0, bytes.length);
+    @Test
+    public void testValue() {
+        final byte[] bytes = "Some String".getBytes();
+        assertEquals(608512271, Crc32C.compute(bytes, 0, bytes.length));
     }
 
-    @Override
-    protected long computeChecksum(byte[] bytes, int offset, int length) {
-        return Crc32C.compute(bytes, offset, length);
-    }
 }
