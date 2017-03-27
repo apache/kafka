@@ -386,13 +386,11 @@ public class FileRecordsTest {
                     assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
                     assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
                     assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                }
-                else if (batch.magic() == RecordBatch.MAGIC_VALUE_V1) {
+                } else if (batch.magic() == RecordBatch.MAGIC_VALUE_V1) {
                     assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
                     assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
                     assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
-                }
-                else {
+                } else {
                     assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
                     assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
                     assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));

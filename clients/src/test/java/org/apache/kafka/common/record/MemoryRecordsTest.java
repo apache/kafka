@@ -164,8 +164,8 @@ public class MemoryRecordsTest {
             return;
 
         SimpleRecord[] records = {
-                new SimpleRecord(283843L, "key1".getBytes(), "value1".getBytes()),
-                new SimpleRecord(1234L, "key2".getBytes(), "value2".getBytes())
+            new SimpleRecord(283843L, "key1".getBytes(), "value1".getBytes()),
+            new SimpleRecord(1234L, "key2".getBytes(), "value2".getBytes())
         };
         RecordBatch batch = MemoryRecords.withRecords(magic, compression, records).batches().iterator().next();
         long expectedChecksum;
@@ -174,14 +174,12 @@ public class MemoryRecordsTest {
                 expectedChecksum = 1978725405L;
             else
                 expectedChecksum = 66944826L;
-        }
-        else if (magic == RecordBatch.MAGIC_VALUE_V1) {
+        } else if (magic == RecordBatch.MAGIC_VALUE_V1) {
             if (compression == CompressionType.NONE)
                 expectedChecksum = 109425508L;
             else
                 expectedChecksum = 1407303399L;
-        }
-        else {
+        } else {
             if (compression == CompressionType.NONE)
                 expectedChecksum = 3851219455L;
             else
