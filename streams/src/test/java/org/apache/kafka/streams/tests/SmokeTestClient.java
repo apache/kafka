@@ -94,12 +94,13 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
+        // TODO: set number of threads back to 3 once
+        // https://issues.apache.org/jira/browse/KAFKA-3758 is solved
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        //props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 60 * 1000);
 
         KStreamBuilder builder = new KStreamBuilder();
 
