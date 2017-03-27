@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -103,11 +102,8 @@ public class SmokeTestClient extends SmokeTestUtil {
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         KStreamBuilder builder = new KStreamBuilder();
-
         KStream<String, Integer> source = builder.stream(stringSerde, intSerde, "data");
-
         source.to(stringSerde, intSerde, "echo");
-
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {
