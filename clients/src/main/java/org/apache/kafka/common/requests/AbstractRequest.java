@@ -171,6 +171,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case DELETE_RECORDS:
                 request = new DeleteRecordsRequest(struct, version);
                 break;
+            case OFFSET_FOR_LEADER_EPOCH:
+                request = new OffsetsForLeaderEpochRequest(struct, version);
+                break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));

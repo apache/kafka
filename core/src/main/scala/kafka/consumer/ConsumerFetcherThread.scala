@@ -28,6 +28,7 @@ import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.EpochEndOffset
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
@@ -38,7 +39,8 @@ class ConsumerFetcherThread(name: String,
                                       clientId = config.clientId,
                                       sourceBroker = sourceBroker,
                                       fetchBackOffMs = config.refreshLeaderBackoffMs,
-                                      isInterruptible = true) {
+                                      isInterruptible = true,
+                                      includePartitionInitialisation = false) {
 
   type REQ = FetchRequest
   type PD = PartitionData
@@ -111,6 +113,12 @@ class ConsumerFetcherThread(name: String,
     simpleConsumer.fetch(fetchRequest.underlying).data.map { case (TopicAndPartition(t, p), value) =>
       new TopicPartition(t, p) -> new PartitionData(value)
     }
+
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = { Map() }
+
+  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
+
+  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = { Map() }
 }
 
 object ConsumerFetcherThread {

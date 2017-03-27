@@ -20,8 +20,9 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
-import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0, KAFKA_0_11_0_IV0}
-import kafka.server.OffsetCheckpoint
+import kafka.api.KAFKA_0_11_0_IV0
+import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -87,7 +88,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     // and make sure its gone from checkpoint file
     cleaner.logs.remove(topics(0))
     cleaner.updateCheckpoints(logDir)
-    val checkpoints = new OffsetCheckpoint(new File(logDir,cleaner.cleanerManager.offsetCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir,cleaner.cleanerManager.offsetCheckpointFile)).read()
     // we expect partition 0 to be gone
     assertFalse(checkpoints.contains(topics(0)))
   }

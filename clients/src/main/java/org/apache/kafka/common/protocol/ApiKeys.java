@@ -46,7 +46,8 @@ public enum ApiKeys {
     API_VERSIONS(18, "ApiVersions"),
     CREATE_TOPICS(19, "CreateTopics"),
     DELETE_TOPICS(20, "DeleteTopics"),
-    DELETE_RECORDS(21, "DeleteRecords");
+    DELETE_RECORDS(21, "DeleteRecords"),
+    OFFSET_FOR_LEADER_EPOCH(22, "OffsetForLeaderEpoch");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

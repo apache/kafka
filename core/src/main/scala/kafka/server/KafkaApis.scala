@@ -100,6 +100,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
+        case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -1306,6 +1307,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorizedForDeleteTopics.mapValues(_.toLong),
         sendResponseCallback)
     }
+  }
+
+  def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
+    val offsetForEpoch = request.body[OffsetsForLeaderEpochRequest]
+    val requestInfo = offsetForEpoch.epochsByTopic()
+    authorizeClusterAction(request)
+
+    val responseBody = new OffsetsForLeaderEpochResponse(
+      replicaManager.getResponseFor(requestInfo)
+    )
+    requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

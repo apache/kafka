@@ -37,7 +37,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -49,10 +48,14 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   val topic = "foo"
   val topicFilter = Whitelist(topic)
   val group = "test.group"
+  val timeout = "10000"
   val props = new Properties
 
   // configure the servers and clients
-  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { config =>
+    config.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "5")//TODO don't merge me - us seperate fix in https://github.com/apache/kafka/pull/2734
+    KafkaConfig.fromProps(config, overridingProps)
+  }
 
   @Before
   override def setUp() {
