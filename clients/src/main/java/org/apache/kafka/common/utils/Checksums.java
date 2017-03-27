@@ -19,6 +19,11 @@ package org.apache.kafka.common.utils;
 import java.nio.ByteBuffer;
 import java.util.zip.Checksum;
 
+/**
+ * Utility methods for `Checksum` instances.
+ *
+ * NOTE: This class is intended for INTERNAL usage only within Kafka.
+ */
 public final class Checksums {
 
     private Checksums() {
