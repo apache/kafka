@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.Os;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -31,7 +32,7 @@ public class ShellTest {
 
     @Test
     public void testEchoHello() throws Exception {
-        assumeTrue(!System.getProperty("os.name").toLowerCase(Locale.ROOT).startsWith("windows"));
+        assumeTrue(!Os.IS_WINDOWS);
         String output = Shell.execCommand("echo", "hello");
         assertEquals("hello\n", output);
     }
