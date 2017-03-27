@@ -102,6 +102,10 @@ public class MemoryRecordsTest {
                     assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
                     assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                     assertNull(batch.countOrNull());
+                    if (magic == RecordBatch.MAGIC_VALUE_V0)
+                        assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
+                    else
+                        assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
                 }
 
                 int recordCount = 0;
@@ -116,10 +120,18 @@ public class MemoryRecordsTest {
                     if (magic >= RecordBatch.MAGIC_VALUE_V2)
                         assertEquals(firstSequence + total, record.sequence());
 
-                    if (magic > RecordBatch.MAGIC_VALUE_V0) {
+                    assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
+                    if (magic == RecordBatch.MAGIC_VALUE_V0) {
+                        assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
+                        assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                    } else {
                         assertEquals(records[total].timestamp(), record.timestamp());
+                        assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
                         if (magic < RecordBatch.MAGIC_VALUE_V2)
-                            assertTrue(record.hasTimestampType(batch.timestampType()));
+                            assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        else
+                            assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
                     }
 
                     total++;
