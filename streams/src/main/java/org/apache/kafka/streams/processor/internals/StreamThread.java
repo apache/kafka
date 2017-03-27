@@ -400,17 +400,21 @@ public class StreamThread extends Thread {
 
     @SuppressWarnings("ThrowableNotThrown")
     private void shutdownTasksAndState() {
-        log.debug("{} shutdownTasksAndState: shutting down all active tasks {} and standby tasks {}", logPrefix,
-            activeTasks.keySet(), standbyTasks.keySet());
+        log.debug("{} shutdownTasksAndState: shutting down all active tasks {} " +
+                "and standby tasks {} and suspended tasks {} and suspended standby tasks {}", logPrefix,
+            activeTasks.keySet(), standbyTasks.keySet(),
+            suspendedTasks.keySet(), suspendedStandbyTasks.keySet());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         // Close all processors in topology order
         firstException.compareAndSet(null, closeAllTasks());
+        firstException.compareAndSet(null, closeAllSuspendedTasks());
         // flush state
         firstException.compareAndSet(null, flushAllState());
         // Close all task state managers. Don't need to set exception as all
         // state would have been flushed above
         closeAllStateManagers(firstException.get() == null);
+        closeAllSuspendedStateManagers(firstException.get() == null);
         // only commit under clean exit
         if (cleanRun && firstException.get() == null) {
             firstException.set(commitOffsets());
@@ -475,8 +479,41 @@ public class StreamThread extends Thread {
         return firstException;
     }
 
+    private RuntimeException performOnAllSuspendedTasks(final AbstractTaskAction action,
+                                               final String exceptionMessage) {
+        RuntimeException firstException = null;
+        final List<AbstractTask> allTasks = new ArrayList<AbstractTask>(suspendedTasks.values());
+        allTasks.addAll(suspendedStandbyTasks.values());
+        for (final AbstractTask task : allTasks) {
+            try {
+                action.apply(task);
+            } catch (RuntimeException t) {
+                log.error("{} Failed while executing {} {} due to {}: ",
+                    StreamThread.this.logPrefix,
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    exceptionMessage,
+                    t);
+                if (firstException == null) {
+                    firstException = t;
+                }
+            }
+        }
+        return firstException;
+    }
+
     private Throwable closeAllStateManagers(final boolean writeCheckpoint) {
         return performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                log.info("{} Closing the state manager of task {}", StreamThread.this.logPrefix, task.id());
+                task.closeStateManager(writeCheckpoint);
+            }
+        }, "close state manager");
+    }
+
+    private Throwable closeAllSuspendedStateManagers(final boolean writeCheckpoint) {
+        return performOnAllSuspendedTasks(new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
                 log.info("{} Closing the state manager of task {}", StreamThread.this.logPrefix, task.id());
@@ -1015,6 +1052,17 @@ public class StreamThread extends Thread {
 
     private RuntimeException closeAllTasks() {
         return performOnAllTasks(new AbstractTaskAction() {
+            @Override
+            public void apply(final AbstractTask task) {
+                log.info("{} Closing task {}", StreamThread.this.logPrefix, task.id());
+                task.close();
+                streamsMetrics.tasksClosedSensor.record();
+            }
+        }, "close");
+    }
+
+    private RuntimeException closeAllSuspendedTasks() {
+        return performOnAllSuspendedTasks(new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
                 log.info("{} Closing task {}", StreamThread.this.logPrefix, task.id());
