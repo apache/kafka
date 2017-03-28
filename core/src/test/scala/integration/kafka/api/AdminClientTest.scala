@@ -136,7 +136,10 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     client = AdminClient.createSimplePlaintext(brokerList)
 
-    assertEquals(DeleteRecordsResult(5L, null), client.deleteRecordsBefore(Map((tp, 0L))).get()(tp))
+    TestUtils.waitUntilTrue(() => {
+      // Need to retry if leader is not available for the partition
+      client.deleteRecordsBefore(Map((tp, 0L))).get(1000L, TimeUnit.MILLISECONDS)(tp).equals(DeleteRecordsResult(5L, null))
+    }, "Expected low watermark of the partition to be 5L")
   }
 
   @Test
