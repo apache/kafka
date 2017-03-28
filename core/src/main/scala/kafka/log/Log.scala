@@ -367,12 +367,14 @@ class Log(@volatile var dir: File,
       pidMap.truncateAndReload(lastOffset)
       logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
-        val logEntries = segment.read(startOffset, Some(lastOffset), Int.MaxValue).records
+        val records = segment.read(startOffset, Some(lastOffset), Int.MaxValue).records
         val currentTimeMs = time.milliseconds
-        logEntries.batches.asScala.foreach { entry =>
-          val pidEntry = PidEntry(entry.lastSequence, entry.producerEpoch, entry.lastOffset,
-            (entry.lastOffset - entry.baseOffset + 1).toInt, entry.maxTimestamp)
-          pidMap.load(entry.producerId, pidEntry, currentTimeMs)
+        records.batches.asScala.foreach { batch =>
+          if (batch.hasProducerId) {
+            val pidEntry = PidEntry(batch.lastSequence, batch.producerEpoch, batch.lastOffset,
+              (batch.lastOffset - batch.baseOffset + 1).toInt, batch.maxTimestamp)
+            pidMap.load(batch.producerId, pidEntry, currentTimeMs)
+          }
         }
       }
       logStartOffset.foreach(pidMap.cleanFrom)
@@ -649,7 +651,7 @@ class Log(@volatile var dir: File,
       val numRecordsInEntry: Int = (batch.lastOffset - batch.baseOffset + 1).toInt
       val currentPidEntry = PidEntry(batch.lastSequence, batch.producerEpoch, batch.lastOffset, numRecordsInEntry, batch.maxTimestamp)
       val pid = batch.producerId
-      if (batch.producerId != RecordBatch.NO_PRODUCER_ID) {
+      if (RecordBatch.NO_PRODUCER_ID < batch.producerId) {
         pidEntryMap.get(pid) match {
           case Some(entryRange) =>
             ProducerIdMapping.validatePidEntries(pid, entryRange.last, currentPidEntry)

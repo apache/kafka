@@ -43,7 +43,7 @@ public class TransactionState {
         }
 
         public boolean isValid() {
-            return producerId != NO_PRODUCER_ID;
+            return NO_PRODUCER_ID < producerId;
         }
     }
 

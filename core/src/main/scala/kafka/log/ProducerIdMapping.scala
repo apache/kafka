@@ -236,10 +236,9 @@ class ProducerIdMapping(val config: LogConfig,
    * Update the mapping to the given epoch and sequence number.
    */
   def update(pid: Long, pidEntry: PidEntry): Unit = {
-    if (pid >= RecordBatch.NO_PRODUCER_ID) {
-      pidMap.put(pid, pidEntry)
-      lastMapOffset = pidEntry.lastOffset
-    }
+    assert(RecordBatch.NO_PRODUCER_ID < pid)
+    pidMap.put(pid, pidEntry)
+    lastMapOffset = pidEntry.lastOffset
   }
 
   /**
@@ -257,7 +256,7 @@ class ProducerIdMapping(val config: LogConfig,
    * the log.
    */
   def checkSeqAndEpoch(pid: Long, incomingEntry: PidEntry) {
-    if (pid != RecordBatch.NO_PRODUCER_ID) {
+    if (RecordBatch.NO_PRODUCER_ID < pid) {
       pidMap.get(pid) match {
         case None =>
           if (incomingEntry.firstSeq != 0)

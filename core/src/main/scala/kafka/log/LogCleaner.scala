@@ -455,7 +455,7 @@ private[log] class Cleaner(val id: Int,
         // retain the entry if it is the last one produced by an active idempotent producer to ensure that
         // the PID is not removed from the log before it has been expired
         val pid = recordBatch.producerId
-        val isLastEntryForPid = pid != RecordBatch.NO_PRODUCER_ID && activePids.get(pid).exists(_.lastOffset == record.offset)
+        val isLastEntryForPid = RecordBatch.NO_PRODUCER_ID < pid && activePids.get(pid).exists(_.lastOffset == record.offset)
         record.isControlRecord || isLastEntryForPid || shouldRetainMessage(source, map, retainDeletes, record, stats)
       }
     }
