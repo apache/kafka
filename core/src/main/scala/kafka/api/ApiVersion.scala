@@ -65,7 +65,9 @@ object ApiVersion {
     "0.10.2" -> KAFKA_0_10_2_IV0,
     // KIP-98 (idempotent and transactional producer support)
     "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
-    "0.11.0" -> KAFKA_0_11_0_IV0
+    // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
+    "0.11.0-IV1" -> KAFKA_0_11_0_IV1,
+    "0.11.0" -> KAFKA_0_11_0_IV1
   )
 
   private val versionPattern = "\\.".r
@@ -151,6 +153,12 @@ case object KAFKA_0_10_2_IV0 extends ApiVersion {
 }
 
 case object KAFKA_0_11_0_IV0 extends ApiVersion {
+  val version: String = "0.11.0-IV0"
+  val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
+  val id: Int = 10
+}
+
+case object KAFKA_0_11_0_IV1 extends ApiVersion {
   val version: String = "0.11.0-IV0"
   val messageFormatVersion: Byte = RecordBatch.MAGIC_VALUE_V2
   val id: Int = 10

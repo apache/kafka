@@ -79,6 +79,17 @@ case class LogAppendInfo(var firstOffset: Long,
  *
  * @param dir The directory in which log segments are created.
  * @param config The log configuration settings
+ * @param logStartOffset The earliest offset allowed to be exposed to kafka client.
+ *                       The logStartOffset can be updated by :
+ *                       - user's DeleteRecordsRequest
+ *                       - broker's log retention
+ *                       - broker's log truncation
+ *                       The logStartOffset is used to decide the following:
+ *                       - Log deletion. LogSegment whose nextOffset <= log's logStartOffset can be deleted.
+ *                         It may trigger log rolling if the active segment is deleted.
+ *                       - Earliest offset of the log in response to ListOffsetRequest. To avoid OffsetOutOfRange exception after user seeks to earliest offset,
+ *                         we make sure that logStartOffset <= log's highWatermark
+ *                       Other activities such as log cleaning are not affected by logStartOffset.
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
  * @param time The time instance used for checking the clock
@@ -87,6 +98,7 @@ case class LogAppendInfo(var firstOffset: Long,
 @threadsafe
 class Log(@volatile var dir: File,
           @volatile var config: LogConfig,
+          @volatile var logStartOffset: Long = 0L,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
           time: Time = Time.SYSTEM) extends Logging with KafkaMetricsGroup {
@@ -118,8 +130,10 @@ class Log(@volatile var dir: File,
     nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
       activeSegment.size.toInt)
 
-    info("Completed load of log %s with %d log segments and log end offset %d in %d ms"
-      .format(name, segments.size(), logEndOffset, time.milliseconds - startMs))
+    logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
+
+    info("Completed load of log %s with %d log segments, log start offset %d and log end offset %d in %d ms"
+      .format(name, segments.size(), logStartOffset, logEndOffset, time.milliseconds - startMs))
   }
 
   val topicPartition: TopicPartition = Log.parseTopicPartitionName(dir)
@@ -443,6 +457,20 @@ class Log(@volatile var dir: File,
     }
   }
 
+  /*
+   * Increment the log start offset if the provided offset is larger.
+   */
+  def maybeIncrementLogStartOffset(offset: Long) {
+    // We don't have to write the log start offset to log-start-offset-checkpoint immediately.
+    // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
+    // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
+    lock synchronized {
+      if (offset > logStartOffset) {
+        logStartOffset = offset
+      }
+    }
+  }
+
   /**
    * Validate the following:
    * <ol>
@@ -543,7 +571,7 @@ class Log(@volatile var dir: File,
    * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
    *
-   * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the base offset of the first segment.
+   * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false): FetchDataInfo = {
@@ -558,9 +586,9 @@ class Log(@volatile var dir: File,
 
     var entry = segments.floorEntry(startOffset)
 
-    // attempt to read beyond the log end offset is an error
-    if(startOffset > next || entry == null)
-      throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, segments.firstKey, next))
+    // return error on attempt to read beyond the log end offset or read below log start offset
+    if(startOffset > next || entry == null || startOffset < logStartOffset)
+      throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, logStartOffset, next))
 
     // Do the read on the segment with a base offset less than the target offset
     // but if that segment doesn't contain any messages with an offset greater than that
@@ -626,7 +654,7 @@ class Log(@volatile var dir: File,
     val segmentsCopy = logSegments.toBuffer
     // For the earliest and latest, we do not need to return the timestamp.
     if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, segmentsCopy.head.baseOffset))
+        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logStartOffset))
     else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
         return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logEndOffset))
 
@@ -640,7 +668,7 @@ class Log(@volatile var dir: File,
         None
     }
 
-    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp))
+    targetSeg.flatMap(_.findOffsetByTimestamp(targetTimestamp, logStartOffset))
   }
 
   /**
@@ -666,16 +694,21 @@ class Log(@volatile var dir: File,
   private def deleteOldSegments(predicate: LogSegment => Boolean): Int = {
     lock synchronized {
       val deletable = deletableSegments(predicate)
-      val numToDelete = deletable.size
-      if (numToDelete > 0) {
-        // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
-        if (segments.size == numToDelete)
-          roll()
-        // remove the segments for lookups
-        deletable.foreach(deleteSegment)
-      }
-      numToDelete
+      deleteSegments(deletable)
     }
+  }
+
+  private def deleteSegments(deletable: Iterable[LogSegment]): Int = {
+    val numToDelete = deletable.size
+    if (numToDelete > 0) {
+      // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
+      if (segments.size == numToDelete)
+        roll()
+      // remove the segments for lookups
+      deletable.foreach(deleteSegment)
+      logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
+    }
+    numToDelete
   }
 
   /**
@@ -696,10 +729,10 @@ class Log(@volatile var dir: File,
     */
   def deleteOldSegments(): Int = {
     if (!config.delete) return 0
-    deleteRetenionMsBreachedSegments() + deleteRetentionSizeBreachedSegments()
+    deleteRetentionMsBreachedSegments() + deleteRetentionSizeBreachedSegments() + deleteLogStartOffsetBreachedSegments()
   }
 
-  private def deleteRetenionMsBreachedSegments() : Int = {
+  private def deleteRetentionMsBreachedSegments() : Int = {
     if (config.retentionMs < 0) return 0
     val startMs = time.milliseconds
     deleteOldSegments(startMs - _.largestTimestamp > config.retentionMs)
@@ -719,15 +752,26 @@ class Log(@volatile var dir: File,
     deleteOldSegments(shouldDelete)
   }
 
+  private def deleteLogStartOffsetBreachedSegments() : Int = {
+    // keep active segment to avoid frequent log rolling due to user's DeleteRecordsRequest
+    lock synchronized {
+      val deletable = {
+        if (segments.size() < 2)
+          Seq.empty
+        else
+          logSegments.sliding(2).takeWhile { iterable =>
+            val nextSegment = iterable.toSeq(1)
+            nextSegment.baseOffset <= logStartOffset
+          }.map(_.toSeq(0)).toSeq
+      }
+      deleteSegments(deletable)
+    }
+  }
+
   /**
    * The size of the log in bytes
    */
   def size: Long = logSegments.map(_.size).sum
-
-   /**
-   * The earliest message offset in the log
-   */
-  def logStartOffset: Long = logSegments.head.baseOffset
 
   /**
    * The offset metadata of the next message that will be appended to the log
@@ -789,7 +833,7 @@ class Log(@volatile var dir: File,
   def roll(expectedNextOffset: Long = 0): LogSegment = {
     val start = time.nanoseconds
     lock synchronized {
-      val newOffset = Math.max(expectedNextOffset, logEndOffset)
+      val newOffset = math.max(expectedNextOffset, logEndOffset)
       val logFile = logFilename(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
       val timeIndexFile = timeIndexFilename(dir, newOffset)
@@ -895,6 +939,7 @@ class Log(@volatile var dir: File,
         activeSegment.truncateTo(targetOffset)
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
+        this.logStartOffset = math.min(targetOffset, this.logStartOffset)
       }
     }
   }
@@ -920,6 +965,7 @@ class Log(@volatile var dir: File,
                                 preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
+      this.logStartOffset = newOffset
     }
   }
 
@@ -1081,6 +1127,8 @@ object Log {
 
   /** a directory that is scheduled to be deleted */
   val DeleteDirSuffix = "-delete"
+
+  val UnknownLogStartOffset = -1L
 
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros

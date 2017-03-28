@@ -60,7 +60,8 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler,
-      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
+      logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower,
+      new MetadataCache(configs.head.brokerId))
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()
@@ -104,7 +105,8 @@ class HighwatermarkPersistenceTest {
     val time = new MockTime
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils,
-      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
+      scheduler, logManagers.head, new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower,
+      new MetadataCache(configs.head.brokerId))
     replicaManager.startup()
     try {
       replicaManager.checkpointHighWatermarks()

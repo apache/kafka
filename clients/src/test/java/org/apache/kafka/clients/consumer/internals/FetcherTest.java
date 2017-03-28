@@ -222,7 +222,7 @@ public class FetcherTest {
             public boolean matches(AbstractRequest body) {
                 FetchRequest fetch = (FetchRequest) body;
                 return fetch.fetchData().containsKey(tp) &&
-                        fetch.fetchData().get(tp).offset == offset;
+                        fetch.fetchData().get(tp).fetchOffset == offset;
             }
         };
     }
@@ -966,7 +966,7 @@ public class FetcherTest {
 
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {
         Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
-                new FetchResponse.PartitionData(error, hw, FetchResponse.INVALID_LSO, null, records));
+                new FetchResponse.PartitionData(error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
         return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
     }
 

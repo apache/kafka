@@ -40,7 +40,7 @@ class ReplicaManagerQuotasTest {
   val record = new SimpleRecord("some-data-in-a-message".getBytes())
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
-  val fetchInfo = Seq(topicPartition1 -> new PartitionData(0, 100), topicPartition2 -> new PartitionData(0, 100))
+  val fetchInfo = Seq(topicPartition1 -> new PartitionData(0, 0, 100), topicPartition2 -> new PartitionData(0, 0, 100))
   var replicaManager: ReplicaManager = null
 
   @Test
@@ -147,6 +147,7 @@ class ReplicaManagerQuotasTest {
 
     //Create log which handles both a regular read and a 0 bytes read
     val log = createMock(classOf[Log])
+    expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
 
@@ -173,7 +174,7 @@ class ReplicaManagerQuotasTest {
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
-      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower, new MetadataCache(configs.head.brokerId))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
