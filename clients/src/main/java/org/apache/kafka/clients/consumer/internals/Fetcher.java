@@ -748,8 +748,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         TopicPartition tp = completedFetch.partition;
         FetchResponse.PartitionData partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
-        int bytes = 0;
-        int recordsCount = 0;
         PartitionRecords parsedRecords = null;
         Errors error = partition.error;
 
@@ -822,7 +820,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             }
         } finally {
             if (error != Errors.NONE) {
-                completedFetch.metricAggregator.record(tp, bytes, recordsCount);
+                completedFetch.metricAggregator.record(tp, 0, 0);
                 // we move the partition to the end if there was an error. This way, it's more likely that partitions for
                 // the same topic can remain together (allowing for more efficient serialization).
                 subscriptions.movePartitionToEnd(tp);
