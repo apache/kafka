@@ -151,6 +151,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
 
       val log = new Log(dir = dir,
         LogConfig(logProps),
+        logStartOffset = 0L,
         recoveryPoint = 0L,
         scheduler = time.scheduler,
         time = time)
