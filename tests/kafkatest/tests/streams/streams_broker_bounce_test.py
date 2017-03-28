@@ -122,7 +122,7 @@ class StreamsBrokerBounceTest(Test):
         self.driver.start()
         self.processor1.start()
 
-    def collect_results(self):
+    def collect_results(self, sleep_time_secs):
         data = {}
         # End test
         self.driver.wait()
@@ -132,8 +132,14 @@ class StreamsBrokerBounceTest(Test):
 
         node = self.driver.node
         
-        # Success is declared if streams does not crash.
-        output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+        # Success is declared if streams does not crash when sleep time > 0
+        # It should give an exception when sleep time is 0 since we kill the brokers immediately
+        # and the topic manager cannot create internal topics with the desired replication factor
+        if (sleep_time_secs == 0):
+            output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-EXCEPTION %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+        else:
+            output_streams = self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+            
         for line in output_streams:
             data["Client closed"] = line
 
@@ -149,15 +155,14 @@ class StreamsBrokerBounceTest(Test):
         
         return data
 
-    
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
             broker_type=["leader", "controller"],
-            sleep_time_secs=[0, 15])
+            sleep_time_secs=[120])
     def test_broker_type_bounce(self, failure_mode, broker_type, sleep_time_secs):
         """
-        Start a smoke test client, then kill a particular broker and ensure data is still received
-        Record if records are delivered
+        Start a smoke test client, then kill one particular broker and ensure data is still received
+        Record if records are delivered. 
         """
         self.setup_system() 
 
@@ -167,8 +172,28 @@ class StreamsBrokerBounceTest(Test):
         # Fail brokers
         self.fail_broker_type(failure_mode, broker_type);
 
-        return self.collect_results()
+        return self.collect_results(sleep_time_secs)
 
+    @cluster(num_nodes=7)
+    @matrix(failure_mode=["clean_shutdown"],
+            broker_type=["controller"],
+            sleep_time_secs=[0])
+    def test_broker_type_bounce_at_start(self, failure_mode, broker_type, sleep_time_secs):
+        """
+        Start a smoke test client, then kill one particular broker immediately before streams stats
+        Streams should throw an exception since it cannot create topics with the desired
+        replication factor of 3
+        """
+        self.setup_system() 
+
+        # Sleep to allow test to run for a bit
+        time.sleep(sleep_time_secs)
+
+        # Fail brokers
+        self.fail_broker_type(failure_mode, broker_type);
+
+        return self.collect_results(sleep_time_secs)
+    
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown"],
             num_failures=[2])
@@ -180,9 +205,9 @@ class StreamsBrokerBounceTest(Test):
         self.setup_system() 
 
         # Sleep to allow test to run for a bit
-        time.sleep(15)
+        time.sleep(120)
 
         # Fail brokers
         self.fail_many_brokers(failure_mode, num_failures);
 
-        return self.collect_results()
+        return self.collect_results(120)

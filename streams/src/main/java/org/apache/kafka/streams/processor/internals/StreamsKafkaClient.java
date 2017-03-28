@@ -206,7 +206,7 @@ public class StreamsKafkaClient {
             try {
                 kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
             } catch (Exception e) {
-                throw new StreamsException("Could not poll.");
+                throw new StreamsException("Could not poll.", e);
             }
         }
         if (brokerId == null) {
@@ -239,11 +239,20 @@ public class StreamsKafkaClient {
     }
 
     private ClientResponse sendRequest(final ClientRequest clientRequest) {
-        kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
+        try {
+            kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
+        } catch (Exception e) {
+            throw new StreamsException("Could not send request.", e);
+        }
         final long responseTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         // Poll for the response.
         while (Time.SYSTEM.milliseconds() < responseTimeout) {
-            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            final List<ClientResponse> responseList;
+            try {
+                responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            } catch (IllegalStateException e) {
+                throw new StreamsException("Could not poll.", e);
+            }
             if (!responseList.isEmpty()) {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");
@@ -272,12 +281,8 @@ public class StreamsKafkaClient {
             new MetadataRequest.Builder(null),
             Time.SYSTEM.milliseconds(),
             true);
-        ClientResponse clientResponse;
-        try {
-            clientResponse = sendRequest(clientRequest);
-        } catch (Exception e) {
-            throw new StreamsException("Failed to send request");
-        }
+        final ClientResponse clientResponse = sendRequest(clientRequest);
+
         if (!clientResponse.hasResponse()) {
             throw new StreamsException("Empty response for client request.");
         }
