@@ -138,9 +138,13 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
     try {
+      // Shutdown the RequestSendThread before closing the NetworkClient to avoid the concurrent use of the
+      // non-threadsafe classes as described in KAFKA-4959.
+      // The call to shutdownLatch.await() in ShutdownableThread.shutdown() serves as a synchronization barrier that
+      // hands off the NetworkClient from the RequestSendThread to the ZkEventThread.
+      brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
-      brokerState.requestSendThread.shutdown()
       brokerStateInfo.remove(brokerState.brokerNode.id)
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
