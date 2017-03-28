@@ -161,7 +161,7 @@ class Log(@volatile var dir: File,
 
   newGauge("LogStartOffset",
     new Gauge[Long] {
-      def value = logStartOffset.get
+      def value = logStartOffset
     },
     tags)
 
@@ -377,7 +377,7 @@ class Log(@volatile var dir: File,
           }
         }
       }
-      logStartOffset.foreach(pidMap.cleanFrom)
+      pidMap.cleanFrom(logStartOffset)
     }
   }
 

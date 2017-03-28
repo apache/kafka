@@ -1311,6 +1311,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorizedForDeleteTopics.mapValues(_.toLong),
         sendResponseCallback)
     }
+  }
 
   def handleInitPidRequest(request: RequestChannel.Request): Unit = {
     val initPidRequest = request.body[InitPidRequest]
