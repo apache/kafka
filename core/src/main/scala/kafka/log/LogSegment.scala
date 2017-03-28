@@ -387,32 +387,33 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
-   * Search the message offset based on timestamp.
-   * This method returns an option of TimestampOffset. The offset is the offset of the first message whose timestamp is
-   * greater than or equals to the target timestamp.
+   * Search the message offset based on timestamp and offset.
    *
-   * If all the message in the segment have smaller timestamps, the returned offset will be last offset + 1 and the
-   * timestamp will be max timestamp in the segment.
+   * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
    *
-   * If all the messages in the segment have larger timestamps, or no message in the segment has a timestamp,
-   * the returned the offset will be the base offset of the segment and the timestamp will be Message.NoTimestamp.
+   * - If all the messages in the segment have smaller offsets, return None
+   * - If all the messages in the segment have smaller timestamps, return None
+   * - If all the messages in the segment have larger timestamps, or no message in the segment has a timestamp
+   *   the returned the offset will be max(the base offset of the segment, startingOffset) and the timestamp will be Message.NoTimestamp.
+   * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
+   *   is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
    *
-   * This methods only returns None when the log is not empty but we did not see any messages when scanning the log
-   * from the indexed position. This could happen if the log is truncated after we get the indexed position but
-   * before we scan the log from there. In this case we simply return None and the caller will need to check on
-   * the truncated log and maybe retry or even do the search on another log segment.
+   * This methods only returns None when 1) all messages' offset < startOffing or 2) the log is not empty but we did not
+   * see any message when scanning the log from the indexed position. The latter could happen if the log is truncated
+   * after we get the indexed position but before we scan the log from there. In this case we simply return None and the
+   * caller will need to check on the truncated log and maybe retry or even do the search on another log segment.
    *
    * @param timestamp The timestamp to search for.
-   * @return the timestamp and offset of the first message whose timestamp is larger than or equal to the
-   *         target timestamp. None will be returned if there is no such message.
+   * @param startingOffset The starting offset to search.
+   * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
    */
-  def findOffsetByTimestamp(timestamp: Long): Option[TimestampOffset] = {
+  def findOffsetByTimestamp(timestamp: Long, startingOffset: Long = baseOffset): Option[TimestampOffset] = {
     // Get the index entry with a timestamp less than or equal to the target timestamp
     val timestampOffset = timeIndex.lookup(timestamp)
-    val position = index.lookup(timestampOffset.offset).position
+    val position = index.lookup(math.max(timestampOffset.offset, startingOffset)).position
 
     // Search the timestamp
-    Option(log.searchForTimestamp(timestamp, position)).map { timestampAndOffset =>
+    Option(log.searchForTimestamp(timestamp, position, startingOffset)).map { timestampAndOffset =>
       TimestampOffset(timestampAndOffset.timestamp, timestampAndOffset.offset)
     }
   }

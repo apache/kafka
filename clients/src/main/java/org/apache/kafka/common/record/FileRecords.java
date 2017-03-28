@@ -286,24 +286,25 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     /**
-     * Search forward for the message whose timestamp is greater than or equals to the target timestamp.
+     * Search forward for the first message that meets the following requirements:
+     * - Message's timestamp is greater than or equals to the targetTimestamp.
+     * - Message's position in the log file is greater than or equals to the startingPosition.
+     * - Message's offset is greater than or equals to the startingOffset.
      *
      * @param targetTimestamp The timestamp to search for.
      * @param startingPosition The starting position to search.
-     * @return The timestamp and offset of the message found. None, if no message is found.
+     * @param startingOffset The starting offset to search.
+     * @return The timestamp and offset of the message found. Null if no message is found.
      */
-    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition) {
+    public TimestampAndOffset searchForTimestamp(long targetTimestamp, int startingPosition, long startingOffset) {
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             if (batch.maxTimestamp() >= targetTimestamp) {
                 // We found a message
                 for (Record record : batch) {
                     long timestamp = record.timestamp();
-                    if (timestamp >= targetTimestamp)
+                    if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
                         return new TimestampAndOffset(timestamp, record.offset());
                 }
-                throw new IllegalStateException(String.format("The message set (max timestamp = %s, max offset = %s)" +
-                        " should contain target timestamp %s but it does not.", batch.maxTimestamp(),
-                        batch.lastOffset(), targetTimestamp));
             }
         }
         return null;

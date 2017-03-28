@@ -53,7 +53,7 @@ class IsrExpirationTest {
   @Before
   def setUp() {
     replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, null, new AtomicBoolean(false),
-      QuotaFactory.instantiate(configs.head, metrics, time).follower)
+      QuotaFactory.instantiate(configs.head, metrics, time).follower, new MetadataCache(configs.head.brokerId))
   }
 
   @After
@@ -78,7 +78,9 @@ class IsrExpirationTest {
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(15L), MemoryRecords.EMPTY),
                                                     hw = 15L,
+                                                    leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 15L,
+                                                    followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1))
     var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
@@ -130,7 +132,9 @@ class IsrExpirationTest {
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(10L), MemoryRecords.EMPTY),
                                                     hw = 10L,
+                                                    leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 15L,
+                                                    followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1))
 
@@ -144,7 +148,9 @@ class IsrExpirationTest {
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
       r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(11L), MemoryRecords.EMPTY),
                             hw = 11L,
+                            leaderLogStartOffset = 0L,
                             leaderLogEndOffset = 15L,
+                            followerLogStartOffset = 0L,
                             fetchTimeMs = time.milliseconds,
                             readSize = -1))
     }
@@ -161,7 +167,9 @@ class IsrExpirationTest {
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
       r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(15L), MemoryRecords.EMPTY),
                             hw = 15L,
+                            leaderLogStartOffset = 0L,
                             leaderLogEndOffset = 15L,
+                            followerLogStartOffset = 0L,
                             fetchTimeMs = time.milliseconds,
                             readSize = -1))
     }
@@ -185,7 +193,9 @@ class IsrExpirationTest {
     for (replica <- partition.assignedReplicas - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY),
                                                     hw = 0L,
+                                                    leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 0L,
+                                                    followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1))
     // set the leader and its hw and the hw update time
