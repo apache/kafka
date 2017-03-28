@@ -129,7 +129,7 @@ public class ConsumerCoordinatorTest {
         this.partitionAssignor.clear();
 
         client.setNode(node);
-        this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, autoCommitEnabled);
+        this.coordinator = buildCoordinator(metrics, assignors, ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, autoCommitEnabled, true);
     }
 
     @After
@@ -861,7 +861,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testIncludeInternalTopicsConfigOption() {
-        coordinator = buildCoordinator(new Metrics(), assignors, false, false);
+        coordinator = buildCoordinator(new Metrics(), assignors, false, false, true);
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
 
         metadata.update(TestUtils.singletonCluster(TestUtils.GROUP_METADATA_TOPIC_NAME, 2), Collections.<String>emptySet(), time.milliseconds());
@@ -955,7 +955,7 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "consumer";
 
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
+                                                           ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -980,7 +980,7 @@ public class ConsumerCoordinatorTest {
         final String consumerId = "consumer";
 
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
+                                                           ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -1007,7 +1007,7 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testAutoCommitManualAssignment() {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
+                                                           ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
 
         subscriptions.assignFromUser(singleton(t1p));
         subscriptions.seek(t1p, 100);
@@ -1025,7 +1025,7 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testAutoCommitManualAssignmentCoordinatorUnknown() {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true);
+                                                           ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, true, true);
 
         subscriptions.assignFromUser(singleton(t1p));
         subscriptions.seek(t1p, 100);
@@ -1376,7 +1376,7 @@ public class ConsumerCoordinatorTest {
 
         try (Metrics metrics = new Metrics(time)) {
             ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(roundRobin, range),
-                    ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false);
+                                                               ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false, true);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(roundRobin.name(), metadata.get(0).name());
@@ -1385,7 +1385,7 @@ public class ConsumerCoordinatorTest {
 
         try (Metrics metrics = new Metrics(time)) {
             ConsumerCoordinator coordinator = buildCoordinator(metrics, Arrays.<PartitionAssignor>asList(range, roundRobin),
-                    ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false);
+                                                               ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, false, true);
             List<ProtocolMetadata> metadata = coordinator.metadata();
             assertEquals(2, metadata.size());
             assertEquals(range.name(), metadata.get(0).name());
@@ -1395,19 +1395,25 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseDynamicAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         gracefulCloseTest(coordinator, true);
     }
 
     @Test
     public void testCloseManualAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, true);
+        gracefulCloseTest(coordinator, false);
+    }
+
+    @Test
+    public void shouldNotLeaveGroupWhenLeaveGroupFlagIsFalse() throws Exception {
+        final ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, false);
         gracefulCloseTest(coordinator, false);
     }
 
     @Test
     public void testCloseCoordinatorNotKnownManualAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, true);
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR_FOR_GROUP);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, 1000, 60000, 1000, 1000);
@@ -1415,14 +1421,14 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseCoordinatorNotKnownNoCommits() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, true);
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR_FOR_GROUP);
         closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
     }
 
     @Test
     public void testCloseCoordinatorNotKnownWithCommits() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR_FOR_GROUP);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, 1000, 60000, 1000, 1000);
@@ -1430,14 +1436,14 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseCoordinatorUnavailableNoCommits() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, true);
         makeCoordinatorUnknown(coordinator, Errors.GROUP_COORDINATOR_NOT_AVAILABLE);
         closeVerifyTimeout(coordinator, 1000, 60000, 0, 0);
     }
 
     @Test
     public void testCloseTimeoutCoordinatorUnavailableForCommit() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         makeCoordinatorUnknown(coordinator, Errors.GROUP_COORDINATOR_NOT_AVAILABLE);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, 1000, 60000, 1000, 1000);
@@ -1445,7 +1451,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseMaxWaitCoordinatorUnavailableForCommit() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         makeCoordinatorUnknown(coordinator, Errors.GROUP_COORDINATOR_NOT_AVAILABLE);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
@@ -1453,20 +1459,20 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseNoResponseForCommit() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
     }
 
     @Test
     public void testCloseNoResponseForLeaveGroup() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, true);
         closeVerifyTimeout(coordinator, Long.MAX_VALUE, 60000, 60000, 60000);
     }
 
     @Test
     public void testCloseNoWait() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, 0, 60000, 0, 0);
     }
@@ -1474,7 +1480,7 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testHeartbeatThreadClose() throws Exception {
         groupId = "testCloseTimeoutWithHeartbeatThread";
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, true);
         coordinator.ensureActiveGroup();
         time.sleep(heartbeatIntervalMs + 100);
         Thread.yield(); // Give heartbeat thread a chance to attempt heartbeat
@@ -1485,10 +1491,12 @@ public class ConsumerCoordinatorTest {
             assertFalse("Heartbeat thread active after close", threads[i].getName().contains(groupId));
     }
 
-    private ConsumerCoordinator prepareCoordinatorForCloseTest(boolean useGroupManagement, boolean autoCommit) {
+    private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
+                                                               final boolean autoCommit,
+                                                               final boolean leaveGroup) {
         final String consumerId = "consumer";
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, autoCommit);
+                ConsumerConfig.DEFAULT_EXCLUDE_INTERNAL_TOPICS, autoCommit, leaveGroup);
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady();
         if (useGroupManagement) {
@@ -1547,7 +1555,7 @@ public class ConsumerCoordinatorTest {
         }
     }
 
-    private void gracefulCloseTest(ConsumerCoordinator coordinator, boolean dynamicAssignment) throws Exception {
+    private void gracefulCloseTest(ConsumerCoordinator coordinator, boolean shouldLeaveGroup) throws Exception {
         final AtomicBoolean commitRequested = new AtomicBoolean();
         final AtomicBoolean leaveGroupRequested = new AtomicBoolean();
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -1569,14 +1577,14 @@ public class ConsumerCoordinatorTest {
 
         coordinator.close();
         assertTrue("Commit not requested", commitRequested.get());
-        if (dynamicAssignment)
-            assertTrue("Leave group not requested", leaveGroupRequested.get());
+        assertEquals("leaveGroupRequested should be " + shouldLeaveGroup, shouldLeaveGroup, leaveGroupRequested.get());
     }
 
-    private ConsumerCoordinator buildCoordinator(Metrics metrics,
-                                                 List<PartitionAssignor> assignors,
-                                                 boolean excludeInternalTopics,
-                                                 boolean autoCommitEnabled) {
+    private ConsumerCoordinator buildCoordinator(final Metrics metrics,
+                                                 final List<PartitionAssignor> assignors,
+                                                 final boolean excludeInternalTopics,
+                                                 final boolean autoCommitEnabled,
+                                                 final boolean leaveGroup) {
         return new ConsumerCoordinator(
                 consumerClient,
                 groupId,
@@ -1593,7 +1601,8 @@ public class ConsumerCoordinatorTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 null,
-                excludeInternalTopics);
+                excludeInternalTopics,
+                leaveGroup);
     }
 
     private GroupCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
