@@ -178,8 +178,8 @@ public class MockClient implements KafkaClient {
             }
         }
 
-        while (!this.responses.isEmpty()) {
-            ClientResponse response = this.responses.poll();
+        ClientResponse response;
+        while ((response = this.responses.poll()) != null) {
             response.onComplete();
         }
 
