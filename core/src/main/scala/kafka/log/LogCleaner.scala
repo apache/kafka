@@ -448,7 +448,7 @@ private[log] class Cleaner(val id: Int,
                              map: OffsetMap,
                              retainDeletes: Boolean,
                              maxLogMessageSize: Int,
-                             activePids: Map[Long, PidEntry],
+                             activePids: Map[Long, ProducerIdEntry],
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
       def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = {

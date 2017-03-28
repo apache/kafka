@@ -176,7 +176,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val epoch = 5.toShort
     val sequence = 37
     val createTimeMs = time.milliseconds
-    idMapping.load(pid, PidEntry(sequence, epoch, 0L, 1, createTimeMs), time.milliseconds)
+    idMapping.load(pid, ProducerIdEntry(epoch, sequence, 0L, 1, createTimeMs), time.milliseconds)
     checkAndUpdate(idMapping, pid, sequence + 1, epoch, 2L)
   }
 
@@ -188,7 +188,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val createTimeMs = time.milliseconds
     time.sleep(maxPidExpirationMs + 1)
     val loadTimeMs = time.milliseconds
-    idMapping.load(pid, PidEntry(sequence, epoch, 0L, 1, createTimeMs), loadTimeMs)
+    idMapping.load(pid, ProducerIdEntry(epoch, sequence, 0L, 1, createTimeMs), loadTimeMs)
 
     // entry wasn't loaded, so this should fail
     checkAndUpdate(idMapping, pid, sequence + 1, epoch, 2L)
@@ -201,9 +201,10 @@ class ProducerIdMappingTest extends JUnitSuite {
                              lastOffset: Long,
                              timestamp: Long = time.milliseconds()): Unit = {
     val numRecords = 1
-    val incomingPidEntry = PidEntry(seq, epoch, lastOffset, numRecords, timestamp)
-    mapping.checkSeqAndEpoch(pid, incomingPidEntry)
-    mapping.update(pid, incomingPidEntry)
+    val incomingPidEntry = ProducerIdEntry(epoch, seq, lastOffset, numRecords, timestamp)
+    val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
+    producerAppendInfo.append(incomingPidEntry)
+    mapping.update(producerAppendInfo)
   }
 
 }

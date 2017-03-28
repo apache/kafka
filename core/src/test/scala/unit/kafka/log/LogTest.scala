@@ -28,7 +28,7 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.record.{RecordBatch, _}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -158,7 +158,8 @@ class LogTest extends JUnitSuite {
     var seq = 0
     // Pad the beginning of the log.
     for (i <- 0 to 5) {
-      val record = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = seq)
+      val record = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)),
+        pid = pid, epoch = epoch, sequence = seq)
       log.append(record, assignOffsets = true)
       seq = seq + 1
     }

@@ -30,16 +30,70 @@ import org.apache.kafka.common.utils.{ByteUtils, Crc32}
 
 import scala.collection.{immutable, mutable}
 
-private[log] case class PidEntry(lastSeq: Int, epoch: Short, lastOffset: Long, numRecords: Int, timestamp: Long) {
-  def firstSeq: Int = {
-    lastSeq - numRecords + 1
-  }
+private[log] object ProducerIdEntry {
+  val Empty = ProducerIdEntry(RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+    -1, 0, RecordBatch.NO_TIMESTAMP)
+}
 
-  def firstOffset: Long = {
-    lastOffset - numRecords + 1
+private[log] case class ProducerIdEntry(epoch: Short, lastSeq: Int, lastOffset: Long, numRecords: Int, timestamp: Long) {
+  def firstSeq: Int = lastSeq - numRecords + 1
+  def firstOffset: Long = lastOffset - numRecords + 1
+
+  def isDuplicate(batch: RecordBatch): Boolean = {
+    batch.producerEpoch == epoch &&
+      batch.baseSequence == firstSeq &&
+      batch.lastSequence() == lastSeq
   }
 }
-private[log] case class PidEntryRange(first: PidEntry, last: PidEntry)
+
+private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEntry) {
+  private var epoch = initialEntry.epoch
+  private var firstSeq = initialEntry.firstSeq
+  private var lastSeq = initialEntry.lastSeq
+  private var lastOffset = initialEntry.lastOffset
+  private var lastTimestamp = initialEntry.timestamp
+
+  private def validateAppend(epoch: Short, firstSeq: Int, lastSeq: Int) = {
+    if (this.epoch > epoch) {
+      throw new ProducerFencedException(s"Invalid epoch (zombie writer): $epoch (request epoch), ${this.epoch}")
+    } else if (this.epoch == RecordBatch.NO_PRODUCER_EPOCH || this.epoch < epoch) {
+      if (firstSeq != 0)
+        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $epoch " +
+          s"(request epoch), $firstSeq (seq. number)")
+    } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
+      throw new DuplicateSequenceNumberException(s"Duplicate sequence number: $pid (pid), $firstSeq " +
+        s"(seq. number), ${this.firstSeq} (expected seq. number)")
+    } else if (firstSeq != this.lastSeq + 1L) {
+      throw new OutOfOrderSequenceException(s"Invalid sequence number: $pid (pid), $firstSeq " +
+        s"(seq. number), ${this.lastSeq} (expected seq. number)")
+    }
+  }
+
+  def assignLastOffsetAndTimestamp(lastOffset: Long, lastTimestamp: Long): Unit = {
+    this.lastOffset = lastOffset
+    this.lastTimestamp = lastTimestamp
+  }
+
+  private def append(epoch: Short, firstSeq: Int, lastSeq: Int, lastTimestamp: Long, lastOffset: Long) {
+    validateAppend(epoch, firstSeq, lastSeq)
+    this.epoch = epoch
+    this.firstSeq = firstSeq
+    this.lastSeq = lastSeq
+    this.lastTimestamp = lastTimestamp
+    this.lastOffset = lastOffset
+  }
+
+  def append(batch: RecordBatch): Unit =
+    append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset)
+
+  def append(entry: ProducerIdEntry): Unit =
+    append(entry.epoch, entry.firstSeq, entry.lastSeq, entry.timestamp, entry.lastOffset)
+
+  def lastEntry: ProducerIdEntry =
+    ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq + 1, lastTimestamp)
+}
+
+private[log] case class PidEntryRange(first: ProducerIdEntry, last: ProducerIdEntry)
 private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 object ProducerIdMapping {
@@ -51,9 +105,9 @@ object ProducerIdMapping {
   private val VersionField = "version"
   private val CrcField = "crc"
   private val PidField = "pid"
-  private val SequenceField = "sequence"
+  private val LastSequenceField = "last_sequence"
   private val EpochField = "epoch"
-  private val OffsetField = "offset"
+  private val LastOffsetField = "last_offset"
   private val NumRecordsField = "num_records"
   private val TimestampField = "timestamp"
   private val PidEntriesField = "pid_entries"
@@ -65,35 +119,16 @@ object ProducerIdMapping {
   val PidSnapshotEntrySchema = new Schema(
     new Field(PidField, Type.INT64, "The producer ID"),
     new Field(EpochField, Type.INT16, "Current epoch of the producer"),
-    new Field(SequenceField, Type.INT32, "Last written sequence of the producer"),
-    new Field(OffsetField, Type.INT64, "Last written offset of the producer"),
+    new Field(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
+    new Field(LastOffsetField, Type.INT64, "Last written offset of the producer"),
     new Field(NumRecordsField, Type.INT32, "The number of records written in the last log entry"),
-    new Field(TimestampField, Type.INT64, "Max timestamp from the last written entry"));
+    new Field(TimestampField, Type.INT64, "Max timestamp from the last written entry"))
   val PidSnapshotMapSchema = new Schema(
     new Field(VersionField, Type.INT16, "Version of the snapshot file"),
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
     new Field(PidEntriesField, new ArrayOf(PidSnapshotEntrySchema), "The entries in the PID table"))
 
-  def validatePidEntries(pid: Long, existingEntry: PidEntry, incomingEntry: PidEntry): Unit = {
-    // Zombie writer
-    if (existingEntry.epoch > incomingEntry.epoch)
-      throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${incomingEntry.epoch} (request epoch), " +
-        s"${existingEntry.epoch}")
-    if (existingEntry.epoch < incomingEntry.epoch) {
-      if (incomingEntry.firstSeq != 0)
-        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: ${incomingEntry.epoch} " +
-          s"(request epoch), ${incomingEntry.firstSeq} (seq. number)")
-    } else {
-      if (incomingEntry.firstSeq > existingEntry.lastSeq + 1L)
-        throw new OutOfOrderSequenceException(s"Invalid sequence number: $pid (id), ${incomingEntry.firstSeq} " +
-          s"(seq. number), ${existingEntry.lastSeq} (expected seq. number)")
-      else if (incomingEntry.firstSeq <= existingEntry.lastSeq)
-        throw new DuplicateSequenceNumberException(s"Duplicate sequence number: $pid (id), ${incomingEntry.firstSeq} " +
-          s"(seq. number), ${existingEntry.firstSeq} (expected seq. number)")
-    }
-  }
-
-  private def loadSnapshot(file: File, pidMap: mutable.Map[Long, PidEntry]) {
+  private def loadSnapshot(file: File, pidMap: mutable.Map[Long, ProducerIdEntry]) {
     val buffer = Files.readAllBytes(file.toPath)
     val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
 
@@ -106,30 +141,30 @@ object ProducerIdMapping {
       throw new CorruptSnapshotException("Snapshot file is corrupted (CRC is no longer valid)")
 
     struct.getArray(PidEntriesField).foreach { pidEntryObj =>
-      val pidEntry = pidEntryObj.asInstanceOf[Struct]
-      val pid = pidEntry.getLong(PidField)
-      val epoch = pidEntry.getShort(EpochField)
-      val seq = pidEntry.getInt(SequenceField)
-      val offset = pidEntry.getLong(OffsetField)
-      val timestamp = pidEntry.getLong(TimestampField)
-      val numRecords = pidEntry.getInt(NumRecordsField)
-      pidMap.put(pid, PidEntry(seq, epoch, offset, numRecords, timestamp))
+      val pidEntryStruct = pidEntryObj.asInstanceOf[Struct]
+      val pid = pidEntryStruct.getLong(PidField)
+      val epoch = pidEntryStruct.getShort(EpochField)
+      val seq = pidEntryStruct.getInt(LastSequenceField)
+      val offset = pidEntryStruct.getLong(LastOffsetField)
+      val timestamp = pidEntryStruct.getLong(TimestampField)
+      val numRecords = pidEntryStruct.getInt(NumRecordsField)
+      pidMap.put(pid, ProducerIdEntry(epoch, seq, offset, numRecords, timestamp))
     }
   }
 
-  private def writeSnapshot(file: File, entries: mutable.Map[Long, PidEntry]) {
+  private def writeSnapshot(file: File, entries: mutable.Map[Long, ProducerIdEntry]) {
     val struct = new Struct(PidSnapshotMapSchema)
     struct.set(VersionField, PidSnapshotVersion)
     struct.set(CrcField, 0L) // we'll fill this after writing the entries
     val entriesArray = entries.map {
-      case (pid, PidEntry(seq, epoch, offset, numRecords, timestamp)) =>
+      case (pid, entry) =>
         val pidEntryStruct = struct.instance(PidEntriesField)
         pidEntryStruct.set(PidField, pid)
-        pidEntryStruct.set(EpochField, epoch)
-        pidEntryStruct.set(SequenceField, seq)
-        pidEntryStruct.set(OffsetField, offset)
-        pidEntryStruct.set(NumRecordsField, numRecords)
-        pidEntryStruct.set(TimestampField, timestamp)
+          .set(EpochField, entry.epoch)
+          .set(LastSequenceField, entry.lastSeq)
+          .set(LastOffsetField, entry.lastOffset)
+          .set(NumRecordsField, entry.numRecords)
+          .set(TimestampField, entry.timestamp)
         pidEntryStruct
     }.toArray
     struct.set(PidEntriesField, entriesArray)
@@ -167,8 +202,8 @@ object ProducerIdMapping {
 }
 
 /**
- * Maintains a mapping from identifiers to a triple:
- *   <sequence number, epoch, offset>
+ * Maintains a mapping from ProducerIds (PIDs) to metadata about the last appended entries (e.g.
+ * epoch, sequence number, last offset, etc.)
  *
  * The sequence number is the last number successfully appended to the partition for the given identifier.
  * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
@@ -184,7 +219,7 @@ class ProducerIdMapping(val config: LogConfig,
   val snapDir: File = new File(snapParentDir, formatDirName(topicPartition))
   snapDir.mkdir()
 
-  private val pidMap = mutable.Map[Long, PidEntry]()
+  private val pidMap = mutable.Map[Long, ProducerIdEntry]()
   private var lastMapOffset = -1L
   private var lastSnapOffset = -1L
 
@@ -193,7 +228,10 @@ class ProducerIdMapping(val config: LogConfig,
    */
   def mapEndOffset = lastMapOffset
 
-  def activePids: immutable.Map[Long, PidEntry] = pidMap.toMap
+  /**
+   * Get a copy of the active producers
+   */
+  def activePids: immutable.Map[Long, ProducerIdEntry] = pidMap.toMap
 
   /**
    * Load a snapshot of the id mapping or return empty maps
@@ -233,43 +271,31 @@ class ProducerIdMapping(val config: LogConfig,
   }
 
   /**
-   * Update the mapping to the given epoch and sequence number.
+   * Update the mapping with the given append information
    */
-  def update(pid: Long, pidEntry: PidEntry): Unit = {
-    assert(RecordBatch.NO_PRODUCER_ID < pid)
-    pidMap.put(pid, pidEntry)
-    lastMapOffset = pidEntry.lastOffset
+  def update(appendInfo: ProducerAppendInfo): Unit = {
+    if (appendInfo.pid == RecordBatch.NO_PRODUCER_ID)
+      throw new IllegalArgumentException("Invalid PID passed to update")
+    val entry = appendInfo.lastEntry
+    pidMap.put(appendInfo.pid, entry)
+    lastMapOffset = entry.lastOffset
   }
 
   /**
    * Load a previously stored PID entry into the cache. Ignore the entry if the timestamp is older
    * than the current time minus the PID expiration time (i.e. if the PID has expired).
    */
-  def load(pid: Long, pidEntry: PidEntry, currentTimeMs: Long) {
-    // TODO: Is it safe to depend on CREATE_TIME for this. I guess so because we also use it for retention
-    if (currentTimeMs - pidEntry.timestamp < maxPidExpirationMs)
-      update(pid, pidEntry)
-  }
-
-  /**
-   * Verify the epoch and next expected sequence number. Invoked prior to appending the entries to
-   * the log.
-   */
-  def checkSeqAndEpoch(pid: Long, incomingEntry: PidEntry) {
-    if (RecordBatch.NO_PRODUCER_ID < pid) {
-      pidMap.get(pid) match {
-        case None =>
-          if (incomingEntry.firstSeq != 0)
-            throw new OutOfOrderSequenceException(s"Invalid sequence number: $pid (id), ${incomingEntry.firstSeq} (seq. number)")
-        case Some(tuple) =>
-          validatePidEntries(pid, tuple, incomingEntry)
-     }
+  def load(pid: Long, entry: ProducerIdEntry, currentTimeMs: Long) {
+    if (pid != RecordBatch.NO_PRODUCER_ID && currentTimeMs - entry.timestamp < maxPidExpirationMs) {
+      pidMap.put(pid, entry)
+      lastMapOffset = entry.lastOffset
     }
   }
 
-  def entryForPid(pid: Long): Option[PidEntry] = {
-    pidMap.get(pid)
-  }
+  /**
+   * Get the last written entry for the given PID.
+   */
+  def lastEntry(pid: Long): Option[ProducerIdEntry] = pidMap.get(pid)
 
   /**
     * Serialize and write the bytes to a file. The file name is a concatenation of:
@@ -309,10 +335,6 @@ class ProducerIdMapping(val config: LogConfig,
     pidMap.retain((pid, entry) => entry.lastOffset >= startOffset)
     if (pidMap.isEmpty)
       lastMapOffset = -1L
-  }
-
-  def clean(): Unit = {
-    pidMap.clear()
   }
 
   private def maybeRemove() {
