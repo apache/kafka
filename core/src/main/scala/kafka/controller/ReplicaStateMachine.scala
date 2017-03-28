@@ -362,7 +362,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
               val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
               val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
-              controllerContext.liveBrokers = curBrokers
+              controllerContext.updateLiveBrokers(curBrokers)
               val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
               val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
               val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted

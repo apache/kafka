@@ -60,13 +60,11 @@ class ControllerContext(val zkUtils: ZkUtils) {
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
 
-  // setter
-  def liveBrokers_=(brokers: Set[Broker]) {
+  def updateLiveBrokers(brokers: Set[Broker]) {
     liveBrokersUnderlying = brokers
     liveBrokerIdsUnderlying = liveBrokersUnderlying.map(_.id)
   }
 
-  // getter
   def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
   def liveBrokerIds = liveBrokerIdsUnderlying -- shuttingDownBrokerIds
 
@@ -737,7 +735,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   private def initializeControllerContext() {
     // update controller cache with delete topic information
-    controllerContext.liveBrokers = zkUtils.getAllBrokersInCluster().toSet
+    controllerContext.updateLiveBrokers(zkUtils.getAllBrokersInCluster().toSet)
     controllerContext.allTopics = zkUtils.getAllTopics().toSet
     controllerContext.partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(controllerContext.allTopics.toSeq)
     controllerContext.partitionLeadershipInfo = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
