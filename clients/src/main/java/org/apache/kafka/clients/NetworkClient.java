@@ -34,6 +34,8 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.TimeBasedRateLimiter;
+import org.apache.kafka.common.utils.TimeBasedRateLimiter.InfoOrTraceLog;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A network client for asynchronous request/response network i/o. This is an internal class used to implement the
@@ -103,6 +106,9 @@ public class NetworkClient implements KafkaClient {
     private final Set<String> nodesNeedingApiVersionsFetch = new HashSet<>();
 
     private final List<ClientResponse> abortedSends = new LinkedList<>();
+
+    private final TimeBasedRateLimiter protocolDowngradeRateLimiter =
+        new TimeBasedRateLimiter(30, TimeUnit.SECONDS);
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -316,16 +322,18 @@ public class NetworkClient implements KafkaClient {
         }
     }
 
-    private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now, AbstractRequest request) {
-        String nodeId = clientRequest.destination();
-        RequestHeader header = clientRequest.makeHeader(request.version());
+    private void doSend(final ClientRequest clientRequest, boolean isInternalRequest,
+                        long now, final AbstractRequest request) {
+        final String nodeId = clientRequest.destination();
+        final RequestHeader header = clientRequest.makeHeader(request.version());
         if (log.isDebugEnabled()) {
             int latestClientVersion = clientRequest.apiKey().latestVersion();
             if (header.apiVersion() == latestClientVersion) {
                 log.trace("Sending {} {} to node {}.", clientRequest.apiKey(), request, nodeId);
             } else {
-                log.debug("Using older server API v{} to send {} {} to node {}.",
-                        header.apiVersion(), clientRequest.apiKey(), request, nodeId);
+                protocolDowngradeRateLimiter.perform(clientRequest.createdTimeMs(),
+                    new InfoOrTraceLog(log, "Using older server API v{} to send {} {} to node {}.",
+                            header.apiVersion(), clientRequest.apiKey(), request, nodeId));
             }
         }
         Send send = request.toSend(nodeId, header);
