@@ -87,10 +87,11 @@ public class ConnectorsResource {
     @Path("/")
     public Response createConnector(final @QueryParam("forward") Boolean forward,
                                     final CreateConnectorRequest createRequest) throws Throwable {
-        String name = createRequest.name();
-        if (name.contains("/")) {
-            throw new BadRequestException("connector name should not contain '/'");
-        }
+        // Trim leading and trailing whitespaces from the connector name, replace null with empty string
+        // if no name element present to keep validation within validator (NonEmptyStringWithoutControlChars
+        // allows null values)
+        String name = createRequest.name() == null ? "" : createRequest.name().trim();
+
         Map<String, String> configs = createRequest.config();
         checkAndPutConnectorConfigName(name, configs);
 
