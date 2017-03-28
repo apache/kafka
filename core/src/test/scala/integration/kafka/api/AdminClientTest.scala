@@ -98,15 +98,27 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     subscribeAndWaitForAssignment(topic, consumer)
 
     sendRecords(producers.head, 10, tp)
-    assertEquals(10, consumer.poll(1000).count())
+    var messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 10
+    }, "Expected 10 messages", 3000L)
 
     client.deleteRecordsBefore(Map((tp, 3L))).get()
     consumer.seek(tp, 1)
-    assertEquals(7, consumer.poll(1000).count())
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 7
+    }, "Expected 7 messages", 3000L)
 
     client.deleteRecordsBefore(Map((tp, 8L))).get()
     consumer.seek(tp, 1)
-    assertEquals(2, consumer.poll(1000).count())
+    messageCount = 0
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count()
+      messageCount == 2
+    }, "Expected 2 messages", 3000L)
   }
 
   @Test
