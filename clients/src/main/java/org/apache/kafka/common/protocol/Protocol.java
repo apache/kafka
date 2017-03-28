@@ -1165,8 +1165,8 @@ public class Protocol {
                                                                       new Field("timeout", INT32, "The maximum time to await a response in ms."));
 
     public static final Schema DELETE_RECORDS_RESPONSE_PARTITION_V0 = new Schema(new Field("partition", INT32, "Topic partition id."),
-                                                                                 new Field("low_watermark", INT64, "Smallest available offset"),
-                                                                                 new Field("error_code", INT16, "The error code for the given topic."));
+                                                                                 new Field("low_watermark", INT64, "Smallest available offset of all live replicas"),
+                                                                                 new Field("error_code", INT16, "The error code for the given partition."));
 
     public static final Schema DELETE_RECORDS_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING, "Topic name."),
                                                                              new Field("partitions", new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V0)));

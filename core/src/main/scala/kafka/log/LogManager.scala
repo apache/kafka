@@ -464,6 +464,7 @@ class LogManager(val logDirs: Array[File],
       val renamedDir = new File(removedLog.dir.getParent, dirName)
       val renameSuccessful = removedLog.dir.renameTo(renamedDir)
       if (renameSuccessful) {
+        checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
         removedLog.dir = renamedDir
         // change the file pointers for log and index file
         for (logSegment <- removedLog.logSegments) {
