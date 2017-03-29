@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Checksums;
 import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
@@ -526,22 +527,22 @@ public final class LegacyRecord {
         crc.update(magic);
         crc.update(attributes);
         if (magic > RecordBatch.MAGIC_VALUE_V0)
-            crc.updateLong(timestamp);
+            Checksums.updateLong(crc, timestamp);
         // update for the key
         if (key == null) {
-            crc.updateInt(-1);
+            Checksums.updateInt(crc, -1);
         } else {
             int size = key.remaining();
-            crc.updateInt(size);
-            crc.update(key, size);
+            Checksums.updateInt(crc, size);
+            Checksums.update(crc, key, size);
         }
         // update for the value
         if (value == null) {
-            crc.updateInt(-1);
+            Checksums.updateInt(crc, -1);
         } else {
             int size = value.remaining();
-            crc.updateInt(size);
-            crc.update(value, size);
+            Checksums.updateInt(crc, size);
+            Checksums.update(crc, value, size);
         }
         return crc.getValue();
     }
