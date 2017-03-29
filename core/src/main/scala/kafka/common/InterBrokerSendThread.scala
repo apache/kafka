@@ -16,81 +16,141 @@
  */
 package kafka.common
 
-import java.util.concurrent.BlockingQueue
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
-import kafka.cluster.{Broker, BrokerEndPoint}
-import kafka.utils.ShutdownableThread
-import org.apache.kafka.clients.NetworkClient
-import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.AbstractResponse
+import kafka.cluster.Broker
+import kafka.utils.{ShutdownableThread, ZkUtils}
+import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.Node
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse}
+import org.apache.kafka.common.utils.Time
 
-import scala.collection.mutable.HashMap
+import scala.collection.mutable
 
 object InterBrokerSendThread {
 
+  sealed trait CallBackResult { def byte: Byte }
+
+  case object OK extends CallBackResult { val byte: Byte = 0 }
+
+  case object Retry extends CallBackResult { val byte: Byte = 1 }
+
+  case object Fatal extends CallBackResult { val byte: Byte = 2 }
+
+  type RequestCompletionCallback = AbstractResponse => CallBackResult
 }
 
 /**
  *  Abstract class for inter-broker send thread that utilize a non-blocking network client.
  */
-abstract class InterBrokerSendThread(name: String,
-                                     sourceBroker: BrokerEndPoint,
-                                     isInterruptible: Boolean = true)
-  extends ShutdownableThread(name, isInterruptible) {
+class InterBrokerSendThread(name: String,
+                            zkUtils: ZkUtils,
+                            networkClient: NetworkClient,
+                            interBrokerListenerName: ListenerName,
+                            time: Time)
+  extends ShutdownableThread(name, isInterruptible = false) {
 
-  private val brokerStateInfo: HashMap[Int, ] = new HashMap[Int, ControllerBrokerStateInfo]
-  private val brokerLock = new Object
+  private val brokerStateMap: mutable.Map[Int, DestinationBrokerState] = new mutable.HashMap[Int, DestinationBrokerState]()
 
-  /* callbacks to be defined in subclass */
+  private def addNewBroker(broker: Broker) {
+    val messageQueue = new LinkedBlockingQueue[RequestAndCallback]
+    val brokerEndPoint = broker.getBrokerEndPoint(interBrokerListenerName)
+    val brokerNode = new Node(broker.id, brokerEndPoint.host, brokerEndPoint.port)
 
-  // process response
-  def processResponse(response: AbstractResponse)
+    brokerStateMap.put(broker.id, DestinationBrokerState(brokerNode, messageQueue))
+
+    debug(s"Added destination broker ${broker.id}")
+  }
+
+  private def removeExistingBroker(brokerState: DestinationBrokerState) {
+    try {
+      val state = brokerStateMap.remove(brokerState.destBrokerNode.id)
+
+      if (state.isDefined && !state.get.requestQueue.isEmpty)
+        info(s"Removing destination broker ${brokerState.destBrokerNode.id} while it still have pending requests ${state.get.requestQueue}")
+
+      debug(s"Removed destination broker ${brokerState.destBrokerNode.id}")
+    } catch {
+      case e: Throwable => error("Error while removing broker by the controller", e)
+    }
+  }
 
   def addBroker(broker: Broker) {
     // be careful here. Maybe the startup() API has already started the request send thread
-    brokerLock synchronized {
-      if(!brokerStateInfo.contains(broker.id)) {
+    brokerStateMap synchronized {
+      if(!brokerStateMap.contains(broker.id)) {
         addNewBroker(broker)
-        startRequestSendThread(broker.id)
       }
     }
   }
 
   def removeBroker(brokerId: Int) {
-    brokerLock synchronized {
-      removeExistingBroker(brokerStateInfo(brokerId))
+    brokerStateMap synchronized {
+      removeExistingBroker(brokerStateMap(brokerId))
+    }
+  }
+
+  def addRequest(destBrokerId: Int, request: AbstractRequest.Builder[_ <: AbstractRequest], callback: InterBrokerSendThread.RequestCompletionCallback): Boolean = {
+    val brokerStateView = brokerStateMap synchronized brokerStateMap.toMap
+
+    if (brokerStateView.contains(destBrokerId)) {
+      brokerStateView(destBrokerId).requestQueue.add(RequestAndCallback(request, callback))
+      true
+    } else {
+      false
     }
   }
 
   override def doWork() {
+    val brokerStates = brokerStateMap synchronized brokerStateMap.toMap.values
 
-    val fetchRequest = inLock(partitionMapLock) {
-      val fetchRequest = buildFetchRequest(partitionStates.partitionStates.asScala.map { state =>
-        state.topicPartition -> state.value
-      })
-      if (fetchRequest.isEmpty) {
-        trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
-        partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
+    val now = time.milliseconds()
+    var poolTimeout = Long.MaxValue
+
+    // for each reachable destination broker, try to send the first queued request to it;
+    // only remove the reques from the queue upon successful callback to ensure ordering
+    for (brokerState: DestinationBrokerState <- brokerStates) {
+      val destNode = brokerState.destBrokerNode
+      val requests = brokerState.requestQueue
+      if (networkClient.ready(destNode, now)) {
+        val requestAndCallback = requests.peek()
+        if (requestAndCallback != null) {
+          val callback: RequestCompletionHandler = new RequestCompletionHandler() {
+            override def onComplete(response: ClientResponse) {
+              val result = requestAndCallback.callback(response.responseBody())
+              result match {
+                case InterBrokerSendThread.OK =>
+                  debug(s"Request with apiKey ${requestAndCallback.request.apiKey} to destination broker ${destNode.id} has completed OK")
+
+                  if (requestAndCallback != requests.poll())
+                    throw new IllegalStateException("The responded request does not match the first queued request; this should never happen")
+
+                case InterBrokerSendThread.Retry =>
+                  debug(s"Request with apiKey ${requestAndCallback.request.apiKey} to destination broker ${destNode.id} did not complete, will retry in the next iteration")
+
+                case InterBrokerSendThread.Fatal =>
+                  info(s"Request with apiKey ${requestAndCallback.request.apiKey} to destination broker ${destNode.id} has failed permanently, will not retry but remove it from the queue")
+
+                  if (requestAndCallback != requests.poll())
+                    throw new IllegalStateException("The responded request does not match the first queued request; this should never happen")
+              }
+            }
+          }
+          val clientRequest = networkClient.newClientRequest(Integer.toString(destNode.id), requestAndCallback.request, now, true, callback)
+          networkClient.send(clientRequest, now)
+        }
+      } else {
+        // pool timeout would be the minimum of connection delay if there are any dest yet to be reached;
+        // otherwise it is infinity
+        poolTimeout = Math.min(poolTimeout, networkClient.connectionDelay(destNode, now))
       }
-      fetchRequest
     }
-    if (!fetchRequest.isEmpty)
-      processFetchRequest(fetchRequest)
-  }
 
-  override def shutdown(){
-    initiateShutdown()
-    inLock(partitionMapLock) {
-      partitionMapCond.signalAll()
-    }
-    awaitShutdown()
-
-    // we don't need the lock since the thread has finished shutdown and metric removal is safe
-    fetcherStats.unregister()
-    fetcherLagStats.unregister()
+    networkClient.poll(poolTimeout, now)
   }
 }
 
-case class ControllerBrokerStateInfo(destBrokerNode: Node,
-                                     messageQueue: BlockingQueue[QueueItem])
+case class DestinationBrokerState(destBrokerNode: Node, requestQueue: BlockingQueue[RequestAndCallback])
+
+case class RequestAndCallback(request: AbstractRequest.Builder[_ <: AbstractRequest], callback: InterBrokerSendThread.RequestCompletionCallback)
