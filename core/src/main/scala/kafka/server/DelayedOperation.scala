@@ -28,6 +28,7 @@ import kafka.utils._
 import kafka.utils.timer._
 
 import scala.collection._
+import scala.collection.mutable.ListBuffer
 
 /**
  * An operation whose processing needs to be delayed for at most the given delayMs. For example
@@ -133,6 +134,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
                                                        purgeInterval: Int = 1000,
                                                        reaperEnabled: Boolean = true)
         extends Logging with KafkaMetricsGroup {
+
 
   /* a list of operation watching keys */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
@@ -240,6 +242,19 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
   }
 
   /**
+    * Remove the watch for the given key and cancel any operations
+    * @param key
+    * @return the delayed operations that were watched
+    */
+  def cancelForKey(key: Any): List[T] = {
+    inWriteLock(removeWatchersLock) {
+        val watchers = watchersForKey.remove(key)
+        if (watchers != null) watchers.cancel()
+        else Nil
+    }
+  }
+
+  /**
    * Return the total size of watch lists the purgatory. Since an operation may be watched
    * on multiple lists, and some of its watched entries may still be in the watch lists
    * even when it has been completed, this number may be larger than the number of real operations watched
@@ -306,6 +321,18 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
     // add the element to watch
     def watch(t: T) {
       operations.add(t)
+    }
+
+    def cancel(): List[T] = {
+      val iter = operations.iterator()
+      var cancelled = new ListBuffer[T]()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        curr.cancel()
+        iter.remove()
+        cancelled += curr
+      }
+      cancelled.toList
     }
 
     // traverse the list and try to complete some watched elements

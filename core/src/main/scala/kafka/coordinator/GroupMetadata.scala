@@ -103,14 +103,27 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
   */
 private[coordinator] case object Empty extends GroupState { val state: Byte = 5 }
 
+/**
+  * Group was previously Empty and the first member has joined.
+  *
+  * action: respond to heartbeats with REBALANCE_IN_PROGRESS
+  *         respond to sync group with REBALANCE_IN_PROGRESS
+  *         remove member on leave group request
+  *         allow offset fetch requests
+  * transition: after timeout => PreparingRebalance
+  *             all members have left group => Empty
+  */
+private[coordinator] case object InitialRebalance extends GroupState { val state: Byte = 6 }
+
 
 private object GroupMetadata {
   private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(Stable, PreparingRebalance, AwaitingSync, Empty, Dead),
+    Map(Dead -> Set(Stable, PreparingRebalance, AwaitingSync, Empty, Dead, InitialRebalance),
       AwaitingSync -> Set(PreparingRebalance),
       Stable -> Set(AwaitingSync),
-      PreparingRebalance -> Set(Stable, AwaitingSync, Empty),
-      Empty -> Set(PreparingRebalance))
+      PreparingRebalance -> Set(Stable, AwaitingSync, InitialRebalance),
+      InitialRebalance -> Set(Empty),
+      Empty -> Set(PreparingRebalance, InitialRebalance))
 }
 
 /**
@@ -192,6 +205,10 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
 
   def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
     timeout.max(member.rebalanceTimeoutMs)
+  }
+
+  def sessionTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
+    timeout.max(member.sessionTimeoutMs)
   }
 
   // TODO: decide if ids should be predictable or random

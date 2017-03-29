@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
+import org.scalactic.{CanEqual, Equality}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
@@ -723,6 +724,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
     }.toSet
 
+    println("Actual " + actual.size)
+    println("Expected " + expected.size)
     assertEquals(expected, actual)
   }
 

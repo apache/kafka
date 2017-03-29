@@ -99,6 +99,24 @@ class DelayedOperationTest {
     assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched(), 1, purgatory.watched())
   }
 
+  @Test
+  def shouldCancelForKeyReturningCancelledOperations() {
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key2"))
+
+    val cancelledOperations = purgatory.cancelForKey("key")
+    assertEquals(2, cancelledOperations.size)
+    assertEquals(1, purgatory.delayed())
+    assertEquals(1, purgatory.watched())
+  }
+
+  @Test
+  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist() {
+    val cancelledOperations = purgatory.cancelForKey("key")
+    assertEquals(Nil, cancelledOperations)
+  }
+
   class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
     var completable = false
 
