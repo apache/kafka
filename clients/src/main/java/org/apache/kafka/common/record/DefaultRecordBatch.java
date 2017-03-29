@@ -49,11 +49,11 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  * Note that when compression is enabled (see attributes below), the compressed record data is serialized
  * directly following the count of the number of records.
  *
- * The CRC covers the data from the attributes to the end of the batch. Note that the location is
- * located after the magic byte, which means that consumers must parse the magic byte before
- * deciding how to interpret the bytes between the batch length and the magic byte. The reason that
- * the partition leader epoch field is moved ahead of the CRC is to avoid the need to recompute the CRC
- * for every batch that is received by the broker when this field is assigned.
+ * The CRC covers the data from the attributes to the end of the batch (i.e. all the bytes that follow the CRC). It is
+ * located after the magic byte, which means that clients must parse the magic byte before deciding how to interpret
+ * the bytes between the batch length and the magic byte. The partition leader epoch field is not included in the CRC
+ * computation to avoid the need to recompute the CRC when this field is assigned for every batch that is received by
+ * the broker. The CRC-32C (Castagnoli) polynomial is used for the computation.
  *
  * The current attributes are given below:
  *
