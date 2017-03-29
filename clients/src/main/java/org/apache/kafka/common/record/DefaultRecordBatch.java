@@ -20,14 +20,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Crc32;
-import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -205,61 +202,28 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private Iterator<Record> compressedIterator() {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
+        final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
                 new ByteBufferInputStream(buffer), magic()));
 
-        // TODO: An improvement for the consumer would be to only decompress the records
-        // we need to fill max.poll.records and leave the rest compressed.
-        int numRecords = count();
-        if (numRecords < 0)
-            throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v" +
-                    magic() + " batch");
-
-        List<Record> records = new ArrayList<>(numRecords);
-        try {
-            Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
-            long baseOffset = baseOffset();
-            long baseTimestamp = baseTimestamp();
-            int baseSequence = baseSequence();
-
-            for (int i = 0; i < numRecords; i++)
-                records.add(DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime));
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        } finally {
-            Utils.closeQuietly(stream, "records iterator stream");
-        }
-
-        return records.iterator();
+        return new RecordIterator() {
+            @Override
+            protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
+                try {
+                    return DefaultRecord.readFrom(stream, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+                } catch (IOException e) {
+                    throw new KafkaException("Failed to decompress record stream", e);
+                }
+            }
+        };
     }
 
     private Iterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
-        final Long logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
-        final long baseOffset = baseOffset();
-        final long baseTimestamp = baseTimestamp();
-        final int baseSequence = baseSequence();
-
         buffer.position(RECORDS_OFFSET);
-        final int totalRecords = count();
-
-        return new Iterator<Record>() {
-            int readRecords = 0;
-
+        return new RecordIterator() {
             @Override
-            public boolean hasNext() {
-                return readRecords < totalRecords;
-            }
-
-            @Override
-            public Record next() {
-                readRecords++;
+            protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
-            }
-
-            @Override
-            public void remove() {
-                throw new UnsupportedOperationException();
             }
         };
     }
@@ -432,4 +396,42 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
+    private abstract class RecordIterator implements Iterator<Record> {
+        private final Long logAppendTime;
+        private final long baseOffset;
+        private final long baseTimestamp;
+        private final int baseSequence;
+        private final int numRecords;
+        private int readRecords = 0;
+
+        public RecordIterator() {
+            this.logAppendTime = timestampType() == TimestampType.LOG_APPEND_TIME ? maxTimestamp() : null;
+            this.baseOffset = baseOffset();
+            this.baseTimestamp = baseTimestamp();
+            this.baseSequence = baseSequence();
+            int numRecords = count();
+            if (numRecords < 0)
+                throw new InvalidRecordException("Found invalid record count " + numRecords + " in magic v" +
+                        magic() + " batch");
+            this.numRecords = numRecords;
+        }
+
+        @Override
+        public boolean hasNext() {
+            return readRecords < numRecords;
+        }
+
+        @Override
+        public Record next() {
+            readRecords++;
+            return readNext(baseOffset, baseTimestamp, baseSequence, logAppendTime);
+        }
+
+        protected abstract Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime);
+
+        @Override
+        public void remove() {
+            throw new UnsupportedOperationException();
+        }
+    }
 }
