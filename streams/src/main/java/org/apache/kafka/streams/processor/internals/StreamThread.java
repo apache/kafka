@@ -223,6 +223,7 @@ public class StreamThread extends Thread {
     private final TaskCreator taskCreator = new TaskCreator();
 
     final ConsumerRebalanceListener rebalanceListener;
+    private final static int UNLIMITED_RECORDS = -1;
 
     public synchronized boolean isInitialized() {
         return state == State.RUNNING;
@@ -519,107 +520,168 @@ public class StreamThread extends Thread {
         return Math.max(this.timerStartedMs - previousTimeMs, 0);
     }
 
-    private void runLoop() {
-        int totalNumBuffered = 0;
-        boolean requiresPoll = true;
-        boolean polledRecords = false;
+    /**
+     * Get the next batch of records by polling.
+     * @return Next batch of records or null if no records available.
+     */
+    private ConsumerRecords<byte[], byte[]> pollRequests(final long pollTimeMs) {
+        ConsumerRecords<byte[], byte[]> records = null;
 
+        try {
+            records = consumer.poll(pollTimeMs);
+        } catch (NoOffsetForPartitionException ex) {
+            TopicPartition partition = ex.partition();
+            if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
+                consumer.seekToBeginning(ex.partitions());
+            } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                consumer.seekToEnd(ex.partitions());
+                log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
+            } else {
+
+                if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                    setState(State.PENDING_SHUTDOWN);
+                    String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
+                        " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                        "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                    throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
+                }
+
+                if (originalReset.equals("earliest")) {
+                    consumer.seekToBeginning(ex.partitions());
+                } else if (originalReset.equals("latest")) {
+                    consumer.seekToEnd(ex.partitions());
+                }
+                log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
+            }
+
+        }
+
+        if (rebalanceException != null)
+            throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
+
+        return records;
+    }
+
+    /**
+     * Take records and add them to each respective task
+     * @param records Records, can be null
+     */
+    private void addRecordsToTasks(ConsumerRecords<byte[], byte[]> records) {
+        if (records != null && !records.isEmpty()) {
+            int numAddedRecords = 0;
+
+            for (TopicPartition partition : records.partitions()) {
+                StreamTask task = activeTasksByPartition.get(partition);
+                numAddedRecords += task.addRecords(partition, records.records(partition));
+            }
+            streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
+        }
+    }
+
+    /**
+     * Schedule the records processing by selecting which record is processed next. Commits may
+     * happen as records are processed.
+     * @tasks The tasks that have records.
+     * @param recordsProcessedBeforeCommit number of records to be processed before commit is called.
+     *                                     if UNLIMITED_RECORDS, then commit is never called
+     * @return Number of records processed since last commit.
+     */
+    private long processAndPunctuate(final Map<TaskId, StreamTask> tasks,
+                                     final long recordsProcessedBeforeCommit) {
+
+        long totalProcessedEachRound;
+        long totalProcessedSinceLastMaybeCommit = 0;
+        // Round-robin scheduling by taking one record from each task repeatedly
+        // until no task has any records left
+        do {
+            totalProcessedEachRound = 0;
+            for (StreamTask task : tasks.values()) {
+                // we processed one record,
+                // and more are buffered waiting for the next round
+                if (task.process()) {
+                    totalProcessedEachRound++;
+                    totalProcessedSinceLastMaybeCommit++;
+                }
+            }
+            if (recordsProcessedBeforeCommit != UNLIMITED_RECORDS &&
+                totalProcessedSinceLastMaybeCommit >= recordsProcessedBeforeCommit) {
+                totalProcessedSinceLastMaybeCommit = 0;
+                long processLatency = computeLatency();
+                streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessedSinceLastMaybeCommit,
+                    timerStartedMs);
+                maybeCommit(this.timerStartedMs);
+            }
+        } while (totalProcessedEachRound != 0);
+
+        // go over the tasks again to punctuate or commit
+        for (StreamTask task : tasks.values()) {
+            maybePunctuate(task);
+            if (task.commitNeeded())
+                commitOne(task);
+        }
+
+        return totalProcessedSinceLastMaybeCommit;
+    }
+
+    /**
+     * Adjust the number of records that should be processed by scheduler. This avoids
+     * scenarios where the processing time is higher than the commit time.
+     * @param prevRecordsProcessedBeforeCommit Previous number of records processed by scheduler.
+     * @param totalProcessed Total number of records processed in this last round.
+     * @param processLatency Total processing latency in ms processed in this last round.
+     * @param commitTime Desired commit time in ms.
+     * @return An adjusted number of records to be processed in the next round.
+     */
+    private long adjustRecordsProcessedBeforeCommit(final long prevRecordsProcessedBeforeCommit, final long totalProcessed,
+                                                    final long processLatency, final long commitTime) {
+        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
+        // check if process latency larger than commit latency
+        // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
+        // we will never process all records again. This might be an issue if the initial measurement
+        // was off due to a slow start.
+        if (processLatency > commitTime) {
+            // push down
+            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
+            log.debug("{} processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
+                logPrefix, processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
+        } else if (prevRecordsProcessedBeforeCommit != UNLIMITED_RECORDS && processLatency > 0) {
+            // push up
+            recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
+            log.debug("{} processing latency {} > commit time {} for {} records. Adjusting up recordsProcessedBeforeCommit={}",
+                logPrefix, processLatency, commitTime, totalProcessed, recordsProcessedBeforeCommit);
+        }
+
+        return recordsProcessedBeforeCommit;
+    }
+
+    /**
+     * Main event loop for polling, and processing records through topologies.
+     */
+    private void runLoop() {
+        long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
         consumer.subscribe(sourceTopicPattern, rebalanceListener);
 
         while (stillRunning()) {
             this.timerStartedMs = time.milliseconds();
 
             // try to fetch some records if necessary
-            if (requiresPoll) {
-                requiresPoll = false;
-
-                boolean longPoll = totalNumBuffered == 0;
-
-                ConsumerRecords<byte[], byte[]> records = null;
-
-                try {
-                    records = consumer.poll(longPoll ? this.pollTimeMs : 0);
-                } catch (NoOffsetForPartitionException ex) {
-                    TopicPartition partition = ex.partition();
-                    if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                        log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
-                        consumer.seekToBeginning(ex.partitions());
-                    } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                        consumer.seekToEnd(ex.partitions());
-                        log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
-                    } else {
-
-                        if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                            setState(State.PENDING_SHUTDOWN);
-                            String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
-                                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                                    "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
-                            throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
-                        }
-
-                        if (originalReset.equals("earliest")) {
-                            consumer.seekToBeginning(ex.partitions());
-                        } else if (originalReset.equals("latest")) {
-                            consumer.seekToEnd(ex.partitions());
-                        }
-                        log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
-                    }
-
-                }
-
-                if (rebalanceException != null)
-                    throw new StreamsException(logPrefix + " Failed to rebalance", rebalanceException);
-
-                if (records != null && !records.isEmpty()) {
-                    int numAddedRecords = 0;
-
-                    for (TopicPartition partition : records.partitions()) {
-                        StreamTask task = activeTasksByPartition.get(partition);
-                        numAddedRecords += task.addRecords(partition, records.records(partition));
-                    }
-                    streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
-                    polledRecords = true;
-                } else {
-                    polledRecords = false;
-                }
-
-                // only record poll latency is long poll is required
-                if (longPoll) {
-                    streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
+            ConsumerRecords<byte[], byte[]> records = pollRequests(this.pollTimeMs);
+            if (records != null && !records.isEmpty() && !activeTasks.isEmpty()) {
+                streamsMetrics.pollTimeSensor.record(computeLatency(), timerStartedMs);
+                addRecordsToTasks(records);
+                final long totalProcessed = processAndPunctuate(activeTasks, recordsProcessedBeforeCommit);
+                if (totalProcessed > 0) {
+                    final long processLatency = computeLatency();
+                    streamsMetrics.processTimeSensor.record(processLatency / (double) totalProcessed,
+                        timerStartedMs);
+                    recordsProcessedBeforeCommit = adjustRecordsProcessedBeforeCommit(recordsProcessedBeforeCommit, totalProcessed,
+                        processLatency, commitTimeMs);
                 }
             }
 
-            // try to process one fetch record from each task via the topology, and also trigger punctuate
-            // functions if necessary, which may result in more records going through the topology in this loop
-            if (totalNumBuffered > 0 || polledRecords) {
-                totalNumBuffered = 0;
-
-                if (!activeTasks.isEmpty()) {
-                    for (StreamTask task : activeTasks.values()) {
-
-                        totalNumBuffered += task.process();
-
-                        requiresPoll = requiresPoll || task.requiresPoll();
-
-                        streamsMetrics.processTimeSensor.record(computeLatency(), timerStartedMs);
-
-                        maybePunctuate(task);
-
-                        if (task.commitNeeded())
-                            commitOne(task);
-                    }
-
-                } else {
-                    // even when no task is assigned, we must poll to get a task.
-                    requiresPoll = true;
-                }
-
-            } else {
-                requiresPoll = true;
-            }
             maybeCommit(timerStartedMs);
             maybeUpdateStandbyTasks();
-
             maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
@@ -692,8 +754,9 @@ public class StreamThread extends Thread {
     protected void maybeCommit(final long now) {
 
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
-            log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed",
-                    logPrefix, commitTimeMs, activeTasks, standbyTasks);
+
+            log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed by {}ms",
+                    logPrefix, activeTasks, standbyTasks, commitTimeMs, now - lastCommitMs);
 
             commitAll();
             lastCommitMs = now;

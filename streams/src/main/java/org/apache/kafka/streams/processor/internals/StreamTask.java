@@ -169,19 +169,26 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * Process one record
+     * @return The number of records left in the buffer of this task's partition group
+     */
+    public int numBuffered() {
+        return partitionGroup.numBuffered();
+    }
+
+    /**
+     * Process one record.
      *
-     * @return number of records left in the buffer of this task's partition group after the processing is done
+     * @return true if this method processes a record, false if it does not process a record.
      */
     @SuppressWarnings("unchecked")
-    public int process() {
+    public boolean process() {
         // get the next record to process
         StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
         // if there is no record to process, return immediately
         if (record == null) {
             requiresPoll = true;
-            return 0;
+            return false;
         }
 
         requiresPoll = false;
@@ -224,7 +231,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             processorContext.setCurrentNode(null);
         }
 
-        return partitionGroup.numBuffered();
+        return true;
     }
 
     private void updateProcessorContext(final ProcessorRecordContext recordContext, final ProcessorNode currNode) {
