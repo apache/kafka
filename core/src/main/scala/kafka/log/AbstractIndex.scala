@@ -25,8 +25,7 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{CoreUtils, Logging}
-import org.apache.kafka.common.Os
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Os, Utils}
 import sun.nio.ch.DirectBuffer
 
 import scala.math.ceil

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.Os;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
