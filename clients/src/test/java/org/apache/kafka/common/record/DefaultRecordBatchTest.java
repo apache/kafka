@@ -207,4 +207,15 @@ public class DefaultRecordBatchTest {
         assertEquals(ControlRecordType.ABORT, ControlRecordType.parse(abortRecord.key()));
     }
 
+    @Test
+    public void testStreamingIteratorConsistency() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
+        TestUtils.checkEquals(batch.streamingIterator(), batch.iterator());
+    }
+
 }
