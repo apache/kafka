@@ -36,7 +36,7 @@ import org.apache.kafka.common.requests.{MetadataResponse, PartitionState, Updat
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
  */
-private[server] class MetadataCache(brokerId: Int) extends Logging {
+class MetadataCache(brokerId: Int) extends Logging {
   private val stateChangeLogger = KafkaController.stateChangeLogger
   private val cache = mutable.Map[String, mutable.Map[Int, PartitionStateInfo]]()
   private var controllerId: Option[Int] = None
