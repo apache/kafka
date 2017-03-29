@@ -301,7 +301,7 @@ public class ResetIntegrationTest {
             // ignore
         }
 
-        waitUntilUserTopicsGotDeleted();
+        waitUntilUserTopicsAreDeleted();
 
         CLUSTER.createTopic(INPUT_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC);
@@ -405,10 +405,7 @@ public class ResetIntegrationTest {
         Assert.assertEquals(0, exitCode);
     }
 
-    private void waitUntilUserTopicsGotDeleted() {
-        final Set<String> expectedMissingTopics = new HashSet<>();
-
-        Set<String> allTopics;
+    private void waitUntilUserTopicsAreDeleted() {
         ZkUtils zkUtils = null;
         try {
             zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
@@ -416,21 +413,24 @@ public class ResetIntegrationTest {
                 30000,
                 JaasUtils.isZkSecurityEnabled());
 
-            do {
-                expectedMissingTopics.add(INPUT_TOPIC);
-                expectedMissingTopics.add(OUTPUT_TOPIC);
-                expectedMissingTopics.add(OUTPUT_TOPIC_2);
-                expectedMissingTopics.add(OUTPUT_TOPIC_2_RERUN);
-
+            while (userTopicExists(new HashSet<>(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics())))) {
                 Utils.sleep(100);
-                allTopics = new HashSet<>();
-                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            } while (expectedMissingTopics.removeAll(allTopics));
+            }
         } finally {
             if (zkUtils != null) {
                 zkUtils.close();
             }
         }
+    }
+
+    private boolean userTopicExists(final Set<String> allTopics) {
+        final Set<String> expectedMissingTopics = new HashSet<>();
+        expectedMissingTopics.add(INPUT_TOPIC);
+        expectedMissingTopics.add(OUTPUT_TOPIC);
+        expectedMissingTopics.add(OUTPUT_TOPIC_2);
+        expectedMissingTopics.add(OUTPUT_TOPIC_2_RERUN);
+
+        return expectedMissingTopics.removeAll(allTopics);
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) {
