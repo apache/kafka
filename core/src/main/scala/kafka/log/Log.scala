@@ -385,23 +385,6 @@ class Log(@volatile var dir: File,
     }
   }
 
-  /**
-    * Called from the log cleaner manager to clean up the id map
-    * after a compaction round.
-    *
-    * The current contract is that we expire all ids that do not
-    * have a latest offset greater or equal to the first dirty
-    * offset. The first dirty offset should be the value of the
-    * newStartOffset parameter for this call.
-    *
-    * @param newStartOffset New start offset to clean up the map
-    */
-  private[log] def updateIdMap(newStartOffset: Long): Unit = {
-    lock synchronized {
-      pidMap.cleanFrom(newStartOffset)
-    }
-  }
-
   private[log] def activePids: Map[Long, ProducerIdEntry] = {
     lock synchronized {
       pidMap.activePids
