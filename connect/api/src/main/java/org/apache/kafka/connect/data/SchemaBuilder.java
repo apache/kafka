@@ -64,7 +64,7 @@ public class SchemaBuilder implements Schema {
     private Boolean optional = null;
     private Object defaultValue = null;
 
-    private List<Field> fields = null;
+    private Map<String, Field> fields = null;
     private Schema keySchema = null;
     private Schema valueSchema = null;
 
@@ -78,7 +78,7 @@ public class SchemaBuilder implements Schema {
     private SchemaBuilder(Type type) {
         this.type = type;
         if (type == Type.STRUCT) {
-            fields = new ArrayList<>();
+            fields = new LinkedHashMap<>();
         }
     }
 
@@ -320,11 +320,9 @@ public class SchemaBuilder implements Schema {
         if (type != Type.STRUCT)
             throw new SchemaBuilderException("Cannot create fields on type " + type);
         int fieldIndex = fields.size();
-        for (Field elements : fields) {
-            if (elements.name().equals(fieldName))
-                throw new SchemaBuilderException("Cannot create field because of field name duplication " + fieldName);
-        }
-        fields.add(new Field(fieldName, fieldIndex, fieldSchema));
+        if (fields.containsKey(fieldName))
+            throw new SchemaBuilderException("Cannot create field because of field name duplication " + fieldName);
+        fields.put(fieldName, new Field(fieldName, fieldIndex, fieldSchema));
         return this;
     }
 
@@ -335,16 +333,13 @@ public class SchemaBuilder implements Schema {
     public List<Field> fields() {
         if (type != Type.STRUCT)
             throw new DataException("Cannot list fields on non-struct type");
-        return fields;
+        return new ArrayList<>(fields.values());
     }
 
     public Field field(String fieldName) {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");
-        for (Field field : fields)
-            if (field.name().equals(fieldName))
-                return field;
-        return null;
+        return fields.get(fieldName);
     }
 
 
@@ -391,7 +386,7 @@ public class SchemaBuilder implements Schema {
     public Schema build() {
         return new ConnectSchema(type, isOptional(), defaultValue, name, version, doc,
                 parameters == null ? null : Collections.unmodifiableMap(parameters),
-                fields == null ? null : Collections.unmodifiableList(fields), keySchema, valueSchema);
+                fields == null ? null : Collections.unmodifiableList(new ArrayList<Field>(fields.values())), keySchema, valueSchema);
     }
 
     /**
