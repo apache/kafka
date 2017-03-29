@@ -117,7 +117,7 @@ public class ResetIntegrationTest {
             try {
                 TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
                         "Test consumer group active even after waiting " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
-            } catch (TimeoutException e) {
+            } catch (final TimeoutException e) {
                 continue;
             }
             break;
@@ -300,6 +300,9 @@ public class ResetIntegrationTest {
         } catch (final UnknownTopicOrPartitionException e) {
             // ignore
         }
+
+        waitUntilUserTopicsGotDeleted();
+
         CLUSTER.createTopic(INPUT_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC);
         CLUSTER.createTopic(OUTPUT_TOPIC_2);
@@ -400,6 +403,34 @@ public class ResetIntegrationTest {
 
         final int exitCode = new StreamsResetter().run(parameters, cleanUpConfig);
         Assert.assertEquals(0, exitCode);
+    }
+
+    private void waitUntilUserTopicsGotDeleted() {
+        final Set<String> expectedMissingTopics = new HashSet<>();
+
+        Set<String> allTopics;
+        ZkUtils zkUtils = null;
+        try {
+            zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
+                30000,
+                30000,
+                JaasUtils.isZkSecurityEnabled());
+
+            do {
+                expectedMissingTopics.add(INPUT_TOPIC);
+                expectedMissingTopics.add(OUTPUT_TOPIC);
+                expectedMissingTopics.add(OUTPUT_TOPIC_2);
+                expectedMissingTopics.add(OUTPUT_TOPIC_2_RERUN);
+
+                Utils.sleep(100);
+                allTopics = new HashSet<>();
+                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            } while (expectedMissingTopics.removeAll(allTopics));
+        } finally {
+            if (zkUtils != null) {
+                zkUtils.close();
+            }
+        }
     }
 
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) {
