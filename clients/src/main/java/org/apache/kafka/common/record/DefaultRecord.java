@@ -18,13 +18,15 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32;
+import org.apache.kafka.common.utils.Checksums;
+import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
@@ -258,14 +260,14 @@ public class DefaultRecord implements Record {
     private static long computeChecksum(long timestamp,
                                         ByteBuffer key,
                                         ByteBuffer value) {
-        Crc32 crc = new Crc32();
-        crc.updateLong(timestamp);
+        Checksum crc = Crc32C.create();
+        Checksums.updateLong(crc, timestamp);
 
         if (key != null)
-            crc.update(key, key.remaining());
+            Checksums.update(crc, key, key.remaining());
 
         if (value != null)
-            crc.update(value, value.remaining());
+            Checksums.update(crc, value, value.remaining());
 
         return crc.getValue();
     }
