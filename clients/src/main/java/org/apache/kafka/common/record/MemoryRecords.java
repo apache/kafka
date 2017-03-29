@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.record.ByteBufferLogInputStream.ByteBufferLogEntry;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
@@ -25,11 +23,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * A {@link Records} implementation backed by a ByteBuffer. This is used only for reading or
- * modifying in-place an existing buffer of log entries. To create a new buffer see {@link MemoryRecordsBuilder},
- * or one of the {@link #builder(ByteBuffer, byte, CompressionType, TimestampType) builder} variants.
+ * modifying in-place an existing buffer of record batches. To create a new buffer see {@link MemoryRecordsBuilder},
+ * or one of the {@link #builder(ByteBuffer, byte, CompressionType, TimestampType, long)} variants.
  */
 public class MemoryRecords extends AbstractRecords {
 
@@ -37,19 +36,18 @@ public class MemoryRecords extends AbstractRecords {
 
     private final ByteBuffer buffer;
 
-    private final Iterable<ByteBufferLogEntry> shallowEntries = new Iterable<ByteBufferLogEntry>() {
+    private final Iterable<MutableRecordBatch> batches = new Iterable<MutableRecordBatch>() {
         @Override
-        public Iterator<ByteBufferLogEntry> iterator() {
-            return shallowIterator();
+        public Iterator<MutableRecordBatch> iterator() {
+            return new RecordBatchIterator<>(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
         }
     };
-
-    private final Iterable<LogEntry> deepEntries = deepEntries(false);
 
     private int validBytes = -1;
 
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer) {
+        Objects.requireNonNull(buffer, "buffer should not be null");
         this.buffer = buffer;
     }
 
@@ -98,11 +96,16 @@ public class MemoryRecords extends AbstractRecords {
             return validBytes;
 
         int bytes = 0;
-        for (LogEntry entry : shallowEntries())
-            bytes += entry.sizeInBytes();
+        for (RecordBatch batch : batches())
+            bytes += batch.sizeInBytes();
 
         this.validBytes = bytes;
         return bytes;
+    }
+
+    @Override
+    public MemoryRecords downConvert(byte toMagic) {
+        return downConvert(batches(), toMagic);
     }
 
     /**
@@ -111,13 +114,13 @@ public class MemoryRecords extends AbstractRecords {
      * @param destinationBuffer The byte buffer to write the filtered records to
      * @return A FilterResult with a summary of the output (for metrics)
      */
-    public FilterResult filterTo(LogEntryFilter filter, ByteBuffer destinationBuffer) {
-        return filterTo(shallowEntries(), filter, destinationBuffer);
+    public FilterResult filterTo(RecordFilter filter, ByteBuffer destinationBuffer) {
+        return filterTo(batches(), filter, destinationBuffer);
     }
 
-    private static FilterResult filterTo(Iterable<ByteBufferLogEntry> fromShallowEntries, LogEntryFilter filter,
-                                       ByteBuffer destinationBuffer) {
-        long maxTimestamp = Record.NO_TIMESTAMP;
+    private static FilterResult filterTo(Iterable<MutableRecordBatch> batches, RecordFilter filter,
+                                         ByteBuffer destinationBuffer) {
+        long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long maxOffset = -1L;
         long shallowOffsetOfMaxTimestamp = -1L;
         int messagesRead = 0;
@@ -125,33 +128,35 @@ public class MemoryRecords extends AbstractRecords {
         int messagesRetained = 0;
         int bytesRetained = 0;
 
-        for (ByteBufferLogEntry shallowEntry : fromShallowEntries) {
-            bytesRead += shallowEntry.sizeInBytes();
+        for (MutableRecordBatch batch : batches) {
+            bytesRead += batch.sizeInBytes();
 
-            // We use the absolute offset to decide whether to retain the message or not (this is handled by the
-            // deep iterator). Because of KAFKA-4298, we have to allow for the possibility that a previous version
-            // corrupted the log by writing a compressed message set with a wrapper magic value not matching the magic
-            // of the inner messages. This will be fixed as we recopy the messages to the destination buffer.
+            // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
+            // allow for the possibility that a previous version corrupted the log by writing a compressed record batch
+            // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
+            // recopy the messages to the destination buffer.
 
-            Record shallowRecord = shallowEntry.record();
-            byte shallowMagic = shallowRecord.magic();
+            byte batchMagic = batch.magic();
             boolean writeOriginalEntry = true;
-            List<LogEntry> retainedEntries = new ArrayList<>();
+            long firstOffset = -1;
+            List<Record> retainedRecords = new ArrayList<>();
 
-            for (LogEntry deepEntry : shallowEntry) {
-                Record deepRecord = deepEntry.record();
+            for (Record record : batch) {
+                if (firstOffset < 0)
+                    firstOffset = record.offset();
+
                 messagesRead += 1;
 
-                if (filter.shouldRetain(deepEntry)) {
+                if (filter.shouldRetain(record)) {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-                    // the corrupted entry with correct data.
-                    if (shallowMagic != deepRecord.magic())
+                    // the corrupted batch with correct data.
+                    if (!record.hasMagic(batchMagic))
                         writeOriginalEntry = false;
 
-                    if (deepEntry.offset() > maxOffset)
-                        maxOffset = deepEntry.offset();
+                    if (record.offset() > maxOffset)
+                        maxOffset = record.offset();
 
-                    retainedEntries.add(deepEntry);
+                    retainedRecords.add(record);
                 } else {
                     writeOriginalEntry = false;
                 }
@@ -159,21 +164,26 @@ public class MemoryRecords extends AbstractRecords {
 
             if (writeOriginalEntry) {
                 // There are no messages compacted out and no message format conversion, write the original message set back
-                shallowEntry.writeTo(destinationBuffer);
-                messagesRetained += retainedEntries.size();
-                bytesRetained += shallowEntry.sizeInBytes();
-
-                if (shallowRecord.timestamp() > maxTimestamp) {
-                    maxTimestamp = shallowRecord.timestamp();
-                    shallowOffsetOfMaxTimestamp = shallowEntry.offset();
+                batch.writeTo(destinationBuffer);
+                messagesRetained += retainedRecords.size();
+                bytesRetained += batch.sizeInBytes();
+                if (batch.maxTimestamp() > maxTimestamp) {
+                    maxTimestamp = batch.maxTimestamp();
+                    shallowOffsetOfMaxTimestamp = batch.lastOffset();
                 }
-            } else if (!retainedEntries.isEmpty()) {
+            } else if (!retainedRecords.isEmpty()) {
                 ByteBuffer slice = destinationBuffer.slice();
-                MemoryRecordsBuilder builder = builderWithEntries(slice, shallowRecord.timestampType(), shallowRecord.compressionType(),
-                        shallowRecord.timestamp(), retainedEntries);
+                TimestampType timestampType = batch.timestampType();
+                long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
+                MemoryRecordsBuilder builder = builder(slice, batch.magic(), batch.compressionType(), timestampType,
+                        firstOffset, logAppendTime);
+
+                for (Record record : retainedRecords)
+                    builder.append(record);
+
                 MemoryRecords records = builder.build();
                 destinationBuffer.position(destinationBuffer.position() + slice.position());
-                messagesRetained += retainedEntries.size();
+                messagesRetained += retainedRecords.size();
                 bytesRetained += records.sizeInBytes();
 
                 MemoryRecordsBuilder.RecordsInfo info = builder.info();
@@ -195,46 +205,20 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public Iterable<ByteBufferLogEntry> shallowEntries() {
-        return shallowEntries;
-    }
-
-    private Iterator<ByteBufferLogEntry> shallowIterator() {
-        return RecordsIterator.shallowIterator(new ByteBufferLogInputStream(buffer.duplicate(), Integer.MAX_VALUE));
-    }
-
-    @Override
-    public Iterable<LogEntry> deepEntries() {
-        return deepEntries;
-    }
-
-    public Iterable<LogEntry> deepEntries(final boolean ensureMatchingMagic) {
-        return new Iterable<LogEntry>() {
-            @Override
-            public Iterator<LogEntry> iterator() {
-                return deepIterator(ensureMatchingMagic, Integer.MAX_VALUE);
-            }
-        };
-    }
-
-    private Iterator<LogEntry> deepIterator(boolean ensureMatchingMagic, int maxMessageSize) {
-        return new RecordsIterator(new ByteBufferLogInputStream(buffer.duplicate(), maxMessageSize), false,
-                ensureMatchingMagic, maxMessageSize);
+    public Iterable<MutableRecordBatch> batches() {
+        return batches;
     }
 
     @Override
     public String toString() {
-        Iterator<LogEntry> iter = deepEntries().iterator();
+        Iterator<Record> iter = records().iterator();
         StringBuilder builder = new StringBuilder();
         builder.append('[');
         while (iter.hasNext()) {
-            LogEntry entry = iter.next();
+            Record record = iter.next();
             builder.append('(');
-            builder.append("offset=");
-            builder.append(entry.offset());
-            builder.append(",");
             builder.append("record=");
-            builder.append(entry.record());
+            builder.append(record);
             builder.append(")");
             if (iter.hasNext())
                 builder.append(", ");
@@ -245,8 +229,10 @@ public class MemoryRecords extends AbstractRecords {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
 
         MemoryRecords that = (MemoryRecords) o;
 
@@ -258,8 +244,8 @@ public class MemoryRecords extends AbstractRecords {
         return buffer.hashCode();
     }
 
-    public interface LogEntryFilter {
-        boolean shouldRetain(LogEntry entry);
+    public interface RecordFilter {
+        boolean shouldRetain(Record record);
     }
 
     public static class FilterResult {
@@ -288,41 +274,24 @@ public class MemoryRecords extends AbstractRecords {
         }
     }
 
+    public static MemoryRecords readableRecords(ByteBuffer buffer) {
+        return new MemoryRecords(buffer);
+    }
+
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                CompressionType compressionType,
                                                TimestampType timestampType,
                                                int writeLimit) {
-        return new MemoryRecordsBuilder(buffer, Record.CURRENT_MAGIC_VALUE, compressionType, timestampType, 0L, System.currentTimeMillis(), writeLimit);
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
-                                               long baseOffset,
-                                               long logAppendTime) {
-        return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime, buffer.capacity());
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType) {
-        // use the buffer capacity as the default write limit
-        return builder(buffer, compressionType, timestampType, buffer.capacity());
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               byte magic,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType) {
-        return builder(buffer, magic, compressionType, timestampType, 0L);
+        return new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, 0L,
+                System.currentTimeMillis(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
+                RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, writeLimit);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                CompressionType compressionType,
                                                TimestampType timestampType,
                                                long baseOffset) {
-        return builder(buffer, Record.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset, System.currentTimeMillis());
+        return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -333,88 +302,52 @@ public class MemoryRecords extends AbstractRecords {
         return builder(buffer, magic, compressionType, timestampType, baseOffset, System.currentTimeMillis());
     }
 
-    public static MemoryRecords readableRecords(ByteBuffer buffer) {
-        return new MemoryRecords(buffer);
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               long logAppendTime) {
+        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
     }
 
-    public static MemoryRecords withLogEntries(CompressionType compressionType, List<LogEntry> entries) {
-        return withLogEntries(TimestampType.CREATE_TIME, compressionType, System.currentTimeMillis(), entries);
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               long logAppendTime,
+                                               long pid,
+                                               short epoch,
+                                               int baseSequence) {
+        return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
+                logAppendTime, pid, epoch, baseSequence, false, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH,
+                buffer.capacity());
     }
 
-    public static MemoryRecords withLogEntries(LogEntry ... entries) {
-        return withLogEntries(CompressionType.NONE, Arrays.asList(entries));
+    public static MemoryRecords withRecords(CompressionType compressionType, SimpleRecord... records) {
+        return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, compressionType, records);
     }
 
-    public static MemoryRecords withRecords(CompressionType compressionType, long initialOffset, List<Record> records) {
-        return withRecords(initialOffset, TimestampType.CREATE_TIME, compressionType, System.currentTimeMillis(), records);
+    public static MemoryRecords withRecords(byte magic, CompressionType compressionType, SimpleRecord... records) {
+        return withRecords(magic, 0L, compressionType, TimestampType.CREATE_TIME, records);
     }
 
-    public static MemoryRecords withRecords(Record ... records) {
-        return withRecords(CompressionType.NONE, 0L, Arrays.asList(records));
+    public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, SimpleRecord... records) {
+        return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME, records);
     }
 
-    public static MemoryRecords withRecords(long initialOffset, Record ... records) {
-        return withRecords(CompressionType.NONE, initialOffset, Arrays.asList(records));
-    }
-
-    public static MemoryRecords withRecords(CompressionType compressionType, Record ... records) {
-        return withRecords(compressionType, 0L, Arrays.asList(records));
-    }
-
-    public static MemoryRecords withRecords(TimestampType timestampType, CompressionType compressionType, Record ... records) {
-        return withRecords(0L, timestampType, compressionType, System.currentTimeMillis(), Arrays.asList(records));
-    }
-
-    public static MemoryRecords withRecords(long initialOffset,
-                                            TimestampType timestampType,
-                                            CompressionType compressionType,
-                                            long logAppendTime,
-                                            List<Record> records) {
-        return withLogEntries(timestampType, compressionType, logAppendTime, buildLogEntries(initialOffset, records));
-    }
-
-    private static MemoryRecords withLogEntries(TimestampType timestampType,
-                                                CompressionType compressionType,
-                                                long logAppendTime,
-                                                List<LogEntry> entries) {
-        if (entries.isEmpty())
+    public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                            TimestampType timestampType, SimpleRecord... records) {
+        if (records.length == 0)
             return MemoryRecords.EMPTY;
-        return builderWithEntries(timestampType, compressionType, logAppendTime, entries).build();
-    }
-
-    private static List<LogEntry> buildLogEntries(long initialOffset, List<Record> records) {
-        List<LogEntry> entries = new ArrayList<>();
-        for (Record record : records)
-            entries.add(LogEntry.create(initialOffset++, record));
-        return entries;
-    }
-
-    public static MemoryRecordsBuilder builderWithEntries(TimestampType timestampType,
-                                                          CompressionType compressionType,
-                                                          long logAppendTime,
-                                                          List<LogEntry> entries) {
-        ByteBuffer buffer = ByteBuffer.allocate(estimatedSize(compressionType, entries));
-        return builderWithEntries(buffer, timestampType, compressionType, logAppendTime, entries);
-    }
-
-    private static MemoryRecordsBuilder builderWithEntries(ByteBuffer buffer,
-                                                           TimestampType timestampType,
-                                                           CompressionType compressionType,
-                                                           long logAppendTime,
-                                                           List<LogEntry> entries) {
-        if (entries.isEmpty())
-            throw new IllegalArgumentException("entries must not be empty");
-
-        LogEntry firstEntry = entries.iterator().next();
-        long firstOffset = firstEntry.offset();
-        byte magic = firstEntry.record().magic();
-
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType,
-                firstOffset, logAppendTime);
-        for (LogEntry entry : entries)
-            builder.appendWithOffset(entry.offset(), entry.record());
-
-        return builder;
+        int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
+        ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
+        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset);
+        for (SimpleRecord record : records)
+            builder.append(record);
+        return builder.build();
     }
 
 }

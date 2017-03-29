@@ -16,21 +16,22 @@
  */
 package org.apache.kafka.common.utils;
 
-import static org.junit.Assert.assertEquals;
 import org.junit.Test;
 
-import java.nio.ByteBuffer;
+import java.util.zip.Checksum;
 
-public class CrcTest {
+import static org.junit.Assert.assertEquals;
+
+public class Crc32Test {
 
     @Test
     public void testUpdate() {
         final byte[] bytes = "Any String you want".getBytes();
         final int len = bytes.length;
 
-        Crc32 crc1 = new Crc32();
-        Crc32 crc2 = new Crc32();
-        Crc32 crc3 = new Crc32();
+        Checksum crc1 = Crc32C.create();
+        Checksum crc2 = Crc32C.create();
+        Checksum crc3 = Crc32C.create();
 
         crc1.update(bytes, 0, len);
         for (int i = 0; i < len; i++)
@@ -43,17 +44,9 @@ public class CrcTest {
     }
 
     @Test
-    public void testUpdateInt() {
-        final int value = 1000;
-        final ByteBuffer buffer = ByteBuffer.allocate(4);
-        buffer.putInt(value);
-
-        Crc32 crc1 = new Crc32();
-        Crc32 crc2 = new Crc32();
-
-        crc1.updateInt(value);
-        crc2.update(buffer.array(), buffer.arrayOffset(), 4);
-
-        assertEquals("Crc values should be the same", crc1.getValue(), crc2.getValue());
+    public void testValue() {
+        final byte[] bytes = "Some String".getBytes();
+        assertEquals(2021503672, Crc32.crc32(bytes));
     }
+
 }

@@ -423,10 +423,10 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def doCommitOffsets(group: GroupMetadata,
-                      memberId: String,
-                      generationId: Int,
-                      offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                      responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
+                              memberId: String,
+                              generationId: Int,
+                              offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                              responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
     var delayedOffsetStore: Option[DelayedStore] = None
 
     group synchronized {

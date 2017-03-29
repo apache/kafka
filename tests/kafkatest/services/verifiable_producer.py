@@ -28,9 +28,15 @@ from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import DEV_BRANCH
 from kafkatest.utils.remote_account import line_count
 
-
-
 class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
+    """This service wraps org.apache.kafka.tools.VerifiableProducer for use in
+    system testing. 
+
+    NOTE: this class should be treated as a PUBLIC API. Downstream users use
+    this service both directly and through class extension, so care must be 
+    taken to ensure compatibility.
+    """
+
     PERSISTENT_ROOT = "/mnt/verifiable_producer"
     STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stdout")
     STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "verifiable_producer.stderr")
@@ -86,6 +92,9 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
         self.request_timeout_sec = request_timeout_sec
+
+    def java_class_name(self):
+        return "VerifiableProducer"
 
     def prop_file(self, node):
         idx = self.idx(node)

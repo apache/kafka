@@ -40,7 +40,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{MemoryRecords, Record, TimestampType}
+import org.apache.kafka.common.record.{RecordBatch, MemoryRecords, TimestampType}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -99,6 +99,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
+        case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -147,7 +148,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val leaderAndIsrResponse =
         if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-          val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, metadataCache, onLeadershipChange)
+          val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
           new LeaderAndIsrResponse(result.error, result.responseMap.asJava)
         } else {
           val result = leaderAndIsrRequest.partitionStates.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
@@ -199,7 +200,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val updateMetadataResponse =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-        val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
+        val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
         if (deletedPartitions.nonEmpty)
           coordinator.handleDeletedPartitions(deletedPartitions)
 
@@ -450,11 +451,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val nonExistingOrUnauthorizedForDescribePartitionData = nonExistingOrUnauthorizedForDescribeTopics.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION, -1, MemoryRecords.EMPTY))
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
     val unauthorizedForReadPartitionData = unauthorizedForReadRequestInfo.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, -1, MemoryRecords.EMPTY))
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
     // the callback for sending a fetch response
@@ -462,22 +465,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       val convertedPartitionData = {
         responsePartitionData.map { case (tp, data) =>
 
-          // We only do down-conversion when:
-          // 1. The message format version configured for the topic is using magic value > 0, and
-          // 2. The message set contains message whose magic > 0
-          // This is to reduce the message format conversion as much as possible. The conversion will only occur
-          // when new message format is used for the topic and we see an old request.
-          // Please note that if the message format is changed from a higher version back to lower version this
-          // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
-          // without format down conversion.
-          val convertedData = if (versionId <= 1 && replicaManager.getMagic(tp).exists(_ > Record.MAGIC_VALUE_V0) &&
-            !data.records.hasMatchingShallowMagic(Record.MAGIC_VALUE_V0)) {
-            trace(s"Down converting message to V0 for fetch request from $clientId")
-            val downConvertedRecords = data.records.toMessageFormat(Record.MAGIC_VALUE_V0, TimestampType.NO_TIMESTAMP_TYPE)
-            FetchPartitionData(data.error, data.hw, downConvertedRecords)
-          } else data
+          // Down-conversion of the fetched records is needed when the stored magic version is
+          // greater than that supported by the client (as indicated by the fetch request version). If the
+          // configured magic version for the topic is less than or equal to that supported by the version of the
+          // fetch request, we skip the iteration through the records in order to check the magic version since we
+          // know it must be supported. However, if the magic version is changed from a higher version back to a
+          // lower version, this check will no longer be valid and we will fail to down-convert the messages
+          // which were written in the new format prior to the version downgrade.
+          val convertedData = replicaManager.getMagic(tp) match {
+            case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0) =>
+              trace(s"Down converting message to V0 for fetch request from $clientId")
+              FetchPartitionData(data.error, data.hw, data.logStartOffset, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
 
-          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, convertedData.records)
+            case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1) =>
+              trace(s"Down converting message to V1 for fetch request from $clientId")
+              FetchPartitionData(data.error, data.hw, data.logStartOffset, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
+
+            case _ => data
+          }
+
+          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            convertedData.logStartOffset, null, convertedData.records)
         }
       }
 
@@ -652,7 +660,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           val found = {
             if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-              TimestampOffset(Record.NO_TIMESTAMP, localReplica.highWatermark.messageOffset)
+              TimestampOffset(RecordBatch.NO_TIMESTAMP, localReplica.highWatermark.messageOffset)
             else {
               def allowed(timestampOffset: TimestampOffset): Boolean =
                 !fromConsumer || timestampOffset.offset <= localReplica.highWatermark.messageOffset
@@ -721,7 +729,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         new Array[(Long, Long)](segments.length)
 
     for (i <- segments.indices)
-      offsetTimeArray(i) = (segments(i).baseOffset, segments(i).lastModified)
+      offsetTimeArray(i) = (math.max(segments(i).baseOffset, log.logStartOffset), segments(i).lastModified)
     if (lastSegmentHasSize)
       offsetTimeArray(segments.length) = (log.logEndOffset, time.milliseconds)
 
@@ -1249,6 +1257,54 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendResponseCallback
         )
       }
+    }
+  }
+
+  def handleDeleteRecordsRequest(request: RequestChannel.Request) {
+    val deleteRecordsRequest = request.body[DeleteRecordsRequest]
+
+    val (authorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = deleteRecordsRequest.partitionOffsets.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
+    }
+
+    val (authorizedForDeleteTopics, unauthorizedForDeleteTopics) = authorizedForDescribeTopics.partition {
+      case (topicPartition, _) => authorize(request.session, Delete, new Resource(auth.Topic, topicPartition.topic))
+    }
+
+    // the callback for sending a DeleteRecordsResponse
+    def sendResponseCallback(responseStatus: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse]) {
+
+      val mergedResponseStatus = responseStatus ++
+        unauthorizedForDeleteTopics.mapValues(_ =>
+          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)) ++
+        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ =>
+          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+
+      mergedResponseStatus.foreach { case (topicPartition, status) =>
+        if (status.error != Errors.NONE) {
+          debug("DeleteRecordsRequest with correlation id %d from client %s on partition %s failed due to %s".format(
+            request.header.correlationId,
+            request.header.clientId,
+            topicPartition,
+            status.error.exceptionName))
+        }
+      }
+
+      val respBody = new DeleteRecordsResponse(mergedResponseStatus.asJava)
+      requestChannel.sendResponse(new RequestChannel.Response(request, respBody))
+
+      // When this callback is triggered, the remote API call has completed
+      request.apiRemoteCompleteTimeMs = time.milliseconds
+    }
+
+    if (authorizedForDeleteTopics.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      // call the replica manager to append messages to the replicas
+      replicaManager.deleteRecords(
+        deleteRecordsRequest.timeout.toLong,
+        authorizedForDeleteTopics.mapValues(_.toLong),
+        sendResponseCallback)
     }
   }
 

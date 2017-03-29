@@ -25,8 +25,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.common.requests.ApiVersionsResponse
-import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.Test
 
 class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
@@ -45,6 +44,7 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
     val nodeApiVersions = NodeApiVersions.create
     for (apiKey <- ApiKeys.values) {
       val apiVersion = nodeApiVersions.apiVersion(apiKey)
+      assertNotNull(apiVersion)
       val versionRangeStr =
         if (apiVersion.minVersion == apiVersion.maxVersion) apiVersion.minVersion.toString
         else s"${apiVersion.minVersion} to ${apiVersion.maxVersion}"

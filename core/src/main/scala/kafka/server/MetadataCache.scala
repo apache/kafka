@@ -132,6 +132,12 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  def isBrokerAlive(brokerId: Int): Boolean = {
+    inReadLock(partitionMetadataLock) {
+      aliveBrokers.contains(brokerId)
+    }
+  }
+
   def getAliveBrokers: Seq[Broker] = {
     inReadLock(partitionMetadataLock) {
       aliveBrokers.values.toBuffer

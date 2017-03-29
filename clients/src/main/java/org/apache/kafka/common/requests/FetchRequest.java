@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -29,11 +23,18 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.utils.Utils;
 
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
 public class FetchRequest extends AbstractRequest {
     public static final int CONSUMER_REPLICA_ID = -1;
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
     private static final String MAX_WAIT_KEY_NAME = "max_wait_time";
     private static final String MIN_BYTES_KEY_NAME = "min_bytes";
+    private static final String ISOLATION_LEVEL_KEY_NAME = "isolation_level";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // request and partition level name
@@ -46,28 +47,33 @@ public class FetchRequest extends AbstractRequest {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String FETCH_OFFSET_KEY_NAME = "fetch_offset";
+    private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
 
     // default values for older versions where a request level limit did not exist
     public static final int DEFAULT_RESPONSE_MAX_BYTES = Integer.MAX_VALUE;
+    public static final long INVALID_LOG_START_OFFSET = -1L;
 
     private final int replicaId;
     private final int maxWait;
     private final int minBytes;
     private final int maxBytes;
+    private final IsolationLevel isolationLevel;
     private final LinkedHashMap<TopicPartition, PartitionData> fetchData;
 
     public static final class PartitionData {
-        public final long offset;
+        public final long fetchOffset;
+        public final long logStartOffset;
         public final int maxBytes;
 
-        public PartitionData(long offset, int maxBytes) {
-            this.offset = offset;
+        public PartitionData(long fetchOffset, long logStartOffset, int maxBytes) {
+            this.fetchOffset = fetchOffset;
+            this.logStartOffset = logStartOffset;
             this.maxBytes = maxBytes;
         }
 
         @Override
         public String toString() {
-            return "(offset=" + offset + ", maxBytes=" + maxBytes + ")";
+            return "(offset=" + fetchOffset + ", logStartOffset=" + logStartOffset + ", maxBytes=" + maxBytes + ")";
         }
     }
 
@@ -159,6 +165,7 @@ public class FetchRequest extends AbstractRequest {
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
         this.fetchData = fetchData;
+        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
     }
 
     public FetchRequest(Struct struct, short version) {
@@ -170,6 +177,12 @@ public class FetchRequest extends AbstractRequest {
             maxBytes = struct.getInt(MAX_BYTES_KEY_NAME);
         else
             maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
+
+        if (struct.hasField(ISOLATION_LEVEL_KEY_NAME))
+            isolationLevel = IsolationLevel.forId(struct.getByte(ISOLATION_LEVEL_KEY_NAME));
+        else
+            isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+
         fetchData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -179,7 +192,9 @@ public class FetchRequest extends AbstractRequest {
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
                 long offset = partitionResponse.getLong(FETCH_OFFSET_KEY_NAME);
                 int maxBytes = partitionResponse.getInt(MAX_BYTES_KEY_NAME);
-                PartitionData partitionData = new PartitionData(offset, maxBytes);
+                long logStartOffset = partitionResponse.hasField(LOG_START_OFFSET_KEY_NAME) ?
+                    partitionResponse.getLong(LOG_START_OFFSET_KEY_NAME) : INVALID_LOG_START_OFFSET;
+                PartitionData partitionData = new PartitionData(offset, logStartOffset, maxBytes);
                 fetchData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
@@ -191,8 +206,8 @@ public class FetchRequest extends AbstractRequest {
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e),
-                    FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY);
-
+                FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET,
+                null, MemoryRecords.EMPTY);
             responseData.put(entry.getKey(), partitionResponse);
         }
         return new FetchResponse(responseData, 0);
@@ -222,21 +237,27 @@ public class FetchRequest extends AbstractRequest {
         return replicaId >= 0;
     }
 
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
+    }
+
     public static FetchRequest parse(ByteBuffer buffer, short version) {
         return new FetchRequest(ApiKeys.FETCH.parseRequest(version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        short version = version();
-        Struct struct = new Struct(ApiKeys.FETCH.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.FETCH.requestSchema(version()));
         List<TopicAndPartitionData<PartitionData>> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);
         struct.set(MAX_WAIT_KEY_NAME, maxWait);
         struct.set(MIN_BYTES_KEY_NAME, minBytes);
-        if (version >= 3)
+        if (struct.hasField(MAX_BYTES_KEY_NAME))
             struct.set(MAX_BYTES_KEY_NAME, maxBytes);
+        if (struct.hasField(ISOLATION_LEVEL_KEY_NAME))
+            struct.set(ISOLATION_LEVEL_KEY_NAME, IsolationLevel.READ_UNCOMMITTED.id());
+
         List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
@@ -246,7 +267,9 @@ public class FetchRequest extends AbstractRequest {
                 PartitionData fetchPartitionData = partitionEntry.getValue();
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
-                partitionData.set(FETCH_OFFSET_KEY_NAME, fetchPartitionData.offset);
+                partitionData.set(FETCH_OFFSET_KEY_NAME, fetchPartitionData.fetchOffset);
+                if (partitionData.hasField(LOG_START_OFFSET_KEY_NAME))
+                    partitionData.set(LOG_START_OFFSET_KEY_NAME, fetchPartitionData.logStartOffset);
                 partitionData.set(MAX_BYTES_KEY_NAME, fetchPartitionData.maxBytes);
                 partitionArray.add(partitionData);
             }
