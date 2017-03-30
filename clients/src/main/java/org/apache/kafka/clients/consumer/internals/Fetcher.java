@@ -61,6 +61,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -80,7 +81,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class manage the fetching process with the brokers.
  */
-public class Fetcher<K, V> implements SubscriptionState.Listener {
+public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
@@ -1187,6 +1188,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         private static String partitionLagMetricName(TopicPartition tp) {
             return tp + ".records-lag";
         }
+    }
+
+    @Override
+    public void close() throws IOException {
+        if (nextInLineRecords != null)
+            nextInLineRecords.drain();
     }
 
 }
