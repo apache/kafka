@@ -414,6 +414,7 @@ class TransactionStateManager(brokerId: Int,
       txnMetadata.txnTimeoutMs.toLong,
       TransactionLog.EnforcedRequiredAcks,
       internalTopicsAllowed = true,
+      isFromClient = false,
       recordsPerPartition,
       updateCacheCallback)
   }

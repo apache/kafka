@@ -36,11 +36,14 @@ class LogSegmentTest {
     val ms = FileRecords.open(msFile)
     val idxFile = TestUtils.tempFile()
     val timeIdxFile = TestUtils.tempFile()
+    val txnIdxFile = TestUtils.tempFile()
     idxFile.delete()
     timeIdxFile.delete()
+    txnIdxFile.delete()
     val idx = new OffsetIndex(idxFile, offset, 1000)
     val timeIdx = new TimeIndex(timeIdxFile, offset, 1500)
-    val seg = new LogSegment(ms, idx, timeIdx, offset, indexIntervalBytes, 0, Time.SYSTEM)
+    val txnIndex = new TransactionIndex(txnIdxFile)
+    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, Time.SYSTEM)
     segments += seg
     seg
   }
@@ -153,7 +156,7 @@ class LogSegmentTest {
   }
 
   @Test
-  def testReloadLargestTimestampAfterTruncation() {
+  def testReloadLargestTimestampAndNextOffsetAfterTruncation() {
     val numMessages = 30
     val seg = createSegment(40, 2 * records(0, "hello").sizeInBytes - 1)
     var offset = 40
@@ -161,13 +164,15 @@ class LogSegmentTest {
       seg.append(offset, offset, offset, offset, records(offset, "hello"))
       offset += 1
     }
+    assertEquals(offset, seg.nextOffset)
+
     val expectedNumEntries = numMessages / 2 - 1
     assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.entries)
 
     seg.truncateTo(41)
     assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.entries)
     assertEquals(s"Largest timestamp should be 400", 400L, seg.largestTimestamp)
-
+    assertEquals(41, seg.nextOffset)
   }
 
   /**
@@ -217,7 +222,7 @@ class LogSegmentTest {
     val seg = createSegment(40)
     assertEquals(40, seg.nextOffset)
     seg.append(50, 52, RecordBatch.NO_TIMESTAMP, -1L, records(50, "hello", "there", "you"))
-    assertEquals(53, seg.nextOffset())
+    assertEquals(53, seg.nextOffset)
   }
 
   /**

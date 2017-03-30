@@ -122,7 +122,6 @@ public class MemoryRecordsBuilder {
                 throw new IllegalArgumentException("Transactional messages are not supported for magic " + magic);
         }
 
-
         this.magic = magic;
         this.timestampType = timestampType;
         this.compressionType = compressionType;
@@ -254,7 +253,7 @@ public class MemoryRecordsBuilder {
             if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
                 throw new IllegalArgumentException("Invalid negative producer epoch");
 
-            if (baseSequence == RecordBatch.NO_SEQUENCE)
+            if (baseSequence < 0 && baseSequence != RecordBatch.CONTROL_SEQUENCE)
                 throw new IllegalArgumentException("Invalid negative sequence number used");
 
             if (magic < RecordBatch.MAGIC_VALUE_V2)

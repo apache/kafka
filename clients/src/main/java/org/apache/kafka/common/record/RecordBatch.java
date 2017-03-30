@@ -55,6 +55,13 @@ public interface RecordBatch extends Iterable<Record> {
     int NO_SEQUENCE = -1;
 
     /**
+     * This is a sentinel sequence number used to identify record batches containing COMMIT or
+     * ABORT control records. This is used to avoid "deep" iteration to find the control records
+     * when updating the transaction index on followers. Clients are not allowed to use this.
+     */
+    int CONTROL_SEQUENCE = -2;
+
+    /**
      * Used to indicate an unknown leader epoch, which will be the case when the record set is
      * first created by the producer.
      */

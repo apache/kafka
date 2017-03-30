@@ -30,9 +30,10 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.ListOffsetRequest
+import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, mutable}
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -40,10 +41,15 @@ import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCod
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
 import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+
+import java.util.Map.{Entry => JEntry}
+import java.lang.{Long => JLong}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
-    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, Map.empty[Long, ProducerAppendInfo], false)
+    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, Map.empty[Long, ProducerAppendInfo], null,
+    false)
 }
 
 /**
@@ -74,7 +80,11 @@ case class LogAppendInfo(var firstOffset: Long,
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
                          producerAppendInfos: Map[Long, ProducerAppendInfo],
+                         completedTransactions: List[CompletedTxn] = null,
                          isDuplicate: Boolean = false)
+
+case class ControlRecord(controlType: ControlRecordType, pid: Long, epoch: Short, offset: Long, timestamp: Long)
+case class CompletedTxn(pid: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean)
 
 /**
  * An append-only log for storing messages.
@@ -133,6 +143,9 @@ class Log(@volatile var dir: File,
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
 
+  /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
+  @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
+
   /* Construct and load PID map */
   private val pidMap = new ProducerIdMapping(config, topicPartition, dir, maxPidExpirationMs)
 
@@ -147,7 +160,7 @@ class Log(@volatile var dir: File,
     loadSegments()
 
     /* Calculate the offset of the next message */
-    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
+    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset, activeSegment.baseOffset,
       activeSegment.size.toInt)
 
     leaderEpochCache.clearLatest(nextOffsetMetadata.messageOffset)
@@ -306,9 +319,12 @@ class Log(@volatile var dir: File,
       val index =  new OffsetIndex(indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
       val timeIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TimeIndexFileSuffix) + SwapFileSuffix)
       val timeIndex = new TimeIndex(timeIndexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
+      val txnIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TxnIndexFileSuffix) + SwapFileSuffix)
+      val txnIndex = new TransactionIndex(txnIndexFile)
       val swapSegment = new LogSegment(FileRecords.open(swapFile),
                                        index = index,
                                        timeIndex = timeIndex,
+                                       txnIndex = txnIndex,
                                        baseOffset = startOffset,
                                        indexIntervalBytes = config.indexInterval,
                                        rollJitterMs = config.randomSegmentJitter,
@@ -374,13 +390,6 @@ class Log(@volatile var dir: File,
     }
   }
 
-  /**
-    * Creates an instance of id map for this log and updates the mapping
-    * in the case it is missing some messages. Note that the id mapping
-    * starts from a snapshot that is taken strictly before the log end
-    * offset. Consequently, we need to process the tail of the log to update
-    * the mapping.
-    */
   private def buildAndRecoverPidMap(lastOffset: Long) {
     lock synchronized {
       info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
@@ -389,18 +398,39 @@ class Log(@volatile var dir: File,
       logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
         val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
-        if (fetchDataInfo != null) {
-          fetchDataInfo.records.batches.asScala.foreach { batch =>
-            if (batch.hasProducerId) {
-              val pidEntry = ProducerIdEntry(batch.producerEpoch, batch.lastSequence, batch.lastOffset,
-                batch.lastSequence - batch.baseSequence, batch.maxTimestamp)
-              pidMap.load(batch.producerId, pidEntry, currentTimeMs)
-            }
-          }
-        }
+        if (fetchDataInfo != null)
+          loadPidsFromLog(fetchDataInfo.records)
       }
       pidMap.updateMapEndOffset(lastOffset)
+      updateFirstUnstableOffset()
     }
+  }
+
+  private def loadPidsFromLog(records: Records): Unit = {
+    val pidsToLoad = mutable.Map[Long, ProducerAppendInfo]()
+    records.batches.asScala.foreach { batch =>
+      if (batch.hasProducerId) {
+        val pid = batch.producerId
+        pidsToLoad.get(pid) match {
+          case None =>
+            val appendInfo = pidMap.lastEntry(pid) match {
+              case Some(lastEntry) =>
+                val appendInfo = new ProducerAppendInfo(pid, lastEntry)
+                appendInfo.append(batch)
+                appendInfo
+
+              case None =>
+                new ProducerAppendInfo(pid, batch)
+            }
+            pidsToLoad.put(pid, appendInfo)
+
+          case Some(appendInfo) =>
+            appendInfo.append(batch)
+        }
+      }
+    }
+
+    pidsToLoad.values.foreach(pidMap.update)
   }
 
   private[log] def activePids: Map[Long, ProducerIdEntry] = {
@@ -436,8 +466,8 @@ class Log(@volatile var dir: File,
     * @throws KafkaStorageException If the append fails due to an I/O error.
     * @return Information about the appended messages including the first and last offset.
     */
-  def appendAsLeader(records: MemoryRecords, leaderEpoch: Int): LogAppendInfo = {
-    append(records, assignOffsets = true, leaderEpoch)
+  def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true): LogAppendInfo = {
+    append(records, isFromClient, assignOffsets = true, leaderEpoch)
   }
 
   /**
@@ -447,7 +477,7 @@ class Log(@volatile var dir: File,
     * @return Information about the appended messages including the first and last offset.
     */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
-    append(records, assignOffsets = false, leaderEpoch = -1)
+    append(records, isFromClient = false, assignOffsets = false, leaderEpoch = -1)
   }
 
   /**
@@ -462,7 +492,7 @@ class Log(@volatile var dir: File,
     * @throws KafkaStorageException If the append fails due to an I/O error.
     * @return Information about the appended messages including the first and last offset.
     */
-  private def append(records: MemoryRecords, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
+  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -483,15 +513,16 @@ class Log(@volatile var dir: File,
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
-                                                          offset,
-                                                          now,
-                                                          appendInfo.sourceCodec,
-                                                          appendInfo.targetCodec,
-                                                          config.compact,
-                                                          config.messageFormatVersion.messageFormatVersion,
-                                                          config.messageTimestampType,
-                                                          config.messageTimestampDifferenceMaxMs,
-                                                          leaderEpoch)
+              offset,
+              now,
+              appendInfo.sourceCodec,
+              appendInfo.targetCodec,
+              config.compact,
+              config.messageFormatVersion.messageFormatVersion,
+              config.messageTimestampType,
+              config.messageTimestampDifferenceMaxMs,
+              leaderEpoch,
+              isFromClient)
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
@@ -539,7 +570,7 @@ class Log(@volatile var dir: File,
           maxTimestampInMessages = appendInfo.maxTimestamp,
           maxOffsetInMessages = appendInfo.lastOffset)
 
-        // now append to the log
+        // The incoming record doesn't have any duplicates. Append it to the local log.
         segment.append(firstOffset = appendInfo.firstOffset,
           largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
@@ -549,10 +580,19 @@ class Log(@volatile var dir: File,
         // update the PID sequence mapping
         for ((pid, producerAppendInfo) <- appendInfo.producerAppendInfos) {
           trace(s"Updating pid with sequence: $pid -> ${producerAppendInfo.lastEntry}")
-
           if (assignOffsets)
             producerAppendInfo.assignLastOffsetAndTimestamp(appendInfo.lastOffset, appendInfo.maxTimestamp)
           pidMap.update(producerAppendInfo)
+        }
+
+        // update the transaction index and last stable offset. The ordering is important.
+        // The index must be updated before we can advance the LSO, but the LSO value must take
+        // into account the completed transaction.
+        for (completedTxn <- appendInfo.completedTransactions) {
+          val firstUnstableOffset = pidMap.firstUnstableOffset(completedTxn)
+          val lastStableOffset = firstUnstableOffset.getOrElse(completedTxn.lastOffset + 1)
+          segment.updateTxnIndex(completedTxn, lastStableOffset)
+          pidMap.completeTxn(completedTxn)
         }
 
         // always update the last pid map offset so that the snapshot reflects the current offset
@@ -561,6 +601,9 @@ class Log(@volatile var dir: File,
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
+
+        // update the first unstable offset (which is used to compute LSO)
+        updateFirstUnstableOffset()
 
         trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
           .format(this.name, appendInfo.firstOffset, nextOffsetMetadata.messageOffset, validRecords))
@@ -572,6 +615,20 @@ class Log(@volatile var dir: File,
       }
     } catch {
       case e: IOException => throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
+    }
+  }
+
+  private def updateFirstUnstableOffset(): Unit = {
+    this.firstUnstableOffset = pidMap.firstUnstableOffset match {
+      case None => None
+      case Some(offset) =>
+        if (firstUnstableOffset.exists(_.messageOffset == offset)) {
+          firstUnstableOffset
+        } else {
+          val segment = segments.floorEntry(offset).getValue
+          val position  = segment.translateOffset(offset)
+          Some(LogOffsetMetadata(offset, segment.baseOffset, position.position))
+        }
     }
   }
 
@@ -618,6 +675,7 @@ class Log(@volatile var dir: File,
     var offsetOfMaxTimestamp = -1L
     var isDuplicate = false
     val producerAppendInfos = mutable.Map[Long, ProducerAppendInfo]()
+    val completedTxns = ListBuffer.empty[CompletedTxn]
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
@@ -663,24 +721,41 @@ class Log(@volatile var dir: File,
 
       val pid = batch.producerId
       if (pid != RecordBatch.NO_PRODUCER_ID) {
+        val maybeControlRecord = if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
+          val record = batch.iterator.next()
+          val controlRecordType = ControlRecordType.parse(record.key)
+          val controlRecord = ControlRecord(controlRecordType, pid, batch.producerEpoch,
+            record.offset, record.timestamp)
+          Some(controlRecord)
+        } else None
+
+        def appendTo(appendInfo: ProducerAppendInfo) =
+          maybeControlRecord match {
+            case Some(controlRecord) =>
+              val completedTxn = appendInfo.appendControl(controlRecord)
+              completedTxns += completedTxn
+            case None => appendInfo.append(batch)
+          }
+
         producerAppendInfos.get(pid) match {
-          case Some(appendInfo) => appendInfo.append(batch)
+          case Some(appendInfo) => appendTo(appendInfo)
           case None =>
-            val lastEntry = pidMap.lastEntry(pid).getOrElse(ProducerIdEntry.Empty)
-            if (isFromClient && lastEntry.isDuplicate(batch)) {
-              // This request is a duplicate so return the information about the existing entry. Note that for requests
-              // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
-              // of the loop and the values below will not be updated more than once.
-              isDuplicate = true
-              firstOffset = lastEntry.firstOffset
-              lastOffset = lastEntry.lastOffset
-              maxTimestamp = lastEntry.timestamp
-              debug(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): ($firstOffset, $lastOffset). " +
-                "Ignoring the incoming record.")
-            } else {
-              val producerAppendInfo = new ProducerAppendInfo(pid, lastEntry)
-              producerAppendInfos.put(pid, producerAppendInfo)
-              producerAppendInfo.append(batch)
+            pidMap.lastEntry(pid) match {
+              case Some(lastEntry) if isFromClient && lastEntry.isDuplicate(batch) =>
+                // This request is a duplicate so return the information about the existing entry. Note that for requests
+                // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
+                // of the loop and the values below will not be updated more than once.
+                isDuplicate = true
+                firstOffset = lastEntry.firstOffset
+                lastOffset = lastEntry.lastOffset
+                maxTimestamp = lastEntry.timestamp
+                debug(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): ($firstOffset, $lastOffset). " +
+                  "Ignoring the incoming record.")
+
+              case maybeLastEntry =>
+                val appendInfo = new ProducerAppendInfo(pid, maybeLastEntry)
+                producerAppendInfos.put(pid, appendInfo)
+                appendTo(appendInfo)
             }
         }
       }
@@ -690,7 +765,8 @@ class Log(@volatile var dir: File,
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
 
     LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
-      targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap, isDuplicate)
+      targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap, completedTxns.toList,
+      isDuplicate)
   }
 
   /**
@@ -725,7 +801,8 @@ class Log(@volatile var dir: File,
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
-  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false): FetchDataInfo = {
+  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None,
+           minOneMessage: Boolean = false, isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
     // Because we don't use lock for reading, the synchronization is a little bit tricky.
@@ -735,38 +812,57 @@ class Log(@volatile var dir: File,
     if(startOffset == next)
       return FetchDataInfo(currentNextOffsetMetadata, MemoryRecords.EMPTY)
 
-    var entry = segments.floorEntry(startOffset)
+    var segmentEntry = segments.floorEntry(startOffset)
 
     // return error on attempt to read beyond the log end offset or read below log start offset
-    if(startOffset > next || entry == null || startOffset < logStartOffset)
+    if(startOffset > next || segmentEntry == null || startOffset < logStartOffset)
       throw new OffsetOutOfRangeException("Request for offset %d but we only have log segments in the range %d to %d.".format(startOffset, logStartOffset, next))
 
     // Do the read on the segment with a base offset less than the target offset
     // but if that segment doesn't contain any messages with an offset greater than that
     // continue to read from successive segments until we get some messages or we reach the end of the log
-    while(entry != null) {
+    while(segmentEntry != null) {
+      val segment = segmentEntry.getValue
+
       // If the fetch occurs on the active segment, there might be a race condition where two fetch requests occur after
       // the message is appended but before the nextOffsetMetadata is updated. In that case the second fetch may
       // cause OffsetOutOfRangeException. To solve that, we cap the reading up to exposed position instead of the log
       // end of the active segment.
       val maxPosition = {
-        if (entry == segments.lastEntry) {
+        if (segmentEntry == segments.lastEntry) {
           val exposedPos = nextOffsetMetadata.relativePositionInSegment.toLong
           // Check the segment again in case a new segment has just rolled out.
-          if (entry != segments.lastEntry)
+          if (segmentEntry != segments.lastEntry)
             // New log segment has rolled out, we can read up to the file end.
-            entry.getValue.size
+            segment.size
           else
             exposedPos
         } else {
-          entry.getValue.size
+          segment.size
         }
       }
-      val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
-      if(fetchInfo == null) {
-        entry = segments.higherEntry(entry.getKey)
+      val fetchInfo = segment.read(startOffset, maxOffset, maxLength, maxPosition, minOneMessage)
+      if (fetchInfo == null) {
+        segmentEntry = segments.higherEntry(segmentEntry.getKey)
       } else {
-        return fetchInfo
+        return isolationLevel match {
+          case IsolationLevel.READ_UNCOMMITTED => fetchInfo
+          case IsolationLevel.READ_COMMITTED =>
+            val fetchSize = fetchInfo.records.sizeInBytes
+            val startOffsetPosition = OffsetPosition(startOffset, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
+            val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
+              val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
+              if (nextSegmentEntry != null)
+                nextSegmentEntry.getValue.baseOffset
+              else
+                logEndOffset
+            }
+            val abortedTransactions = collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry)
+            FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
+              records = fetchInfo.records,
+              firstEntryIncomplete = fetchInfo.firstEntryIncomplete,
+              abortedTransactions = Some(abortedTransactions))
+        }
       }
     }
 
@@ -774,6 +870,22 @@ class Log(@volatile var dir: File,
     // this can happen when all messages with offset larger than start offsets have been deleted.
     // In this case, we will return the empty set with log end offset metadata
     FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
+  }
+
+  private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
+                                         startingSegmentEntry: JEntry[JLong, LogSegment]): List[AbortedTransaction] = {
+    var segmentEntry = startingSegmentEntry
+    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
+
+    while (segmentEntry != null) {
+      val searchResult = segmentEntry.getValue.collectAbortedTxns(startOffset, upperBoundOffset)
+      abortedTransactions ++= searchResult.abortedTransactions
+      if (searchResult.isComplete)
+        return abortedTransactions.toList
+
+      segmentEntry = segments.higherEntry(segmentEntry.getKey)
+    }
+    abortedTransactions.toList
   }
 
   /**
@@ -934,7 +1046,7 @@ class Log(@volatile var dir: File,
   def logEndOffsetMetadata: LogOffsetMetadata = nextOffsetMetadata
 
   /**
-   *  The offset of the next message that will be appended to the log
+   * The offset of the next message that will be appended to the log
    */
   def logEndOffset: Long = nextOffsetMetadata.messageOffset
 
@@ -1132,6 +1244,7 @@ class Log(@volatile var dir: File,
 
       pidMap.truncate()
       pidMap.updateMapEndOffset(newOffset)
+      updateFirstUnstableOffset()
 
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       this.logStartOffset = newOffset
@@ -1282,6 +1395,9 @@ object Log {
 
   val PidSnapshotFileSuffix = ".snapshot"
 
+  /** an (aborted) txn index */
+  val TxnIndexFileSuffix = ".txnindex"
+
   /** a file that is scheduled to be deleted */
   val DeletedFileSuffix = ".deleted"
 
@@ -1351,6 +1467,9 @@ object Log {
    */
   def pidSnapshotFilename(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + PidSnapshotFileSuffix)
+
+  def txnIndexFilename(dir: File, offset: Long) =
+    new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix)
 
   def offsetFromFilename(filename: String): Long =
     filename.substring(0, filename.indexOf('.')).toLong

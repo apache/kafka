@@ -38,7 +38,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.OffsetFetchResponse
+import org.apache.kafka.common.requests.{IsolationLevel, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -225,7 +225,8 @@ class GroupMetadataManager(brokerId: Int,
     replicaManager.appendRecords(
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
-      true, // allow appending to internal offset topic
+      internalTopicsAllowed = true,
+      isFromClient = false,
       delayedStore.partitionRecords,
       delayedStore.callback)
   }
@@ -438,11 +439,21 @@ class GroupMetadataManager(brokerId: Int,
 
         while (currOffset < highWaterMark && !shuttingDown.get()) {
           buffer.clear()
-          val fileRecords = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true)
-            .records.asInstanceOf[FileRecords]
-          val bufferRead = fileRecords.readInto(buffer, 0)
+          // We only add the READ_UNCOMMITTED parameter here because EasyMock in the GroupMetadataManagerTest
+          // cannot seem to deal with the default value for isolationLevel in log.read() -- it throws an
+          // IllegalStateException.
 
-          MemoryRecords.readableRecords(bufferRead).batches.asScala.foreach { batch =>
+          val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true,
+            isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+
+          val memRecords = fetchDataInfo.records match {
+            case records: MemoryRecords => records
+            case fileRecords: FileRecords =>
+              val bufferRead = fileRecords.readInto(buffer, 0)
+              MemoryRecords.readableRecords(bufferRead)
+          }
+
+          memRecords.batches.asScala.foreach { batch =>
             for (record <- batch.asScala) {
               require(record.hasKey, "Group metadata/offset entry key should not be null")
               GroupMetadataManager.readMessageKey(record.key) match {
@@ -630,7 +641,8 @@ class GroupMetadataManager(brokerId: Int,
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones: _*)
-                partition.appendRecordsToLeader(records)
+                partition.appendRecordsToLeader(records, isFromClient = false, requiredAcks = 0)
+
                 offsetsRemoved += removedOffsets.size
                 trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired/deleted " +
                   s"offsets and/or metadata for group $groupId")

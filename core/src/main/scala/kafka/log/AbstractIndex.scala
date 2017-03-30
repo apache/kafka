@@ -246,14 +246,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @param target The index key to look for
    * @return The slot found or -1 if the least entry in the index is larger than the target key or the index is empty
    */
-  protected def indexSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int = {
+  protected def largestLowerBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
+    indexSlotRangeFor(idx, target, searchEntity)._1
+
+  /**
+   * Find the smallest entry greater than or equal the target key or value. If none can be found, -1 is returned.
+   */
+  protected def smallestUpperBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
+    indexSlotRangeFor(idx, target, searchEntity)._2
+
+  /**
+   * Lookup lower and upper bounds for the given target.
+   */
+  private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): (Int, Int) = {
     // check if the index is empty
     if(_entries == 0)
-      return -1
+      return (-1, -1)
 
     // check if the target offset is smaller than the least offset
     if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
-      return -1
+      return (-1, 0)
 
     // binary search for the entry
     var lo = 0
@@ -267,9 +279,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       else if(compareResult < 0)
         lo = mid
       else
-        return mid
+        return (mid, mid)
     }
-    lo
+
+    (lo, if (lo == _entries - 1) -1 else lo + 1)
   }
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {

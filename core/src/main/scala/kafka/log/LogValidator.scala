@@ -52,28 +52,33 @@ private[kafka] object LogValidator extends Logging {
                                                       magic: Byte,
                                                       timestampType: TimestampType,
                                                       timestampDiffMaxMs: Long,
-                                                      partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
+                                                      partitionLeaderEpoch: Int,
+                                                      isFromClient: Boolean): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
         convertAndAssignOffsetsNonCompressed(records, offsetCounter, compactedTopic, now, timestampType,
-          timestampDiffMaxMs, magic, partitionLeaderEpoch)
+          timestampDiffMaxMs, magic, partitionLeaderEpoch, isFromClient)
       else
         // Do in-place validation, offset assignment and maybe set timestamp
         assignOffsetsNonCompressed(records, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
-          partitionLeaderEpoch)
+          partitionLeaderEpoch, isFromClient)
     } else {
       validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, now, sourceCodec, targetCodec, compactedTopic,
-        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch)
+        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, isFromClient)
     }
   }
 
-  private def validateBatch(batch: RecordBatch): Unit = {
-    ensureNonTransactional(batch)
+  private def validateBatch(batch: RecordBatch, isFromClient: Boolean): Unit = {
+    if (isFromClient) {
+      if (batch.producerId() != RecordBatch.NO_PRODUCER_ID && batch.baseSequence() < 0)
+        throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
+          s"with producerId ${batch.producerId}")
+    }
   }
 
   private def validateRecord(batch: RecordBatch, record: Record, now: Long, timestampType: TimestampType,
-                             timestampDiffMaxMs: Long, compactedTopic: Boolean): Unit = {
+                             timestampDiffMaxMs: Long, compactedTopic: Boolean, isFromClient: Boolean): Unit = {
     if (!record.hasMagic(batch.magic))
       throw new InvalidRecordException(s"Log record magic does not match outer magic ${batch.magic}")
 
@@ -84,7 +89,9 @@ private[kafka] object LogValidator extends Logging {
     if (batch.magic <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed)
       record.ensureValid()
 
-    ensureNotControlRecord(record)
+    if (isFromClient && record.isControlRecord)
+      throw new InvalidRecordException("Clients are not allowed to write control records")
+
     validateKey(record, compactedTopic)
     validateTimestamp(batch, record, now, timestampType, timestampDiffMaxMs)
   }
@@ -96,7 +103,8 @@ private[kafka] object LogValidator extends Logging {
                                                    timestampType: TimestampType,
                                                    timestampDiffMaxMs: Long,
                                                    toMagicValue: Byte,
-                                                   partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
+                                                   partitionLeaderEpoch: Int,
+                                                   isFromClient: Boolean): ValidationAndOffsetAssignResult = {
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
       CompressionType.NONE, records.records)
 
@@ -110,10 +118,10 @@ private[kafka] object LogValidator extends Logging {
       offsetCounter.value, now, pid, epoch, sequence, false, partitionLeaderEpoch)
 
     for (batch <- records.batches.asScala) {
-      validateBatch(batch)
+      validateBatch(batch, isFromClient)
 
       for (record <- batch.asScala) {
-        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic, isFromClient)
         builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
       }
     }
@@ -133,21 +141,21 @@ private[kafka] object LogValidator extends Logging {
                                          compactedTopic: Boolean,
                                          timestampType: TimestampType,
                                          timestampDiffMaxMs: Long,
-                                         partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
+                                         partitionLeaderEpoch: Int,
+                                         isFromClient: Boolean): ValidationAndOffsetAssignResult = {
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
     var isMagicV2 = false
 
     for (batch <- records.batches.asScala) {
-      validateBatch(batch)
+      validateBatch(batch, isFromClient)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxBatchTimestamp = -1L
 
       for (record <- batch.asScala) {
-        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
-
+        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic, isFromClient)
         val offset = offsetCounter.getAndIncrement()
         if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && record.timestamp > maxBatchTimestamp) {
           maxBatchTimestamp = record.timestamp
@@ -206,7 +214,8 @@ private[kafka] object LogValidator extends Logging {
                                                  magic: Byte,
                                                  timestampType: TimestampType,
                                                  timestampDiffMaxMs: Long,
-                                                 partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
+                                                 partitionLeaderEpoch: Int,
+                                                 isFromClient: Boolean): ValidationAndOffsetAssignResult = {
 
       // No in place assignment situation 1 and 2
       var inPlaceAssignment = sourceCodec == targetCodec && magic > RecordBatch.MAGIC_VALUE_V0
@@ -216,14 +225,13 @@ private[kafka] object LogValidator extends Logging {
       val validatedRecords = new mutable.ArrayBuffer[Record]
 
       for (batch <- records.batches.asScala) {
-        validateBatch(batch)
+        validateBatch(batch, isFromClient)
 
         for (record <- batch.asScala) {
-          validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+          validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic, isFromClient)
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
-
           if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && magic > RecordBatch.MAGIC_VALUE_V0) {
             // Check if we need to overwrite offset
             // No in place assignment situation 3
@@ -295,17 +303,6 @@ private[kafka] object LogValidator extends Logging {
       maxTimestamp = info.maxTimestamp,
       shallowOffsetOfMaxTimestamp = info.shallowOffsetOfMaxTimestamp,
       messageSizeMaybeChanged = true)
-  }
-
-  private def ensureNonTransactional(batch: RecordBatch) {
-    if (batch.isTransactional)
-      throw new InvalidRecordException("Transactional messages are not currently supported")
-  }
-
-  private def ensureNotControlRecord(record: Record) {
-    // Until we have implemented transaction support, we do not permit control records to be written
-    if (record.isControlRecord)
-      throw new InvalidRecordException("Control messages are not currently supported")
   }
 
   private def validateKey(record: Record, compactedTopic: Boolean) {
