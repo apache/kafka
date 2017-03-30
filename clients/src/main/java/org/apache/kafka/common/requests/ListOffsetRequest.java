@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -128,10 +127,10 @@ public class ListOffsetRequest extends AbstractRequest {
             bld.append("(type=ListOffsetRequest")
                .append(", replicaId=").append(replicaId);
             if (offsetData != null) {
-                bld.append(", offsetData=").append(Utils.mkString(offsetData));
+                bld.append(", offsetData=").append(offsetData);
             }
             if (partitionTimestamps != null) {
-                bld.append(", partitionTimestamps=").append(Utils.mkString(partitionTimestamps));
+                bld.append(", partitionTimestamps=").append(partitionTimestamps);
             }
             bld.append(", minVersion=").append(minVersion);
             bld.append(")");

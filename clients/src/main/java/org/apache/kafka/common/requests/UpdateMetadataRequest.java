@@ -67,8 +67,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
-                append(", partitionStates=").append(Utils.mkString(partitionStates)).
-                append(", liveBrokers=").append(Utils.join(liveBrokers, " ,")).
+                append(", partitionStates=").append(partitionStates).
+                append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
             return bld.toString();
         }
