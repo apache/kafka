@@ -116,7 +116,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
             "Total consumed records did not match consumed position"
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True, False], bounce_mode=["all", "rolling"])
+    @matrix(clean_shutdown=[True], bounce_mode=["all", "rolling"])
     def test_consumer_bounce(self, clean_shutdown, bounce_mode):
         """
         Verify correct consumer behavior when the consumers in the group are consecutively restarted.
@@ -159,7 +159,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 (consumer.current_position(partition), consumer.total_consumed())
 
     @cluster(num_nodes=7)
-    @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
+    @matrix(clean_shutdown=[True], enable_autocommit=[True, False])
     def test_consumer_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
         
