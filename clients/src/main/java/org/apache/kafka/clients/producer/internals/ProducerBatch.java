@@ -69,7 +69,6 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
         this.retry = false;
-        this.isWritable = true;
     }
 
     /**
@@ -78,8 +77,7 @@ public final class ProducerBatch {
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
     public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, long now) {
-        if (!isWritable || !recordsBuilder.hasRoomFor(timestamp, key, value)) {
-            this.isWritable = false;
+        if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
             return null;
         } else {
             long checksum = this.recordsBuilder.append(timestamp, key, value);
@@ -230,7 +228,7 @@ public final class ProducerBatch {
     }
 
     public boolean isFull() {
-        return !isWritable || recordsBuilder.isFull();
+        return recordsBuilder.isFull();
     }
 
     public void setProducerState(TransactionState.PidAndEpoch pidAndEpoch, int baseSequence) {
