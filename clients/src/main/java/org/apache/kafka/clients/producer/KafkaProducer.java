@@ -365,7 +365,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static TransactionState configureTransactionState(ProducerConfig config, Time time) {
         boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
         if (idempotenceEnabled) {
-           return new TransactionState(time);
+            return new TransactionState(time);
         } else {
             return null;
         }
