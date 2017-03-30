@@ -29,6 +29,8 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
+import java.nio.file.OpenOption;
+import java.nio.file.StandardOpenOption;
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -414,18 +416,18 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            boolean preallocate) throws IOException {
         if (mutable) {
             if (fileAlreadyExists) {
-                return new RandomAccessFile(file, "rw").getChannel();
+                return FileChannel.open(file.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
             } else {
                 if (preallocate) {
                     RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
                     randomAccessFile.setLength(initFileSize);
                     return randomAccessFile.getChannel();
                 } else {
-                    return new RandomAccessFile(file, "rw").getChannel();
+                    return FileChannel.open(file.toPath(), StandardOpenOption.READ, StandardOpenOption.WRITE);
                 }
             }
         } else {
-            return new FileInputStream(file).getChannel();
+            return FileChannel.open(file.toPath());
         }
     }
 

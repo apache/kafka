@@ -23,11 +23,9 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -116,7 +114,7 @@ public class OffsetCheckpoint {
         synchronized (lock) {
             BufferedReader reader;
             try {
-                reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
+                reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8);
             } catch (FileNotFoundException e) {
                 return Collections.emptyMap();
             }

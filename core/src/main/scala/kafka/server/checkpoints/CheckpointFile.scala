@@ -76,7 +76,7 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
       new IOException(s"Malformed line in checkpoint file (${file.getAbsolutePath}): $line'")
 
     lock synchronized {
-      val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
+      val reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)
       var line: String = null
       try {
         line = reader.readLine()

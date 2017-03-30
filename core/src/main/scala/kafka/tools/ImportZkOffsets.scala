@@ -19,6 +19,7 @@ package kafka.tools
 
 import java.io.{BufferedReader, FileInputStream, InputStreamReader}
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, Logging, ZkUtils}
@@ -77,7 +78,7 @@ object ImportZkOffsets extends Logging {
   }
 
   private def getPartitionOffsetsFromFile(filename: String):Map[String,String] = {
-    val br = new BufferedReader(new InputStreamReader(new FileInputStream(filename), StandardCharsets.UTF_8))
+    val br = Files.newBufferedReader(Paths.get(filename), StandardCharsets.UTF_8)
     try {
       var partOffsetsMap: Map[String,String] = Map()
 

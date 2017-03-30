@@ -22,8 +22,10 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
 
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.SecureRandom;
@@ -208,16 +210,12 @@ public class SslFactory implements Configurable {
         }
 
         private KeyStore load() throws GeneralSecurityException, IOException {
-            FileInputStream in = null;
-            try {
+            try (InputStream in = Files.newInputStream(Paths.get(path))) {
                 KeyStore ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
                 return ks;
-            } finally {
-                if (in != null) in.close();
             }
         }
     }

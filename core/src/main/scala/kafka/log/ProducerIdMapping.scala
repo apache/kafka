@@ -18,6 +18,7 @@ package kafka.log
 
 import java.io._
 import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 
 import kafka.common.KafkaException
@@ -178,11 +179,11 @@ object ProducerIdMapping {
     val crc = Crc32C.compute(buffer, PidEntriesOffset, buffer.limit - PidEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
-    val fos = new FileOutputStream(file)
+    val fileChannel = FileChannel.open(file.toPath)
     try {
-      fos.write(buffer.array, buffer.arrayOffset, buffer.limit)
+      fileChannel.write(buffer)
     } finally {
-      fos.close()
+      fileChannel.close()
     }
   }
 

@@ -17,8 +17,9 @@
 
 package kafka.tools
 
-import java.io.{FileOutputStream, FileWriter, OutputStreamWriter}
+import java.io.{FileOutputStream, FileWriter, OutputStreamWriter, Writer}
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
@@ -72,14 +73,13 @@ object ExportZkOffsets extends Logging {
     
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, outFileOpt)
     
-    val zkConnect  = options.valueOf(zkConnectOpt)
-    val groups     = options.valuesOf(groupOpt)
-    val outfile    = options.valueOf(outFileOpt)
+    val zkConnect = options.valueOf(zkConnectOpt)
+    val groups = options.valuesOf(groupOpt)
+    val outfile = options.valueOf(outFileOpt)
 
-    var zkUtils   : ZkUtils    = null
-    val fileWriter : OutputStreamWriter =
-        new OutputStreamWriter(new FileOutputStream(outfile), StandardCharsets.UTF_8)
-    
+    var zkUtils: ZkUtils    = null
+    val fileWriter: Writer = Files.newBufferedWriter(Paths.get(outfile), StandardCharsets.UTF_8)
+
     try {
       zkUtils = ZkUtils(zkConnect,
                         30000,

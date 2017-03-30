@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{File, IOException, RandomAccessFile}
+import java.io.{Closeable, File, IOException, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
@@ -38,7 +38,7 @@ import scala.math.ceil
  * @param maxIndexSize The maximum index size in bytes.
  */
 abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1)
-    extends Logging {
+    extends Closeable with Logging {
 
   protected def entrySize: Int
 
@@ -105,7 +105,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
       if (OperatingSystem.IS_WINDOWS)
-        forceUnmap(mmap);
+        forceUnmap(mmap)
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)

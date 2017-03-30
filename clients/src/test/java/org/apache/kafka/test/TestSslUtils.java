@@ -24,10 +24,13 @@ import java.io.FileOutputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.EOFException;
+import java.io.InputStream;
 import java.math.BigInteger;
 
 import javax.net.ssl.TrustManagerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyPair;
@@ -152,7 +155,7 @@ public class TestSslUtils {
     public static <T extends Certificate> void createTrustStore(
             String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
-        try (FileInputStream in = new FileInputStream(filename)) {
+        try (InputStream in = Files.newInputStream(Paths.get(filename))) {
             ks.load(in, password.value().toCharArray());
         } catch (EOFException e) {
             ks = createEmptyKeyStore();

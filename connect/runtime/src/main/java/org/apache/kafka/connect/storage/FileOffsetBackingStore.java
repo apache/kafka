@@ -31,6 +31,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,8 +70,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
 
     @SuppressWarnings("unchecked")
     private void load() {
-        try {
-            ObjectInputStream is = new ObjectInputStream(new FileInputStream(file));
+        try (ObjectInputStream is = new ObjectInputStream(Files.newInputStream(file.toPath()))) {
             Object obj = is.readObject();
             if (!(obj instanceof HashMap))
                 throw new ConnectException("Expected HashMap but found " + obj.getClass());
@@ -81,7 +81,6 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
             }
-            is.close();
         } catch (FileNotFoundException | EOFException e) {
             // FileNotFoundException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt
@@ -91,8 +90,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
     }
 
     protected void save() {
-        try {
-            ObjectOutputStream os = new ObjectOutputStream(new FileOutputStream(file));
+        try (ObjectOutputStream os = new ObjectOutputStream(Files.newOutputStream(file.toPath()))) {
             Map<byte[], byte[]> raw = new HashMap<>();
             for (Map.Entry<ByteBuffer, ByteBuffer> mapEntry : data.entrySet()) {
                 byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
@@ -100,7 +98,6 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 raw.put(key, value);
             }
             os.writeObject(raw);
-            os.close();
         } catch (IOException e) {
             throw new ConnectException(e);
         }
