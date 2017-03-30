@@ -93,7 +93,6 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq + 1, lastTimestamp)
 }
 
-private[log] case class PidEntryRange(first: ProducerIdEntry, last: ProducerIdEntry)
 private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 object ProducerIdMapping {

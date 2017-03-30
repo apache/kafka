@@ -496,7 +496,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // first make sure the metadata for the topic is available
             ClusterAndWaitTime clusterAndWaitTime = waitOnMetadata(record.topic(), record.partition(), maxBlockTimeMs);
             long remainingWaitMs = Math.max(0, maxBlockTimeMs - clusterAndWaitTime.waitedOnMetadataMs);
-            remainingWaitMs = maybeWaitOnPid(remainingWaitMs);
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
@@ -616,18 +615,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         return new ClusterAndWaitTime(cluster, elapsed);
-    }
-
-    private long maybeWaitOnPid(long maxWaitMs) throws InterruptedException {
-        if (transactionState == null || transactionState.hasPid()) {
-            return maxWaitMs;
-        }
-        long start = time.milliseconds();
-        TransactionState.PidAndEpoch pidAndEpoch = transactionState.awaitPidAndEpoch(maxWaitMs);
-        if (!pidAndEpoch.isValid()) {
-            throw new TimeoutException("Could not retrieve a pid within " + maxWaitMs + " ms");
-        }
-        return Math.max(0, maxWaitMs - (time.milliseconds() - start));
     }
 
     /**
