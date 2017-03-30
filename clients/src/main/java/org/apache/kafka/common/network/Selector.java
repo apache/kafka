@@ -207,6 +207,7 @@ public class Selector implements Selectable {
      * Note that we are not checking if the connection id is valid - since the connection already exists
      */
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
+        this.sensors.connectionAccepted.record();
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
@@ -350,8 +351,12 @@ public class Selector implements Selectable {
                 }
 
                 /* if channel is not ready finish prepare */
-                if (channel.isConnected() && !channel.ready())
+                if (channel.isConnected() && !channel.ready()) {
                     channel.prepare();
+                    if (channel.ready()) {
+                        this.sensors.connectionPrepared.record();
+                    }
+                }
 
                 /* if channel is ready read from any connections that have readable data */
                 if (channel.ready() && key.isReadable() && !hasStagedReceive(channel)) {
@@ -658,6 +663,8 @@ public class Selector implements Selectable {
         private final Metrics metrics;
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
+        public final Sensor connectionAccepted;
+        public final Sensor connectionPrepared;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
         public final Sensor bytesReceived;
@@ -686,6 +693,14 @@ public class Selector implements Selectable {
             this.connectionCreated = sensor("connections-created:" + tagsSuffix.toString());
             metricName = metrics.metricName("connection-creation-rate", metricGrpName, "New connections established per second in the window.", metricTags);
             this.connectionCreated.add(metricName, new Rate());
+
+            this.connectionAccepted = sensor("connections-accepted:" + tagsSuffix.toString());
+            metricName = metrics.metricName("connection-accept-rate", metricGrpName, "New connections accepted per second in the window.", metricTags);
+            this.connectionAccepted.add(metricName, new Rate());
+
+            this.connectionPrepared = sensor("connections-prepared:" + tagsSuffix.toString());
+            metricName = metrics.metricName("connection-prepare-rate", metricGrpName, "New connections prepared (ready) per second in the window.", metricTags);
+            this.connectionPrepared.add(metricName, new Rate());
 
             this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix.toString());
             metricName = metrics.metricName("network-io-rate", metricGrpName, "The average number of network operations (reads or writes) on all connections per second.", metricTags);
