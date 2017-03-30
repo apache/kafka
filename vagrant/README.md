@@ -132,3 +132,16 @@ Now start things up, but specify the aws provider:
 Your instances should get tagged with a name including your hostname to make
 them identifiable and make it easier to track instances in the AWS management
 console.
+
+### Libvirt with kvm ###
+
+Install the `vagrant-libvirt` plugin to provide libvirt and kvm support:
+```
+yum install libxslt-devel libxml2-devel libvirt-devel
+```
+```vagrant plugin install vagrant-libvirt``` or ```yum install vagrant-libvirt``` for fedora >=21
+Description for ubuntu or other information is [there](https://github.com/pradels/vagrant-libvirt)
+
+
+Start things up with specified provider:
+```vagrant up --provider=libvirt```
