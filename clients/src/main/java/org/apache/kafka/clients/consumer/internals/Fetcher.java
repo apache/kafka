@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -44,12 +45,14 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
+import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -66,15 +69,20 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
+import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static java.util.Collections.emptyList;
 
 /**
  * This class manage the fetching process with the brokers.
@@ -98,6 +106,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
+    private final IsolationLevel isolationLevel;
+
     private PartitionRecords nextInLineRecords = null;
     private ExceptionMetadata nextInLineExceptionMetadata = null;
 
@@ -115,7 +125,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                    Metrics metrics,
                    String metricGrpPrefix,
                    Time time,
-                   long retryBackoffMs) {
+                   long retryBackoffMs,
+                   IsolationLevel isolationLevel) {
         this.time = time;
         this.client = client;
         this.metadata = metadata;
@@ -131,6 +142,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
+        this.isolationLevel = isolationLevel;
 
         subscriptions.addListener(this);
     }
@@ -370,7 +382,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (strategy == OffsetResetStrategy.EARLIEST)
             timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
         else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
+            timestamp = isolationLevel == IsolationLevel.READ_COMMITTED ? ListOffsetRequest.LSO_TIMESTAMP : ListOffsetRequest.LATEST_TIMESTAMP;
         else
             throw new NoOffsetForPartitionException(partition);
         return timestamp;
@@ -457,7 +469,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, long timeout) {
-        return beginningOrEndOffset(partitions, ListOffsetRequest.LATEST_TIMESTAMP, timeout);
+        long endTimestamp = isolationLevel == IsolationLevel.READ_COMMITTED ? ListOffsetRequest.LSO_TIMESTAMP : ListOffsetRequest.LATEST_TIMESTAMP;
+        return beginningOrEndOffset(partitions, endTimestamp, timeout);
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
@@ -570,7 +583,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         partitionRecords.drain();
-        return Collections.emptyList();
+        return emptyList();
     }
 
     /**
@@ -771,7 +784,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         Map<Node, FetchRequest.Builder> requests = new HashMap<>();
         for (Map.Entry<Node, LinkedHashMap<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             Node node = entry.getKey();
-            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes, entry.getValue()).
+            FetchRequest.Builder fetch = FetchRequest.Builder.forConsumer(this.maxWaitMs, this.minBytes, entry.getValue(), isolationLevel).
                     setMaxBytes(this.maxBytes);
             requests.put(node, fetch);
         }
@@ -906,6 +919,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final TopicPartition partition;
         private final CompletedFetch completedFetch;
         private final Iterator<? extends RecordBatch> batches;
+        private final Set<Long> abortedPids;
+        private final Queue<FetchResponse.AbortedTransaction> abortedTransactions;
 
         private int recordsRead;
         private int bytesRead;
@@ -921,6 +936,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.completedFetch = completedFetch;
             this.batches = batches;
             this.nextFetchOffset = completedFetch.fetchedOffset;
+            this.abortedPids = new HashSet<>();
+            this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
         }
 
         private void drain() {
@@ -960,8 +977,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private void maybeCloseRecordStream() {
-            if (records != null)
+            if (records != null) {
                 records.close();
+                records = null;
+            }
         }
 
         private Record nextFetchedRecord() {
@@ -974,6 +993,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         return null;
                     }
                     currentBatch = batches.next();
+                    if (isBatchAborted(currentBatch, abortedPids, abortedTransactions)) {
+                        continue;
+                    }
+
                     maybeEnsureValid(currentBatch);
                     records = currentBatch.streamingIterator();
                 }
@@ -1008,6 +1031,62 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
             return records;
         }
+
+        private boolean isBatchAborted(RecordBatch batch, Set<Long> abortedPids, Queue<FetchResponse.AbortedTransaction> abortedTransactions) {
+           /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
+            *   0. Check whether the pid is in the 'abortedPids' set && the entry does not include an abort marker.
+            *      If so, skip the entry.
+            *   1. If the pid is in aborted pids and the entry contains an abort marker, remove the pid from
+            *      aborted pids and skip the entry.
+            *   2. Check lowest offset entry in the abort index. If the PID of the current entry matches the
+            *      pid of the abort index entry, and the incoming offset is no smaller than the abort index offset,
+            *      this means that the entry has been aborted. Add the pid to the aborted pids set, and remove
+            *      the entry from the abort index.
+            */
+            if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
+                if (abortedPids.contains(batch.producerId())
+                        || (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset())) {
+                    if (abortedPids.contains(batch.producerId()) && containsAbortMarker(batch)) {
+                        abortedPids.remove(batch.producerId());
+                    } else if (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
+                        abortedPids.add(batch.producerId());
+                        abortedTransactions.remove(nextAbortedTransaction);
+                    }
+                    log.trace("Skipping aborted record with pid {} and base offset {}", batch.producerId(), batch.baseOffset());
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private Queue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {
+            PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = null;
+            if (partition.abortedTransactions != null && 0 < partition.abortedTransactions.size()) {
+                abortedTransactions = new PriorityQueue<>(
+                        partition.abortedTransactions.size(),
+                        new Comparator<FetchResponse.AbortedTransaction>() {
+                            @Override
+                            public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
+                                return (int) o1.firstOffset - (int) o2.firstOffset;
+                            }
+                        }
+                );
+                abortedTransactions.addAll(partition.abortedTransactions);
+            } else {
+                abortedTransactions = new PriorityQueue<>();
+            }
+            return abortedTransactions;
+        }
+
+        private boolean containsAbortMarker(RecordBatch batch) {
+            Iterator<Record> batchIterator = batch.iterator();
+            Record firstRecord = batchIterator.hasNext() ? batchIterator.next() : null;
+            if (firstRecord != null && batchIterator.hasNext())
+                throw new CorruptRecordException("A RecordBatch containing a control message contained more than one message.");
+            return firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+        }
+
     }
 
     private static class ExceptionMetadata {
