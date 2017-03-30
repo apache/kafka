@@ -207,7 +207,7 @@ public class StreamsKafkaClient {
             }
             try {
                 kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 throw new StreamsException("Could not poll.", e);
             }
         }
@@ -243,7 +243,7 @@ public class StreamsKafkaClient {
     private ClientResponse sendRequest(final ClientRequest clientRequest) {
         try {
             kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
-        } catch (Exception e) {
+        } catch (final Exception e) {
             throw new StreamsException("Could not send request.", e);
         }
         final long responseTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
@@ -252,7 +252,7 @@ public class StreamsKafkaClient {
             final List<ClientResponse> responseList;
             try {
                 responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
-            } catch (IllegalStateException e) {
+            } catch (final IllegalStateException e) {
                 throw new StreamsException("Could not poll.", e);
             }
             if (!responseList.isEmpty()) {
