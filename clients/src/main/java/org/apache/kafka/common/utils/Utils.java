@@ -35,9 +35,13 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -545,19 +549,30 @@ public class Utils {
      *
      * @param file The root file at which to begin deleting
      */
-    public static void delete(File file) {
-        if (file == null) {
+    public static void delete(final File file) throws IOException {
+        if (file == null)
             return;
-        } else if (file.isDirectory()) {
-            File[] files = file.listFiles();
-            if (files != null) {
-                for (File f : files)
-                    delete(f);
+        Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
+                // If the root path did not exist, ignore the error; otherwise throw it.
+                if (exc instanceof NoSuchFileException && path.toFile().equals(file))
+                    return FileVisitResult.TERMINATE;
+                throw exc;
             }
-            file.delete();
-        } else {
-            file.delete();
-        }
+
+            @Override
+            public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+                Files.delete(path);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path path, IOException exc) throws IOException {
+                Files.delete(path);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     /**

@@ -25,6 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.StandardOpenOption;
@@ -52,10 +53,8 @@ public class StateDirectoryTest {
     }
 
     @After
-    public void cleanup() {
-        if (stateDir.exists()) {
-            Utils.delete(stateDir);
-        }
+    public void cleanup() throws IOException {
+        Utils.delete(stateDir);
     }
 
     @Test
