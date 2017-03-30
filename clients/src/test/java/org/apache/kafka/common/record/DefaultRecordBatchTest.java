@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -205,6 +206,19 @@ public class DefaultRecordBatchTest {
         Record abortRecord = logRecords.get(1);
         assertTrue(abortRecord.isControlRecord());
         assertEquals(ControlRecordType.ABORT, ControlRecordType.parse(abortRecord.key()));
+    }
+
+    @Test
+    public void testStreamingIteratorConsistency() {
+        MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, 0L,
+                CompressionType.GZIP, TimestampType.CREATE_TIME,
+                new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+                new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+                new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
+        DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
+        try (CloseableIterator<Record> streamingIterator = batch.streamingIterator()) {
+            TestUtils.checkEquals(streamingIterator, batch.iterator());
+        }
     }
 
 }
