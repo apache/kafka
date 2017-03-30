@@ -440,6 +440,14 @@ public class RequestResponseTest {
         createCreateTopicRequest(0, true);
     }
 
+    @Test
+    public void testFetchRequestMaxBytesOldVersions() throws Exception {
+        final short version = 1;
+        FetchRequest fr = createFetchRequest(version);
+        FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
+        assertEquals(fr2.maxBytes(), fr.maxBytes());
+    }
+    
     private RequestHeader createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
     }
