@@ -315,10 +315,25 @@ public class MemoryRecords extends AbstractRecords {
                                                long pid,
                                                short epoch,
                                                int baseSequence) {
+        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime, pid, epoch,
+                baseSequence, false);
+    }
+
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               long logAppendTime,
+                                               long pid,
+                                               short epoch,
+                                               int baseSequence,
+                                               boolean isTransactional) {
         return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, pid, epoch, baseSequence, false, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH,
+                logAppendTime, pid, epoch, baseSequence, isTransactional, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH,
                 buffer.remaining());
     }
+
 
     public static MemoryRecords withRecords(CompressionType compressionType, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, compressionType, records);
