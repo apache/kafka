@@ -82,7 +82,7 @@ public class MetadataRequest extends AbstractRequest {
     private final List<String> topics;
 
     /**
-     * In v0 null is not allowed and and empty list indicates requesting all topics.
+     * In v0 null is not allowed and an empty list indicates requesting all topics.
      * Note: modern clients do not support sending v0 requests.
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */

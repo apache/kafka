@@ -34,7 +34,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 
 /**
  * JAAS configuration parser that constructs a JAAS configuration object with a single
- * login context from the the Kafka configuration option {@link SaslConfigs#SASL_JAAS_CONFIG}.
+ * login context from the Kafka configuration option {@link SaslConfigs#SASL_JAAS_CONFIG}.
  * <p/>
  * JAAS configuration file format is described <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">here</a>.
  * The format of the property value is:
