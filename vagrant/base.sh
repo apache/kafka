@@ -29,7 +29,17 @@ if [ -z `which javac` ]; then
     fi
 
     /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
-    apt-get -y install oracle-java7-installer oracle-java7-set-default
+
+    # oracle-javaX-installer runs wget with a dot progress indicator which ends up
+    # as one line per dot in the build logs.
+    # To avoid this noise we redirect all output to a file that we only show if apt-get fails.
+    echo "Installing JDK..."
+    if ! apt-get -y install oracle-java7-installer oracle-java7-set-default >/tmp/jdk_install.log 2>&1 ; then
+        cat /tmp/jdk_install.log
+        echo "ERROR: JDK install failed"
+        exit 1
+    fi
+    echo "JDK installed: $(javac -version)"
 
     if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
         cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
