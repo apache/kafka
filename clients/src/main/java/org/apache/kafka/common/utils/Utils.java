@@ -352,43 +352,39 @@ public class Utils {
     /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
-     * @param seperator The separator
+     * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(T[] strs, String seperator) {
-        return join(Arrays.asList(strs), seperator);
+    public static <T> String join(T[] strs, String separator) {
+        return join(Arrays.asList(strs), separator);
     }
 
     /**
      * Create a string representation of a list joined by the given separator
      * @param list The list of items
-     * @param seperator The separator
+     * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String seperator) {
+    public static <T> String join(Collection<T> list, String separator) {
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
-                sb.append(seperator);
+                sb.append(separator);
         }
         return sb.toString();
     }
 
-    public static <K, V> String mkString(Map<K, V> map) {
-        return mkString(map, "{", "}", "=", " ,");
-    }
-
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,
-                                         String keyValueSeparator, String elementSeperator) {
+                                         String keyValueSeparator, String elementSeparator) {
         StringBuilder bld = new StringBuilder();
         bld.append(begin);
         String prefix = "";
         for (Map.Entry<K, V> entry : map.entrySet()) {
             bld.append(prefix).append(entry.getKey()).
                     append(keyValueSeparator).append(entry.getValue());
-            prefix = elementSeperator;
+            prefix = elementSeparator;
         }
         bld.append(end);
         return bld.toString();
@@ -439,7 +435,7 @@ public class Utils {
         thread.setDaemon(daemon);
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '" + t.getName() + "':", e);
+                log.error("Uncaught exception in thread '{}':", t.getName(), e);
             }
         });
         return thread;
@@ -544,25 +540,6 @@ public class Utils {
         return Arrays.asList(elems);
     }
 
-    /*
-     * Create a string from a collection
-     * @param coll the collection
-     * @param separator the separator
-     */
-    public static <T> CharSequence mkString(Collection<T> coll, String separator) {
-        StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = coll.iterator();
-        if (iter.hasNext()) {
-            sb.append(iter.next().toString());
-
-            while (iter.hasNext()) {
-                sb.append(separator);
-                sb.append(iter.next().toString());
-            }
-        }
-        return sb;
-    }
-
     /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
@@ -624,8 +601,8 @@ public class Utils {
         } catch (IOException outer) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of " + source + " to " + target + " succeeded after atomic move failed due to "
-                        + outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target, 
+                        outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -663,7 +640,7 @@ public class Utils {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close " + name, t);
+                log.warn("Failed to close {}", name, t);
             }
         }
     }
