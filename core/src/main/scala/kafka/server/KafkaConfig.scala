@@ -578,7 +578,7 @@ object KafkaConfig {
   val TransactionIdExpirationMsDoc = "The maximum time of inactivity before a transactional id is expired by the " +
     "transaction coordinator. Note that this also influences PID expiration: PIDs are guaranteed to expire " +
     "after expiration of this timeout from the last write by the PID (they may expire sooner if the last write " +
-    "from the PID is deleted after due to the topic's retention settings)."
+    "from the PID is deleted due to the topic's retention settings)."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +

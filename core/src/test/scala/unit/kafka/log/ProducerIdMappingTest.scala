@@ -103,16 +103,31 @@ class ProducerIdMappingTest extends JUnitSuite {
   @Test
   def testRecoverFromSnapshot(): Unit = {
     val epoch = 0.toShort
-    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 1L)
-    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 2L)
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, time.milliseconds)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L, time.milliseconds)
+    idMapping.maybeTakeSnapshot()
+    val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
+    recoveredMapping.truncateAndReload(3L, time.milliseconds)
+
+    // entry added after recovery
+    checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, time.milliseconds)
+  }
+
+  @Test(expected = classOf[OutOfOrderSequenceException])
+  def testRemoveExpiredPidsOnReload(): Unit = {
+    val epoch = 0.toShort
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 1)
 
     idMapping.maybeTakeSnapshot()
     val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-    recoveredMapping.truncateAndReload(1L)
+    recoveredMapping.truncateAndReload(1L, 70000)
 
-    // entry added after recovery
-    checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, 3L)
+    // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
+    // we should get an out of order sequence exception.
+    checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, 70001)
   }
+
 
   @Test
   def testRemoveOldSnapshot(): Unit = {
@@ -156,7 +171,7 @@ class ProducerIdMappingTest extends JUnitSuite {
 
     intercept[OutOfOrderSequenceException] {
       val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-      recoveredMapping.truncateAndReload(1L)
+      recoveredMapping.truncateAndReload(1L, time.milliseconds)
       checkAndUpdate(recoveredMapping, pid2, 1, epoch, 4L, 5L)
     }
   }

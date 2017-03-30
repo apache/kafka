@@ -70,8 +70,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val clusterId: String,
                 time: Time) extends Logging {
 
-  val random = new Random()
-
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
   /**
@@ -1318,7 +1316,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Send response callback
     def sendResponseCallback(result: InitPidResult): Unit = {
       val responseBody: InitPidResponse = new InitPidResponse(result.error, result.pid, result.epoch)
-      trace(s"Generated new PID ${result.pid} from InitPidRequest from client ${request.header.clientId}")
+      trace(s"InitPidRequest : Generated new PID ${result.pid} from InitPidRequest from client ${request.header.clientId}")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
     txnCoordinator.handleInitPid(initPidRequest.transactionalId, sendResponseCallback)

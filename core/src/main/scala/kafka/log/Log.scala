@@ -56,11 +56,8 @@ object LogAppendInfo {
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
- * @param producerAppendInfos A map from a Pid to a pair of PidEntry's. The first PidEntry includes the first offset and first
- *                   sequence of the first entry for the pid. The second PidEntry contains the last offset and last
- *                   sequence for the last entry for the  pid. In the replication case, a single record could have multiple LogEntries
- *                   from multiple pids. For a ProduceRequest to a leader, there will be one LogEntry (and hence one
- *                   PID) per record.
+ * @param producerAppendInfos A map from a Pid to a ProducerAppendInfo, which is used to validate each Record in a
+ *                            RecordBatch and keep track of metadata across Records in a RecordBatch.
  */
 case class LogAppendInfo(var firstOffset: Long,
                          var lastOffset: Long,
@@ -110,7 +107,8 @@ class Log(@volatile var dir: File,
           scheduler: Scheduler,
           time: Time = Time.SYSTEM,
           val maxPidExpirationMs: Int = 60 * 60 * 1000,
-          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
+          val pidSnapshotCreationIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -183,6 +181,12 @@ class Log(@volatile var dir: File,
       pidMap.checkForExpiredPids(time.milliseconds)
     }
   }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
+
+  scheduler.schedule(name = "PeriodicPidSnapshotTask", fun = () => {
+    lock synchronized {
+      pidMap.maybeTakeSnapshot()
+    }
+  }, period = pidSnapshotCreationIntervalMs, unit = TimeUnit.MILLISECONDS)
 
 
   /** The name of this log */
@@ -365,11 +369,12 @@ class Log(@volatile var dir: File,
     */
   private def buildAndRecoverPidMap(lastOffset: Long) {
     lock synchronized {
-      pidMap.truncateAndReload(lastOffset)
+      val currentTimeMs = time.milliseconds
+      pidMap.truncateAndReload(lastOffset, currentTimeMs)
       logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
-        val records = segment.read(startOffset, Some(lastOffset), Int.MaxValue).records
-        val currentTimeMs = time.milliseconds
+        val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+        val records = fetchDataInfo.records
         records.batches.asScala.foreach { batch =>
           if (batch.hasProducerId) {
             // TODO: Currently accessing any of the batch-level headers other than the offset
@@ -569,9 +574,6 @@ class Log(@volatile var dir: File,
     val producerAppendInfos = mutable.Map[Long, ProducerAppendInfo]()
 
     for (batch <- records.batches.asScala) {
-      if (isFromClient && batch.magic >= RecordBatch.MAGIC_VALUE_V2 && shallowMessageCount > 0)
-        throw new InvalidRecordException("Client produce requests should not have more than one batch")
-
       // update the first offset if on the first message
       if (firstOffset < 0)
         firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
@@ -619,6 +621,7 @@ class Log(@volatile var dir: File,
               firstOffset = lastEntry.firstOffset
               lastOffset = lastEntry.lastOffset
               maxTimestamp = lastEntry.timestamp
+              warn(s"Detected a duplicate at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). Ignoring the incoming record.")
             } else {
               val producerAppendInfo = new ProducerAppendInfo(pid, lastEntry)
               producerAppendInfos.put(pid, producerAppendInfo)
