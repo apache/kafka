@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,16 +36,18 @@ public class InternalTopicManager {
     public static final String RETENTION_MS = "retention.ms";
     public static final Long WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT = TimeUnit.MILLISECONDS.convert(1, TimeUnit.DAYS);
     private static final int MAX_TOPIC_READY_TRY = 5;
-
+    private final Time time;
     private final long windowChangeLogAdditionalRetention;
 
     private final int replicationFactor;
     private final StreamsKafkaClient streamsKafkaClient;
 
-    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor, final long windowChangeLogAdditionalRetention) {
+    public InternalTopicManager(final StreamsKafkaClient streamsKafkaClient, final int replicationFactor,
+                                final long windowChangeLogAdditionalRetention, final Time time) {
         this.streamsKafkaClient = streamsKafkaClient;
         this.replicationFactor = replicationFactor;
         this.windowChangeLogAdditionalRetention = windowChangeLogAdditionalRetention;
+        this.time = time;
     }
 
     /**
@@ -69,11 +72,8 @@ public class InternalTopicManager {
             } catch (StreamsException ex) {
                 log.warn("Could not create internal topics: " + ex.getMessage() + " Retry #" + i);
             }
-            try {
-                Thread.sleep(100L);
-            } catch (InterruptedException e) {
-                // ignore
-            }
+            // backoff
+            time.sleep(100L);
         }
         throw new StreamsException("Could not create internal topics.");
     }
@@ -92,11 +92,8 @@ public class InternalTopicManager {
             } catch (StreamsException ex) {
                 log.warn("Could not get number of partitions: " + ex.getMessage() + " Retry #" + i);
             }
-            try {
-                Thread.sleep(100L);
-            } catch (InterruptedException e) {
-                // ignore
-            }
+            // backoff
+            time.sleep(100L);
         }
         throw new StreamsException("Could not get number of partitions.");
     }

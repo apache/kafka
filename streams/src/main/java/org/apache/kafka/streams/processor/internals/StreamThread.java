@@ -198,7 +198,7 @@ public class StreamThread extends Thread {
     private final Set<TaskId> prevActiveTasks;
     private final Map<TaskId, StreamTask> suspendedTasks;
     private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
-    private final Time time;
+    public final Time time;
     private final int rebalanceTimeoutMs;
     private final long pollTimeMs;
     private final long cleanTimeMs;
