@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -215,7 +216,9 @@ public class DefaultRecordBatchTest {
                 new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
                 new SimpleRecord(3L, "c".getBytes(), "3".getBytes()));
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
-        TestUtils.checkEquals(batch.streamingIterator(), batch.iterator());
+        try (CloseableIterator<Record> streamingIterator = batch.streamingIterator()) {
+            TestUtils.checkEquals(streamingIterator, batch.iterator());
+        }
     }
 
 }

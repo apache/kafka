@@ -109,7 +109,7 @@ public class SimpleRecord {
 
     @Override
     public String toString() {
-        return String.format("SimpleRecord(timestamp = %d, key = %d bytes, value = %d bytes)",
+        return String.format("SimpleRecord(timestamp=%d, key=%d bytes, value=%d bytes)",
                 timestamp(),
                 key == null ? 0 : key.limit(),
                 value == null ? 0 : value.limit());

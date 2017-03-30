@@ -155,7 +155,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public String toString() {
-        return "LegacyRecordBatch(" + offset() + ", " + outerRecord() + ")";
+        return "LegacyRecordBatch(offset=" + offset() + ", " + outerRecord() + ")";
     }
 
     @Override
@@ -219,7 +219,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             private boolean hasNext = true;
 
             @Override
-            public void close() throws IOException {}
+            public void close() {}
 
             @Override
             public boolean hasNext() {
@@ -372,7 +372,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
 
         @Override
-        public void close() throws IOException {}
+        public void close() {}
     }
 
     private static class BasicLegacyRecordBatch extends AbstractLegacyRecordBatch {

@@ -220,8 +220,12 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             }
 
             @Override
-            public void close() throws IOException {
-                stream.close();
+            public void close() {
+                try {
+                    stream.close();
+                } catch (IOException e) {
+                    throw new KafkaException("Failed to close record stream", e);
+                }
             }
         };
     }
@@ -234,6 +238,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
             }
+            @Override
+            public void close() {}
         };
     }
 
@@ -244,14 +250,12 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
-        // can use the streaming iterator option.
+        // can use `streamingIterator` at the cost of additional complexity
         try (CloseableIterator<Record> iterator = compressedIterator()) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
             return records.iterator();
-        } catch (IOException e) {
-            throw new KafkaException();
         }
     }
 
@@ -376,7 +380,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public String toString() {
-        return "RecordBatch(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
+        return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
+                "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }
 
     public static int sizeInBytes(long baseOffset, Iterable<Record> records) {
@@ -465,7 +470,5 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             throw new UnsupportedOperationException();
         }
 
-        @Override
-        public void close() throws IOException {}
     }
 }
