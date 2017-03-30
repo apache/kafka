@@ -85,7 +85,7 @@ public class ProcessorStateManagerTest {
     }
 
     @After
-    public void cleanup() {
+    public void cleanup() throws IOException {
         Utils.delete(baseDir);
     }
 
