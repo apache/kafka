@@ -33,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -300,6 +301,10 @@ public class TestUtils {
      */
     public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
         assertEquals(toList(it1), toList(it2));
+    }
+
+    public static <T> void checkEquals(Iterator<T> it1, Iterator<T> it2) {
+        assertEquals(Utils.toList(it1), Utils.toList(it2));
     }
 
     public static <T> List<T> toList(Iterable<? extends T> iterable) {

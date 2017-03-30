@@ -106,4 +106,12 @@ public class SimpleRecord {
         result = 31 * result + Arrays.hashCode(headers);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return String.format("SimpleRecord(timestamp=%d, key=%d bytes, value=%d bytes)",
+                timestamp(),
+                key == null ? 0 : key.limit(),
+                value == null ? 0 : value.limit());
+    }
 }
