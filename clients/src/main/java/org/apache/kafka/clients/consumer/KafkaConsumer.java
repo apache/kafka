@@ -1269,7 +1269,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
             Long offset = this.subscriptions.position(partition);
             if (offset == null) {
-                updateFetchPositions(Collections.singleton(partition));
+                updateFetchPositions(subscriptions.assignedPartitions());
                 offset = this.subscriptions.position(partition);
             }
             return offset;

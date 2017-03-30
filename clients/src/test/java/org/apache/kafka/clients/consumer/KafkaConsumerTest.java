@@ -1151,8 +1151,10 @@ public class KafkaConsumerTest {
         assertEquals(0, consumer.committed(tp1).offset());
 
         // fetch and verify consumer's position in the two partitions
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp0, 3L), Errors.NONE));
-        client.prepareResponse(listOffsetsResponse(Collections.singletonMap(tp1, 3L), Errors.NONE));
+        final Map<TopicPartition, Long> offsetResponse = new HashMap<>();
+        offsetResponse.put(tp0, 3L);
+        offsetResponse.put(tp1, 3L);
+        client.prepareResponse(listOffsetsResponse(offsetResponse, Errors.NONE));
         assertEquals(3L, consumer.position(tp0));
         assertEquals(3L, consumer.position(tp1));
 
