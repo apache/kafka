@@ -19,8 +19,11 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -34,6 +37,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Manages the {@link Segment}s that are used by the {@link RocksDBSegmentedBytesStore}
  */
 class Segments {
+    private static final Logger log = LoggerFactory.getLogger(Segments.class);
+
     static final long MIN_SEGMENT_INTERVAL = 60 * 1000L;
 
     private final ConcurrentHashMap<Long, Segment> segments = new ConcurrentHashMap<>();
@@ -167,7 +172,11 @@ class Segments {
             if (segment != null && segment.id <= oldestSegmentId) {
                 segments.remove(segmentEntry.getKey());
                 segment.close();
-                segment.destroy();
+                try {
+                    segment.destroy();
+                } catch (IOException e) {
+                    log.error("Error destroying {}", segment, e);
+                }
             }
         }
         if (oldestSegmentId > minSegmentId) {

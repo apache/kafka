@@ -55,6 +55,7 @@ import org.junit.Test;
 import org.junit.Before;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -146,7 +147,7 @@ public class StreamTaskTest {
     }
 
     @After
-    public void cleanup() {
+    public void cleanup() throws IOException {
         if (task != null) {
             try {
                 task.close();
