@@ -26,6 +26,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class StoresTest {
 
@@ -79,5 +80,36 @@ public class StoresTest {
                 .build();
 
         assertFalse(supplier.loggingEnabled());
+    }
+
+    @Test
+    public void shouldThrowIllegalArgumentExceptionIfCreatingWindowStoreWithLessThanOneSegment() throws Exception {
+        final Stores.PersistentKeyValueFactory<String, String> factory = Stores.create("store")
+                .withKeys(Serdes.String())
+                .withValues(Serdes.String())
+                .persistent();
+
+        try {
+            factory.windowed(10, 10, 0, false);
+            fail("Should have thrown illegal argument exception as numSegments is less than 1");
+        } catch (final IllegalArgumentException e) {
+            // pass
+        }
+    }
+
+
+    @Test
+    public void shouldThrowIllegalArgumentExceptionIfRetentionPeriodIsNotPositive() throws Exception {
+        final Stores.PersistentKeyValueFactory<String, String> factory = Stores.create("store")
+                .withKeys(Serdes.String())
+                .withValues(Serdes.String())
+                .persistent();
+
+        try {
+            factory.windowed(1, 0, 1, false);
+            fail("Should have thrown illegal argument exception as retention period is less than 1");
+        } catch (final IllegalArgumentException e) {
+            // pass
+        }
     }
 }

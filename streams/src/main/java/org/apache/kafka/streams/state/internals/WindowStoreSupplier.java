@@ -28,4 +28,7 @@ public interface WindowStoreSupplier<T extends StateStore> extends StateStoreSup
 
     // window retention period in milli-second
     long retentionPeriod();
+
+    // number of segments in the store.
+    int segments();
 }

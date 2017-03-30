@@ -45,15 +45,24 @@ class Segments {
     private long maxSegmentId = -1L;
 
     Segments(final String name, final long retentionPeriod, final int numSegments) {
+        if (numSegments < 1) {
+            throw new IllegalArgumentException("numSegments must be positive");
+        }
+        if (retentionPeriod < 1) {
+            throw new IllegalArgumentException("retentionPeriod must be positive");
+        }
         this.name = name;
         this.numSegments = numSegments;
-        this.segmentInterval = Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
+        this.segmentInterval = numSegments == 1 ? Long.MAX_VALUE : Math.max(retentionPeriod / (numSegments - 1), MIN_SEGMENT_INTERVAL);
         // Create a date formatter. Formatted timestamps are used as segment name suffixes
         this.formatter = new SimpleDateFormat("yyyyMMddHHmm");
         this.formatter.setTimeZone(new SimpleTimeZone(0, "UTC"));
     }
 
     long segmentId(long timestamp) {
+        if (numSegments == 1) {
+            return 1;
+        }
         return timestamp / segmentInterval;
     }
 
@@ -154,7 +163,7 @@ class Segments {
     }
 
     private boolean isSegment(final Segment store, long segmentId) {
-        return store != null && store.id == segmentId;
+        return store != null && (numSegments == 1 || store.id == segmentId);
     }
 
     private void cleanup(final long segmentId) {

@@ -46,6 +46,12 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
 
     public RocksDBWindowStoreSupplier(String name, long retentionPeriod, int numSegments, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, Time time, long windowSize, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
+        if (numSegments < 1) {
+            throw new IllegalArgumentException("numSegments must be positive");
+        }
+        if (retentionPeriod < 1) {
+            throw new IllegalArgumentException("retentionPeriod must be positive");
+        }
         this.retentionPeriod = retentionPeriod;
         this.retainDuplicates = retainDuplicates;
         this.numSegments = numSegments;
@@ -72,6 +78,11 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     @Override
     public long retentionPeriod() {
         return retentionPeriod;
+    }
+
+    @Override
+    public int segments() {
+        return numSegments;
     }
 
     private SegmentedBytesStore maybeWrapLogged(final SegmentedBytesStore inner) {

@@ -1184,14 +1184,17 @@ public class TopologyBuilder {
     }
 
     private InternalTopicConfig createInternalTopicConfig(final StateStoreSupplier<?> supplier, final String name) {
+        final Set<InternalTopicConfig.CleanupPolicy> cleanupPolicies = Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact);
         if (!(supplier instanceof WindowStoreSupplier)) {
-            return new InternalTopicConfig(name, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), supplier.logConfig());
+            return new InternalTopicConfig(name, cleanupPolicies, supplier.logConfig());
         }
 
         final WindowStoreSupplier windowStoreSupplier = (WindowStoreSupplier) supplier;
+        if (windowStoreSupplier.segments() > 1) {
+            cleanupPolicies.add(InternalTopicConfig.CleanupPolicy.delete);
+        }
         final InternalTopicConfig config = new InternalTopicConfig(name,
-                                                                   Utils.mkSet(InternalTopicConfig.CleanupPolicy.compact,
-                                                                               InternalTopicConfig.CleanupPolicy.delete),
+                                                                   cleanupPolicies,
                                                                    supplier.logConfig());
         config.setRetentionMs(windowStoreSupplier.retentionPeriod());
         return config;

@@ -111,6 +111,12 @@ public class Stores {
 
                                     @Override
                                     public PersistentKeyValueFactory<K, V> windowed(final long windowSize, final long retentionPeriod, final int numSegments, final boolean retainDuplicates) {
+                                        if (numSegments < 1) {
+                                            throw new IllegalArgumentException("numSegments must be positive");
+                                        }
+                                        if (retentionPeriod < 1) {
+                                            throw new IllegalArgumentException("retentionPeriod must be positive");
+                                        }
                                         this.windowSize = windowSize;
                                         this.numSegments = numSegments;
                                         this.retentionPeriod = retentionPeriod;

@@ -52,7 +52,9 @@ public class RocksDBWindowStoreSupplierTest {
 
     @After
     public void close() {
-        store.close();
+        if (store != null) {
+            store.close();
+        }
     }
 
     @Test
@@ -157,6 +159,18 @@ public class RocksDBWindowStoreSupplierTest {
         store.init(context, store);
         final StreamsMetrics metrics = context.metrics();
         assertFalse(metrics.metrics().isEmpty());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentExceptionWhenNumSegmentsNotPositive() throws Exception {
+        new RocksDBWindowStoreSupplier("name", 1, 0, false, null, null, 1, true, Collections.<String, String>emptyMap(), false);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentExceptionWhenRetentionPerioudNotPositive() throws Exception {
+        new RocksDBWindowStoreSupplier("name", 0, 1, false, null, null, 1, true, Collections.<String, String>emptyMap(), false);
     }
 
     @SuppressWarnings("unchecked")

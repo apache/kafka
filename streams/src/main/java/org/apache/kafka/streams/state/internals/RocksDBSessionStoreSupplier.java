@@ -89,4 +89,9 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
     public long retentionPeriod() {
         return retentionPeriod;
     }
+
+    @Override
+    public int segments() {
+        return NUM_SEGMENTS;
+    }
 }

@@ -29,6 +29,8 @@ import org.junit.Test;
 import java.io.File;
 import java.util.List;
 
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -181,6 +183,42 @@ public class SegmentsTest {
         verifyCorrectSegments(1, 5);
         segments.getOrCreateSegment(6, context);
         verifyCorrectSegments(2, 5);
+    }
+
+    @Test
+    public void shouldHaveSingleSegmentId() throws Exception {
+        segments = new Segments("name", 1, 1);
+        assertThat(segments.segmentId(0), equalTo(1L));
+        assertThat(segments.segmentId(Long.MAX_VALUE), equalTo(1L));
+    }
+
+    @Test
+    public void shouldOnlyCreateSingleSegmentWhenOnlyOneSegment() throws Exception {
+        segments = new Segments("name", 1, 1);
+        segments.getOrCreateSegment(1, context);
+        verifyCorrectSegments(1, 1);
+        segments.getOrCreateSegment(2, context);
+        verifyCorrectSegments(1, 1);
+        segments.getOrCreateSegment(10, context);
+        verifyCorrectSegments(1, 1);
+    }
+
+    @Test
+    public void shouldReturnSameSegmentForTimestampWhenOneSegment() throws Exception {
+        segments = new Segments("name", 1, 1);
+        segments.getOrCreateSegment(1, context);
+        final Segment segment = segments.getSegmentForTimestamp(1);
+        assertThat(segments.getSegmentForTimestamp(Long.MAX_VALUE), equalTo(segment));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentExceptionIfNumSegmentsNotPositive() throws Exception {
+        new Segments("name", 1, 0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentExceptionIfRetentionPeriodNotPositive() throws Exception {
+        new Segments("name", 0, 1);
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {

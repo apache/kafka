@@ -854,7 +854,7 @@ public class StreamPartitionAssignorTest {
                         return null;
                     }
                 },
-                JoinWindows.of(0)
+                JoinWindows.of(1)
             );
 
         final UUID uuid = UUID.randomUUID();
