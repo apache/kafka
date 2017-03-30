@@ -45,8 +45,8 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -55,11 +55,13 @@ import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -78,7 +80,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class manage the fetching process with the brokers.
  */
-public class Fetcher<K, V> implements SubscriptionState.Listener {
+public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
@@ -748,7 +750,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         TopicPartition tp = completedFetch.partition;
         FetchResponse.PartitionData partition = completedFetch.partitionData;
         long fetchOffset = completedFetch.fetchedOffset;
-        PartitionRecords parsedRecords = null;
+        PartitionRecords partitionRecords = null;
         Errors error = partition.error;
 
         try {
@@ -769,7 +771,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                 log.trace("Preparing to read {} bytes of data for partition {} with offset {}",
                         partition.records.sizeInBytes(), tp, position);
                 Iterator<? extends RecordBatch> batches = partition.records.batches().iterator();
-                parsedRecords = new PartitionRecords(tp, completedFetch, batches);
+                partitionRecords = new PartitionRecords(tp, completedFetch, batches);
 
                 if (!batches.hasNext() && partition.records.sizeInBytes() > 0) {
                     if (completedFetch.responseVersion < 3) {
@@ -819,15 +821,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                 throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching data");
             }
         } finally {
-            if (error != Errors.NONE) {
+            if (partitionRecords == null)
                 completedFetch.metricAggregator.record(tp, 0, 0);
+
+            if (error != Errors.NONE)
                 // we move the partition to the end if there was an error. This way, it's more likely that partitions for
                 // the same topic can remain together (allowing for more efficient serialization).
                 subscriptions.movePartitionToEnd(tp);
-            }
         }
 
-        return parsedRecords;
+        return partitionRecords;
     }
 
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition, RecordBatch batch, Record record) {
@@ -866,7 +869,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         private int recordsRead;
         private int bytesRead;
         private RecordBatch currentBatch;
-        private Iterator<Record> records;
+        private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
 
@@ -881,6 +884,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
         private void drain() {
             if (!isFetched) {
+                maybeCloseRecordStream();
+
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -913,16 +918,23 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             }
         }
 
+        private void maybeCloseRecordStream() {
+            if (records != null)
+                records.close();
+        }
+
         private Record nextFetchedRecord() {
             while (true) {
                 if (records == null || !records.hasNext()) {
+                    maybeCloseRecordStream();
+
                     if (!batches.hasNext()) {
                         drain();
                         return null;
                     }
                     currentBatch = batches.next();
                     maybeEnsureValid(currentBatch);
-                    records = currentBatch.iterator();
+                    records = currentBatch.streamingIterator();
                 }
 
                 Record record = records.next();
@@ -939,12 +951,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             }
         }
 
-        private List<ConsumerRecord<K, V>> fetchRecords(int n) {
+        private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             if (isFetched)
                 return Collections.emptyList();
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
-            for (int i = 0; i < n; i++) {
+            for (int i = 0; i < maxRecords; i++) {
                 Record record = nextFetchedRecord();
                 if (record == null)
                     break;
@@ -1171,6 +1183,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         private static String partitionLagMetricName(TopicPartition tp) {
             return tp + ".records-lag";
         }
+    }
+
+    @Override
+    public void close() {
+        if (nextInLineRecords != null)
+            nextInLineRecords.drain();
     }
 
 }

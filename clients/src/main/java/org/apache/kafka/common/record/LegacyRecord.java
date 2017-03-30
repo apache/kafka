@@ -279,7 +279,7 @@ public final class LegacyRecord {
 
     public String toString() {
         if (magic() > 0)
-            return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, %s = %d, key = %d bytes, value = %d bytes)",
+            return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, %s=%d, key=%d bytes, value=%d bytes)",
                                  magic(),
                                  attributes(),
                                  compressionType(),
@@ -289,7 +289,7 @@ public final class LegacyRecord {
                                  key() == null ? 0 : key().limit(),
                                  value() == null ? 0 : value().limit());
         else
-            return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, key = %d bytes, value = %d bytes)",
+            return String.format("Record(magic=%d, attributes=%d, compression=%s, crc=%d, key=%d bytes, value=%d bytes)",
                                  magic(),
                                  attributes(),
                                  compressionType(),
