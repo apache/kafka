@@ -239,21 +239,26 @@ class ProducerIdMapping(val config: LogConfig,
    */
   private def loadFromSnapshot(logEndOffset: Long, checkNotExpired:(ProducerIdEntry) => Boolean) {
     pidMap.clear()
-    lastSnapshotFile(logEndOffset) match {
-      case Some(file) =>
-        try {
-          loadSnapshot(file, pidMap, checkNotExpired)
-          lastSnapOffset = offsetFromFile(file)
-          lastMapOffset = lastSnapOffset
-        } catch {
-          case e: CorruptSnapshotException =>
-            // TODO: Delete the file and try to use the next snapshot
-            throw e
-        }
-      case None =>
-        lastSnapOffset = 0L
-        lastMapOffset = 0L
-        snapDir.mkdir()
+
+    var loaded = false
+    while (!loaded) {
+      lastSnapshotFile(logEndOffset) match {
+        case Some(file) =>
+          try {
+            loadSnapshot(file, pidMap, checkNotExpired)
+            lastSnapOffset = offsetFromFile(file)
+            lastMapOffset = lastSnapOffset
+            loaded = true
+          } catch {
+            case e: CorruptSnapshotException =>
+              file.delete()
+          }
+        case None =>
+          lastSnapOffset = 0L
+          lastMapOffset = 0L
+          snapDir.mkdir()
+          loaded = true
+      }
     }
   }
 

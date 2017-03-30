@@ -264,6 +264,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxBlockTimeMs = configureMaxBlockTime(config, userProvidedConfigs);
             this.requestTimeoutMs = configureRequestTimeout(config, userProvidedConfigs);
             this.transactionState = configureTransactionState(config, time);
+            int retries = configureRetries(config, transactionState != null);
+            int maxInflightRequests = configureInflightRequests(config, transactionState != null);
 
             this.apiVersions = new ApiVersions();
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -283,7 +285,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                             this.metrics, time, "producer", channelBuilder),
                     this.metadata,
                     clientId,
-                    config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
+                    maxInflightRequests,
                     config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
@@ -294,10 +296,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,
-                    config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) == 1,
+                    maxInflightRequests == 1,
                     config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                     (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
-                    config.getInt(ProducerConfig.RETRIES_CONFIG),
+                    retries,
                     this.metrics,
                     Time.SYSTEM,
                     this.requestTimeoutMs,
@@ -363,20 +365,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static TransactionState configureTransactionState(ProducerConfig config, Time time) {
         boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
         if (idempotenceEnabled) {
-            if (config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
-                throw new ConfigException("Need to set '" + ProducerConfig.RETRIES_CONFIG
-                        + "' to greater than zero in order to use the idempotent producer. With idempotence " +
-                        "enabled, the producer tracks additional metadata to ensure that messages are deduplicated " +
-                        "on the broker. Without retries, there will never be duplicates to begin with.");
-            }
-            if (config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) != 1) {
-                throw new ConfigException("Must set '" + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION
-                        + "' to 1 inorder to use the idempotent producer, otherwise we cannot guarantee idempotence.");
-            }
-            return new TransactionState(time);
+           return new TransactionState(time);
         } else {
             return null;
         }
+    }
+
+    private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled) {
+        if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
+            return 3;
+        }
+        return config.getInt(ProducerConfig.RETRIES_CONFIG);
+    }
+
+    private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled) {
+        int configuredMaxInflightRequests = config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+        if (idempotenceEnabled && configuredMaxInflightRequests == ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DEFAULT) {
+            return 1;
+        }
+        if (idempotenceEnabled && configuredMaxInflightRequests != 1) {
+            throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 in order" +
+                    "to use the idempotent producer. Otherwise we cannot guarantee idempotence.");
+        }
+        return configuredMaxInflightRequests;
     }
 
     private static int parseAcks(String acksString) {
