@@ -58,7 +58,6 @@ public final class ProducerBatch {
     private String expiryErrorMessage;
     private AtomicBoolean completed;
     private boolean retry;
-    private boolean isWritable;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
         this.createdMs = now;
@@ -237,7 +236,6 @@ public final class ProducerBatch {
 
     public void close() {
         recordsBuilder.close();
-        isWritable = false;
     }
 
     public boolean isClosed() {
@@ -253,7 +251,7 @@ public final class ProducerBatch {
     }
 
     public boolean isWritable() {
-        return isWritable && !recordsBuilder.isClosed();
+        return !recordsBuilder.isClosed();
     }
 
     public byte magic() {
