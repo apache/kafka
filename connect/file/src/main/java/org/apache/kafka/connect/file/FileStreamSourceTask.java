@@ -17,12 +17,13 @@
 package org.apache.kafka.connect.file;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -78,7 +79,7 @@ public class FileStreamSourceTask extends SourceTask {
     public List<SourceRecord> poll() throws InterruptedException {
         if (stream == null) {
             try {
-                stream = new FileInputStream(filename);
+                stream = Files.newInputStream(Paths.get(filename));
                 Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
                 if (offset != null) {
                     Object lastRecordedOffset = offset.get(POSITION_FIELD);
@@ -92,7 +93,7 @@ public class FileStreamSourceTask extends SourceTask {
                                 long skipped = stream.skip(skipLeft);
                                 skipLeft -= skipped;
                             } catch (IOException e) {
-                                log.error("Error while trying to seek to previous offset in file: ", e);
+                                log.error("Error while trying to seek to previous offset in file {}: ", filename, e);
                                 throw new ConnectException(e);
                             }
                         }
@@ -104,12 +105,15 @@ public class FileStreamSourceTask extends SourceTask {
                 }
                 reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
                 log.debug("Opened {} for reading", logFilename());
-            } catch (FileNotFoundException e) {
+            } catch (NoSuchFileException e) {
                 log.warn("Couldn't find file {} for FileStreamSourceTask, sleeping to wait for it to be created", logFilename());
                 synchronized (this) {
                     this.wait(1000);
                 }
                 return null;
+            } catch (IOException e) {
+                log.error("Error while trying to open file {}: ", filename, e);
+                throw new ConnectException(e);
             }
         }
 

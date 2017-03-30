@@ -12,7 +12,7 @@
   */
 package kafka.api
 
-import java.io.FileOutputStream
+import java.nio.file.Files
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -159,7 +159,7 @@ class SaslClientsWithInvalidCredentialsTest extends IntegrationTestHarness with 
   @Test
   def testConsumerGroupServiceWithAuthenticationFailure() {
     val propsFile = TestUtils.tempFile()
-    val propsStream = new FileOutputStream(propsFile)
+    val propsStream = Files.newOutputStream(propsFile.toPath)
     propsStream.write("security.protocol=SASL_PLAINTEXT\n".getBytes())
     propsStream.write(s"sasl.mechanism=$kafkaClientSaslMechanism".getBytes())
     propsStream.close()

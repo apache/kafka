@@ -35,10 +35,11 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Exit;
 
-import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -200,7 +201,7 @@ public class VerifiableProducer {
      */
     public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
         Properties props = new Properties();
-        try (InputStream propStream = new FileInputStream(filename)) {
+        try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
             props.load(propStream);
         }
         return props;
