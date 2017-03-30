@@ -756,7 +756,7 @@ public class StreamThread extends Thread {
         if (commitTimeMs >= 0 && lastCommitMs + commitTimeMs < now) {
 
             log.info("{} Committing all active tasks {} and standby tasks {} because the commit interval {}ms has elapsed by {}ms",
-                    logPrefix, activeTasks, standbyTasks, commitTimeMs, now - lastCommitMs);
+                    logPrefix, activeTasks.keySet(), standbyTasks.keySet(), commitTimeMs, now - lastCommitMs);
 
             commitAll();
             lastCommitMs = now;
@@ -1279,8 +1279,8 @@ public class StreamThread extends Thread {
                             "\tcurrent suspended standby tasks: {}\n" +
                             "\tprevious active tasks: {}",
                     logPrefix, state, assignment,
-                    partitionAssignor.activeTasks(), partitionAssignor.standbyTasks(),
-                    suspendedTasks, suspendedStandbyTasks, prevActiveTasks);
+                    partitionAssignor.activeTasks().keySet(), partitionAssignor.standbyTasks().keySet(),
+                    suspendedTasks.keySet(), suspendedStandbyTasks.keySet(), prevActiveTasks);
 
             final long start = time.milliseconds();
             try {
@@ -1304,7 +1304,7 @@ public class StreamThread extends Thread {
                         "\tcurrent active tasks: {}\n" +
                         "\tcurrent standby tasks: {}",
                         logPrefix, time.milliseconds() - start,
-                        activeTasks, standbyTasks);
+                        activeTasks.keySet(), standbyTasks.keySet());
             }
         }
 
@@ -1314,7 +1314,7 @@ public class StreamThread extends Thread {
                             "\tcurrent assigned active tasks: {}\n" +
                             "\tcurrent assigned standby tasks: {}\n",
                     logPrefix, state, assignment,
-                    activeTasks, standbyTasks);
+                    activeTasks.keySet(), standbyTasks.keySet());
 
             final long start = time.milliseconds();
             try {
@@ -1335,7 +1335,7 @@ public class StreamThread extends Thread {
                                 "\tsuspended standby tasks: {}\n" +
                                 "\tprevious active tasks: {}\n",
                         logPrefix, time.milliseconds() - start,
-                        suspendedTasks, suspendedStandbyTasks, prevActiveTasks);
+                        suspendedTasks.keySet(), suspendedStandbyTasks.keySet(), prevActiveTasks);
             }
         }
     }
