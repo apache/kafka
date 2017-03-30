@@ -499,7 +499,9 @@ class Log(@volatile var dir: File,
           maxOffsetInMessages = appendInfo.lastOffset)
 
 
-        // The incoming record doesn't have any duplicates. Append it to the local log.
+        // update the first offset if on the first message. For magic versions older than 2, we use the last offset
+        // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
+        // For magic version 2, we can get the first offset directly from the batch header.
         segment.append(firstOffset = appendInfo.firstOffset,
           largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
