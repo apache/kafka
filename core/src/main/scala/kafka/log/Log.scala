@@ -712,7 +712,7 @@ class Log(@volatile var dir: File,
   }
 
   /**
-    * Find segments starting from the oldest until the the user-supplied predicate is false.
+    * Find segments starting from the oldest until the user-supplied predicate is false.
     * A final segment that is empty will never be returned (since we would just end up re-creating it).
     * @param predicate A function that takes in a single log segment and returns true iff it is deletable
     * @return the segments ready to be deleted

@@ -472,7 +472,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Create an persistent node with the given path and data. Create parents if necessary.
+   * Create a persistent node with the given path and data. Create parents if necessary.
    */
   def createPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = DefaultAcls): Unit = {
     try {

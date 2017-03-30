@@ -217,7 +217,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       rebalanceLock synchronized {
         try {
           if (config.autoCommitEnable)
-	        scheduler.shutdown()
+            scheduler.shutdown()
           fetcher match {
             case Some(f) => f.stopConnections
             case None =>
@@ -677,7 +677,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val brokers = zkUtils.getAllBrokersInCluster()
       if (brokers.size == 0) {
         // This can happen in a rare case when there are no brokers available in the cluster when the consumer is started.
-        // We log an warning and register for child changes on brokers/id so that rebalance can be triggered when the brokers
+        // We log a warning and register for child changes on brokers/id so that rebalance can be triggered when the brokers
         // are up.
         warn("no brokers found when trying to rebalance.")
         zkUtils.zkClient.subscribeChildChanges(BrokerIdsPath, loadBalancerListener)
