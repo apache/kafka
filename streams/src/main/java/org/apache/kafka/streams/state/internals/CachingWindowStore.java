@@ -68,6 +68,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
     void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         this.serdes = new StateSerdes<>(underlying.name(),
+                                        context.applicationId(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
@@ -157,8 +158,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractWrappedStateSto
 
         return new MergedSortedCacheWindowStoreIterator<>(filteredCacheIterator,
                                                           underlyingIterator,
-                                                          new StateSerdes<>(serdes.stateName(), Serdes.Long(), serdes.valueSerde()));
-
+                                                          new StateSerdes<>(serdes.stateName(), context.applicationId(), Serdes.Long(), serdes.valueSerde()));
     }
 
 

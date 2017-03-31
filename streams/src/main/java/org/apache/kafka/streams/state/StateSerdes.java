@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 
 /**
  * Factory for creating serializers / deserializers for state stores in Kafka Streams.
@@ -39,11 +40,15 @@ public final class StateSerdes<K, V> {
      * @param <V>         the value type
      * @return            a new instance of {@link StateSerdes}
      */
-    public static <K, V> StateSerdes<K, V> withBuiltinTypes(String stateName, Class<K> keyClass, Class<V> valueClass) {
+    public static <K, V> StateSerdes<K, V> withBuiltinTypes(
+        final String stateName,
+        final Class<K> keyClass,
+        final Class<V> valueClass) {
         return new StateSerdes<>(stateName, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
     }
 
     private final String stateName;
+    private String topic = null;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
@@ -59,10 +64,33 @@ public final class StateSerdes<K, V> {
      * @throws IllegalArgumentException if key or value serde is null
      */
     @SuppressWarnings("unchecked")
-    public StateSerdes(String stateName,
-                       Serde<K> keySerde,
-                       Serde<V> valueSerde) {
+    public StateSerdes(final String stateName,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde) {
+        this(stateName, null, keySerde, valueSerde);
+    }
+
+    /**
+     * Create a context for serialization using the specified serializers and deserializers which
+     * <em>must</em> match the key and value types used as parameters for this object; the state changelog topic
+     * is provided to bind this serde factory to, so that future calls for serialize / deserialize do not
+     * need to provide the topic name any more.
+     *
+     * @param stateName     the name of the state
+     * @param applicationId the application id
+     * @param keySerde      the serde for keys; cannot be null
+     * @param valueSerde    the serde for values; cannot be null
+     * @throws IllegalArgumentException if key or value serde is null
+     */
+    @SuppressWarnings("unchecked")
+    public StateSerdes(final String stateName,
+                       final String applicationId,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde) {
         this.stateName = stateName;
+        if (applicationId != null) {
+            topic = ProcessorStateManager.storeChangelogTopic(applicationId, stateName);
+        }
 
         if (keySerde == null)
             throw new IllegalArgumentException("key serde cannot be null");
@@ -71,6 +99,11 @@ public final class StateSerdes<K, V> {
 
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
+    }
+
+    public StateSerdes<K, V> setApplicationId(final String applicationId) {
+        topic = ProcessorStateManager.storeChangelogTopic(applicationId, stateName);
+        return this;
     }
 
     /**
@@ -143,7 +176,7 @@ public final class StateSerdes<K, V> {
      * @return        the key as typed object
      */
     public K keyFrom(byte[] rawKey) {
-        return keySerde.deserializer().deserialize(stateName, rawKey);
+        return keySerde.deserializer().deserialize(topic, rawKey);
     }
 
     /**
@@ -153,7 +186,7 @@ public final class StateSerdes<K, V> {
      * @return          the value as typed object
      */
     public V valueFrom(byte[] rawValue) {
-        return valueSerde.deserializer().deserialize(stateName, rawValue);
+        return valueSerde.deserializer().deserialize(topic, rawValue);
     }
 
     /**
@@ -163,7 +196,7 @@ public final class StateSerdes<K, V> {
      * @return     the serialized key
      */
     public byte[] rawKey(K key) {
-        return keySerde.serializer().serialize(stateName, key);
+        return keySerde.serializer().serialize(topic, key);
     }
 
     /**
@@ -173,6 +206,6 @@ public final class StateSerdes<K, V> {
      * @return       the serialized value
      */
     public byte[] rawValue(V value) {
-        return valueSerde.serializer().serialize(stateName, value);
+        return valueSerde.serializer().serialize(topic, value);
     }
 }

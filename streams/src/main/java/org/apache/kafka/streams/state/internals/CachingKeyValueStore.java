@@ -70,6 +70,7 @@ class CachingKeyValueStore<K, V> implements WrappedStateStore, KeyValueStore<K, 
     void initInternal(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         this.serdes = new StateSerdes<>(underlying.name(),
+                                        context.applicationId(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 

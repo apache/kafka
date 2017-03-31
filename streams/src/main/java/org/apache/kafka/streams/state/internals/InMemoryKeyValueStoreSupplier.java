@@ -94,9 +94,11 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
         @SuppressWarnings("unchecked")
         public void init(ProcessorContext context, StateStore root) {
             // construct the serde
-            this.serdes = new StateSerdes<>(name,
-                    keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                    valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+            this.serdes = new StateSerdes<>(
+                name,
+                context.applicationId(),
+                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
             // register the store
             context.register(root, true, new StateRestoreCallback() {

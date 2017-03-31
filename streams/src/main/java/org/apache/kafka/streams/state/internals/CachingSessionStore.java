@@ -101,6 +101,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
         this.context = context;
 
         this.serdes = new StateSerdes<>(bytesStore.name(),
+                                        context.applicationId(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
 

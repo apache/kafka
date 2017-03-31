@@ -70,6 +70,7 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
         this.context = context;
         // construct the serde
         this.serdes = new StateSerdes<>(bytesStore.name(),
+                                        context.applicationId(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 

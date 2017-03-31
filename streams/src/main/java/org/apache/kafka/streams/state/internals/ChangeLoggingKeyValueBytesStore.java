@@ -37,7 +37,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractW
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         inner.init(context, root);
-        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, WindowStoreUtils.INNER_SERDES);
+        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, WindowStoreUtils.INNER_SERDES.setApplicationId(context.applicationId()));
     }
 
 
