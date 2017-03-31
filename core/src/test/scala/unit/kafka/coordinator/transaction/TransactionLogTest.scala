@@ -39,7 +39,7 @@ class TransactionLogTest extends JUnitSuite {
 
   @Test
   def shouldThrowExceptionWriteInvalidTxn() {
-    val txnMetadata = new TransactionMetadata(0L, epoch, transactionTimeoutMs)
+    val txnMetadata = TransactionMetadata(0L, epoch, transactionTimeoutMs)
     txnMetadata.addPartitions(topicPartitions)
 
     intercept[IllegalStateException] {
@@ -65,7 +65,7 @@ class TransactionLogTest extends JUnitSuite {
 
     // generate transaction log messages
     val txnRecords = pidMappings.map { case (transactionalId, pid) =>
-      val txnMetadata = new TransactionMetadata(pid, epoch, transactionTimeoutMs, transactionStates(pid))
+      val txnMetadata = TransactionMetadata(pid, epoch, transactionTimeoutMs, transactionStates(pid))
 
       if (!txnMetadata.state.equals(Empty))
         txnMetadata.addPartitions(topicPartitions)

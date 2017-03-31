@@ -17,7 +17,6 @@
 package kafka.coordinator.transaction
 
 import kafka.common.{KafkaException, MessageFormatter}
-import kafka.message.{CompressionCodec, NoCompressionCodec}
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.types.Type._
@@ -25,7 +24,9 @@ import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
 import java.io.PrintStream
 import java.nio.ByteBuffer
 
-import kafka.log.LogConfig
+import org.apache.kafka.common.record.CompressionType
+
+import scala.collection.mutable
 
 /*
  * Messages stored for the transaction topic represent the pid and transactional status of the corresponding
@@ -43,6 +44,14 @@ object TransactionLog {
   val DefaultReplicationFactor: Short = 3.toShort
   val DefaultMinInSyncReplicas: Int = 2
   val DefaultLoadBufferSize: Int = 5 * 1024 * 1024
+
+  // enforce always using
+  //  1. cleanup policy = compact
+  //  2. compression = none
+  //  3. unclean leader election = disabled
+  //  4. required acks = -1 when writing
+  val EnforcedCompressionType: CompressionType = CompressionType.NONE
+  val EnforcedRequiredAcks: Short = (-1).toShort
 
   // log message formats
   private val TXN_ID_KEY = "transactional_id"
@@ -132,7 +141,7 @@ object TransactionLog {
 
     if (txnMetadata.state == Empty) {
       if (txnMetadata.topicPartitions.nonEmpty)
-        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.state}: ${txnMetadata}")
+        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.state}: $txnMetadata")
 
       value.set(VALUE_SCHEMA_TXN_PARTITIONS_FIELD, null)
     } else {
@@ -198,7 +207,7 @@ object TransactionLog {
         val stateByte = value.getByte(VALUE_SCHEMA_TXN_STATUS_FIELD)
         val state = TransactionMetadata.byteToState(stateByte)
 
-        val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state)
+        val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state, mutable.Set.empty[TopicPartition])
 
         if (!state.equals(Empty)) {
           val topicPartitionArray = value.getArray(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)
