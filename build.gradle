@@ -188,7 +188,7 @@ subprojects {
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
-    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+    maxParallelForks = userMaxForks ?: (Math.max(Runtime.runtime.availableProcessors(), 2) / 2)
 
     minHeapSize = "256m"
     maxHeapSize = "2048m"
@@ -368,8 +368,8 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       if (project.name.equals('core')) {
         cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
       }
-      /* 
-       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
        * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
