@@ -49,9 +49,11 @@ public class InMemoryKeyValueLoggedStore<K, V> extends WrappedStateStore.Abstrac
         inner.init(context, root);
 
         // construct the serde
-        StateSerdes<K, V>  serdes = new StateSerdes<>(inner.name(),
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        StateSerdes<K, V>  serdes = new StateSerdes<>(
+            inner.name(),
+            context.applicationId(),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.changeLogger = new StoreChangeLogger<>(inner.name(), context, serdes);
 

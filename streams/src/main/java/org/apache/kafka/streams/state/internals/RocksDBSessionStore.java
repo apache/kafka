@@ -76,8 +76,9 @@ class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         this.serdes = new StateSerdes<>(bytesStore.name(),
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
+                                        context.applicationId(),
+                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                        aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
 
         bytesStore.init(context, root);
     }

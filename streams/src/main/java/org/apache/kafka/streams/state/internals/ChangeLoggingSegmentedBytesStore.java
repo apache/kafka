@@ -65,6 +65,6 @@ class ChangeLoggingSegmentedBytesStore extends WrappedStateStore.AbstractStateSt
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
-        changeLogger = new StoreChangeLogger<>(name(), context, WindowStoreUtils.INNER_SERDES);
+        changeLogger = new StoreChangeLogger<>(name(), context, WindowStoreUtils.INNER_SERDES.setApplicationId(context.applicationId()));
     }
 }

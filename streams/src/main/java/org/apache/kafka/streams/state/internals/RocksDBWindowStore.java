@@ -78,6 +78,7 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         this.context = context;
         // construct the serde
         this.serdes = new StateSerdes<>(bytesStore.name(),
+                                        context.applicationId(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 

@@ -64,9 +64,11 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
         // construct the serde
-        this.serdes = new StateSerdes<>(name,
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        this.serdes = new StateSerdes<>(
+            name,
+            context.applicationId(),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         if (root != null) {
             // register the store

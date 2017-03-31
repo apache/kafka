@@ -56,6 +56,7 @@ class ChangeLoggingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateSt
         innerBytes.init(context, root);
 
         this.serdes = new StateSerdes<>(innerBytes.name(),
+                                        context.applicationId(),
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
