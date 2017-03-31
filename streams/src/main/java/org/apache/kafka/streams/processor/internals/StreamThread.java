@@ -537,9 +537,9 @@ public class StreamThread extends Thread {
 
             for (final TopicPartition partition : partitions) {
                 if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                    reset(partition, seekToBeginning, "stream-thread [%s] setting topic %s to consume from %s offset", "earliest", loggedTopics);
+                    addToResetList(partition, seekToBeginning, "stream-thread [%s] setting topic %s to consume from %s offset", "earliest", loggedTopics);
                 } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                    reset(partition, seekToEnd, "stream-thread [%s] setting topic %s to consume from %s offset", "latest", loggedTopics);
+                    addToResetList(partition, seekToEnd, "stream-thread [%s] setting topic %s to consume from %s offset", "latest", loggedTopics);
                 } else {
                     if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
                         setState(State.PENDING_SHUTDOWN);
@@ -549,11 +549,10 @@ public class StreamThread extends Thread {
                         throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
                     }
 
-                    log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", getName(), partition.topic(), originalReset));
                     if (originalReset.equals("earliest")) {
-                        reset(partition, seekToBeginning, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "earliest", loggedTopics);
+                        addToResetList(partition, seekToBeginning, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "earliest", loggedTopics);
                     } else if (originalReset.equals("latest")) {
-                        reset(partition, seekToEnd, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "latest", loggedTopics);
+                        addToResetList(partition, seekToEnd, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "latest", loggedTopics);
                     }
                 }
             }
@@ -567,6 +566,15 @@ public class StreamThread extends Thread {
         }
 
         return records;
+    }
+
+    private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
+        final String topic = partition.topic();
+        if (!loggedTopics.contains(topic)) {
+            loggedTopics.add(topic);
+            log.info(String.format(logMessage, getName(), topic, resetPolicy));
+        }
+        partitions.add(partition);
     }
 
     /**
@@ -691,15 +699,6 @@ public class StreamThread extends Thread {
             maybeClean(timerStartedMs);
         }
         log.info("{} Shutting down at user request", logPrefix);
-    }
-
-    private void reset(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
-        final String topic = partition.topic();
-        if (!loggedTopics.contains(topic)) {
-            loggedTopics.add(topic);
-            log.info(String.format(logMessage, getName(), topic, resetPolicy));
-        }
-        partitions.add(partition);
     }
 
     private void maybeUpdateStandbyTasks() {
