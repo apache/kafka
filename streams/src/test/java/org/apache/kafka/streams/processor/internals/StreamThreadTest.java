@@ -64,6 +64,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import static java.util.Collections.EMPTY_SET;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
@@ -157,12 +158,13 @@ public class StreamThreadTest {
                               Collection<TopicPartition> partitions,
                               ProcessorTopology topology,
                               Consumer<byte[], byte[]> consumer,
-                              Consumer<byte[], byte[]> restoreConsumer,
                               Producer<byte[], byte[]> producer,
+                              Consumer<byte[], byte[]> restoreConsumer,
                               StreamsConfig config,
                               StreamsMetrics metrics,
                               StateDirectory stateDirectory) {
-            super(id, applicationId, partitions, topology, consumer, new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000), producer, config, metrics, stateDirectory, null, new MockTime());
+            super(id, applicationId, partitions, topology, consumer, new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000), config, metrics,
+                  stateDirectory, null, new MockTime(), new RecordCollectorImpl(producer, id.toString()));
         }
 
         @Override
@@ -210,7 +212,7 @@ public class StreamThreadTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "source2", "source3");
 
 
-        MockClientSupplier mockClientSupplier = new MockClientSupplier();
+        final MockClientSupplier mockClientSupplier = new MockClientSupplier();
         StreamThread thread = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId, processId, new Metrics(), Time.SYSTEM, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST), 0) {
 
             @Override
@@ -218,7 +220,7 @@ public class StreamThreadTest {
 
                 ProcessorTopology topology = builder.build(id.topicGroupId);
                 return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer,
-                    restoreConsumer, new MockClientSupplier().producer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
+                    mockClientSupplier.producer, restoreConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
             }
         };
 
@@ -368,8 +370,8 @@ public class StreamThreadTest {
         thread2.partitionAssignor(new MockStreamsPartitionAssignor(thread2Assignment));
 
         // revoke (to get threads in correct state)
-        thread1.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
-        thread2.rebalanceListener.onPartitionsRevoked(Collections.EMPTY_SET);
+        thread1.rebalanceListener.onPartitionsRevoked(EMPTY_SET);
+        thread2.rebalanceListener.onPartitionsRevoked(EMPTY_SET);
 
         // assign
         thread1.rebalanceListener.onPartitionsAssigned(task0Assignment);
@@ -493,7 +495,7 @@ public class StreamThreadTest {
             TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
 
-            MockClientSupplier mockClientSupplier = new MockClientSupplier();
+            final MockClientSupplier mockClientSupplier = new MockClientSupplier();
             StreamThread thread = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId, processId, new Metrics(), mockTime, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
                                                    0) {
 
@@ -506,7 +508,7 @@ public class StreamThreadTest {
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                     ProcessorTopology topology = builder.build(id.topicGroupId);
                     return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer,
-                        restoreConsumer, new MockClientSupplier().producer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
+                        mockClientSupplier.producer, restoreConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
                 }
             };
 
@@ -623,7 +625,7 @@ public class StreamThreadTest {
             TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
             builder.addSource("source1", "topic1");
 
-            MockClientSupplier mockClientSupplier = new MockClientSupplier();
+            final MockClientSupplier mockClientSupplier = new MockClientSupplier();
             StreamThread thread = new StreamThread(builder, config, mockClientSupplier, applicationId, clientId, processId, new Metrics(), mockTime, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
                                                    0) {
 
@@ -636,7 +638,7 @@ public class StreamThreadTest {
                 protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitionsForTask) {
                     ProcessorTopology topology = builder.build(id.topicGroupId);
                     return new TestStreamTask(id, applicationId, partitionsForTask, topology, consumer,
-                        restoreConsumer, new MockClientSupplier().producer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
+                        mockClientSupplier.producer, restoreConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
                 }
             };
 
@@ -717,9 +719,10 @@ public class StreamThreadTest {
 
         thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
 
+        assertSame(1, clientSupplier.numberOfCreatedProducers);
         assertSame(clientSupplier.producer, thread.threadProducer);
         for (final StreamTask task : thread.tasks().values()) {
-            assertSame(clientSupplier.producer, task.producer);
+            assertSame(clientSupplier.producer, task.producer());
         }
         assertSame(clientSupplier.consumer, thread.consumer);
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer);
@@ -747,14 +750,18 @@ public class StreamThreadTest {
         final Map<TaskId, Set<TopicPartition>> assignment = new HashMap<>();
         assignment.put(new TaskId(0, 0), Collections.singleton(new TopicPartition("someTopic", 0)));
         assignment.put(new TaskId(0, 1), Collections.singleton(new TopicPartition("someTopic", 1)));
+        assignment.put(new TaskId(0, 2), Collections.singleton(new TopicPartition("someTopic", 2)));
         thread.partitionAssignor(new MockStreamsPartitionAssignor(assignment));
 
-        thread.rebalanceListener.onPartitionsAssigned(Collections.singleton(new TopicPartition("someTopic", 0)));
+        final Set<TopicPartition> assignedPartitions = new HashSet<>();
+        Collections.addAll(assignedPartitions, new TopicPartition("someTopic", 0), new TopicPartition("someTopic", 2));
+        thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
 
         assertNull(thread.threadProducer);
+        assertSame(thread.tasks().size(), clientSupplier.numberOfCreatedProducers);
         Iterator it = clientSupplier.producers.iterator();
         for (final StreamTask task : thread.tasks().values()) {
-            assertSame(it.next(), task.producer);
+            assertSame(it.next(), task.producer());
         }
         assertSame(clientSupplier.consumer, thread.consumer);
         assertSame(clientSupplier.restoreConsumer, thread.restoreConsumer);
@@ -769,6 +776,7 @@ public class StreamThreadTest {
         public Producer<byte[], byte[]> getProducer(Map<String, Object> config) {
             final Producer producer = new MockedProducer();
             producers.add(producer);
+            ++numberOfCreatedProducers;
             return producer;
         }
     }
@@ -803,7 +811,7 @@ public class StreamThreadTest {
         thread.run();
 
         for (final StreamTask task : thread.tasks().values()) {
-            assertTrue(((MockedProducer) task.producer).closed);
+            assertTrue(((MockedProducer) task.producer()).closed);
         }
     }
 
@@ -982,17 +990,17 @@ public class StreamThreadTest {
         builder.setApplicationId(applicationId);
         builder.stream(Pattern.compile("t.*")).to("out");
         final StreamsConfig config = new StreamsConfig(configProps());
-        final MockClientSupplier clientSupplier = new MockClientSupplier();
+        final MockClientSupplier mockClientSupplier = new MockClientSupplier();
 
         final Map<Collection<TopicPartition>, TestStreamTask> createdTasks = new HashMap<>();
 
-        final StreamThread thread = new StreamThread(builder, config, clientSupplier, applicationId,
+        final StreamThread thread = new StreamThread(builder, config, mockClientSupplier, applicationId,
                                                      clientId, processId, new Metrics(), new MockTime(), new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST), 0) {
             @Override
             protected StreamTask createStreamTask(final TaskId id, final Collection<TopicPartition> partitions) {
                 final ProcessorTopology topology = builder.build(id.topicGroupId);
                 final TestStreamTask task = new TestStreamTask(id, applicationId, partitions, topology, consumer,
-                    restoreConsumer, new MockClientSupplier().producer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
+                    mockClientSupplier.producer, restoreConsumer, config, new MockStreamsMetrics(new Metrics()), stateDirectory);
                 createdTasks.put(partitions, task);
                 return task;
             }
@@ -1043,8 +1051,8 @@ public class StreamThreadTest {
                                                                  Utils.mkSet(new TopicPartition("t1", 0)),
                                                                  builder.build(0),
                                                                  clientSupplier.consumer,
-                                                                 clientSupplier.restoreConsumer,
                                                                  clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
                                                                  new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
@@ -1095,8 +1103,8 @@ public class StreamThreadTest {
                                                                  Utils.mkSet(new TopicPartition("t1", 0)),
                                                                  builder.build(0),
                                                                  clientSupplier.consumer,
-                                                                 clientSupplier.restoreConsumer,
                                                                  clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
                                                                  new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
@@ -1147,8 +1155,8 @@ public class StreamThreadTest {
                                                                  Utils.mkSet(new TopicPartition("t1", 0)),
                                                                  builder.build(0),
                                                                  clientSupplier.consumer,
-                                                                 clientSupplier.restoreConsumer,
                                                                  clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
                                                                  new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {
@@ -1198,8 +1206,8 @@ public class StreamThreadTest {
                                                                  Utils.mkSet(new TopicPartition("t1", 0)),
                                                                  builder.build(0),
                                                                  clientSupplier.consumer,
-                                                                 clientSupplier.restoreConsumer,
                                                                  clientSupplier.producer,
+                                                                 clientSupplier.restoreConsumer,
                                                                  config,
                                                                  new MockStreamsMetrics(new Metrics()),
                                                                  new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG), time)) {

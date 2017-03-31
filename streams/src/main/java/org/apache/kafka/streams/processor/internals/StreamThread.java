@@ -184,7 +184,7 @@ public class StreamThread extends Thread {
 
     protected final StreamsConfig config;
     protected final TopologyBuilder builder;
-    protected Producer<byte[], byte[]> threadProducer = null;
+    protected Producer<byte[], byte[]> threadProducer;
     protected final KafkaClientSupplier clientSupplier;
     protected final Consumer<byte[], byte[]> consumer;
     protected final Consumer<byte[], byte[]> restoreConsumer;
@@ -208,7 +208,7 @@ public class StreamThread extends Thread {
     // TODO: this is not private only for tests, should be better refactored
     final StateDirectory stateDirectory;
     private String originalReset;
-    private StreamPartitionAssignor partitionAssignor = null;
+    private StreamPartitionAssignor partitionAssignor;
     private boolean cleanRun = false;
     private long timerStartedMs;
     private long lastCleanMs;
@@ -966,8 +966,24 @@ public class StreamThread extends Thread {
 
         streamsMetrics.taskCreatedSensor.record();
 
-        final ProcessorTopology topology = builder.build(id.topicGroupId);
+        return new StreamTask(
+            id,
+            applicationId,
+            partitions,
+            builder.build(id.topicGroupId),
+            consumer,
+            storeChangelogReader,
+            config,
+            streamsMetrics,
+            stateDirectory,
+            cache,
+            time,
+            createRecordCollector(id));
+    }
+
+    private RecordCollector createRecordCollector(final TaskId id) {
         final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
+
         final Producer<byte[], byte[]> producer;
         if (exactlyOnceEnabled) {
             log.info("{} Creating producer client for task {}", logPrefix, id);
@@ -979,7 +995,8 @@ public class StreamThread extends Thread {
             }
             producer = threadProducer;
         }
-        return new StreamTask(id, applicationId, partitions, topology, consumer, storeChangelogReader, producer, config, streamsMetrics, stateDirectory, cache, time);
+
+        return new RecordCollectorImpl(producer, id.toString());
     }
 
     private void addStreamTasks(Collection<TopicPartition> assignment, final long start) {

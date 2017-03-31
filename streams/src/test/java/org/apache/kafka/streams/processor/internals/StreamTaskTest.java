@@ -56,7 +56,6 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -115,6 +114,7 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir;
     private StateDirectory stateDirectory;
+    private RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
     private ThreadCache testCache =  new ThreadCache("testCache", 0, streamsMetrics);
     private StreamsConfig config;
     private StreamTask task;
@@ -143,7 +143,7 @@ public class StreamTaskTest {
         config = createConfig(baseDir);
         stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
-                              changelogReader, producer, config, streamsMetrics, stateDirectory, null, time);
+                              changelogReader, config, streamsMetrics, stateDirectory, null, time, recordCollector);
     }
 
     @After
@@ -367,7 +367,7 @@ public class StreamTaskTest {
         task.close();
 
         task  = new StreamTask(taskId00, applicationId, partitions,
-                                                     topology, consumer, changelogReader, producer, config, streamsMetrics, stateDirectory, testCache, time);
+                                                     topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
         final int offset = 20;
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -420,11 +420,16 @@ public class StreamTaskTest {
     @Test
     public void shouldFlushRecordCollectorOnFlushState() throws Exception {
         final AtomicBoolean flushed = new AtomicBoolean(false);
+        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
+            @Override
+            public void flush() {
+                flushed.set(true);
+            }
+        };
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final StreamTask streamTask = new StreamTask(taskId00, "appId", partitions, topology, consumer,
-                                                     changelogReader, new MockedProducer(flushed),
-                                                     createConfig(baseDir), streamsMetrics, stateDirectory, testCache,
-                                                     time);
+                                                     changelogReader, createConfig(baseDir), streamsMetrics,
+                                                     stateDirectory, testCache, time, recordCollector);
         streamTask.flushState();
         assertTrue(flushed.get());
     }
@@ -453,6 +458,13 @@ public class StreamTaskTest {
                                                                  Collections.<StateStore>emptyList());
 
         final TopicPartition partition = new TopicPartition(changelogTopic, 0);
+        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
+            @Override
+            public Map<TopicPartition, Long> offsets() {
+
+                return Collections.singletonMap(partition, 543L);
+            }
+        };
 
         restoreStateConsumer.updatePartitions(changelogTopic,
                                               Collections.singletonList(
@@ -465,19 +477,9 @@ public class StreamTaskTest {
         final MockTime time = new MockTime();
         final StreamsConfig config = createConfig(baseDir);
         final StreamTask streamTask = new StreamTask(taskId, "appId", partitions, topology, consumer,
-                                                     changelogReader, producer, config, streamsMetrics,
+                                                     changelogReader, config, streamsMetrics,
                                                      stateDirectory, new ThreadCache("testCache", 0, streamsMetrics),
-                                                     time);
-
-        final Field taskRecordCollector = streamTask.getClass().getDeclaredField("recordCollector");
-        taskRecordCollector.setAccessible(true);
-        taskRecordCollector.set(streamTask, new NoOpRecordCollector() {
-            @Override
-            public Map<TopicPartition, Long> offsets() {
-
-                return Collections.singletonMap(partition, 543L);
-            }
-        });
+                                                     time, recordCollector);
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
@@ -562,10 +564,10 @@ public class StreamTaskTest {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         final StreamsConfig config = new StreamsConfig(properties);
 
-        MockedProducer producer = new MockedProducer(null);
+        final MockedProducer producer = new MockedProducer(null);
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
-            changelogReader, producer, config, streamsMetrics, stateDirectory, null, time);
+            changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
 
         task.closeProducer();
 
@@ -592,7 +594,7 @@ public class StreamTaskTest {
 
 
         return new StreamTask(taskId00, applicationId, partitions,
-                              topology, consumer, changelogReader, producer, config, streamsMetrics, stateDirectory, testCache, time);
+                              topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {

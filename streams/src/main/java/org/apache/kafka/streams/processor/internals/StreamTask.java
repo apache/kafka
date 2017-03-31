@@ -57,7 +57,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final PunctuationQueue punctuationQueue;
 
     private final Map<TopicPartition, Long> consumedOffsets;
-    final Producer<byte[], byte[]> producer;
     private final RecordCollector recordCollector;
     private final int maxBufferedSize;
     private final boolean exactlyOnceEnabled;
@@ -94,7 +93,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param config                the {@link StreamsConfig} specified by the user
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
-     * @param producer              the instance of {@link Producer} used to write records
+     * @param recordCollector       the instance of {@link RecordCollector} used to produce records
      */
     public StreamTask(final TaskId id,
                       final String applicationId,
@@ -102,12 +101,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
                       final ProcessorTopology topology,
                       final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
-                      final Producer<byte[], byte[]> producer,
                       final StreamsConfig config,
                       final StreamsMetrics metrics,
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
-                      final Time time) {
+                      final Time time,
+                      final RecordCollector recordCollector) {
         super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache);
         punctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
@@ -129,13 +128,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
         logPrefix = String.format("task [%s]", id);
 
         partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
-        this.producer = producer;
 
         // initialize the consumed offset cache
         consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
-        recordCollector = new RecordCollectorImpl(producer, id.toString());
+        this.recordCollector = recordCollector;
 
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
@@ -396,7 +394,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     void closeProducer() {
         if (exactlyOnceEnabled) {
             try {
-                producer.close();
+                recordCollector.close();
             } catch (final Throwable e) {
                 log.error("{} Failed to close producer: ", logPrefix, e);
             }
@@ -453,6 +451,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public void flushState() {
         super.flushState();
         recordCollector.flush();
+    }
+
+    // for testing only
+    Producer<byte[], byte[]> producer() {
+        return ((RecordCollectorImpl) recordCollector).producer();
     }
 
 }

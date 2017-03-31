@@ -27,19 +27,20 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -186,22 +187,15 @@ public class StreamThreadStateStoreProviderTest {
                                          final MockClientSupplier clientSupplier,
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
-        return new StreamTask(
-            taskId,
-            applicationId,
-            Collections.singletonList(new TopicPartition("topic", taskId.partition)),
-            topology,
-            clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
-            clientSupplier.producer,
-            streamsConfig,
-            new MockStreamsMetrics(new Metrics()),
-            stateDirectory,
-            null,
-            new MockTime()) {
-
+        return new StreamTask(taskId, applicationId, Collections
+                .singletonList(new TopicPartition("topic", taskId.partition)), topology,
+                              clientSupplier.consumer,
+                              new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
+                              streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
             @Override
-            protected void initializeOffsetLimits() {}
+            protected void initializeOffsetLimits() {
+
+            }
         };
     }
 
