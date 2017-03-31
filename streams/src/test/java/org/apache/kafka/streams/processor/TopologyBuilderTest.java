@@ -49,8 +49,6 @@ import java.util.regex.Pattern;
 
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -575,24 +573,6 @@ public class TopologyBuilderTest {
         assertEquals(2, policies.size());
         assertEquals("30000", properties.getProperty(InternalTopicManager.RETENTION_MS));
         assertEquals(2, properties.size());
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldAddInternalTopicConfigWithCompactSetForWindowStoresWithOneSegment() throws Exception {
-        final TopologyBuilder builder = new TopologyBuilder();
-        builder.setApplicationId("appId");
-        builder.addSource("source", "topic");
-        builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(new RocksDBWindowStoreSupplier("store", 30000, 1, false, null, null, 10000, true, Collections.<String, String>emptyMap(), false), "processor");
-        final Map<Integer, TopicsInfo> topicGroups = builder.topicGroups();
-        final TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Properties properties = topicConfig.toProperties(0);
-        final List<String> policies = Arrays.asList(properties.getProperty(InternalTopicManager.CLEANUP_POLICY_PROP).split(","));
-        assertEquals("appId-store-changelog", topicConfig.name());
-        assertThat(policies, equalTo(Collections.singletonList("compact")));
-        assertEquals(1, properties.size());
     }
 
     @SuppressWarnings("unchecked")

@@ -1190,9 +1190,8 @@ public class TopologyBuilder {
         }
 
         final WindowStoreSupplier windowStoreSupplier = (WindowStoreSupplier) supplier;
-        if (windowStoreSupplier.segments() > 1) {
-            cleanupPolicies.add(InternalTopicConfig.CleanupPolicy.delete);
-        }
+        cleanupPolicies.add(InternalTopicConfig.CleanupPolicy.delete);
+
         final InternalTopicConfig config = new InternalTopicConfig(name,
                                                                    cleanupPolicies,
                                                                    supplier.logConfig());
