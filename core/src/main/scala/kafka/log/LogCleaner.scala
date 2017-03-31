@@ -451,13 +451,7 @@ private[log] class Cleaner(val id: Int,
                              activePids: Map[Long, ProducerIdEntry],
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
-      def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = {
-        // retain the entry if it is the last one produced by an active idempotent producer to ensure that
-        // the PID is not removed from the log before it has been expired
-        val pid = recordBatch.producerId
-        val isLastEntryForPid = RecordBatch.NO_PRODUCER_ID < pid && activePids.get(pid).exists(_.lastOffset == record.offset)
-        record.isControlRecord || isLastEntryForPid || shouldRetainMessage(source, map, retainDeletes, record, stats)
-      }
+      def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = shouldRetainMessage(source, map, retainDeletes, record, stats, activePids, recordBatch.producerId)
     }
 
     var position = 0
@@ -499,8 +493,15 @@ private[log] class Cleaner(val id: Int,
                                   map: kafka.log.OffsetMap,
                                   retainDeletes: Boolean,
                                   record: Record,
-                                  stats: CleanerStats): Boolean = {
+                                  stats: CleanerStats,
+                                  activePids: Map[Long, ProducerIdEntry],
+                                  pid: Long): Boolean = {
     if (record.isControlRecord)
+      return true
+
+    // retain the entry if it is the last one produced by an active idempotent producer to ensure that
+    // the PID is not removed from the log before it has been expired
+    if (RecordBatch.NO_PRODUCER_ID < pid && activePids.get(pid).exists(_.lastOffset == record.offset))
       return true
 
     val pastLatestOffset = record.offset > map.latestOffset
