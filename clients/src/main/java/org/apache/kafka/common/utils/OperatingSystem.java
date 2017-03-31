@@ -18,9 +18,9 @@ package org.apache.kafka.common.utils;
 
 import java.util.Locale;
 
-public final class Os {
+public final class OperatingSystem {
 
-    private Os() {
+    private OperatingSystem() {
     }
     
     public static final String NAME;
