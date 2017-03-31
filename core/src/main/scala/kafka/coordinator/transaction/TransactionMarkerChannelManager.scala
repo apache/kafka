@@ -16,17 +16,196 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.InterBrokerSendThread
-import kafka.server.{DelayedOperationPurgatory, MetadataCache}
-import org.apache.kafka.common.TopicPartition
+import java.util
 
-import scala.collection.immutable
+import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
+import kafka.utils.Logging
+import org.apache.kafka.clients.{ApiVersions, ManualMetadataUpdater, NetworkClient, RequestCompletionHandler, ClientResponse}
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkerRequest, WriteTxnMarkerResponse}
+import org.apache.kafka.common.requests.WriteTxnMarkerRequest.TxnMarkerEntry
+import org.apache.kafka.common.security.JaasContext
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{Node, TopicPartition}
 
-class TransactionMarkerChannelManager(metadataCache: MetadataCache,
-                                      sendThread: InterBrokerSendThread,
-                                      txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMetadataUpdate]) {
+import scala.collection.{concurrent, immutable, mutable}
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
-  def addTxnMarkerRequest(topicPartitions: immutable.Set[TopicPartition]): Unit = {
+import collection.JavaConverters._
 
+class TransactionMarkerChannelManager(config: KafkaConfig,
+                                      metrics: Metrics,
+                                      metadataCache: MetadataCache,
+                                      brokerListenerName: ListenerName,
+                                      txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
+                                      time: Time) extends Logging {
+
+  this.logIdent = "[Transaction Maker Channel Manager " + config.brokerId + "]: "
+
+  private val sendThread: InterBrokerSendThread = {
+    val threadName = "TxnMarkerSenderThread-" + config.brokerId
+    val channelBuilder = ChannelBuilders.clientChannelBuilder(
+      config.interBrokerSecurityProtocol,
+      JaasContext.Type.SERVER,
+      config,
+      config.interBrokerListenerName,
+      config.saslMechanismInterBrokerProtocol,
+      config.saslInterBrokerHandshakeRequestEnable
+    )
+    val selector = new Selector(
+      NetworkReceive.UNLIMITED,
+      config.connectionsMaxIdleMs,
+      metrics,
+      time,
+      "replica-fetcher",
+      Map("broker-id" -> config.brokerId.toString).asJava,
+      false,
+      channelBuilder
+    )
+    val networkClient = new NetworkClient(
+      selector,
+      new ManualMetadataUpdater(),
+      threadName,
+      1,
+      0,
+      Selectable.USE_DEFAULT_BUFFER_SIZE,
+      config.socketReceiveBufferBytes,
+      config.requestTimeoutMs,
+      time,
+      false,
+      new ApiVersions
+    )
+
+    new TransactionMarkerSenderThread(threadName, networkClient, brokerListenerName, time)
+  }
+
+  // use finer synchronization (concurrent map + blocking queue) so that we do not need a global lock
+  private val brokerStateMap: concurrent.Map[Int, DestinationBrokerAndQueuedMarkers] = concurrent.TrieMap.empty[Int, DestinationBrokerAndQueuedMarkers]
+
+  private val pendingTxnMap: concurrent.Map[Long, TransactionMetadata] = concurrent.TrieMap.empty[Long, TransactionMetadata]
+
+  private def addNewBroker(broker: Node) {
+    val markersQueue = new LinkedBlockingQueue[TxnMarkerEntry]()
+
+    brokerStateMap.put(broker.id, DestinationBrokerAndQueuedMarkers(broker, markersQueue))
+
+    trace(s"Added destination broker ${broker.id}: $broker")
+  }
+
+  private def addRequestForBroker(brokerId: Int, txnMarker: TxnMarkerEntry) {
+    val markersQueue = brokerStateMap(brokerId).markersQueue
+
+    markersQueue.add(txnMarker)
+
+    trace(s"Added markers $txnMarker for broker $brokerId")
+  }
+
+  private def addRequestToSend(pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition], watchInPurgatory: Boolean = true): Unit = {
+
+    val partitionsByDestination: immutable.Map[Int, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
+      val leaderForPartition = metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
+      leaderForPartition match {
+        case Some(partitionInfo) =>
+          val brokerId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+          if (!brokerStateMap.contains(brokerId)) {
+            val broker = metadataCache.getAliveEndpoint(brokerId, brokerListenerName).get
+            addNewBroker(broker)
+          }
+          brokerId
+        case None =>
+          // TODO: there is a rare case that the producer gets the partition info from another broker who has the newer information of the
+          // partition, while the TC itself has not received the propagated metadata update; do we need to block when this happens?
+          throw new IllegalStateException("Cannot find the leader broker for the txn marker to write for topic partition " + topicPartition)
+      }
+    }
+
+    for ((brokerId: Int, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
+      val txnMarker = new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
+
+      addRequestForBroker(brokerId, txnMarker)
+    }
+  }
+
+  def addTxnMarkerRequest(metadata: TransactionMetadata, coordinatorEpoch: Int): Unit = {
+    // we need to set the watcher before appending to the queue as they may be drained asynchronously by the sender thread
+    val metadataToWrite = metadata synchronized metadata.copy()
+
+    val delayedTxnMarker = new DelayedTxnMarker(metadataToWrite)
+    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(metadata.pid))
+
+    val exisintMetadataToWrite = pendingTxnMap.putIfAbsent(metadata.pid, metadata)
+    if (exisintMetadataToWrite.isDefined)
+      throw new IllegalStateException(s"There is already a pending txn to write its markers ${exisintMetadataToWrite.get}; this should not happen")
+
+    val result = metadataToWrite.state match {
+      case PrepareCommit => TransactionResult.COMMIT
+      case PrepareAbort => TransactionResult.ABORT
+      case s => throw new IllegalStateException("Unexpected txn metadata state while writing markers: " + s)
+    }
+    addRequestToSend(metadataToWrite.pid, metadataToWrite.epoch, result, coordinatorEpoch, metadataToWrite.topicPartitions.toSet)
+  }
+
+  private class TransactionMarkerSenderThread(threadName: String,
+                                              networkClient: NetworkClient,
+                                              interBrokerListenerName: ListenerName,
+                                              time: Time)
+    extends InterBrokerSendThread(threadName, networkClient, interBrokerListenerName, time) {
+
+    override def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler] =
+      brokerStateMap.map { case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
+        val markersToSend: java.util.List[TxnMarkerEntry] = new util.ArrayList[TxnMarkerEntry]()
+        destAndMarkerQueue.markersQueue.drainTo(markersToSend)
+
+        val requestCompletionHandler = new RequestCompletionHandler {
+          override def onComplete(response: ClientResponse): Unit = {
+            val correlationId = response.requestHeader.correlationId
+            if (response.wasDisconnected) {
+              trace(s"Cancelled request $response due to node $response.destination being disconnected")
+
+              // re-enqueue the markers
+              for (txnMarker: TxnMarkerEntry <- markersToSend)
+              addRequestForBroker(brokerId, txnMarker)
+            } else {
+              trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
+
+              val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkerResponse]
+
+              for (txnMarker: TxnMarkerEntry <- markersToSend) {
+                val errors = writeTxnMarkerResponse.errors(txnMarker.pid)
+
+                if (errors == null) // TODO: could this ever happen?
+                  throw new IllegalStateException("WriteTxnMarkerResponse does not contain expected error map for pid " + txnMarker.pid)
+
+                val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
+                for ((topicPartition: TopicPartition, error: Errors) <- errors) {
+                  error match {
+                    case Errors.NONE =>
+                      val metadata = pendingTxnMap.getOrElse(txnMarker.pid, throw new IllegalStateException("Cannot find the pending txn marker in cache; it should not happen"))
+                      // do not synchronize on this metadata since it will only be accessed by the sender thread
+                      metadata.topicPartitions -= topicPartition
+                    case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
+                         Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+                      retryPartitions += topicPartition
+                    case _ =>
+                      throw new IllegalStateException("Writing txn marker request failed permanently for pid " + txnMarker.pid)
+                  }
+
+                  if (retryPartitions.nonEmpty) {
+                    // re-enqueue with possible new leaders of the partitions
+                    addRequestToSend(txnMarker.pid, txnMarker.epoch, txnMarker.transactionResult, txnMarker.coordinatorEpoch, retryPartitions.toSet, watchInPurgatory = false)
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        (destAndMarkerQueue.destBrokerNode, RequestAndCompletionHandler(new WriteTxnMarkerRequest.Builder(markersToSend), requestCompletionHandler))
+      }.toMap
   }
 }
+
+case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[WriteTxnMarkerRequest.TxnMarkerEntry])

@@ -501,9 +501,9 @@ public class RequestResponseTest {
         List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
                 new TopicPartition("foo", 2));
 
-        List<WriteTxnMarkerRequest.TxnMarkerEntry> entries = Collections.singletonList(new WriteTxnMarkerRequest.TxnMarkerEntry(23437L, (short) 99, TransactionResult.COMMIT, partitions));
+        List<WriteTxnMarkerRequest.TxnMarkerEntry> entries = Collections.singletonList(new WriteTxnMarkerRequest.TxnMarkerEntry(23437L, (short) 99, 437, TransactionResult.COMMIT, partitions));
 
-        return new WriteTxnMarkerRequest.Builder(437, entries).build();
+        return new WriteTxnMarkerRequest.Builder(entries).build();
     }
 
     private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {

@@ -1295,6 +1295,9 @@ public class Protocol {
             new Field("transaction_result",
                     INT8,
                     "The result of the transaction to write to the partitions (0 = COMMIT, 1 = ABORT)"),
+            new Field("coordinator_epoch",
+                    INT32,
+                    "Epoch associated with the transaction state partition hosted by this transaction coordinator"),
             new Field("topic_partitions",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
@@ -1303,9 +1306,6 @@ public class Protocol {
     );
 
     public static final Schema WRITE_TXN_MARKER_REQUEST_V0 = new Schema(
-            new Field("coordinator_epoch",
-                    INT32,
-                    "Epoch associated with the transaction state partition hosted by this transaction coordinator"),
             new Field("transaction_markers",
                     new ArrayOf(TXN_MARKER_ENTRY_V0),
                     "The transaction markers to be written")

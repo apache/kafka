@@ -61,12 +61,6 @@ class MetadataCache(brokerId: Int) extends Logging {
     result
   }
 
-  private def getAliveEndpoint(brokerId: Int, listenerName: ListenerName): Option[Node] =
-    aliveNodes.get(brokerId).map { nodeMap =>
-      nodeMap.getOrElse(listenerName,
-        throw new BrokerEndPointNotAvailableException(s"Broker `$brokerId` does not have listener with name `$listenerName`"))
-    }
-
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
   private def getPartitionMetadata(topic: String, listenerName: ListenerName, errorUnavailableEndpoints: Boolean): Option[Iterable[MetadataResponse.PartitionMetadata]] = {
     cache.get(topic).map { partitions =>
@@ -108,6 +102,12 @@ class MetadataCache(brokerId: Int) extends Logging {
       }
     }
   }
+
+  def getAliveEndpoint(brokerId: Int, listenerName: ListenerName): Option[Node] =
+    aliveNodes.get(brokerId).map { nodeMap =>
+      nodeMap.getOrElse(listenerName,
+        throw new BrokerEndPointNotAvailableException(s"Broker `$brokerId` does not have listener with name `$listenerName`"))
+    }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
   def getTopicMetadata(topics: Set[String], listenerName: ListenerName, errorUnavailableEndpoints: Boolean = false): Seq[MetadataResponse.TopicMetadata] = {

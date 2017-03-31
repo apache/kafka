@@ -17,25 +17,28 @@
 package kafka.coordinator.transaction
 
 import kafka.server.DelayedOperation
-import org.apache.kafka.common.protocol.Errors
 
 /**
   * Delayed transaction state change operations that are added to the purgatory without timeout (i.e. these operations should never time out)
   */
-private[transaction] class DelayedTxnMarker(TxnMetadata: TransactionMetadata,
-                                            responseCallback: Errors => Unit)
-  extends DelayedOperation(Long.MaxValue) {
+private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata)
+  extends DelayedOperation(Long.MaxValue) { // TODO: if we set a timeout value, what should happen when it gets expired?
 
   // overridden since tryComplete already synchronizes on the existing txn metadata. This makes it safe to
   // call purgatory operations while holding the group lock.
   override def safeTryComplete(): Boolean = tryComplete()
 
-  // whenever this function is triggered, we can always safely complete the operation;
-  override def tryComplete(): Boolean = forceComplete()
+  override def tryComplete(): Boolean = {
+    txnMetadata synchronized {
+      if (txnMetadata.topicPartitions.isEmpty)
+        forceComplete()
+      else false
+    }
+  }
 
   override def onExpiration(): Unit = {
     // this should never happen
-    throw new IllegalStateException("Delayed txn state change operation to " + newTxnMetadata + " has timed out, this should never happen.")
+    throw new IllegalStateException(s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen.")
   }
-  override def onComplete(): Unit = coordinator.tryUpdateTxnState(transactionalId, newTxnMetadata, responseCallback)
+  override def onComplete(): Unit = {} // FIXME: append the final txn state to the txn log
 }
