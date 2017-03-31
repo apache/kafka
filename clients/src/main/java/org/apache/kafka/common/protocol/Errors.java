@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ControllerMovedException;
@@ -166,7 +167,8 @@ public enum Errors {
             " the message was sent to an incompatible broker. See the broker logs for more details.")),
     UNSUPPORTED_FOR_MESSAGE_FORMAT(43,
         new UnsupportedForMessageFormatException("The message format version on the broker does not support the request.")),
-    POLICY_VIOLATION(44, new PolicyViolationException("Request parameters do not satisfy the configured policy."));
+    POLICY_VIOLATION(44, new PolicyViolationException("Request parameters do not satisfy the configured policy.")),
+    AUTHENTICATION_FAILED(45, new AuthenticationException("Authentication of client using SASL failed."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

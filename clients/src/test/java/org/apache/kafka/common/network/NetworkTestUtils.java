@@ -78,14 +78,26 @@ public class NetworkTestUtils {
     }
 
     public static void waitForChannelClose(Selector selector, String node) throws IOException {
+        waitForChannelClose(selector, node, false);
+    }
+
+    public static void waitForAuthenticationFailureAndClose(Selector selector, String node) throws IOException {
+        waitForChannelClose(selector, node, true);
+    }
+
+    private static void waitForChannelClose(Selector selector, String node, boolean expectAuthFailure) throws IOException {
         boolean closed = false;
+        int authFailed = 0;
         for (int i = 0; i < 30; i++) {
             selector.poll(1000L);
+            authFailed += selector.authenticationFailed().size();
             if (selector.channel(node) == null) {
                 closed = true;
                 break;
             }
         }
+        if (expectAuthFailure)
+            assertEquals(1, authFailed);
         assertTrue("Channel was not closed by timeout", closed);
     }
 }

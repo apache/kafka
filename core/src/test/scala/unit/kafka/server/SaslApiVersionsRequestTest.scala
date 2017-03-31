@@ -16,11 +16,11 @@
   */
 package kafka.server
 
-import java.io.IOException
 import java.net.Socket
 import java.util.Collections
 
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.requests.SaslHandshakeRequest
 import org.apache.kafka.common.requests.SaslHandshakeResponse
@@ -58,7 +58,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslTestHarness {
         sendApiVersionsRequest(plaintextSocket, new ApiVersionsRequest.Builder().build(0))
         fail("Versions Request during Sasl handshake did not fail")
       } catch {
-        case _: IOException => // expected exception
+        case _: SchemaException => // expected exception
       }
     } finally {
       plaintextSocket.close()
