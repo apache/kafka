@@ -66,7 +66,7 @@ class TransactionStateManager(brokerId: Int,
   private val partitionLock = new ReentrantLock()
 
   /** partitions of transaction topic that are assigned to this manager, partition lock should be called BEFORE accessing this set */
-  private val ownedPartitions: mutable.Set[Int] = mutable.Set()
+  private val ownedPartitions: mutable.Map[Int, Int] = mutable.Map()
 
   /** partitions of transaction topic that are being loaded, partition lock should be called BEFORE accessing this set */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
@@ -224,7 +224,7 @@ class TransactionStateManager(brokerId: Int,
    * When this broker becomes a leader for a transaction log partition, load this partition and
    * populate the transaction metadata cache with the transactional ids.
    */
-  def loadTransactionsForPartition(partition: Int) {
+  def loadTransactionsForPartition(partition: Int, coordinatorEpoch: Int) {
     validateTransactionTopicPartitionCountIsStable()
 
     val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partition)
@@ -249,7 +249,7 @@ class TransactionStateManager(brokerId: Int,
         case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
       } finally {
         inLock(partitionLock) {
-          ownedPartitions.add(partition)
+          ownedPartitions.put(partition, coordinatorEpoch)
           loadingPartitions.remove(partition)
         }
       }
