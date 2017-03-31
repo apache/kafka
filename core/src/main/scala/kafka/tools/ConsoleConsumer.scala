@@ -461,7 +461,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (printValue) {
       write(valueDeserializer, value, lineSeparator)
     } else {
-      write(None, "".getBytes(), lineSeparator)
+      output.write(lineSeparator)
     }
   }
 }
