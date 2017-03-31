@@ -1180,10 +1180,7 @@ public class Protocol {
     public static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
             new Field("transactional_id",
                     NULLABLE_STRING,
-                    "The transactional id whose pid we want to retrieve or generate."),
-            new Field("transaction_timeout_ms",
-                    INT32,
-                    "The time in ms to wait for any idle transaction sent by this producer before proactively being aborted")
+                    "The transactional id whose pid we want to retrieve or generate.")
     );
 
     public static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
@@ -1367,7 +1364,7 @@ public class Protocol {
     );
 
     public static final Schema WRITE_TXN_MARKER_RESPONSE_V0 = new Schema(
-            new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKER_ENTRY_RESPONSE_V0),"Errors per partition from writing markers")
+            new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKER_ENTRY_RESPONSE_V0), "Errors per partition from writing markers")
     );
 
     public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKER_REQUEST_V0};

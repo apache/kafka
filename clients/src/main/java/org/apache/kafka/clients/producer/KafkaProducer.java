@@ -915,19 +915,29 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void abortTransaction() throws ProducerFencedException {}
+    public void abortTransaction() throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
-    public void beginTransaction() throws ProducerFencedException {}
+    public void beginTransaction() throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
-    public void commitTransaction() throws ProducerFencedException {}
+    public void commitTransaction() throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
-    public void initTransactions() throws IllegalStateException {}
+    public void initTransactions() throws IllegalStateException {
+        throw new UnsupportedOperationException();
+    }
 
     @Override
     public void sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         final String consumerGroupId) throws ProducerFencedException {}
+                                         final String consumerGroupId) throws ProducerFencedException {
+        throw new UnsupportedOperationException();
+    }
 
 }
