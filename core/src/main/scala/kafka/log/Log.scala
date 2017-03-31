@@ -58,6 +58,7 @@ object LogAppendInfo {
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  * @param producerAppendInfos A map from a Pid to a ProducerAppendInfo, which is used to validate each Record in a
  *                            RecordBatch and keep track of metadata across Records in a RecordBatch.
+ * @param isDuplicate Indicates whether the message set is a duplicate of a message at the tail of the log.
  */
 case class LogAppendInfo(var firstOffset: Long,
                          var lastOffset: Long,
@@ -380,8 +381,9 @@ class Log(@volatile var dir: File,
             // TODO: Currently accessing any of the batch-level headers other than the offset
             // or magic causes us to load the full entry into memory. It would be better if we
             // only loaded the header
+            val numRecords = (batch.lastOffset - batch.baseOffset + 1).toInt
             val pidEntry = ProducerIdEntry(batch.producerEpoch, batch.lastSequence, batch.lastOffset,
-              (batch.lastOffset - batch.baseOffset + 1).toInt, batch.maxTimestamp)
+              numRecords, batch.maxTimestamp)
             pidMap.load(batch.producerId, pidEntry, currentTimeMs)
           }
         }
@@ -429,6 +431,7 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   def append(records: MemoryRecords, assignOffsets: Boolean = true): LogAppendInfo = {
+
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -498,10 +501,7 @@ class Log(@volatile var dir: File,
           maxTimestampInMessages = appendInfo.maxTimestamp,
           maxOffsetInMessages = appendInfo.lastOffset)
 
-
-        // update the first offset if on the first message. For magic versions older than 2, we use the last offset
-        // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
-        // For magic version 2, we can get the first offset directly from the batch header.
+        // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset,
           largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
@@ -511,6 +511,7 @@ class Log(@volatile var dir: File,
         // update the PID sequence mapping
         for ((pid, producerAppendInfo) <- appendInfo.producerAppendInfos) {
           trace(s"Updating pid with sequence: $pid -> ${producerAppendInfo.lastEntry}")
+
           if (assignOffsets)
             producerAppendInfo.assignLastOffsetAndTimestamp(appendInfo.lastOffset, appendInfo.maxTimestamp)
           pidMap.update(producerAppendInfo)
@@ -551,6 +552,7 @@ class Log(@volatile var dir: File,
    * <ol>
    * <li> each message matches its CRC
    * <li> each message size is valid
+   * <li> that the sequence numbers of the incoming record batches are consistent with the existing state and with each other.
    * </ol>
    *
    * Also compute the following quantities:
@@ -576,7 +578,9 @@ class Log(@volatile var dir: File,
     val producerAppendInfos = mutable.Map[Long, ProducerAppendInfo]()
 
     for (batch <- records.batches.asScala) {
-      // update the first offset if on the first message
+      // update the first offset if on the first message. For magic versions older than 2, we use the last offset
+      // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
+      // For magic version 2, we can get the first offset directly from the batch header.
       if (firstOffset < 0)
         firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
 
@@ -618,12 +622,14 @@ class Log(@volatile var dir: File,
           case None =>
             val lastEntry = pidMap.lastEntry(pid).getOrElse(ProducerIdEntry.Empty)
             if (isFromClient && lastEntry.isDuplicate(batch)) {
-              // This request is a duplicate so return the information about the existing entry
+              // This request is a duplicate so return the information about the existing entry. Note that for requests
+              // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
+              // of the loop and the values below will not be updated more than once.
               isDuplicate = true
               firstOffset = lastEntry.firstOffset
               lastOffset = lastEntry.lastOffset
               maxTimestamp = lastEntry.timestamp
-              warn(s"Detected a duplicate at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). Ignoring the incoming record.")
+              info(s"Detected a duplicate at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). Ignoring the incoming record.")
             } else {
               val producerAppendInfo = new ProducerAppendInfo(pid, lastEntry)
               producerAppendInfos.put(pid, producerAppendInfo)

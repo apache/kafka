@@ -189,8 +189,6 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
 
-    public static final int MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DEFAULT = 5;
-
     /** <code>retries</code> */
     public static final String RETRIES_CONFIG = "retries";
     private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error."
@@ -198,7 +196,6 @@ public class ProducerConfig extends AbstractConfig {
                                               + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
                                               + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
                                               + " succeeds, then the records in the second batch may appear first.";
-    public static final int RETRIES_DEFAULT = 0;
 
     /** <code>key.serializer</code> */
     public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
@@ -232,11 +229,12 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. This is set to 'false' by default. "
                                                         + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be set to 1 and "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> cannot be zero.";
+                                                        + "<code>" + RETRIES_CONFIG + "</code> cannot be zero. If these values are left at their defaults, we will override the default to be suitable. "
+                                                        + "If the values are set to something incompatible with the idempotent producer, a ConfigException will be thrown.";
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
-                                .define(RETRIES_CONFIG, Type.INT, RETRIES_DEFAULT, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
+                                .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
                                         "1",
@@ -288,7 +286,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT, 2, atLeast(1), Importance.LOW, CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
                                         Type.INT,
-                                        MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DEFAULT,
+                                        5,
                                         atLeast(1),
                                         Importance.LOW,
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)

@@ -98,8 +98,10 @@ public class TransactionState {
     /**
      * This method is used when the producer needs to reset it's internal state because of an irrecoverable exception
      * from the broker.
-    */
-    public synchronized void reset() {
+     *
+     *
+     */
+    public synchronized void resetProducerId() {
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers.clear();
     }

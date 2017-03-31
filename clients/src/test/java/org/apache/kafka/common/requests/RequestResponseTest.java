@@ -136,9 +136,9 @@ public class RequestResponseTest {
         checkRequest(createDeleteTopicsRequest());
         checkErrorResponse(createDeleteTopicsRequest(), new UnknownServerException());
         checkResponse(createDeleteTopicsResponse(), 0);
-        checkRequest(createInitPIDRequest());
-        checkErrorResponse(createInitPIDRequest(), new UnknownServerException());
-        checkResponse(createInitPIDResponse(), 0);
+        checkRequest(createInitPidRequest());
+        checkErrorResponse(createInitPidRequest(), new UnknownServerException());
+        checkResponse(createInitPidResponse(), 0);
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0);
         checkResponse(createMetadataResponse(), 1);
@@ -790,11 +790,11 @@ public class RequestResponseTest {
         return new DeleteTopicsResponse(errors);
     }
 
-    private InitPidRequest createInitPIDRequest() {
+    private InitPidRequest createInitPidRequest() {
         return new InitPidRequest.Builder(null).build();
     }
 
-    private InitPidResponse createInitPIDResponse() {
+    private InitPidResponse createInitPidResponse() {
         return new InitPidResponse(Errors.NONE, 3332, (short) 3);
     }
 

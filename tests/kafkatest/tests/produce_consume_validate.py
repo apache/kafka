@@ -42,7 +42,7 @@ class ProduceConsumeValidateTest(Test):
         # producer begins producing messages, in which case we will miss the
         # initial set of messages and get spurious test failures.
         self.consumer_init_timeout_sec = 0
-        self.enable_idempotence=False
+        self.enable_idempotence = False
 
     def setup_producer_and_consumer(self):
         raise NotImplementedError("Subclasses should implement this")

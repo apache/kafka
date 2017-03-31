@@ -68,7 +68,7 @@ case class ProducerIdBlock(brokerId: Int, blockStartPid: Long, blockEndPid: Long
 
 class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging {
 
-  this.logIdent = "[PID Manager " + brokerId + "]: "
+  this.logIdent = "[ProducerId Manager " + brokerId + "]: "
 
   private var currentPIDBlock: ProducerIdBlock = null
   private var nextPID: Long = -1L
@@ -80,7 +80,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
   }
 
   private def getNewPidBlock(): Unit = {
-    var zkWriteComplete: Boolean = false
+    var zkWriteComplete = false
     while (!zkWriteComplete) {
       // refresh current pid block from zookeeper again
       val (dataOpt, zkVersion) = zkUtils.readDataAndVersionMaybeNull(ZkUtils.PidBlockPath)

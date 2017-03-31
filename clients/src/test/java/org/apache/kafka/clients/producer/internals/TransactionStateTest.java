@@ -47,4 +47,15 @@ public class TransactionStateTest {
         transactionState.incrementSequenceNumber(topicPartition, 3);
         assertEquals((int) transactionState.sequenceNumber(topicPartition), 3);
     }
+
+
+    @Test
+    public void testProducerIdReset() {
+        TransactionState transactionState = new TransactionState(new MockTime());
+        assertEquals((int) transactionState.sequenceNumber(topicPartition), 0);
+        transactionState.incrementSequenceNumber(topicPartition, 3);
+        assertEquals((int) transactionState.sequenceNumber(topicPartition), 3);
+        transactionState.resetProducerId();
+        assertEquals((int) transactionState.sequenceNumber(topicPartition), 0);
+    }
 }

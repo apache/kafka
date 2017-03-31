@@ -55,7 +55,7 @@ class TransactionCoordinator(val brokerId: Int,
     if (transactionalId == null || transactionalId.isEmpty) {
       // if the transactional id is not specified, then always blindly accept the request
       // and return a new pid from the pid manager
-      val pid: Long = pidManager.nextPid()
+      val pid = pidManager.nextPid()
       responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
     } else {
       // check if it is the assigned coordinator for the transactional id

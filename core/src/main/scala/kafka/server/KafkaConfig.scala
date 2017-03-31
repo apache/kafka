@@ -170,7 +170,7 @@ object Defaults {
 
   val CompressionType = "producer"
 
-  val MaxIdMapSnapshots = 1
+  val MaxIdMapSnapshots = 2
   /** ********* Kafka Metrics Configuration ***********/
   val MetricNumSamples = 2
   val MetricSampleWindowMs = 30000

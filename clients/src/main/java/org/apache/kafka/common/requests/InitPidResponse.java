@@ -24,6 +24,11 @@ import org.apache.kafka.common.record.RecordBatch;
 import java.nio.ByteBuffer;
 
 public class InitPidResponse extends AbstractResponse {
+    /**
+     * Possible Error codes:
+     * OK
+     *
+     */
     private static final String PRODUCER_ID_KEY_NAME = "pid";
     private static final String EPOCH_KEY_NAME = "epoch";
     private static final String ERROR_CODE_KEY_NAME = "error_code";

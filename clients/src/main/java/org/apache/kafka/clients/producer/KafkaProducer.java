@@ -372,22 +372,34 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private static int configureRetries(ProducerConfig config, boolean idempotenceEnabled) {
-        if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
+        boolean userConfiguredRetries = false;
+        if (config.originals().containsKey(ProducerConfig.RETRIES_CONFIG)) {
+            userConfiguredRetries = true;
+        }
+        if (idempotenceEnabled && !userConfiguredRetries) {
+            log.info("Overriding the default retries config to " + 3 + " since the idempotent producer is enabled.");
             return 3;
+        }
+        if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
+            throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
         }
         return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
 
     private static int configureInflightRequests(ProducerConfig config, boolean idempotenceEnabled) {
-        int configuredMaxInflightRequests = config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
-        if (idempotenceEnabled && configuredMaxInflightRequests == ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DEFAULT) {
+        boolean userConfiguredInflights = false;
+        if (config.originals().containsKey(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION)) {
+            userConfiguredInflights = true;
+        }
+        if (idempotenceEnabled && !userConfiguredInflights) {
+            log.info("Overriding the default " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 since idempontence is enabled.");
             return 1;
         }
-        if (idempotenceEnabled && configuredMaxInflightRequests != 1) {
+        if (idempotenceEnabled && config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) != 1) {
             throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 in order" +
                     "to use the idempotent producer. Otherwise we cannot guarantee idempotence.");
         }
-        return configuredMaxInflightRequests;
+        return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
 
     private static int parseAcks(String acksString) {

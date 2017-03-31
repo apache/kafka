@@ -447,7 +447,7 @@ public final class RecordAccumulator {
                                             // the pid and sequence here, this attempt will also be accepted, causing
                                             // a duplicate.
                                             int sequenceNumber = transactionState.sequenceNumber(batch.topicPartition);
-                                            log.debug("Dest: {} : pid: {}, epoch: {}, Assigning sequence for {}: {}",
+                                            log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
                                                     node, pidAndEpoch.producerId, pidAndEpoch.epoch,
                                                     batch.topicPartition, sequenceNumber);
                                             batch.setProducerState(pidAndEpoch, sequenceNumber);

@@ -308,7 +308,7 @@ class LogTest extends JUnitSuite {
 
     log.append(MemoryRecords.readableRecords(buffer), assignOffsets = false)
     // Should throw a duplicate seqeuence exception here.
-    assertFalse("should have thrown a DuplicateSequenceNumberException.", true)
+    fail("should have thrown a DuplicateSequenceNumberException.")
   }
 
   @Test(expected = classOf[ProducerFencedException])

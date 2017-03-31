@@ -593,7 +593,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Return the ProducerId (PID) of the LogEntries created by this builder.
+     * Return the ProducerId (PID) of the RecordBatches created by this builder.
      */
     public long producerId() {
         return this.producerId;

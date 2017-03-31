@@ -42,16 +42,18 @@ private[log] case class ProducerIdEntry(epoch: Short, lastSeq: Int, lastOffset: 
   def isDuplicate(batch: RecordBatch): Boolean = {
     batch.producerEpoch == epoch &&
       batch.baseSequence == firstSeq &&
-      batch.lastSequence() == lastSeq
+      batch.lastSequence == lastSeq
   }
 }
 
 private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEntry) {
+  // the initialEntry here is the last successfull appended batch. we validate incoming entries transitively, starting
+  // with the last appended entry.
   private var epoch = initialEntry.epoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
   private var lastOffset = initialEntry.lastOffset
-  private var lastTimestamp = initialEntry.timestamp
+  private var maxTimestamp = initialEntry.timestamp
 
   private def validateAppend(epoch: Short, firstSeq: Int, lastSeq: Int) = {
     if (this.epoch > epoch) {
@@ -71,7 +73,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
 
   def assignLastOffsetAndTimestamp(lastOffset: Long, lastTimestamp: Long): Unit = {
     this.lastOffset = lastOffset
-    this.lastTimestamp = lastTimestamp
+    this.maxTimestamp = lastTimestamp
   }
 
   private def append(epoch: Short, firstSeq: Int, lastSeq: Int, lastTimestamp: Long, lastOffset: Long) {
@@ -79,7 +81,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     this.epoch = epoch
     this.firstSeq = firstSeq
     this.lastSeq = lastSeq
-    this.lastTimestamp = lastTimestamp
+    this.maxTimestamp = lastTimestamp
     this.lastOffset = lastOffset
   }
 
@@ -90,7 +92,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     append(entry.epoch, entry.firstSeq, entry.lastSeq, entry.timestamp, entry.lastOffset)
 
   def lastEntry: ProducerIdEntry =
-    ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq + 1, lastTimestamp)
+    ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq + 1, maxTimestamp)
 }
 
 private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
@@ -114,6 +116,8 @@ object ProducerIdMapping {
   private val VersionOffset = 0
   private val CrcOffset = VersionOffset + 2
   private val PidEntriesOffset = CrcOffset + 4
+
+  private val maxPidSnapshotsToRetain = 2
 
   val PidSnapshotEntrySchema = new Schema(
     new Field(PidField, Type.INT64, "The producer ID"),
@@ -342,7 +346,7 @@ class ProducerIdMapping(val config: LogConfig,
 
   private def maybeRemove() {
     val list = listSnapshotFiles()
-    if (list.size > config.maxIdMapSnapshots) {
+    if (list.size > maxPidSnapshotsToRetain) {
       // Get file with the smallest offset
       val toDelete = list.minBy(offsetFromFile)
       // Delete the last

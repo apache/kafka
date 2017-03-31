@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -49,6 +50,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -386,7 +388,8 @@ public class SenderTest {
         }, new InitPidResponse(Errors.NONE, producerId, (short) 0));
         sender.run(time.milliseconds());
         assertTrue(transactionState.hasPid());
-        assertEquals(transactionState.pidAndEpoch().producerId, producerId);
+        assertEquals(producerId, transactionState.pidAndEpoch().producerId);
+        assertEquals((short) 0, transactionState.pidAndEpoch().epoch);
     }
 
     @Test
@@ -415,22 +418,35 @@ public class SenderTest {
         );
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                if (body instanceof ProduceRequest) {
+                    ProduceRequest request = (ProduceRequest) body;
+                    MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+                    Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
+                    assertTrue(batchIterator.hasNext());
+                    RecordBatch batch = batchIterator.next();
+                    assertFalse(batchIterator.hasNext());
+                    assertEquals(0, batch.baseSequence());
+                    assertEquals(producerId, batch.producerId());
+                    assertEquals(0, batch.producerEpoch());
+                    return true;
+                }
+                return false;
+            }
+        }, produceResponse(tp0, 0, Errors.NONE, 0));
+
         sender.run(time.milliseconds());  // connect.
         sender.run(time.milliseconds());  // send.
 
-        assertEquals(1, client.inFlightRequestCount());
-        assertEquals("Expected no sequence number before receiving a response", (long) transactionState.sequenceNumber(tp0), 0L);
-
-        client.respond(produceResponse(tp0, 0, Errors.NONE, 0));
-
-        sender.run(time.milliseconds());
+        sender.run(time.milliseconds());  // receive response
         assertTrue(responseFuture.isDone());
         assertEquals((long) transactionState.sequenceNumber(tp0), 1L);
-
     }
 
     @Test
-    public void testAbortWhenPidChanges() throws InterruptedException {
+    public void testAbortRetryWhenPidChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionState transactionState = new TransactionState(new MockTime());
         transactionState.setPidAndEpoch(producerId, (short) 0);

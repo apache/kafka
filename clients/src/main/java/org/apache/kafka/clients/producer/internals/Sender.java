@@ -239,7 +239,7 @@ public class Sender implements Runnable {
         }
 
         if (needsTransactionStateReset) {
-            transactionState.reset();
+            transactionState.resetProducerId();
             return;
         }
 
@@ -318,7 +318,7 @@ public class Sender implements Runnable {
                             "We will back off and try again.");
                 }
             } catch (Exception e) {
-                log.warn("Received an exception {} while trying to get a pid. Will back off and retry.", e);
+                log.warn("Received an exception while trying to get a pid. Will back off and retry.", e);
             }
             log.trace("Retry InitPidRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
@@ -382,18 +382,16 @@ public class Sender implements Runnable {
                         error);
                 if (transactionState == null) {
                     reenqueueBatch(batch, now);
+                } else if (transactionState.pidAndEpoch().producerId == batch.producerId()) {
+                    // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
+                    log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
+                            transactionState.sequenceNumber(batch.topicPartition));
+                    reenqueueBatch(batch, now);
                 } else {
-                    if (transactionState.pidAndEpoch().producerId == batch.producerId()) {
-                        // If idempotence is enabled only retry the request if the current PID is the same as the pid of the
-                        // batch.
-                        log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
-                                transactionState.sequenceNumber(batch.topicPartition));
-                        reenqueueBatch(batch, now);
-                    } else {
-                        failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
-                                "batch but the producer id has changed in the meantime. This batch will be dropped."));
-                        this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
-                    }
+                    failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
+                            "batch but the producer id changed from " + batch.producerId() + " to " +
+                            transactionState.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                    this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
                 final RuntimeException exception;
@@ -446,7 +444,7 @@ public class Sender implements Runnable {
             // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
-            transactionState.reset();
+            transactionState.resetProducerId();
         }
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);

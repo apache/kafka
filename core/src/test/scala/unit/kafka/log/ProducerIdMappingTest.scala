@@ -41,7 +41,6 @@ class ProducerIdMappingTest extends JUnitSuite {
   def setUp(): Unit = {
     // Create configuration including number of snapshots to hold
     val props = new Properties()
-    props.setProperty(LogConfig.MaxIdMapSnapshotsProp, "1")
     config = LogConfig(props)
 
     // Create temporary directory

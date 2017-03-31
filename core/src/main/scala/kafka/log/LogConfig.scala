@@ -90,9 +90,6 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
 
-  /** ********* Id mapping snapshots configuration **************/
-  val maxIdMapSnapshots = getInt(LogConfig.MaxIdMapSnapshotsProp)
-
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
 }
@@ -130,9 +127,6 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsProp = "message.timestamp.difference.max.ms"
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
-
-  /** ********* Id mapping snapshots ****************/
-  val MaxIdMapSnapshotsProp = "max.id.map.snapshots"
 
   val SegmentSizeDoc = "This configuration controls the segment file size for " +
     "the log. Retention and cleaning is always done a file at a time so a larger " +
@@ -207,10 +201,6 @@ object LogConfig {
     "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
   val FollowerReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on the follower side. The list should describe a set of " +
     "replicas in the form [PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle all replicas for this topic."
-
-  /** ********* Id mapping snapshots ***********/
-  val MaxIdMapSnapshotsDoc = "Sets the maximum number of id mapping snapshots to keep. Id mapping snapshots are used to recover the mapping " +
-    "upon restarts."
 
   private class LogConfigDef extends ConfigDef {
 
@@ -306,9 +296,6 @@ object LogConfig {
         LeaderReplicationThrottledReplicasDoc, LeaderReplicationThrottledReplicasProp)
       .define(FollowerReplicationThrottledReplicasProp, LIST, Defaults.FollowerReplicationThrottledReplicas, ThrottledReplicaListValidator, MEDIUM,
         FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
-      /** ********* Id mapping snapshots configuration ***********/
-      .define(MaxIdMapSnapshotsProp, INT, Defaults.MaxIdMapSnapshots, atLeast(1), MEDIUM, MaxIdMapSnapshotsDoc,
-        KafkaConfig.LogMaxIdMapSnapshotsProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
