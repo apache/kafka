@@ -45,6 +45,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -149,7 +150,7 @@ public class StandbyTaskTest {
     }
 
     @After
-    public void cleanup() {
+    public void cleanup() throws IOException {
         Utils.delete(baseDir);
     }
 

@@ -132,7 +132,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @After
-    public void cleanUp() {
+    public void cleanUp() throws IOException {
         Utils.delete(stateDir);
     }
     

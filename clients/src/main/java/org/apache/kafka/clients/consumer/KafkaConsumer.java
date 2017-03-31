@@ -1567,6 +1567,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
         }
+        ClientUtils.closeQuietly(fetcher, "fetcher", firstException);
         ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);

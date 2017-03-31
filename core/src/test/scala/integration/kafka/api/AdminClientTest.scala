@@ -177,8 +177,6 @@ class AdminClientTest extends IntegrationTestHarness with Logging {
     assertEquals(DeleteRecordsResult(5L, null), client.deleteRecordsBefore(Map((tp, 5L))).get()(tp))
     // OffsetOutOfRangeException if offset > high_watermark
     assertEquals(DeleteRecordsResult(-1L, Errors.OFFSET_OUT_OF_RANGE.exception()), client.deleteRecordsBefore(Map((tp, 20))).get()(tp))
-    // TimeoutException if response is not available within user-specified timeout
-    assertEquals(DeleteRecordsResult(-1L, Errors.REQUEST_TIMED_OUT.exception()), client.deleteRecordsBefore(Map((tp, 5L))).get(0, TimeUnit.MILLISECONDS)(tp))
 
     val nonExistPartition = new TopicPartition(topic, 3)
     // UnknownTopicOrPartitionException if user tries to delete records of a non-existent partition

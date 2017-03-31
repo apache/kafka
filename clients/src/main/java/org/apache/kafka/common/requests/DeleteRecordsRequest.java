@@ -22,7 +22,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
-import org.apache.kafka.common.utils.Utils;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -68,7 +67,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
             StringBuilder builder = new StringBuilder();
             builder.append("(type=DeleteRecordsRequest")
                    .append(", timeout=").append(timeout)
-                   .append(", partitionOffsets=(").append(Utils.mkString(partitionOffsets))
+                   .append(", partitionOffsets=(").append(partitionOffsets)
                    .append("))");
             return builder.toString();
         }

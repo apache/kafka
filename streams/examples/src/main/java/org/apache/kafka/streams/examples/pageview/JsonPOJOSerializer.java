@@ -31,8 +31,7 @@ public class JsonPOJOSerializer<T> implements Serializer<T> {
      */
     public JsonPOJOSerializer() {
     }
-
-    @SuppressWarnings("unchecked")
+    
     @Override
     public void configure(Map<String, ?> props, boolean isKey) {
     }

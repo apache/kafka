@@ -21,7 +21,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -137,7 +136,7 @@ public class FetchRequest extends AbstractRequest {
         @Override
         public FetchRequest build(short version) {
             if (version < 3) {
-                maxBytes = -1;
+                maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
             }
 
             return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData);
@@ -151,7 +150,7 @@ public class FetchRequest extends AbstractRequest {
                     append(", maxWait=").append(maxWait).
                     append(", minBytes=").append(minBytes).
                     append(", maxBytes=").append(maxBytes).
-                    append(", fetchData=").append(Utils.mkString(fetchData)).
+                    append(", fetchData=").append(fetchData).
                     append(")");
             return bld.toString();
         }

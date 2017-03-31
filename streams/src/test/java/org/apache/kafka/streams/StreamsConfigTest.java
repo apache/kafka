@@ -83,7 +83,7 @@ public class StreamsConfigTest {
 
     @Test
     public void defaultSerdeShouldBeConfigured() {
-        Map<String, Object> serializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", "UTF8");
         serializerConfigs.put("value.serializer.encoding", "UTF-16");
         Serializer<String> serializer = Serdes.String().serializer();
@@ -103,7 +103,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSupportMultipleBootstrapServers() {
         List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
-        String bootstrapServersString = Utils.mkString(expectedBootstrapServers, ",").toString();
+        String bootstrapServersString = Utils.join(expectedBootstrapServers, ",");
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "irrelevant");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);

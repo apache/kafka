@@ -20,7 +20,6 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -88,8 +87,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             StringBuilder bld = new StringBuilder();
             bld.append("(numPartitions=").append(numPartitions).
                     append(", replicationFactor=").append(replicationFactor).
-                    append(", replicasAssignments=").append(Utils.mkString(replicasAssignments)).
-                    append(", configs=").append(Utils.mkString(configs)).
+                    append(", replicasAssignments=").append(replicasAssignments).
+                    append(", configs=").append(configs).
                     append(")");
             return bld.toString();
         }
@@ -123,7 +122,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=CreateTopicsRequest").
-                append(", topics=").append(Utils.mkString(topics)).
+                append(", topics=").append(topics).
                 append(", timeout=").append(timeout).
                 append(", validateOnly=").append(validateOnly).
                 append(")");

@@ -19,12 +19,16 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Crc32C;
 
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -199,7 +203,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private Iterator<Record> compressedIterator() {
+    private CloseableIterator<Record> compressedIterator() {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
@@ -214,10 +218,19 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                     throw new KafkaException("Failed to decompress record stream", e);
                 }
             }
+
+            @Override
+            public void close() {
+                try {
+                    stream.close();
+                } catch (IOException e) {
+                    throw new KafkaException("Failed to close record stream", e);
+                }
+            }
         };
     }
 
-    private Iterator<Record> uncompressedIterator() {
+    private CloseableIterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         return new RecordIterator() {
@@ -225,11 +238,30 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             protected Record readNext(long baseOffset, long baseTimestamp, int baseSequence, Long logAppendTime) {
                 return DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, logAppendTime);
             }
+            @Override
+            public void close() {}
         };
     }
 
     @Override
     public Iterator<Record> iterator() {
+        if (!isCompressed())
+            return uncompressedIterator();
+
+        // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
+        // so we decompress the full record set here. Use cases which call for a lower memory footprint
+        // can use `streamingIterator` at the cost of additional complexity
+        try (CloseableIterator<Record> iterator = compressedIterator()) {
+            List<Record> records = new ArrayList<>(count());
+            while (iterator.hasNext())
+                records.add(iterator.next());
+            return records.iterator();
+        }
+    }
+
+
+    @Override
+    public CloseableIterator<Record> streamingIterator() {
         if (isCompressed())
             return compressedIterator();
         else
@@ -348,7 +380,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public String toString() {
-        return "RecordBatch(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
+        return "RecordBatch(magic=" + magic() + ", offsets=[" + baseOffset() + ", " + lastOffset() + "], " +
+                "compression=" + compressionType() + ", timestampType=" + timestampType() + ", crc=" + checksum() + ")";
     }
 
     public static int sizeInBytes(long baseOffset, Iterable<Record> records) {
@@ -396,7 +429,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
-    private abstract class RecordIterator implements Iterator<Record> {
+    private abstract class RecordIterator implements CloseableIterator<Record> {
         private final Long logAppendTime;
         private final long baseOffset;
         private final long baseTimestamp;
@@ -423,6 +456,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         @Override
         public Record next() {
+            if (readRecords >= numRecords)
+                throw new NoSuchElementException();
+
             readRecords++;
             return readNext(baseOffset, baseTimestamp, baseSequence, logAppendTime);
         }
@@ -433,5 +469,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         public void remove() {
             throw new UnsupportedOperationException();
         }
+
     }
 }
