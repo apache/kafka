@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -49,7 +50,7 @@ public final class ProducerBatch {
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
 
-    private volatile int attempts;
+    private final AtomicInteger attempts = new AtomicInteger(0);
     int recordCount;
     int maxRecordSize;
     private long lastAttemptMs;
@@ -181,11 +182,11 @@ public final class ProducerBatch {
     }
 
     int attempts() {
-        return attempts;
+        return attempts.get();
     }
 
     void reenqueued(long now) {
-        attempts++;
+        attempts.getAndIncrement();
         lastAttemptMs = Math.max(lastAppendTime, now);
         lastAppendTime = Math.max(lastAppendTime, now);
         retry = true;
