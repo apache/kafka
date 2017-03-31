@@ -570,8 +570,7 @@ public class StreamThread extends Thread {
 
     private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
         final String topic = partition.topic();
-        if (!loggedTopics.contains(topic)) {
-            loggedTopics.add(topic);
+        if (loggedTopics.add(topic)) {
             log.info(String.format(logMessage, getName(), topic, resetPolicy));
         }
         partitions.add(partition);
