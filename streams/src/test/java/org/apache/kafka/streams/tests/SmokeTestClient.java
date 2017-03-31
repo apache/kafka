@@ -90,7 +90,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     private static KafkaStreams createKafkaStreams(File stateDir, String kafka) {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);

@@ -64,8 +64,10 @@ public class InternalTopicManager {
                 final Map<String, Integer> existingTopicPartitions = fetchExistingPartitionCountByTopic(metadata);
                 final Map<InternalTopicConfig, Integer> topicsToBeCreated = validateTopicPartitions(topics, existingTopicPartitions);
                 if (metadata.brokers().size() < replicationFactor) {
-                    throw new StreamsException("Not enough brokers " + metadata.brokers().size() +
-                        " for replication factor " + replicationFactor);
+                    throw new StreamsException("Found only " + metadata.brokers().size() + " brokers, " +
+                        " but replication factor is " + replicationFactor + "." +
+                        " Decrease replication factor for internal topics via StreamsConfig parameter \"replication.factor\""  +
+                        " or add more brokers to your cluster.");
                 }
                 streamsKafkaClient.createTopics(topicsToBeCreated, replicationFactor, windowChangeLogAdditionalRetention, metadata);
                 return;

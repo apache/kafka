@@ -198,7 +198,7 @@ public class StreamThread extends Thread {
     private final Set<TaskId> prevActiveTasks;
     private final Map<TaskId, StreamTask> suspendedTasks;
     private final Map<TaskId, StandbyTask> suspendedStandbyTasks;
-    public final Time time;
+    private final Time time;
     private final int rebalanceTimeoutMs;
     private final long pollTimeMs;
     private final long cleanTimeMs;
@@ -310,6 +310,7 @@ public class StreamThread extends Thread {
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
         this.partitionAssignor = partitionAssignor;
+        this.partitionAssignor.time(this.time);
     }
 
     /**
