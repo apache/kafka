@@ -28,7 +28,9 @@ import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.{FileRecords, SimpleRecord, MemoryRecords}
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.mutable
@@ -41,7 +43,7 @@ object TransactionManager {
   val DefaultTransactionsMaxTimeoutMs = 900000 // 15 min
 }
 
-/*
+/**
  * Transaction manager is part of the transaction coordinator, it manages:
  *
  * 1. the transaction log, which is a special internal topic.
@@ -57,23 +59,23 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
 
-  /* number of partitions for the transaction log topic */
-  private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
+  /** shutting down flag */
+  private val shuttingDown = new AtomicBoolean(false)
 
-  /* lock protecting access to loading and owned partition sets */
+  /** lock protecting access to loading and owned partition sets */
   private val partitionLock = new ReentrantLock()
 
-  /* partitions of transaction topic that are assigned to this manager, partition lock should be called BEFORE accessing this set */
+  /** partitions of transaction topic that are assigned to this manager, partition lock should be called BEFORE accessing this set */
   private val ownedPartitions: mutable.Set[Int] = mutable.Set()
 
-  /* partitions of transaction topic that are being loaded, partition lock should be called BEFORE accessing this set */
+  /** partitions of transaction topic that are being loaded, partition lock should be called BEFORE accessing this set */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
-  /* transaction metadata cache indexed by transactional id */
+  /** transaction metadata cache indexed by transactional id */
   private val transactionMetadataCache = new Pool[String, TransactionMetadata]
 
-  /* shutting down flag */
-  private val shuttingDown = new AtomicBoolean(false)
+  /** number of partitions for the transaction log topic */
+  private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
   def enablePidExpiration() {
     scheduler.startup()
@@ -82,15 +84,15 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-    * Get the transaction metadata associated with the given transactionalId, or null if not found
-    */
+   * Get the transaction metadata associated with the given transactional id, or null if not found
+   */
   def getTransaction(transactionalId: String): Option[TransactionMetadata] = {
     Option(transactionMetadataCache.get(transactionalId))
   }
 
   /**
-    * Add a new transaction metadata, or retrieve the metadata if it already exists with the associated transactional id
-    */
+   * Add a new transaction metadata, or retrieve the metadata if it already exists with the associated transactional id
+   */
   def addTransaction(transactionalId: String, txnMetadata: TransactionMetadata): TransactionMetadata = {
     val currentTxnMetadata = transactionMetadataCache.putIfNotExists(transactionalId, txnMetadata)
     if (currentTxnMetadata != null) {
@@ -101,8 +103,8 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-    * Validate the given pid metadata
-    */
+   * Validate the given transaction timeout value
+   */
   def validateTransactionTimeoutMs(txnTimeoutMs: Int): Boolean =
     txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0
 
@@ -136,9 +138,9 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-    * Gets the partition count of the transaction log topic from ZooKeeper.
-    * If the topic does not exist, the default partition count is returned.
-    */
+   * Gets the partition count of the transaction log topic from ZooKeeper.
+   * If the topic does not exist, the default partition count is returned.
+   */
   private def getTransactionTopicPartitionCount: Int = {
     zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName).getOrElse(config.transactionLogNumPartitions)
   }
@@ -219,9 +221,9 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-    * When this broker becomes a leader for a transaction log partition, load this partition and
-    * populate the transaction metadata cache with the transactional ids.
-    */
+   * When this broker becomes a leader for a transaction log partition, load this partition and
+   * populate the transaction metadata cache with the transactional ids.
+   */
   def loadTransactionsForPartition(partition: Int) {
     validateTransactionTopicPartitionCountIsStable()
 
@@ -257,9 +259,9 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-    * When this broker becomes a follower for a transaction log partition, clear out the cache for corresponding transactional ids
-    * that belong to that partition.
-    */
+   * When this broker becomes a follower for a transaction log partition, clear out the cache for corresponding transactional ids
+   * that belong to that partition.
+   */
   def removeTransactionsForPartition(partition: Int) {
     validateTransactionTopicPartitionCountIsStable()
 
@@ -299,6 +301,112 @@ class TransactionStateManager(brokerId: Int,
     val curTransactionTopicPartitionCount = getTransactionTopicPartitionCount
     if (transactionTopicPartitionCount != curTransactionTopicPartitionCount)
       throw new KafkaException(s"Transaction topic number of partitions has changed from $transactionTopicPartitionCount to $curTransactionTopicPartitionCount")
+  }
+
+  def appendTransactionToLog(transactionalId: String,
+                             txnMetadata: TransactionMetadata,
+                             responseCallback: Errors => Unit) {
+
+    // generate the message for this transaction metadata
+    val keyBytes = TransactionLog.keyToBytes(transactionalId)
+    val valueBytes = TransactionLog.valueToBytes(txnMetadata)
+    val timestamp = time.milliseconds()
+
+    val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
+
+    val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partitionFor(transactionalId))
+    val recordsPerPartition = Map(topicPartition -> records)
+
+    // set the callback function to update transaction status in cache after log append completed
+    def updateCacheCallback(responseStatus: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+      // the append response should only contain the topics partition
+      if (responseStatus.size != 1 || !responseStatus.contains(topicPartition))
+        throw new IllegalStateException("Append status %s should only have one partition %s"
+          .format(responseStatus, topicPartition))
+
+      val status = responseStatus(topicPartition)
+
+      var responseError = if (status.error == Errors.NONE) {
+        Errors.NONE
+      } else {
+        debug(s"Transaction state update $txnMetadata for $transactionalId failed when appending to log " +
+          s"due to ${status.error.exceptionName}")
+
+        // transform the log append error code to the corresponding coordinator error code
+        status.error match {
+          case Errors.UNKNOWN_TOPIC_OR_PARTITION
+               | Errors.NOT_ENOUGH_REPLICAS
+               | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND
+               | Errors.REQUEST_TIMED_OUT => // note that for timed out request we return NOT_AVAILABLE error code to let client retry
+
+            debug(s"Appending transaction message $txnMetadata for $transactionalId failed due to " +
+              s"${status.error.exceptionName}, returning ${Errors.COORDINATOR_NOT_AVAILABLE} to the client")
+
+            Errors.COORDINATOR_NOT_AVAILABLE
+
+          case Errors.NOT_LEADER_FOR_PARTITION =>
+
+            debug(s"Appending transaction message $txnMetadata for $transactionalId failed due to " +
+              s"${status.error.exceptionName}, returning ${Errors.NOT_COORDINATOR} to the client")
+
+            Errors.NOT_COORDINATOR
+
+          case Errors.MESSAGE_TOO_LARGE
+               | Errors.RECORD_LIST_TOO_LARGE
+               | Errors.INVALID_FETCH_SIZE =>
+
+            error(s"Appending transaction message $txnMetadata for $transactionalId failed due to " +
+              s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
+
+            Errors.UNKNOWN
+
+          case other =>
+            error(s"Appending metadata message $txnMetadata for $transactionalId failed due to " +
+              s"unexpected error: ${status.error.message}")
+
+            other
+        }
+      }
+
+      if (responseError != Errors.NONE) {
+        debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
+          s"has been appended to the log since the metadata does not match anymore.")
+      } else {
+        // now try to update the cache: we need to update the status in-place instead of
+        // overwriting the whole object to ensure synchronization
+        getTransaction(transactionalId) match {
+          case Some(metadata) =>
+            metadata synchronized {
+              if (metadata.pid == txnMetadata.pid &&
+                metadata.epoch == txnMetadata.epoch &&
+                metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
+                metadata.completeTransitionTo(txnMetadata.state)) {
+                // only topic-partition lists could possibly change (state should have transited in the above condition)
+                metadata.addPartitions(txnMetadata.topicPartitions.toSet)
+              } else {
+                throw new IllegalStateException(s"Completing transaction state transition to $txnMetadata while its current state is $metadata.")
+              }
+            }
+
+          case None =>
+            // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
+            // return NOT_COORDINATOR to let the client retry
+            debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
+              s"has been appended to the log since there is no metadata in the cache anymore.")
+
+            responseError = Errors.NOT_COORDINATOR
+        }
+      }
+
+      responseCallback(responseError)
+    }
+
+    replicaManager.appendRecords(
+      txnMetadata.txnTimeoutMs.toLong,     // use the txn timeout value as the timeout for append
+      TransactionLog.EnforcedRequiredAcks,
+      internalTopicsAllowed = true,        // allow appending to internal offset topic
+      recordsPerPartition,
+      updateCacheCallback)
   }
 
   def shutdown() {

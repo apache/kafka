@@ -73,6 +73,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
+  def close() {
+    quotas.shutdown()
+    info("Shutdown complete.")
+  }
+
   /**
    * Top-level method that handles all requests and multiplexes to the right api
    */
@@ -1203,11 +1208,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new RequestChannel.Response(request, responseSend))
   }
 
-  def close() {
-    quotas.shutdown()
-    info("Shutdown complete.")
-  }
-
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
     val createTopicsRequest = request.body[CreateTopicsRequest]
 
@@ -1346,30 +1346,64 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleInitPidRequest(request: RequestChannel.Request): Unit = {
     val initPidRequest = request.body[InitPidRequest]
+    val transactionalId = initPidRequest.transactionalId
+
     // Send response callback
     def sendResponseCallback(result: InitPidResult): Unit = {
       val responseBody: InitPidResponse = new InitPidResponse(result.error, result.pid, result.epoch)
-      trace(s"InitPidRequest : Generated new PID ${result.pid} from InitPidRequest from client ${request.header.clientId}")
+      trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
-    txnCoordinator.handleInitPid(initPidRequest.transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+    txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
   }
 
-  def handleEndTxnRequest(request: Request): Unit = {
+  def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
     requestChannel.sendResponse(new RequestChannel.Response(request, new EndTxnResponse(Errors.UNSUPPORTED_VERSION)))
   }
 
-  def handleAddPartitionToTxnRequest(request: Request): Unit = {
-    requestChannel.sendResponse(new RequestChannel.Response(request, new AddPartitionsToTxnResponse(Errors.UNSUPPORTED_VERSION)))
-  }
-
-  def handleAddOffsetsToTxnRequest(request: Request): Unit = {
-    requestChannel.sendResponse(new RequestChannel.Response(request, new AddOffsetsToTxnResponse(Errors.UNSUPPORTED_VERSION)))
-  }
-
-  def handleWriteTxnMarkersRequest(request: Request): Unit = {
+  def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
     val emptyResponse = new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
     requestChannel.sendResponse(new RequestChannel.Response(request, new WriteTxnMarkersResponse(emptyResponse)))
+  }
+
+
+  def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {
+    val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
+    val transactionalId = addPartitionsToTxnRequest.transactionalId
+    val partitionsToAdd = addPartitionsToTxnRequest.partitions
+
+    // Send response callback
+    def sendResponseCallback(error: Errors): Unit = {
+      val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(error)
+      trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: $error from client ${request.header.clientId}")
+      requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
+    }
+
+    txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+      addPartitionsToTxnRequest.pid,
+      addPartitionsToTxnRequest.epoch,
+      partitionsToAdd.asScala.toSet,
+      sendResponseCallback)
+  }
+
+  def handleAddOffsetsToTxnRequest(request: RequestChannel.Request): Unit = {
+    val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
+    val transactionalId = addOffsetsToTxnRequest.transactionalId
+    val groupId = addOffsetsToTxnRequest.consumerGroupId
+    val offsetTopicPartition = new TopicPartition(GroupMetadataTopicName, groupCoordinator.partitionFor(groupId))
+
+    // Send response callback
+    def sendResponseCallback(error: Errors): Unit = {
+      val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(error)
+      trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: $error from client ${request.header.clientId}")
+      requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
+    }
+
+    txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+      addOffsetsToTxnRequest.pid,
+      addOffsetsToTxnRequest.epoch,
+      Set[TopicPartition](offsetTopicPartition),
+      sendResponseCallback)
   }
 
   def handleTxnOffsetCommitRequest(request: Request): Unit = {
