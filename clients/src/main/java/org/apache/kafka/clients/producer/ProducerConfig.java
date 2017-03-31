@@ -224,6 +224,29 @@ public class ProducerConfig extends AbstractConfig {
                                                         + "Implementing the <code>ProducerInterceptor</code> interface allows you to intercept (and possibly mutate) the records "
                                                         + "received by the producer before they are published to the Kafka cluster. By default, there are no interceptors.";
 
+    /** <code>enable.idempotence</code> */
+    public static final String ENABLE_IDEMPOTENCE_CONFIG = "enable.idempotence";
+    public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream."
+                                                       + " If 'false', producer retries due to broker failures, etc., may write duplicates of the retried message in the stream."
+                                                       + " This is set to 'false' by default."
+                                                       + " Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be set to 1 and <code>" + RETRIES_CONFIG + "</code> cannot be zero.";
+
+    /** <code>transaction.timeout.ms</code> */
+    public static final String TRANSACTION_TIMEOUT_MS_CONFIG = "transaction.timeout.ms";
+    public static final String TRANSACTION_TIMEOUT_MS_DOC = "The maximum amount of time in ms that the transaction coordinator will wait for a transaction status update from the producer before proactively aborting the ongoing transaction."
+                                                           + " This config value will be sent when calling <code>initTransactions()</code>."
+                                                           + " If this value is larger than the <code>max.transaction.timeout.ms</code> setting in the broker, the request will fail with a `InvalidTransactionTimeout` error."
+                                                           + " Default is 60000."
+                                                           + " This makes a transaction to not block downstream consumption more than a minute, which is generally allowable in real-time apps.";
+
+    /** <code>transactional.id</code> */
+    public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
+    public static final String TRANSACTIONAL_ID_DOC = "The transactional id to use for transactional delivery."
+                                                     + " This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same transactional id have been completed prior to starting any new transactions."
+                                                     + " If no transactional id is provided, then the producer is limited to idempotent delivery."
+                                                     + " Note that <code>" + ENABLE_IDEMPOTENCE_CONFIG + "</code> must be enabled if a transactional id is configured."
+                                                     + " The default is empty, which means transactions cannot be used.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
