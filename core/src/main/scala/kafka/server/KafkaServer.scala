@@ -218,8 +218,15 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager = createReplicaManager(isShuttingDown)
         replicaManager.startup()
 
+        /* Get the authorizer and initialize it if one is specified.*/
+        authorizer = Option(config.authorizerClassName).filter(_.nonEmpty).map { authorizerClassName =>
+          val authZ = CoreUtils.createObject[Authorizer](authorizerClassName)
+          authZ.configure(config.originals())
+          authZ
+        }
+
         /* start kafka controller */
-        kafkaController = new KafkaController(config, zkUtils, brokerState, time, metrics, threadNamePrefix)
+        kafkaController = new KafkaController(config, zkUtils, brokerState, time, metrics, threadNamePrefix, authorizer)
         kafkaController.startup()
 
         adminManager = new AdminManager(config, metrics, metadataCache, zkUtils)
@@ -229,12 +236,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         groupCoordinator = GroupCoordinator(config, zkUtils, replicaManager, Time.SYSTEM)
         groupCoordinator.startup()
 
-        /* Get the authorizer and initialize it if one is specified.*/
-        authorizer = Option(config.authorizerClassName).filter(_.nonEmpty).map { authorizerClassName =>
-          val authZ = CoreUtils.createObject[Authorizer](authorizerClassName)
-          authZ.configure(config.originals())
-          authZ
-        }
 
         /* start processing requests */
         apis = new KafkaApis(socketServer.requestChannel, replicaManager, adminManager, groupCoordinator,

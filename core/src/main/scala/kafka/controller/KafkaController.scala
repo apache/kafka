@@ -43,6 +43,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.server._
 import kafka.common.TopicAndPartition
+import kafka.security.auth.Authorizer
 
 class ControllerContext(val zkUtils: ZkUtils) {
   var controllerChannelManager: ControllerChannelManager = null
@@ -150,7 +151,12 @@ object KafkaController extends Logging {
   }
 }
 
-class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState: BrokerState, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+class KafkaController(val config: KafkaConfig,
+                      zkUtils: ZkUtils,
+                      val brokerState: BrokerState,
+                      time: Time, metrics: Metrics,
+                      threadNamePrefix: Option[String] = None,
+                      authorizer: Option[Authorizer]) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private var isRunning = true
   private val stateChangeLogger = KafkaController.stateChangeLogger
@@ -803,7 +809,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     info("List of topics to be deleted: %s".format(topicsQueuedForDeletion.mkString(",")))
     info("List of topics ineligible for deletion: %s".format(topicsIneligibleForDeletion.mkString(",")))
     // initialize the topic deletion manager
-    deleteTopicManager = new TopicDeletionManager(this, topicsQueuedForDeletion, topicsIneligibleForDeletion)
+    deleteTopicManager = new TopicDeletionManager(this, topicsQueuedForDeletion, topicsIneligibleForDeletion, authorizer)
   }
 
   private def maybeTriggerPartitionReassignment() {
