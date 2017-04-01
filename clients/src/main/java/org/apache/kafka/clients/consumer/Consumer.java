@@ -56,6 +56,16 @@ public interface Consumer<K, V> extends Closeable {
     public void subscribe(Collection<String> topics, ConsumerRebalanceListener callback);
 
     /**
+     * @see KafkaConsumer#subscribe(String, ConsumerRebalanceListener)
+     */
+    public void subscribe(String topic, ConsumerRebalanceListener listener);
+
+    /**
+     * @see KafkaConsumer#subscribe(String)
+     */
+    public void subscribe(String topic);
+
+    /**
      * @see KafkaConsumer#assign(Collection)
      */
     public void assign(Collection<TopicPartition> partitions);

@@ -861,6 +861,59 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Subscribe to the giventopic to get dynamically assigned partitions.
+     * <b>Topic subscriptions are not incremental. This list will replace the current assignment (if there is one).</b>
+     * Note that it is not possible to combine topic subscription with group management
+     * with manual partition assignment through {@link #assign(Collection)}.
+     *
+     * <p>
+     * As part of group management, the consumer will keep track of the list of consumers that belong to a particular
+     * group and will trigger a rebalance operation if one of the following events trigger -
+     * <ul>
+     * <li>Number of partitions change for any of the subscribed list of topics
+     * <li>Topic is created or deleted
+     * <li>An existing member of the consumer group dies
+     * <li>A new member is added to an existing consumer group via the join API
+     * </ul>
+     * <p>
+     * When any of these events are triggered, the provided listener will be invoked first to indicate that
+     * the consumer's assignment has been revoked, and then again when the new assignment has been received.
+     * Note that this listener will immediately override any listener set in a previous call to subscribe.
+     * It is guaranteed, however, that the partitions revoked/assigned through this interface are from topics
+     * subscribed in this call. See {@link ConsumerRebalanceListener} for more details.
+     *
+     * @param topic The topic to subscribe to
+     * @param listener Non-null listener instance to get notifications on partition assignment/revocation for the
+     *                 subscribed topics
+     * @throws IllegalArgumentException If topic is null or empty
+     */
+    @Override
+    public void subscribe(String topic, ConsumerRebalanceListener listener) {
+        subscribe(Collections.singleton(topic), listener);
+    }
+
+    /**
+     * Subscribe to the given topic to get dynamically assigned partitions.
+     * <b>Topic subscriptions are not incremental. This list will replace the current assignment (if there is one).</b>
+     * It is not possible to combine topic subscription with group management
+     * with manual partition assignment through {@link #assign(Collection)}.
+     *
+     * <p>
+     * This is a short-hand for {@link #subscribe(String, ConsumerRebalanceListener)}, which
+     * uses a noop listener. If you need the ability to seek to particular offsets, you should prefer
+     * {@link #subscribe(Collection, ConsumerRebalanceListener)}, since group rebalances will cause partition offsets
+     * to be reset. You should also provide your own listener if you are doing your own offset
+     * management since the listener gives you an opportunity to commit offsets before a rebalance finishes.
+     *
+     * @param topic The topic to subscribe to
+     * @throws IllegalArgumentException If topic is null or empty
+     */
+    @Override
+    public void subscribe(String topic) {
+        subscribe(topic, new NoOpConsumerRebalanceListener());
+    }
+
+    /**
      * Subscribe to all topics matching specified pattern to get dynamically assigned partitions. The pattern matching will be done periodically against topics
      * existing at the time of check.
      *

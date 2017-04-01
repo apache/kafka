@@ -117,6 +117,16 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void subscribe(String topic, ConsumerRebalanceListener listener) {
+        subscribe(Collections.singleton(topic), listener);
+    }
+
+    @Override
+    public void subscribe(String topic) {
+        subscribe(topic, new NoOpConsumerRebalanceListener());
+    }
+
+    @Override
     public void assign(Collection<TopicPartition> partitions) {
         ensureNotClosed();
         this.subscriptions.assignFromUser(new HashSet<>(partitions));
