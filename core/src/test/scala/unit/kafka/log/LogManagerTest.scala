@@ -38,6 +38,7 @@ class LogManagerTest {
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
   logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
+  logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
   val logConfig = LogConfig(logProps)
   var logDir: File = null
   var logManager: LogManager = null

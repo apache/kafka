@@ -1,16 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.integration;
 
@@ -42,6 +44,7 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -53,10 +56,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameter;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -75,12 +75,15 @@ import java.util.concurrent.TimeUnit;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 
-@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class QueryableStateIntegrationTest {
     private static final int NUM_BROKERS = 1;
+    private static final long COMMIT_INTERVAL_MS = 300L;
+
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER =
         new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static final int STREAM_THREE_PARTITIONS = 4;
     private final MockTime mockTime = CLUSTER.time;
     private String streamOne = "stream-one";
     private String streamTwo = "stream-two";
@@ -91,7 +94,7 @@ public class QueryableStateIntegrationTest {
     private String outputTopicThree = "output-three";
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
-    private static final int NUM_PARTITIONS = 2;
+    private static final int STREAM_TWO_PARTITIONS = 2;
     private static final int NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
@@ -101,7 +104,7 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, Long>> stringLongComparator;
     private static int testNo = 0;
 
-    public void createTopics() {
+    private void createTopics() throws InterruptedException {
         streamOne = streamOne + "-" + testNo;
         streamConcurrent = streamConcurrent + "-" + testNo;
         streamThree = streamThree + "-" + testNo;
@@ -111,24 +114,15 @@ public class QueryableStateIntegrationTest {
         streamTwo = streamTwo + "-" + testNo;
         CLUSTER.createTopic(streamOne);
         CLUSTER.createTopic(streamConcurrent);
-        CLUSTER.createTopic(streamTwo, NUM_PARTITIONS, NUM_REPLICAS);
-        CLUSTER.createTopic(streamThree, 4, 1);
+        CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
+        CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
         CLUSTER.createTopic(outputTopic);
         CLUSTER.createTopic(outputTopicConcurrent);
         CLUSTER.createTopic(outputTopicThree);
     }
 
-    @Parameter
-    public long cacheSizeBytes;
-
-    //Single parameter, use Object[]
-    @Parameters
-    public static Object[] data() {
-        return new Object[]{0, 10 * 1024 * 1024L};
-    }
-
     @Before
-    public void before() throws IOException {
+    public void before() throws IOException, InterruptedException {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
@@ -137,14 +131,11 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration
             .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("qs-test").getPath());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration
-            .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
@@ -189,7 +180,7 @@ public class QueryableStateIntegrationTest {
     @After
     public void shutdown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close();
+            kafkaStreams.close(30, TimeUnit.SECONDS);
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -329,7 +320,7 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void queryOnRebalance() throws Exception {
-        final int numThreads = NUM_PARTITIONS;
+        final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
         final int numIterations = 500000;
@@ -423,7 +414,17 @@ public class QueryableStateIntegrationTest {
     }
 
     @Test
-    public void shouldBeAbleToQueryState() throws Exception {
+    public void shouldBeAbleToQueryStateWithZeroSizedCache() throws Exception {
+        verifyCanQueryState(0);
+    }
+
+    @Test
+    public void shouldBeAbleToQueryStateWithNonZeroSizedCache() throws Exception {
+        verifyCanQueryState(10 * 1024 * 1024);
+    }
+
+    private void verifyCanQueryState(int cacheSizeBytes) throws java.util.concurrent.ExecutionException, InterruptedException {
+        streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final KStreamBuilder builder = new KStreamBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
 
@@ -443,13 +444,13 @@ public class QueryableStateIntegrationTest {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
                 streamOne,
-            batch1,
-            TestUtils.producerConfig(
+                batch1,
+                TestUtils.producerConfig(
                 CLUSTER.bootstrapServers(),
                 StringSerializer.class,
                 StringSerializer.class,
                 new Properties()),
-            mockTime);
+                mockTime);
 
         final KStream<String, String> s1 = builder.stream(streamOne);
 
@@ -474,7 +475,6 @@ public class QueryableStateIntegrationTest {
             myCount);
 
         verifyRangeAndAll(expectedCount, myCount);
-
     }
 
     @Test

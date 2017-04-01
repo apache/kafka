@@ -17,10 +17,13 @@
 
 package kafka.tools
 
-import java.io.FileWriter
+import java.io.{FileOutputStream, FileWriter, OutputStreamWriter}
+import java.nio.charset.StandardCharsets
+
 import joptsimple._
-import kafka.utils.{Logging, ZkUtils, ZKGroupTopicDirs, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.security.JaasUtils
+
 import scala.collection.JavaConverters._
 
 
@@ -64,7 +67,7 @@ object ExportZkOffsets extends Logging {
     
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
     
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, outFileOpt)
@@ -74,7 +77,8 @@ object ExportZkOffsets extends Logging {
     val outfile    = options.valueOf(outFileOpt)
 
     var zkUtils   : ZkUtils    = null
-    val fileWriter : FileWriter  = new FileWriter(outfile)
+    val fileWriter : OutputStreamWriter =
+        new OutputStreamWriter(new FileOutputStream(outfile), StandardCharsets.UTF_8)
     
     try {
       zkUtils = ZkUtils(zkConnect,

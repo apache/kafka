@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,6 +16,17 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
+import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
+import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.serialization.Serializer;
+
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -25,17 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
-import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
-import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
-import org.apache.kafka.common.serialization.Serializer;
 
 
 /**
@@ -114,14 +114,14 @@ public class MockProducer<K, V> implements Producer<K, V> {
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         int partition = 0;
-        if (this.cluster.partitionsForTopic(record.topic()) != null)
+        if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
-        ProduceRequestResult result = new ProduceRequestResult();
-        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, Record.NO_TIMESTAMP, 0, 0, 0);
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
+        ProduceRequestResult result = new ProduceRequestResult(topicPartition);
+        FutureRecordMetadata future = new FutureRecordMetadata(result, 0, RecordBatch.NO_TIMESTAMP, 0, 0, 0);
         long offset = nextOffset(topicPartition);
-        Completion completion = new Completion(topicPartition, offset,
-                                               new RecordMetadata(topicPartition, 0, offset, Record.NO_TIMESTAMP, 0, 0, 0),
+        Completion completion = new Completion(offset,
+                                               new RecordMetadata(topicPartition, 0, offset, RecordBatch.NO_TIMESTAMP, 0, 0, 0),
                                                result, callback);
         this.sent.add(record);
         if (autoComplete)
@@ -233,10 +233,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
         private final RecordMetadata metadata;
         private final ProduceRequestResult result;
         private final Callback callback;
-        private final TopicPartition topicPartition;
 
-        public Completion(TopicPartition topicPartition,
-                          long offset,
+        public Completion(long offset,
                           RecordMetadata metadata,
                           ProduceRequestResult result,
                           Callback callback) {
@@ -244,17 +242,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
             this.offset = offset;
             this.result = result;
             this.callback = callback;
-            this.topicPartition = topicPartition;
         }
 
         public void complete(RuntimeException e) {
-            result.done(topicPartition, e == null ? offset : -1L, e);
+            result.set(e == null ? offset : -1L, RecordBatch.NO_TIMESTAMP, e);
             if (callback != null) {
                 if (e == null)
                     callback.onCompletion(metadata, null);
                 else
                     callback.onCompletion(null, e);
             }
+            result.done();
         }
     }
 

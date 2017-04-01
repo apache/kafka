@@ -1,23 +1,23 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.network.Send;
-import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.TransportLayers;
 import org.apache.kafka.common.record.Records;
 
 import java.io.EOFException;
@@ -52,21 +52,18 @@ public class RecordsSend implements Send {
     @Override
     public long writeTo(GatheringByteChannel channel) throws IOException {
         long written = 0;
+
         if (remaining > 0) {
             written = records.writeTo(channel, size() - remaining, remaining);
             if (written < 0)
                 throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
+            remaining -= written;
         }
 
-        if (channel instanceof TransportLayer) {
-            TransportLayer tl = (TransportLayer) channel;
-            pending = tl.hasPendingWrites();
+        pending = TransportLayers.hasPendingWrites(channel);
+        if (remaining <= 0 && pending)
+            channel.write(EMPTY_BYTE_BUFFER);
 
-            if (remaining <= 0 && pending)
-                channel.write(EMPTY_BYTE_BUFFER);
-        }
-
-        remaining -= written;
         return written;
     }
 

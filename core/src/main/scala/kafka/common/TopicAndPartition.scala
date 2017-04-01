@@ -30,9 +30,9 @@ case class TopicAndPartition(topic: String, partition: Int) {
 
   def this(partition: Partition) = this(partition.topic, partition.partitionId)
 
-  def this(replica: Replica) = this(replica.topic, replica.partitionId)
-
   def this(topicPartition: TopicPartition) = this(topicPartition.topic, topicPartition.partition)
+
+  def this(replica: Replica) = this(replica.topicPartition)
 
   def asTuple = (topic, partition)
 

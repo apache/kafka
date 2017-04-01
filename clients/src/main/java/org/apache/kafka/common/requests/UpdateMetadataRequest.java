@@ -1,30 +1,32 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.SecurityProtocol;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -32,35 +34,87 @@ import java.util.Map;
 import java.util.Set;
 
 public class UpdateMetadataRequest extends AbstractRequest {
+    public static class Builder extends AbstractRequest.Builder<UpdateMetadataRequest> {
+        private final int controllerId;
+        private final int controllerEpoch;
+        private final Map<TopicPartition, PartitionState> partitionStates;
+        private final Set<Broker> liveBrokers;
+
+        public Builder(short version, int controllerId, int controllerEpoch,
+                       Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
+            super(ApiKeys.UPDATE_METADATA_KEY, version);
+            this.controllerId = controllerId;
+            this.controllerEpoch = controllerEpoch;
+            this.partitionStates = partitionStates;
+            this.liveBrokers = liveBrokers;
+        }
+
+        @Override
+        public UpdateMetadataRequest build(short version) {
+            if (version == 0) {
+                for (Broker broker : liveBrokers) {
+                    if (broker.endPoints.size() != 1 || broker.endPoints.get(0).securityProtocol != SecurityProtocol.PLAINTEXT) {
+                        throw new UnsupportedVersionException("UpdateMetadataRequest v0 only handles PLAINTEXT endpoints");
+                    }
+                }
+            }
+            return new UpdateMetadataRequest(version, controllerId, controllerEpoch, partitionStates, liveBrokers);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type: UpdateMetadataRequest=").
+                append(", controllerId=").append(controllerId).
+                append(", controllerEpoch=").append(controllerEpoch).
+                append(", partitionStates=").append(partitionStates).
+                append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
+                append(")");
+            return bld.toString();
+        }
+    }
 
     public static final class Broker {
         public final int id;
-        public final Map<SecurityProtocol, EndPoint> endPoints;
-        public final String rack;
+        public final List<EndPoint> endPoints;
+        public final String rack; // introduced in V2
 
-        public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints, String rack) {
+        public Broker(int id, List<EndPoint> endPoints, String rack) {
             this.id = id;
             this.endPoints = endPoints;
             this.rack = rack;
         }
 
-        @Deprecated
-        public Broker(int id, Map<SecurityProtocol, EndPoint> endPoints) {
-            this(id, endPoints, null);
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(id=").append(id);
+            bld.append(", endPoints=").append(Utils.join(endPoints, ","));
+            bld.append(", rack=").append(rack);
+            bld.append(")");
+            return bld.toString();
         }
     }
 
     public static final class EndPoint {
         public final String host;
         public final int port;
+        public final SecurityProtocol securityProtocol;
+        public final ListenerName listenerName; // introduced in V3
 
-        public EndPoint(String host, int port) {
+        public EndPoint(String host, int port, SecurityProtocol securityProtocol, ListenerName listenerName) {
             this.host = host;
             this.port = port;
+            this.securityProtocol = securityProtocol;
+            this.listenerName = listenerName;
+        }
+
+        @Override
+        public String toString() {
+            return "(host=" + host + ", port=" + port + ", listenerName=" + listenerName +
+                    ", securityProtocol=" + securityProtocol + ")";
         }
     }
-
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.UPDATE_METADATA_KEY.id);
 
     private static final String CONTROLLER_ID_KEY_NAME = "controller_id";
     private static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
@@ -84,6 +138,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     // EndPoint key names
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
+    private static final String LISTENER_NAME_KEY_NAME = "listener_name";
     private static final String SECURITY_PROTOCOL_TYPE_KEY_NAME = "security_protocol_type";
 
     private final int controllerId;
@@ -91,95 +146,17 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private final Map<TopicPartition, PartitionState> partitionStates;
     private final Set<Broker> liveBrokers;
 
-    /**
-     * Constructor for version 0.
-     */
-    @Deprecated
-    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Set<Node> liveBrokers,
-                                 Map<TopicPartition, PartitionState> partitionStates) {
-        this(0, controllerId, controllerEpoch, partitionStates,
-             brokerEndPointsToBrokers(liveBrokers));
-    }
-
-    private static Set<Broker> brokerEndPointsToBrokers(Set<Node> brokerEndPoints) {
-        Set<Broker> brokers = new HashSet<>(brokerEndPoints.size());
-        for (Node brokerEndPoint : brokerEndPoints) {
-            Map<SecurityProtocol, EndPoint> endPoints = Collections.singletonMap(SecurityProtocol.PLAINTEXT,
-                    new EndPoint(brokerEndPoint.host(), brokerEndPoint.port()));
-            brokers.add(new Broker(brokerEndPoint.id(), endPoints, null));
-        }
-        return brokers;
-    }
-
-    /**
-     * Constructor for version 2.
-     */
-    public UpdateMetadataRequest(int controllerId, int controllerEpoch, Map<TopicPartition,
+    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch, Map<TopicPartition,
             PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        this(2, controllerId, controllerEpoch, partitionStates, liveBrokers);
-    }
-
-    public UpdateMetadataRequest(int version, int controllerId, int controllerEpoch, Map<TopicPartition,
-            PartitionState> partitionStates, Set<Broker> liveBrokers) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.UPDATE_METADATA_KEY.id, version)));
-        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
-        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-
-        List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
-        for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
-            Struct partitionStateData = struct.instance(PARTITION_STATES_KEY_NAME);
-            TopicPartition topicPartition = entry.getKey();
-            partitionStateData.set(TOPIC_KEY_NAME, topicPartition.topic());
-            partitionStateData.set(PARTITION_KEY_NAME, topicPartition.partition());
-            PartitionState partitionState = entry.getValue();
-            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.controllerEpoch);
-            partitionStateData.set(LEADER_KEY_NAME, partitionState.leader);
-            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.leaderEpoch);
-            partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
-            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
-            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
-            partitionStatesData.add(partitionStateData);
-        }
-        struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
-
-        List<Struct> brokersData = new ArrayList<>(liveBrokers.size());
-        for (Broker broker : liveBrokers) {
-            Struct brokerData = struct.instance(LIVE_BROKERS_KEY_NAME);
-            brokerData.set(BROKER_ID_KEY_NAME, broker.id);
-
-            if (version == 0) {
-                EndPoint endPoint = broker.endPoints.get(SecurityProtocol.PLAINTEXT);
-                brokerData.set(HOST_KEY_NAME, endPoint.host);
-                brokerData.set(PORT_KEY_NAME, endPoint.port);
-            } else {
-                List<Struct> endPointsData = new ArrayList<>(broker.endPoints.size());
-                for (Map.Entry<SecurityProtocol, EndPoint> entry : broker.endPoints.entrySet()) {
-                    Struct endPointData = brokerData.instance(ENDPOINTS_KEY_NAME);
-                    endPointData.set(PORT_KEY_NAME, entry.getValue().port);
-                    endPointData.set(HOST_KEY_NAME, entry.getValue().host);
-                    endPointData.set(SECURITY_PROTOCOL_TYPE_KEY_NAME, entry.getKey().id);
-                    endPointsData.add(endPointData);
-
-                }
-                brokerData.set(ENDPOINTS_KEY_NAME, endPointsData.toArray());
-                if (version >= 2) {
-                    brokerData.set(RACK_KEY_NAME, broker.rack);
-                }
-            }
-
-            brokersData.add(brokerData);
-        }
-        struct.set(LIVE_BROKERS_KEY_NAME, brokersData.toArray());
-
+        super(version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.partitionStates = partitionStates;
         this.liveBrokers = liveBrokers;
     }
 
-    public UpdateMetadataRequest(Struct struct) {
-        super(struct);
-
+    public UpdateMetadataRequest(Struct struct, short versionId) {
+        super(versionId);
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
             Struct partitionStateData = (Struct) partitionStateDataObj;
@@ -216,17 +193,24 @@ public class UpdateMetadataRequest extends AbstractRequest {
             if (brokerData.hasField(HOST_KEY_NAME)) {
                 String host = brokerData.getString(HOST_KEY_NAME);
                 int port = brokerData.getInt(PORT_KEY_NAME);
-                Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>(1);
-                endPoints.put(SecurityProtocol.PLAINTEXT, new EndPoint(host, port));
+                List<EndPoint> endPoints = new ArrayList<>(1);
+                SecurityProtocol securityProtocol = SecurityProtocol.PLAINTEXT;
+                endPoints.add(new EndPoint(host, port, securityProtocol, ListenerName.forSecurityProtocol(securityProtocol)));
                 liveBrokers.add(new Broker(brokerId, endPoints, null));
-            } else { // V1 or V2
-                Map<SecurityProtocol, EndPoint> endPoints = new HashMap<>();
+            } else { // V1, V2 or V3
+                List<EndPoint> endPoints = new ArrayList<>();
                 for (Object endPointDataObj : brokerData.getArray(ENDPOINTS_KEY_NAME)) {
                     Struct endPointData = (Struct) endPointDataObj;
                     int port = endPointData.getInt(PORT_KEY_NAME);
                     String host = endPointData.getString(HOST_KEY_NAME);
                     short protocolTypeId = endPointData.getShort(SECURITY_PROTOCOL_TYPE_KEY_NAME);
-                    endPoints.put(SecurityProtocol.forId(protocolTypeId), new EndPoint(host, port));
+                    SecurityProtocol securityProtocol = SecurityProtocol.forId(protocolTypeId);
+                    String listenerName;
+                    if (endPointData.hasField(LISTENER_NAME_KEY_NAME)) // V3
+                        listenerName = endPointData.getString(LISTENER_NAME_KEY_NAME);
+                    else
+                        listenerName = securityProtocol.name;
+                    endPoints.add(new EndPoint(host, port, securityProtocol, new ListenerName(listenerName)));
                 }
                 String rack = null;
                 if (brokerData.hasField(RACK_KEY_NAME)) { // V2
@@ -242,12 +226,71 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(int versionId, Throwable e) {
-        if (versionId <= 2)
-            return new UpdateMetadataResponse(Errors.forException(e).code());
+    protected Struct toStruct() {
+        short version = version();
+        Struct struct = new Struct(ApiKeys.UPDATE_METADATA_KEY.requestSchema(version));
+        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
+        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
+
+        List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
+        for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
+            Struct partitionStateData = struct.instance(PARTITION_STATES_KEY_NAME);
+            TopicPartition topicPartition = entry.getKey();
+            partitionStateData.set(TOPIC_KEY_NAME, topicPartition.topic());
+            partitionStateData.set(PARTITION_KEY_NAME, topicPartition.partition());
+            PartitionState partitionState = entry.getValue();
+            partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.controllerEpoch);
+            partitionStateData.set(LEADER_KEY_NAME, partitionState.leader);
+            partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.leaderEpoch);
+            partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
+            partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
+            partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
+            partitionStatesData.add(partitionStateData);
+        }
+        struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
+
+        List<Struct> brokersData = new ArrayList<>(liveBrokers.size());
+        for (Broker broker : liveBrokers) {
+            Struct brokerData = struct.instance(LIVE_BROKERS_KEY_NAME);
+            brokerData.set(BROKER_ID_KEY_NAME, broker.id);
+
+            if (version == 0) {
+                EndPoint endPoint = broker.endPoints.get(0);
+                brokerData.set(HOST_KEY_NAME, endPoint.host);
+                brokerData.set(PORT_KEY_NAME, endPoint.port);
+            } else {
+                List<Struct> endPointsData = new ArrayList<>(broker.endPoints.size());
+                for (EndPoint endPoint : broker.endPoints) {
+                    Struct endPointData = brokerData.instance(ENDPOINTS_KEY_NAME);
+                    endPointData.set(PORT_KEY_NAME, endPoint.port);
+                    endPointData.set(HOST_KEY_NAME, endPoint.host);
+                    endPointData.set(SECURITY_PROTOCOL_TYPE_KEY_NAME, endPoint.securityProtocol.id);
+                    if (version >= 3)
+                        endPointData.set(LISTENER_NAME_KEY_NAME, endPoint.listenerName.value());
+                    endPointsData.add(endPointData);
+
+                }
+                brokerData.set(ENDPOINTS_KEY_NAME, endPointsData.toArray());
+                if (version >= 2) {
+                    brokerData.set(RACK_KEY_NAME, broker.rack);
+                }
+            }
+
+            brokersData.add(brokerData);
+        }
+        struct.set(LIVE_BROKERS_KEY_NAME, brokersData.toArray());
+
+        return struct;
+    }
+
+    @Override
+    public AbstractResponse getErrorResponse(Throwable e) {
+        short versionId = version();
+        if (versionId <= 3)
+            return new UpdateMetadataResponse(Errors.forException(e));
         else
             throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.UPDATE_METADATA_KEY.id)));
+                    versionId, this.getClass().getSimpleName(), ApiKeys.UPDATE_METADATA_KEY.latestVersion()));
     }
 
     public int controllerId() {
@@ -266,11 +309,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
         return liveBrokers;
     }
 
-    public static UpdateMetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new UpdateMetadataRequest(ProtoUtils.parseRequest(ApiKeys.UPDATE_METADATA_KEY.id, versionId, buffer));
+    public static UpdateMetadataRequest parse(ByteBuffer buffer, short version) {
+        return new UpdateMetadataRequest(ApiKeys.UPDATE_METADATA_KEY.parseRequest(version, buffer), version);
     }
 
-    public static UpdateMetadataRequest parse(ByteBuffer buffer) {
-        return new UpdateMetadataRequest(CURRENT_SCHEMA.read(buffer));
-    }
 }

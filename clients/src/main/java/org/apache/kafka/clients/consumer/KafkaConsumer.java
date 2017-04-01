@@ -1,17 +1,22 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
@@ -24,13 +29,14 @@ import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -38,8 +44,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Time;
@@ -48,7 +52,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
@@ -65,7 +68,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
-import org.apache.kafka.common.errors.InterruptException;
 
 /**
  * A client that consumes records from a Kafka cluster.
@@ -77,6 +79,13 @@ import org.apache.kafka.common.errors.InterruptException;
  * The consumer maintains TCP connections to the necessary brokers to fetch data.
  * Failure to close the consumer after use will leak these connections.
  * The consumer is not thread-safe. See <a href="#multithreaded">Multi-threaded Processing</a> for more details.
+ *
+ * <h3>Cross-Version Compatibility</h3>
+ * This client can communicate with brokers that are version 0.10.0 or newer. Older or newer brokers may not support
+ * certain features. For example, 0.10.0 brokers do not support offsetsForTimes, because this feature was added
+ * in version 0.10.1. You will receive an {@link org.apache.kafka.common.errors.UnsupportedVersionException}
+ * when invoking an API that is not available on the running broker version.
+ * <p>
  *
  * <h3>Offsets and Consumer Position</h3>
  * Kafka maintains a numerical offset for each record in a partition. This offset acts as a unique identifier of
@@ -500,7 +509,6 @@ import org.apache.kafka.common.errors.InterruptException;
  * There are many possible variations on this approach. For example each processor thread can have its own queue, and
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
- *
  */
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
@@ -508,18 +516,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
-    private static final List<ApiKeys> CONSUMER_APIS = Arrays.asList(
-            ApiKeys.METADATA,
-            ApiKeys.FETCH,
-            ApiKeys.GROUP_COORDINATOR,
-            ApiKeys.HEARTBEAT,
-            ApiKeys.JOIN_GROUP,
-            ApiKeys.LEAVE_GROUP,
-            ApiKeys.LIST_OFFSETS,
-            ApiKeys.OFFSET_COMMIT,
-            ApiKeys.OFFSET_FETCH,
-            ApiKeys.SYNC_GROUP);
-    private static final Collection<ApiVersionsResponse.ApiVersion> EXPECTED_API_VERSIONS = ClientUtils.buildExpectedApiVersions(CONSUMER_APIS);
+    static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
     private final String clientId;
     private final ConsumerCoordinator coordinator;
@@ -638,7 +635,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // load interceptors and make sure they get clientId
             Map<String, Object> userProvidedConfigs = config.originals();
             userProvidedConfigs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-            List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs, false)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ConsumerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
@@ -660,20 +657,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer, valueDeserializer, reporters, interceptorList);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG), false, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-            this.metadata.update(Cluster.bootstrap(addresses), 0);
+            this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "consumer";
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
                     this.metadata,
                     clientId,
-                    100, // a fixed large enough value will suffice
+                    100, // a fixed large enough value will suffice for max in-flight requests
                     config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     time,
-                    EXPECTED_API_VERSIONS);
+                    true,
+                    new ApiVersions());
             this.client = new ConsumerNetworkClient(netClient, metadata, time, retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG));
             OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
@@ -682,22 +680,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
             this.coordinator = new ConsumerCoordinator(this.client,
-                    config.getString(ConsumerConfig.GROUP_ID_CONFIG),
-                    config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
-                    assignors,
-                    this.metadata,
-                    this.subscriptions,
-                    metrics,
-                    metricGrpPrefix,
-                    this.time,
-                    retryBackoffMs,
-                    new ConsumerCoordinator.DefaultOffsetCommitCallback(),
-                    config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
-                    config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
-                    this.interceptors,
-                    config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG));
+                                                       config.getString(ConsumerConfig.GROUP_ID_CONFIG),
+                                                       config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
+                                                       config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
+                                                       config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
+                                                       assignors,
+                                                       this.metadata,
+                                                       this.subscriptions,
+                                                       metrics,
+                                                       metricGrpPrefix,
+                                                       this.time,
+                                                       retryBackoffMs,
+                                                       config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
+                                                       config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
+                                                       this.interceptors,
+                                                       config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
+                                                       config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
             this.fetcher = new Fetcher<>(this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
@@ -721,7 +719,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
             // this is to prevent resource leak. see KAFKA-2121
-            close(true);
+            close(0, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
@@ -1009,9 +1007,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    if (fetcher.sendFetches() > 0) {
+                    if (fetcher.sendFetches() > 0 || client.hasPendingRequests())
                         client.pollNoWakeup();
-                    }
 
                     if (this.interceptors == null)
                         return new ConsumerRecords<>(records);
@@ -1036,6 +1033,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return The fetched records (may be empty)
      */
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollOnce(long timeout) {
+        client.maybeTriggerWakeup();
         coordinator.poll(time.milliseconds());
 
         // fetch positions if we have partitions we're subscribed to that we
@@ -1097,7 +1095,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync() {
         acquire();
         try {
-            commitSync(subscriptions.allConsumed());
+            coordinator.commitOffsetsSync(subscriptions.allConsumed(), Long.MAX_VALUE);
         } finally {
             release();
         }
@@ -1131,7 +1129,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         acquire();
         try {
-            coordinator.commitOffsetsSync(offsets);
+            coordinator.commitOffsetsSync(new HashMap<>(offsets), Long.MAX_VALUE);
         } finally {
             release();
         }
@@ -1348,10 +1346,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Cluster cluster = this.metadata.fetch();
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
-            if (parts != null)
+            if (!parts.isEmpty())
                 return parts;
 
-            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(new MetadataRequest(Collections.singletonList(topic)), requestTimeoutMs);
+            Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
+                    new MetadataRequest.Builder(Collections.singletonList(topic)), requestTimeoutMs);
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1450,6 +1449,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *         than or equal to the target timestamp. {@code null} will be returned for the partition if there is no
      *         such message.
      * @throws IllegalArgumentException if the target timestamp is negative.
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not support looking up
+     *         the offsets by timestamp.
      */
     @Override
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch) {
@@ -1497,17 +1498,39 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer, waiting indefinitely for any needed cleanup. If auto-commit is enabled, this
-     * will commit the current offsets. Note that {@link #wakeup()} cannot be use to interrupt close.
-     * 
+     * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the default
+     * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
+     * cannot be used to interrupt close.
+     *
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      * before or while this function is called
      */
     @Override
     public void close() {
+        close(DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
+     * <code>timeout</code> for the consumer to complete pending commits and leave the group.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the
+     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
+     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
+     * used to interrupt close.
+     *
+     * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
+     *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
+     * @param timeUnit The time unit for the <code>timeout</code>
+     * @throws InterruptException If the thread is interrupted before or while this function is called
+     * @throws IllegalArgumentException If the <code>timeout</code> is negative.
+     */
+    public void close(long timeout, TimeUnit timeUnit) {
+        if (timeout < 0)
+            throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
         try {
-            close(false);
+            close(timeUnit.toMillis(timeout), false);
         } finally {
             release();
         }
@@ -1533,11 +1556,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         return clusterResourceListeners;
     }
 
-    private void close(boolean swallowException) {
+    private void close(long timeoutMs, boolean swallowException) {
         log.trace("Closing the Kafka consumer.");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         this.closed = true;
-        ClientUtils.closeQuietly(coordinator, "coordinator", firstException);
+        try {
+            if (coordinator != null)
+                coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
+        } catch (Throwable t) {
+            firstException.compareAndSet(null, t);
+            log.error("Failed to close coordinator", t);
+        }
+        ClientUtils.closeQuietly(fetcher, "fetcher", firstException);
         ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
@@ -1569,9 +1599,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // the user is manually assigning partitions and managing their own offsets).
         fetcher.resetOffsetsIfNeeded(partitions);
 
-        if (!subscriptions.hasAllFetchPositions()) {
-            // if we still don't have offsets for all partitions, then we should either seek
-            // to the last committed position or reset using the auto reset policy
+        if (!subscriptions.hasAllFetchPositions(partitions)) {
+            // if we still don't have offsets for the given partitions, then we should either
+            // seek to the last committed position or reset using the auto reset policy
 
             // first refresh commits for all assigned partitions
             coordinator.refreshCommittedOffsetsIfNeeded();

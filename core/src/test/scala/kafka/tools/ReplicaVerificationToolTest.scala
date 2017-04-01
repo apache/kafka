@@ -21,7 +21,7 @@ import kafka.api.FetchResponsePartitionData
 import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
 import org.junit.Test
 import org.junit.Assert.assertTrue
 
@@ -41,11 +41,11 @@ class ReplicaVerificationToolTest {
     expectedReplicasPerTopicAndPartition.foreach { case (tp, numReplicas) =>
       (0 until numReplicas).foreach { replicaId =>
         val records = (0 to 5).map { index =>
-          Record.create(s"key $index".getBytes, s"value $index".getBytes)
+          new SimpleRecord(s"key $index".getBytes, s"value $index".getBytes)
         }
         val initialOffset = 4
-        val memoryRecords = MemoryRecords.withRecords(initialOffset, records: _*)
-        replicaBuffer.addFetchedData(tp, replicaId, new FetchResponsePartitionData(Errors.NONE.code(), hw = 20,
+        val memoryRecords = MemoryRecords.withRecords(initialOffset, CompressionType.NONE, records: _*)
+        replicaBuffer.addFetchedData(tp, replicaId, new FetchResponsePartitionData(Errors.NONE, hw = 20,
           new ByteBufferMessageSet(memoryRecords.buffer)))
       }
     }

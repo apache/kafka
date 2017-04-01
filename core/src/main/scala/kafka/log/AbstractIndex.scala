@@ -17,14 +17,15 @@
 
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
+import java.io.{File, IOException, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.{CoreUtils, Logging, Os}
+import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.Os
 import org.apache.kafka.common.utils.Utils
 import sun.nio.ch.DirectBuffer
 
@@ -104,8 +105,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       val position = mmap.position
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
-      if(Os.isWindows)
-        forceUnmap(mmap)
+      if(Os.IS_WINDOWS)
+        forceUnmap(mmap);
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -141,8 +142,16 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def delete(): Boolean = {
     info(s"Deleting index ${file.getAbsolutePath}")
-    if(Os.isWindows)
+    inLock(lock) {
+      // On JVM, a memory mapping is typically unmapped by garbage collector.
+      // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
+      // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
+      // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
       CoreUtils.swallow(forceUnmap(mmap))
+      // Accessing unmapped mmap crashes JVM by SEGV.
+      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
+      mmap = null
+    }
     file.delete()
   }
 
@@ -185,7 +194,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def truncateTo(offset: Long): Unit
 
   /**
-   * Forcefully free the buffer's mmap. We do this only on windows.
+   * Forcefully free the buffer's mmap.
    */
   protected def forceUnmap(m: MappedByteBuffer) {
     try {
@@ -208,12 +217,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * and this requires synchronizing reads.
    */
   protected def maybeLock[T](lock: Lock)(fun: => T): T = {
-    if(Os.isWindows)
+    if(Os.IS_WINDOWS)
       lock.lock()
     try {
       fun
     } finally {
-      if(Os.isWindows)
+      if(Os.IS_WINDOWS)
         lock.unlock()
     }
   }

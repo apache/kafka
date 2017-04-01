@@ -47,7 +47,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
     val brokerId1 = 0
     val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect)
     val server1 = TestUtils.createServer(KafkaConfig.fromProps(props1))
-    val port = server1.boundPort()
+    val port = TestUtils.boundPort(server1)
 
     // Create a second broker with same port
     val brokerId2 = 1

@@ -73,7 +73,7 @@ object TopicCommand extends Logging {
         exitCode = 1
     } finally {
       zkUtils.close()
-      System.exit(exitCode)
+      Exit.exit(exitCode)
     }
 
   }
@@ -360,7 +360,7 @@ object TopicCommand extends Logging {
     println("Are you sure you want to continue? [y/n]")
     if (!Console.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
-      System.exit(0)
+      Exit.exit(0)
     }
   }
 

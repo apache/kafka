@@ -53,13 +53,13 @@ class ProducerTest extends ZooKeeperTestHarness with Logging{
   // ports and then get a consumer instance that will be pointed at the correct port
   def getConsumer1() = {
     if (consumer1 == null)
-      consumer1 = new SimpleConsumer("localhost", server1.boundPort(), 1000000, 64*1024, "")
+      consumer1 = new SimpleConsumer("localhost", TestUtils.boundPort(server1), 1000000, 64*1024, "")
     consumer1
   }
 
   def getConsumer2() = {
     if (consumer2 == null)
-      consumer2 = new SimpleConsumer("localhost", server2.boundPort(), 100, 64*1024, "")
+      consumer2 = new SimpleConsumer("localhost", TestUtils.boundPort(server2), 100, 64*1024, "")
     consumer2
   }
 

@@ -26,6 +26,7 @@ import kafka.common.{ErrorMapping, TopicAndPartition}
 import scala.collection.Map
 import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 
 class ConsumerFetcherThread(name: String,
@@ -53,7 +54,7 @@ class ConsumerFetcherThread(name: String,
     replicaId(Request.OrdinaryConsumerId).
     maxWait(config.fetchWaitMaxMs).
     minBytes(config.fetchMinBytes).
-    requestVersion(kafka.api.FetchRequest.CurrentVersion)
+    requestVersion(3) // for now, the old consumer is pinned to the old message format through the fetch request
 
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
@@ -100,8 +101,7 @@ class ConsumerFetcherThread(name: String,
   protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
     partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
       if (partitionFetchState.isActive)
-        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.offset,
-          fetchSize)
+        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
     }
 
     new FetchRequest(fetchRequestBuilder.build())
@@ -124,11 +124,11 @@ object ConsumerFetcherThread {
   }
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {
-    def errorCode: Short = underlying.error
+    def error = underlying.error
     def toRecords: MemoryRecords = underlying.messages.asInstanceOf[ByteBufferMessageSet].asRecords
     def highWatermark: Long = underlying.hw
     def exception: Option[Throwable] =
-      if (errorCode == ErrorMapping.NoError) None else Some(ErrorMapping.exceptionFor(errorCode))
+      if (error == Errors.NONE) None else Some(ErrorMapping.exceptionFor(error.code))
 
   }
 }

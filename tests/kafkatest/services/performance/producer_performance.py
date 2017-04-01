@@ -22,7 +22,7 @@ from kafkatest.directory_layout.kafka_path import  TOOLS_JAR_NAME, TOOLS_DEPENDA
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK, V_0_9_0_0
+from kafkatest.version import DEV_BRANCH, V_0_9_0_0
 
 
 class ProducerPerformanceService(JmxMixin, PerformanceService):
@@ -34,7 +34,7 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
     LOG_FILE = os.path.join(LOG_DIR, "producer_performance.log")
     LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
 
-    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=TRUNK, settings=None,
+    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, version=DEV_BRANCH, settings=None,
                  intermediate_stats=False, client_id="producer-performance", jmx_object_names=None, jmx_attributes=None):
 
         JmxMixin.__init__(self, num_nodes, jmx_object_names, jmx_attributes or [])
@@ -89,11 +89,11 @@ class ProducerPerformanceService(JmxMixin, PerformanceService):
 
         cmd = ""
 
-        if node.version < TRUNK:
+        if node.version < DEV_BRANCH:
             # In order to ensure more consistent configuration between versions, always use the ProducerPerformance
-            # tool from trunk
-            tools_jar = self.path.jar(TOOLS_JAR_NAME, TRUNK)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, TRUNK)
+            # tool from the development branch
+            tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
+            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
 
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_jar
             cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % tools_dependant_libs_jar

@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.config;
 
@@ -31,6 +35,7 @@ import java.util.Properties;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 public class ConfigDefTest {
@@ -317,6 +322,27 @@ public class ConfigDefTest {
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
         }
+    }
+
+    @Test
+    public void testCanAddInternalConfig() throws Exception {
+        final String configName = "internal.config";
+        final ConfigDef configDef = new ConfigDef().defineInternal(configName, Type.STRING, "", Importance.LOW);
+        final HashMap<String, String> properties = new HashMap<>();
+        properties.put(configName, "value");
+        final List<ConfigValue> results = configDef.validate(properties);
+        final ConfigValue configValue = results.get(0);
+        assertEquals("value", configValue.value());
+        assertEquals(configName, configValue.name());
+    }
+
+    @Test
+    public void testInternalConfigDoesntShowUpInDocs() throws Exception {
+        final String name = "my.config";
+        final ConfigDef configDef = new ConfigDef().defineInternal(name, Type.STRING, "", Importance.LOW);
+        assertFalse(configDef.toHtmlTable().contains("my.config"));
+        assertFalse(configDef.toEnrichedRst().contains("my.config"));
+        assertFalse(configDef.toRst().contains("my.config"));
     }
 
     private static class IntegerRecommender implements ConfigDef.Recommender {

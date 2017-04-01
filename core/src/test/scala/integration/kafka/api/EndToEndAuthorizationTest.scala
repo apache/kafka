@@ -30,7 +30,6 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerReco
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -60,7 +59,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   override val consumerCount = 2
   override val serverCount = 3
 
-  override def setAclsBeforeServersStart() {
+  override def configureSecurityBeforeServersStart() {
     AclCommand.main(clusterAclArgs)
   }
 
@@ -75,9 +74,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val kafkaPrincipal: String
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  protected def kafkaClientSaslMechanism = "GSSAPI"
-  protected def kafkaServerSaslMechanisms = List("GSSAPI")
-  override protected val saslProperties = Some(kafkaSaslProperties(kafkaClientSaslMechanism, Some(kafkaServerSaslMechanisms)))
 
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
@@ -159,12 +155,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     */
   @Before
   override def setUp {
-    securityProtocol match {
-      case SecurityProtocol.SSL =>
-        startSasl(ZkSasl, null, null)
-      case _ =>
-        startSasl(Both, List(kafkaClientSaslMechanism), kafkaServerSaslMechanisms)
-    }
     super.setUp
     AclCommand.main(topicBrokerReadAclArgs)
     servers.foreach { s =>
@@ -179,7 +169,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                 maxBlockMs = 3000L,
                                 securityProtocol = this.securityProtocol,
                                 trustStoreFile = this.trustStoreFile,
-                                saslProperties = this.saslProperties,
+                                saslProperties = this.clientSaslProperties,
                                 props = Some(producerConfig))
   }
   
@@ -210,7 +200,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumeRecords(this.consumers.head, numRecords)
   }
 
-  private def setAclsAndProduce() {
+  protected def setAclsAndProduce() {
     AclCommand.main(produceAclArgs)
     AclCommand.main(consumeAclArgs)
     servers.foreach { s =>
@@ -276,8 +266,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     AclCommand.main(deleteDescribeAclArgs)
     AclCommand.main(deleteWriteAclArgs)
-    servers.foreach { _ =>
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+    servers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
   }
  
@@ -318,7 +308,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     AclCommand.main(groupAclArgs)
     servers.foreach { s =>
       TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl, s.apis.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, servers.head.apis.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
     sendRecords(numRecords, tp)
   }
@@ -343,7 +333,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
         assertEquals(group, e.groupId())
     }
   }
-  
+
   private def sendRecords(numRecords: Int, tp: TopicPartition) {
     val futures = (0 until numRecords).map { i =>
       val record = new ProducerRecord(tp.topic(), tp.partition(), s"$i".getBytes, s"$i".getBytes)
@@ -357,7 +347,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
+  protected def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
                              numRecords: Int = 1,
                              startingOffset: Int = 0,
                              topic: String = topic,

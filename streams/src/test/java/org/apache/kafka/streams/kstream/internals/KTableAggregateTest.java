@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,13 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -38,6 +38,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
 
 
@@ -54,6 +55,9 @@ public class KTableAggregateTest {
 
     private KStreamTestDriver driver = null;
     private File stateDir = null;
+
+    @Rule
+    public EmbeddedKafkaCluster cluster = null;
 
     @After
     public void tearDown() {
@@ -79,8 +83,8 @@ public class KTableAggregateTest {
                 stringSerde,
                 stringSerde
         ).aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.STRING_ADDER,
-                MockAggregator.STRING_REMOVER,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
                 "topic1-Canonized");
 
@@ -128,8 +132,8 @@ public class KTableAggregateTest {
             stringSerde,
             stringSerde
         ).aggregate(MockInitializer.STRING_INIT,
-            MockAggregator.STRING_ADDER,
-            MockAggregator.STRING_REMOVER,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
             stringSerde,
             "topic1-Canonized");
 
@@ -156,21 +160,22 @@ public class KTableAggregateTest {
         KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
             @Override
                 public KeyValue<String, String> apply(String key, String value) {
-                    if (key.equals("null")) {
+                switch (key) {
+                    case "null":
                         return KeyValue.pair(null, value);
-                    } else if (key.equals("NULL")) {
+                    case "NULL":
                         return null;
-                    } else {
+                    default:
                         return KeyValue.pair(value, value);
-                    }
+                }
                 }
             },
                 stringSerde,
                 stringSerde
         )
                 .aggregate(MockInitializer.STRING_INIT,
-                MockAggregator.STRING_ADDER,
-                MockAggregator.STRING_REMOVER,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
                 "topic1-Canonized");
 
@@ -219,7 +224,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.flushState();
@@ -255,7 +260,7 @@ public class KTableAggregateTest {
             .toStream()
             .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "A", "green");
         driver.process(input, "B", "green");
@@ -308,7 +313,7 @@ public class KTableAggregateTest {
                 .toStream()
                 .process(proc);
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir);
+        driver = new KStreamTestDriver(builder, stateDir);
 
         driver.process(input, "11", "A");
         driver.flushState();
@@ -377,7 +382,7 @@ public class KTableAggregateTest {
                     }
                 });
 
-        final KStreamTestDriver driver = new KStreamTestDriver(builder, stateDir, 111);
+        driver = new KStreamTestDriver(builder, stateDir, 111);
         driver.process(reduceTopic, "1", new Change<>(1L, null));
         driver.process("tableOne", "2", "2");
         // this should trigger eviction on the reducer-store topic

@@ -38,12 +38,12 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.record.Record
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
+import org.apache.kafka.common.record.RecordBatch
 
 /**
  * The mirror maker has the following architecture:
@@ -527,7 +527,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     override def requestAndWaitForCommit() {
       this.synchronized {
-        // skip wait() if mirrorMakerConsumer has not been initialized
+        // only wait() if mirrorMakerConsumer has been initialized and it has not been cleaned up.
         if (iter != null) {
           immediateCommitRequested = true
           this.wait()
@@ -566,6 +566,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     override def cleanup() {
+      // We need to set the iterator to null and notify the rebalance listener thread.
+      // This is to handle the case that the consumer rebalance is triggered when the
+      // mirror maker thread is shutting down and the rebalance listener is waiting for the offset commit.
+      this.synchronized {
+        iter = null
+        if (immediateCommitRequested) {
+          notifyCommit()
+        }
+      }
       connector.shutdown()
     }
 
@@ -743,7 +752,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
-      val timestamp: java.lang.Long = if (record.timestamp == Record.NO_TIMESTAMP) null else record.timestamp
+      val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
       Collections.singletonList(new ProducerRecord[Array[Byte], Array[Byte]](record.topic, null, timestamp, record.key, record.value))
     }
   }

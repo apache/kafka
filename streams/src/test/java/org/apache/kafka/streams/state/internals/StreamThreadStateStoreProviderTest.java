@@ -1,16 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.state.internals;
 
@@ -18,19 +20,20 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
+import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
@@ -98,7 +101,7 @@ public class StreamThreadStateStoreProviderTest {
         builder.setApplicationId(applicationId);
         final ProcessorTopology topology = builder.build(null);
         final Map<TaskId, StreamTask> tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(applicationId, stateConfigDir);
+        stateDirectory = new StateDirectory(applicationId, stateConfigDir, new MockTime());
         taskOne = createStreamsTask(applicationId, streamsConfig, clientSupplier, topology,
                                     new TaskId(0, 0));
         tasks.put(new TaskId(0, 0),
@@ -112,7 +115,8 @@ public class StreamThreadStateStoreProviderTest {
         thread = new StreamThread(builder, streamsConfig, clientSupplier,
                                   applicationId,
                                   "clientId", UUID.randomUUID(), new Metrics(),
-                                  Time.SYSTEM, new StreamsMetadataState(builder)) {
+                                  Time.SYSTEM, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                                  0) {
             @Override
             public Map<TaskId, StreamTask> tasks() {
                 return tasks;
@@ -128,7 +132,7 @@ public class StreamThreadStateStoreProviderTest {
     }
 
     @After
-    public void cleanUp() {
+    public void cleanUp() throws IOException {
         Utils.delete(stateDir);
     }
     
@@ -186,8 +190,8 @@ public class StreamThreadStateStoreProviderTest {
         return new StreamTask(taskId, applicationId, Collections
                 .singletonList(new TopicPartition("topic", taskId.partition)), topology,
                               clientSupplier.consumer,
-                              clientSupplier.restoreConsumer,
-                              streamsConfig, new TheStreamMetrics(), stateDirectory, null, new NoOpRecordCollector()) {
+                              new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
+                              streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
             @Override
             protected void initializeOffsetLimits() {
 
@@ -221,21 +225,4 @@ public class StreamThreadStateStoreProviderTest {
         clientSupplier.restoreConsumer
             .updateEndOffsets(offsets);
     }
-
-    private static class TheStreamMetrics implements StreamsMetrics {
-
-        @Override
-        public Sensor addLatencySensor(final String scopeName,
-                                       final String entityName,
-                                       final String operationName,
-                                       final String... tags) {
-            return null;
-        }
-
-        @Override
-        public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-
-        }
-    }
-
 }

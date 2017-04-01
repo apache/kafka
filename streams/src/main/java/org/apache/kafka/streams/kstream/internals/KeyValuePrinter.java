@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
@@ -24,51 +23,44 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-import java.io.PrintStream;
+import java.io.PrintWriter;
 
 
 class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
-
-    private final PrintStream printStream;
+    private final PrintWriter printWriter;
     private Serde<?> keySerde;
     private Serde<?> valueSerde;
     private String streamName;
 
-
-    KeyValuePrinter(PrintStream printStream, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
+    KeyValuePrinter(PrintWriter printWriter, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.streamName = streamName;
-        if (printStream == null) {
-            this.printStream = System.out;
-        } else {
-            this.printStream = printStream;
-        }
+        this.printWriter = printWriter;
     }
 
-    KeyValuePrinter(PrintStream printStream, String streamName) {
-        this(printStream, null, null, streamName);
+    KeyValuePrinter(PrintWriter printWriter, String streamName) {
+        this(printWriter, null, null, streamName);
     }
 
     KeyValuePrinter(Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
-        this(System.out, keySerde, valueSerde, streamName);
+        this(null, keySerde, valueSerde, streamName);
     }
 
     @Override
     public Processor<K, V> get() {
-        return new KeyValuePrinterProcessor(this.printStream, this.keySerde, this.valueSerde, this.streamName);
+        return new KeyValuePrinterProcessor(this.printWriter, this.keySerde, this.valueSerde, this.streamName);
     }
 
-
     private class KeyValuePrinterProcessor extends AbstractProcessor<K, V> {
-        private final PrintStream printStream;
+        private final PrintWriter printWriter;
         private Serde<?> keySerde;
         private Serde<?> valueSerde;
         private ProcessorContext processorContext;
         private String streamName;
 
-        private KeyValuePrinterProcessor(PrintStream printStream, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
-            this.printStream = printStream;
+        private KeyValuePrinterProcessor(PrintWriter printWriter, Serde<?> keySerde, Serde<?> valueSerde, String streamName) {
+            this.printWriter = printWriter;
             this.keySerde = keySerde;
             this.valueSerde = valueSerde;
             this.streamName = streamName;
@@ -92,11 +84,17 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
             K keyToPrint = (K) maybeDeserialize(key, keySerde.deserializer());
             V valueToPrint = (V) maybeDeserialize(value, valueSerde.deserializer());
 
-            printStream.println("[" + this.streamName + "]: " + keyToPrint + " , " + valueToPrint);
+            println("[" + this.streamName + "]: " + keyToPrint + " , " + valueToPrint);
 
             this.processorContext.forward(key, value);
         }
 
+        private void println(String str) {
+            if (printWriter == null)
+                System.out.println(str);
+            else
+                printWriter.println(str);
+        }
 
         private Object maybeDeserialize(Object receivedElement, Deserializer<?> deserializer) {
             if (receivedElement == null) {
@@ -112,10 +110,10 @@ class KeyValuePrinter<K, V> implements ProcessorSupplier<K, V> {
 
         @Override
         public void close() {
-            if (this.printStream == System.out) {
-                this.printStream.flush();
+            if (printWriter == null) {
+                System.out.flush();
             } else {
-                this.printStream.close();
+                printWriter.close();
             }
         }
     }

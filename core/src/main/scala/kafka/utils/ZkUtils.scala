@@ -31,6 +31,7 @@ import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMars
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
@@ -42,19 +43,40 @@ import scala.collection._
 import scala.collection.JavaConverters._
 
 object ZkUtils {
-  val ConsumersPath = "/consumers"
-  val ClusterIdPath = "/cluster/id"
-  val BrokerIdsPath = "/brokers/ids"
-  val BrokerTopicsPath = "/brokers/topics"
+
+
+  // Important: it is necessary to add any new top level Zookeeper path here
+  val AdminPath = "/admin"
+  val BrokersPath = "/brokers"
+  val ClusterPath = "/cluster"
+  val ConfigPath = "/config"
   val ControllerPath = "/controller"
   val ControllerEpochPath = "/controller_epoch"
-  val ReassignPartitionsPath = "/admin/reassign_partitions"
-  val DeleteTopicsPath = "/admin/delete_topics"
-  val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
-  val BrokerSequenceIdPath = "/brokers/seqid"
   val IsrChangeNotificationPath = "/isr_change_notification"
-  val EntityConfigPath = "/config"
-  val EntityConfigChangesPath = "/config/changes"
+  val KafkaAclPath = "/kafka-acl"
+  val KafkaAclChangesPath = "/kafka-acl-changes"
+
+  val ConsumersPath = "/consumers"
+  val ClusterIdPath = s"$ClusterPath/id"
+  val BrokerIdsPath = s"$BrokersPath/ids"
+  val BrokerTopicsPath = s"$BrokersPath/topics"
+  val ReassignPartitionsPath = s"$AdminPath/reassign_partitions"
+  val DeleteTopicsPath = s"$AdminPath/delete_topics"
+  val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
+  val BrokerSequenceIdPath = s"$BrokersPath/seqid"
+  val ConfigChangesPath = s"$ConfigPath/changes"
+
+
+  // Important: it is necessary to add any new top level Zookeeper path to the Seq
+  val SecureZkRootPaths = Seq(AdminPath,
+                              BrokersPath,
+                              ClusterPath,
+                              ConfigPath,
+                              ControllerPath,
+                              ControllerEpochPath,
+                              IsrChangeNotificationPath,
+                              KafkaAclPath,
+                              KafkaAclChangesPath)
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -116,13 +138,13 @@ object ZkUtils {
     getTopicPartitionPath(topic, partitionId) + "/" + "state"
 
   def getEntityConfigRootPath(entityType: String): String =
-    ZkUtils.EntityConfigPath + "/" + entityType
+    ZkUtils.ConfigPath + "/" + entityType
 
   def getEntityConfigPath(entityType: String, entity: String): String =
     getEntityConfigRootPath(entityType) + "/" + entity
 
   def getEntityConfigPath(entityPath: String): String =
-    ZkUtils.EntityConfigPath + "/" + entityPath
+    ZkUtils.ConfigPath + "/" + entityPath
 
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
@@ -190,21 +212,12 @@ class ZkUtils(val zkClient: ZkClient,
   val persistentZkPaths = Seq(ConsumersPath,
                               BrokerIdsPath,
                               BrokerTopicsPath,
-                              EntityConfigChangesPath,
+                              ConfigChangesPath,
                               getEntityConfigRootPath(ConfigType.Topic),
                               getEntityConfigRootPath(ConfigType.Client),
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath)
-
-  val securePersistentZkPaths = Seq(BrokerIdsPath,
-                                    BrokerTopicsPath,
-                                    EntityConfigChangesPath,
-                                    getEntityConfigRootPath(ConfigType.Topic),
-                                    getEntityConfigRootPath(ConfigType.Client),
-                                    DeleteTopicsPath,
-                                    BrokerSequenceIdPath,
-                                    IsrChangeNotificationPath)
 
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
 
@@ -252,10 +265,6 @@ class ZkUtils(val zkClient: ZkClient,
     brokerIds.map(_.toInt).map(getBrokerInfo(_)).filter(_.isDefined).map(_.get)
   }
 
-  def getAllBrokerEndPointsForChannel(protocolType: SecurityProtocol): Seq[BrokerEndPoint] = {
-    getAllBrokersInCluster().map(_.getBrokerEndPoint(protocolType))
-  }
-
   def getLeaderAndIsrForPartition(topic: String, partition: Int):Option[LeaderAndIsr] = {
     ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topic, partition).map(_.leaderAndIsr)
   }
@@ -266,15 +275,8 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   def getLeaderForPartition(topic: String, partition: Int): Option[Int] = {
-    val leaderAndIsrOpt = readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1
-    leaderAndIsrOpt match {
-      case Some(leaderAndIsr) =>
-        Json.parseFull(leaderAndIsr) match {
-          case Some(m) =>
-            Some(m.asInstanceOf[Map[String, Any]].get("leader").get.asInstanceOf[Int])
-          case None => None
-        }
-      case None => None
+    readDataMaybeNull(getTopicPartitionLeaderAndIsrPath(topic, partition))._1.flatMap { leaderAndIsr =>
+      Json.parseFull(leaderAndIsr).map(_.asInstanceOf[Map[String, Any]]("leader").asInstanceOf[Int])
     }
   }
 
@@ -341,11 +343,11 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Register brokers with v3 json format (which includes multiple endpoints and rack) if
+   * Register brokers with v4 json format (which includes multiple endpoints and rack) if
    * the apiVersion is 0.10.0.X or above. Register the broker with v2 json format otherwise.
    * Due to KAFKA-3100, 0.9.0.0 broker and old clients will break if JSON version is above 2.
-   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X without having to upgrade
-   * to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
+   * We include v2 to make it possible for the broker to migrate from 0.9.0.0 to 0.10.0.X or above without having to
+   * upgrade to 0.9.0.1 first (clients have to be upgraded to 0.9.0.1 in any case).
    *
    * This format also includes default endpoints for compatibility with older clients.
    *
@@ -360,25 +362,15 @@ class ZkUtils(val zkClient: ZkClient,
   def registerBrokerInZk(id: Int,
                          host: String,
                          port: Int,
-                         advertisedEndpoints: collection.Map[SecurityProtocol, EndPoint],
+                         advertisedEndpoints: Seq[EndPoint],
                          jmxPort: Int,
                          rack: Option[String],
                          apiVersion: ApiVersion) {
     val brokerIdPath = BrokerIdsPath + "/" + id
-    val timestamp = Time.SYSTEM.milliseconds.toString
-
-    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 3 else 2
-    var jsonMap = Map("version" -> version,
-                      "host" -> host,
-                      "port" -> port,
-                      "endpoints" -> advertisedEndpoints.values.map(_.connectionString).toArray,
-                      "jmx_port" -> jmxPort,
-                      "timestamp" -> timestamp
-    )
-    rack.foreach(rack => if (version >= 3) jsonMap += ("rack" -> rack))
-
-    val brokerInfo = Json.encode(jsonMap)
-    registerBrokerInZk(brokerIdPath, brokerInfo)
+    // see method documentation for reason why we do this
+    val version = if (apiVersion >= KAFKA_0_10_0_IV1) 4 else 2
+    val json = Broker.toJson(version, id, host, port, advertisedEndpoints, jmxPort, rack)
+    registerBrokerInZk(brokerIdPath, json)
 
     info("Registered broker %d at path %s with addresses: %s".format(id, brokerIdPath, advertisedEndpoints.mkString(",")))
   }
@@ -480,7 +472,7 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Create an persistent node with the given path and data. Create parents if necessary.
+   * Create a persistent node with the given path and data. Create parents if necessary.
    */
   def createPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = DefaultAcls): Unit = {
     try {

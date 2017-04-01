@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
@@ -87,12 +86,34 @@ public class KStreamBranchTest {
         }
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, "V" + expectedKey);
         }
 
         assertEquals(3, processors[0].processed.size());
         assertEquals(1, processors[1].processed.size());
         assertEquals(2, processors[2].processed.size());
+    }
+
+    @Test
+    public void testTypeVariance() throws Exception {
+        Predicate<Number, Object> positive = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() > 0;
+            }
+        };
+
+        Predicate<Number, Object> negative = new Predicate<Number, Object>() {
+            @Override
+            public boolean test(Number key, Object value) {
+                return key.doubleValue() < 0;
+            }
+        };
+
+        @SuppressWarnings("unchecked")
+        final KStream<Integer, String>[] branches = new KStreamBuilder()
+            .<Integer, String>stream("empty")
+            .branch(positive, negative);
     }
 }

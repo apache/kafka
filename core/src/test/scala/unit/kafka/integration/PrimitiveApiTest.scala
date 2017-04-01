@@ -153,7 +153,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.foreach(pdata => ErrorMapping.maybeThrowException(pdata._2.error))
+        response.data.foreach(pdata => ErrorMapping.maybeThrowException(pdata._2.error.code))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
         case _: OffsetOutOfRangeException => // This is good.
@@ -169,7 +169,7 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.foreach(pdata => ErrorMapping.maybeThrowException(pdata._2.error))
+        response.data.foreach(pdata => ErrorMapping.maybeThrowException(pdata._2.error.code))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
         case _: UnknownTopicOrPartitionException => // This is good.

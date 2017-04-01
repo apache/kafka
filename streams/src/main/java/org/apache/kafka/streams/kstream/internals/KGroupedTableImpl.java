@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -46,14 +46,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    protected final Serde<K> keySerde;
-    protected final Serde<V> valSerde;
+    protected final Serde<? extends K> keySerde;
+    protected final Serde<? extends V> valSerde;
 
     public KGroupedTableImpl(KStreamBuilder topology,
                              String name,
                              String sourceName,
-                             Serde<K> keySerde,
-                             Serde<V> valSerde) {
+                             Serde<? extends K> keySerde,
+                             Serde<? extends V> valSerde) {
         super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -61,26 +61,27 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
                                       Serde<T> aggValueSerde,
                                       String storeName) {
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
-
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
                                       String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer, adder, subtractor, null, storeName);
     }
 
     @Override
     public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<K, V, T> adder,
-                                      Aggregator<K, V, T> subtractor,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
                                       StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(adder, "adder can't be null");
@@ -99,13 +100,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
         String topic = storeSupplier.name() + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
-        Serializer<V> valueSerializer = valSerde == null ? null : valSerde.serializer();
-        Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
+        Serializer<? extends K> keySerializer = keySerde == null ? null : keySerde.serializer();
+        Deserializer<? extends K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
+        Serializer<? extends V> valueSerializer = valSerde == null ? null : valSerde.serializer();
+        Deserializer<? extends V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        ChangedSerializer<V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
-        ChangedDeserializer<V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
+        ChangedSerializer<? extends V> changedValueSerializer = new ChangedSerializer<>(valueSerializer);
+        ChangedDeserializer<? extends V> changedValueDeserializer = new ChangedDeserializer<>(valueDeserializer);
 
         // send the aggregate key-value pairs to the intermediate topic for partitioning
         topology.addInternalTopic(topic);
@@ -126,6 +127,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public KTable<K, V> reduce(Reducer<V> adder,
                                Reducer<V> subtractor,
                                String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName));
     }
 
@@ -142,6 +145,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public KTable<K, Long> count(String storeName) {
+        Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return count(keyValueStore(keySerde, Serdes.Long(), storeName));
     }
 

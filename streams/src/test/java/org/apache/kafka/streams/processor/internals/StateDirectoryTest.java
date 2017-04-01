@@ -1,22 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.TestUtils;
@@ -25,6 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.StandardOpenOption;
@@ -32,11 +33,13 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class StateDirectoryTest {
 
+    private final MockTime time = new MockTime();
     private File stateDir;
     private String applicationId = "applicationId";
     private StateDirectory directory;
@@ -45,15 +48,13 @@ public class StateDirectoryTest {
     @Before
     public void before() {
         stateDir = new File(TestUtils.IO_TMP_DIR, TestUtils.randomString(5));
-        directory = new StateDirectory(applicationId, stateDir.getPath());
+        directory = new StateDirectory(applicationId, stateDir.getPath(), time);
         appDir = new File(stateDir, applicationId);
     }
 
     @After
-    public void cleanup() {
-        if (stateDir.exists()) {
-            Utils.delete(stateDir);
-        }
+    public void cleanup() throws IOException {
+        Utils.delete(stateDir);
     }
 
     @Test
@@ -139,18 +140,29 @@ public class StateDirectoryTest {
         directory.lock(task1, 0);
         directory.directoryForTask(new TaskId(2, 0));
 
-        directory.cleanRemovedTasks();
+        directory.cleanRemovedTasks(0);
         final List<File> files = Arrays.asList(appDir.listFiles());
         assertEquals(2, files.size());
         assertTrue(files.contains(new File(appDir, task0.toString())));
         assertTrue(files.contains(new File(appDir, task1.toString())));
+    }
 
+    @Test
+    public void shouldCleanupStateDirectoriesWhenLastModifiedIsLessThanNowMinusCleanupDelay() throws Exception {
+        final File dir = directory.directoryForTask(new TaskId(2, 0));
+        final int cleanupDelayMs = 60000;
+        directory.cleanRemovedTasks(cleanupDelayMs);
+        assertTrue(dir.exists());
+
+        time.sleep(cleanupDelayMs + 1);
+        directory.cleanRemovedTasks(cleanupDelayMs);
+        assertFalse(dir.exists());
     }
 
     @Test
     public void shouldNotRemoveNonTaskDirectoriesAndFiles() throws Exception {
         final File otherDir = TestUtils.tempDirectory(stateDir.toPath(), "foo");
-        directory.cleanRemovedTasks();
+        directory.cleanRemovedTasks(0);
         assertTrue(otherDir.exists());
     }
 
@@ -170,10 +182,32 @@ public class StateDirectoryTest {
     public void shouldCreateDirectoriesIfParentDoesntExist() throws Exception {
         final File tempDir = TestUtils.tempDirectory();
         final File stateDir = new File(new File(tempDir, "foo"), "state-dir");
-        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath());
+        final StateDirectory stateDirectory = new StateDirectory(applicationId, stateDir.getPath(), time);
         final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
+    }
+
+    @Test(expected = OverlappingFileLockException.class)
+    public void shouldLockGlobalStateDirectory() throws Exception {
+        final FileChannel channel = FileChannel.open(new File(directory.globalStateDir(),
+                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
+                                                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        directory.lockGlobalState(1);
+        channel.lock();
+    }
+
+    @Test
+    public void shouldUnlockGlobalStateDirectory() throws Exception {
+        final FileChannel channel = FileChannel.open(new File(directory.globalStateDir(),
+                                                              StateDirectory.LOCK_FILE_NAME).toPath(),
+                                                     StandardOpenOption.CREATE, StandardOpenOption.WRITE);
+        directory.lockGlobalState(1);
+
+        directory.unlockGlobalState();
+
+        // should lock without any exceptions
+        channel.lock();
     }
 
 }

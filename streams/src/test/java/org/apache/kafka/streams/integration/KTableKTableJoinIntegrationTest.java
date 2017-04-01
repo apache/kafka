@@ -1,16 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license
- * agreements.  See the NOTICE file distributed with this work for additional information regarding
- * copyright ownership. The ASF licenses this file to You under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance with the License.  You may obtain a
- * copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.streams.integration;
 
@@ -28,23 +30,24 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.experimental.categories.Category;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
 
-@RunWith(Parameterized.class)
+@Category({IntegrationTest.class})
 public class KTableKTableJoinIntegrationTest {
     private final static int NUM_BROKERS = 1;
 
@@ -59,71 +62,6 @@ public class KTableKTableJoinIntegrationTest {
     private KafkaStreams streams;
     private final static Properties CONSUMER_CONFIG = new Properties();
 
-    @Parameterized.Parameter(value = 0)
-    public JoinType joinType1;
-    @Parameterized.Parameter(value = 1)
-    public JoinType joinType2;
-    @Parameterized.Parameter(value = 2)
-    public List<KeyValue<String, String>> expectedResult;
-
-    //Single parameter, use Object[]
-    @Parameterized.Parameters
-    public static Object[] parameters() {
-        return new Object[][]{
-            {JoinType.INNER, JoinType.INNER, Arrays.asList(
-                new KeyValue<>("b", "B1-B2-B3")//,
-            )},
-            {JoinType.INNER, JoinType.LEFT, Arrays.asList(
-                new KeyValue<>("b", "B1-B2-B3")//,
-            )},
-            {JoinType.INNER, JoinType.OUTER, Arrays.asList(
-                new KeyValue<>("a", "null-A3"),
-                new KeyValue<>("b", "null-B3"),
-                new KeyValue<>("c", "null-C3"),
-                new KeyValue<>("b", "B1-B2-B3")//,
-            )},
-            {JoinType.LEFT, JoinType.INNER, Arrays.asList(
-                new KeyValue<>("a", "A1-null-A3"),
-                new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3")//,
-            )},
-            {JoinType.LEFT, JoinType.LEFT, Arrays.asList(
-                new KeyValue<>("a", "A1-null-A3"),
-                new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3")//,
-            )},
-            {JoinType.LEFT, JoinType.OUTER, Arrays.asList(
-                new KeyValue<>("a", "null-A3"),
-                new KeyValue<>("b", "null-B3"),
-                new KeyValue<>("c", "null-C3"),
-                new KeyValue<>("a", "A1-null-A3"),
-                new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3")//,
-            )},
-            {JoinType.OUTER, JoinType.INNER, Arrays.asList(
-                new KeyValue<>("a", "A1-null-A3"),
-                new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", "null-C2-C3")
-            )},
-            {JoinType.OUTER, JoinType.LEFT, Arrays.asList(
-                new KeyValue<>("a", "A1-null-A3"),
-                new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", "null-C2-C3")
-            )},
-            {JoinType.OUTER, JoinType.OUTER, Arrays.asList(
-                new KeyValue<>("a", "null-A3"),
-                new KeyValue<>("b", "null-B3"),
-                new KeyValue<>("c", "null-C3"),
-                new KeyValue<>("a", "A1-null-A3"),
-                new KeyValue<>("b", "B1-null-B3"),
-                new KeyValue<>("b", "B1-B2-B3"),
-                new KeyValue<>("c", "null-C2-C3")
-            )}
-        };
-    }
-
     @BeforeClass
     public static void beforeTest() throws Exception {
         CLUSTER.createTopic(TABLE_1);
@@ -133,7 +71,6 @@ public class KTableKTableJoinIntegrationTest {
 
         streamsConfig = new Properties();
         streamsConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfig.put(StreamsConfig.ZOOKEEPER_CONNECT_CONFIG, CLUSTER.zKConnectString());
         streamsConfig.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfig.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsConfig.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -193,7 +130,101 @@ public class KTableKTableJoinIntegrationTest {
         INNER, LEFT, OUTER
     }
 
-    private KafkaStreams prepareTopology() {
+
+    @Test
+    public void shouldInnerInnerJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.INNER, JoinType.INNER, Collections.singletonList(new KeyValue<>("b", "B1-B2-B3")));
+    }
+
+    @Test
+    public void shouldInnerLeftJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.INNER, JoinType.LEFT, Collections.singletonList(new KeyValue<>("b", "B1-B2-B3")));
+    }
+
+    @Test
+    public void shouldInnerOuterJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.INNER, JoinType.OUTER, Arrays.asList(
+                new KeyValue<>("a", "null-A3"),
+                new KeyValue<>("b", "null-B3"),
+                new KeyValue<>("c", "null-C3"),
+                new KeyValue<>("b", "B1-B2-B3")));
+    }
+
+    @Test
+    public void shouldLeftInnerJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.LEFT, JoinType.INNER, Arrays.asList(
+                new KeyValue<>("a", "A1-null-A3"),
+                new KeyValue<>("b", "B1-null-B3"),
+                new KeyValue<>("b", "B1-B2-B3")));
+    }
+
+    @Test
+    public void shouldLeftLeftJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.LEFT, JoinType.LEFT, Arrays.asList(
+                new KeyValue<>("a", "A1-null-A3"),
+                new KeyValue<>("b", "B1-null-B3"),
+                new KeyValue<>("b", "B1-B2-B3")));
+    }
+
+    @Test
+    public void shouldLeftOuterJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.LEFT, JoinType.OUTER, Arrays.asList(
+                new KeyValue<>("a", "null-A3"),
+                new KeyValue<>("b", "null-B3"),
+                new KeyValue<>("c", "null-C3"),
+                new KeyValue<>("a", "A1-null-A3"),
+                new KeyValue<>("b", "B1-null-B3"),
+                new KeyValue<>("b", "B1-B2-B3")));
+    }
+
+    @Test
+    public void shouldOuterInnerJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.OUTER, JoinType.INNER, Arrays.asList(
+                new KeyValue<>("a", "A1-null-A3"),
+                new KeyValue<>("b", "B1-null-B3"),
+                new KeyValue<>("b", "B1-B2-B3"),
+                new KeyValue<>("c", "null-C2-C3")));
+    }
+
+    @Test
+    public void shouldOuterLeftJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.OUTER, JoinType.LEFT,  Arrays.asList(
+                new KeyValue<>("a", "A1-null-A3"),
+                new KeyValue<>("b", "B1-null-B3"),
+                new KeyValue<>("b", "B1-B2-B3"),
+                new KeyValue<>("c", "null-C2-C3")));
+    }
+
+    @Test
+    public void shouldOuterOuterJoin() throws Exception {
+        verifyKTableKTableJoin(JoinType.OUTER, JoinType.OUTER, Arrays.asList(
+                new KeyValue<>("a", "null-A3"),
+                new KeyValue<>("b", "null-B3"),
+                new KeyValue<>("c", "null-C3"),
+                new KeyValue<>("a", "A1-null-A3"),
+                new KeyValue<>("b", "B1-null-B3"),
+                new KeyValue<>("b", "B1-B2-B3"),
+                new KeyValue<>("c", "null-C2-C3")));
+    }
+
+
+    private void verifyKTableKTableJoin(final JoinType joinType1,
+                                        final JoinType joinType2,
+                                        final List<KeyValue<String, String>> expectedResult) throws Exception {
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType1 + "-" + joinType2 + "-ktable-ktable-join");
+
+        streams = prepareTopology(joinType1, joinType2);
+        streams.start();
+
+
+        final List<KeyValue<String, String>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                CONSUMER_CONFIG,
+                OUTPUT,
+                expectedResult.size());
+
+        assertThat(result, equalTo(expectedResult));
+    }
+    private KafkaStreams prepareTopology(final JoinType joinType1, final JoinType joinType2) {
         final KStreamBuilder builder = new KStreamBuilder();
 
         final KTable<String, String> table1 = builder.table(TABLE_1, TABLE_1);
@@ -223,22 +254,6 @@ public class KTableKTableJoinIntegrationTest {
         }
 
         throw new RuntimeException("Unknown join type.");
-    }
-
-    @Test
-    public void KTableKTableJoin() throws Exception {
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType1 + "-" + joinType2 + "-ktable-ktable-join");
-
-        streams = prepareTopology();
-        streams.start();
-
-
-        final List<KeyValue<String, String>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            CONSUMER_CONFIG,
-            OUTPUT,
-            expectedResult.size());
-
-        assertThat(result, equalTo(expectedResult));
     }
 
 }

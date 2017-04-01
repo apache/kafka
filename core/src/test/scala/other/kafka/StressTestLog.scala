@@ -43,6 +43,7 @@ object StressTestLog {
 
     val log = new Log(dir = dir,
                       config = LogConfig(logProperties),
+                      logStartOffset = 0L,
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
                       time = time)
@@ -98,8 +99,8 @@ object StressTestLog {
       try {
         log.read(offset, 1024, Some(offset+1)).records match {
           case read: FileRecords if read.sizeInBytes > 0 => {
-            val first = read.shallowEntries.iterator.next()
-            require(first.offset == offset, "We should either read nothing or the message we asked for.")
+            val first = read.batches.iterator.next()
+            require(first.lastOffset == offset, "We should either read nothing or the message we asked for.")
             require(first.sizeInBytes == read.sizeInBytes, "Expected %d but got %d.".format(first.sizeInBytes, read.sizeInBytes))
             offset += 1
           }
