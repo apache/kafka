@@ -266,6 +266,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.transactionState = configureTransactionState(config, time);
             int retries = configureRetries(config, transactionState != null);
             int maxInflightRequests = configureInflightRequests(config, transactionState != null);
+            short acks = configureAcks(config, transactionState != null);
 
             this.apiVersions = new ApiVersions();
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -298,7 +299,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     this.accumulator,
                     maxInflightRequests == 1,
                     config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
-                    (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
+                    acks,
                     retries,
                     this.metrics,
                     Time.SYSTEM,
@@ -400,6 +401,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     "to use the idempotent producer. Otherwise we cannot guarantee idempotence.");
         }
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+    }
+
+    private static short configureAcks(ProducerConfig config, boolean idempotenceEnabled) {
+        boolean userConfiguredAcks = false;
+        short acks = (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG));
+        if (config.originals().containsKey(ProducerConfig.ACKS_CONFIG)) {
+            userConfiguredAcks = true;
+        }
+
+        if (idempotenceEnabled && !userConfiguredAcks) {
+            log.info("Overriding the default " + ProducerConfig.ACKS_CONFIG + " to all since idempotence is enabled");
+            return -1;
+        }
+
+        if (idempotenceEnabled && acks != -1) {
+            throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
+                    "producer. Otherwise we cannot guarantee idempotence");
+        }
+        return acks;
     }
 
     private static int parseAcks(String acksString) {

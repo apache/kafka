@@ -229,7 +229,8 @@ public class ProducerConfig extends AbstractConfig {
     public static final String ENABLE_IDEMPOTENCE_DOC = "When set to 'true', the producer will ensure that exactly one copy of each message is written in the stream. If 'false', producer "
                                                         + "retries due to broker failures, etc., may write duplicates of the retried message in the stream. This is set to 'false' by default. "
                                                         + "Note that enabling idempotence requires <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to be set to 1 and "
-                                                        + "<code>" + RETRIES_CONFIG + "</code> cannot be zero. If these values are left at their defaults, we will override the default to be suitable. "
+                                                        + "<code>" + RETRIES_CONFIG + "</code> cannot be zero. Additionally " + ACKS_CONFIG + " must be set to 'all'. If these values "
+                                                        + "are left at their defaults, we will override the default to be suitable. "
                                                         + "If the values are set to something incompatible with the idempotent producer, a ConfigException will be thrown.";
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
