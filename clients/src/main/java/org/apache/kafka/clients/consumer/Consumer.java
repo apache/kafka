@@ -106,9 +106,19 @@ public interface Consumer<K, V> extends Closeable {
     public void seek(TopicPartition partition, long offset);
 
     /**
+     * @see KafkaConsumer#seekToBeginning()
+     */
+    public void seekToBeginning();
+
+    /**
      * @see KafkaConsumer#seekToBeginning(Collection)
      */
     public void seekToBeginning(Collection<TopicPartition> partitions);
+
+    /**
+     * @see KafkaConsumer#seekToEnd()
+     */
+    public void seekToEnd();
 
     /**
      * @see KafkaConsumer#seekToEnd(Collection)

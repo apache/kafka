@@ -1211,11 +1211,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+
+    /**
+     * Seek to the first offset for each for all of the currently assigned partitions. This function evaluates lazily,
+     * seeking to the first offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)}
+     * are called.
+     */
+    @Override
+    public void seekToBeginning() {
+        seekToBeginning(Collections.<TopicPartition>emptyList());
+    }
+
     /**
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
      * first offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      * If no partition is provided, seek to the first offset for all of the currently assigned partitions.
      */
+    @Override
     public void seekToBeginning(Collection<TopicPartition> partitions) {
         acquire();
         try {
@@ -1230,10 +1242,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
+     * Seek to the final offset for all of the currently assigned partitions. This function evaluates lazily, seeking to
+     * the final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
+     */
+    @Override
+    public void seekToEnd() {
+        seekToEnd(Collections.<TopicPartition>emptyList());
+    }
+
+    /**
      * Seek to the last offset for each of the given partitions. This function evaluates lazily, seeking to the
      * final offset in all partitions only when {@link #poll(long)} or {@link #position(TopicPartition)} are called.
      * If no partition is provided, seek to the final offset for all of the currently assigned partitions.
      */
+    @Override
     public void seekToEnd(Collection<TopicPartition> partitions) {
         acquire();
         try {
