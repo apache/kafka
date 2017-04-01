@@ -254,12 +254,14 @@ public class RegexSourceIntegrationTest {
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
+        final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList("message for test"), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList("testMessage"), producerConfig, mockTime);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, TOPIC_1, 1, 5000);
+
         streams.close();
 
         Map<String, List<String>> stateStoreToSourceTopic = builder.stateStoreNameToSourceTopics();
-
         assertThat(stateStoreToSourceTopic.get("testStateStore").get(0), is("topic-1"));
     }
 
