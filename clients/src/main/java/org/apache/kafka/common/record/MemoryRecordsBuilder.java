@@ -199,8 +199,7 @@ public class MemoryRecordsBuilder {
             // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
             // be re queued. In this case, we should not attempt to set the state again, since changing the pid and sequence
             // once a batch has been sent to the broker risks introducing duplicates.
-            throw new IllegalStateException("Attempting to close the same batch with a different base sequence. "
-                    + "Being in this situation indicates data corruption is afoot.");
+            throw new IllegalStateException("Trying to set producer state of an already closed batch. This indicates a bug on the client.");
         }
         this.producerId = pid;
         this.producerEpoch = epoch;

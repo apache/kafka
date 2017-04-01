@@ -99,7 +99,13 @@ public class TransactionState {
      * This method is used when the producer needs to reset it's internal state because of an irrecoverable exception
      * from the broker.
      *
+     * We need to reset the producer id and associated state when we have sent a batch to the broker, but we either get
+     * a non-retriable exception or we run out of retries, or the batch expired in the producer queue after it was already
+     * sent to the broker.
      *
+     * In all of these cases, we don't know whether batch was actually committed on the broker, and hence whether the
+     * sequence number was actually updated. If we don't reset the producer state, we risk the chance that all future
+     * messages will return an OutOfOrderSequenceException.
      */
     public synchronized void resetProducerId() {
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);

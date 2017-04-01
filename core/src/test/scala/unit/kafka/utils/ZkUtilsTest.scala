@@ -40,10 +40,7 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     assertTrue("Deletion should be successful", zkUtils.conditionalDeletePath(path, 0))
   }
 
-  /*
-   * Added this test since PIDManager's behavior is depending on the expected return values
-   * of ZkUtils.createSequentialPersistentPath
-   */
+  // Verify behaviour of ZkUtils.createSequentialPersistentPath since PIDManager relies on it
   @Test
   def testPersistentSequentialPath() {
     // Given an existing path

@@ -230,7 +230,8 @@ public class Sender implements Runnable {
 
         boolean needsTransactionStateReset = false;
         // Reset the PID if an expired batch has previously been sent to the broker. Also update the metrics
-        // for expired batches.
+        // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
+        // we need to reset the producer id here.
         for (ProducerBatch expiredBatch : expiredBatches) {
             if (transactionState != null && expiredBatch.inRetry()) {
                 needsTransactionStateReset = true;
@@ -289,7 +290,7 @@ public class Sender implements Runnable {
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
 
-    private Node getReadyNode(long remainingTimeMs) throws IOException {
+    private Node awaitLeastLoadedNodeReady(long remainingTimeMs) throws IOException {
         Node node = client.leastLoadedNode(time.milliseconds());
         if (NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
             return node;
@@ -303,7 +304,7 @@ public class Sender implements Runnable {
 
         while (!transactionState.hasPid()) {
             try {
-                Node node = getReadyNode(requestTimeout);
+                Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
                     if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
