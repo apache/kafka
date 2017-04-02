@@ -237,16 +237,20 @@ public final class RecordAccumulator {
     }
 
     /**
-     *  Try to append to a ProducerBatch. If it is full, we return null and a new batch is created. If the existing batch is
-     *  full, it will be closed right before send, or if it is expired, or when the producer is closed, whichever
+     *  Try to append to a ProducerBatch. If it is full, we return null and a new batch is created. We also close the underlying
+     *  data stream to free up resources like compression buffers. The batch will be fully closed (ie. the headers will be written
+     *  and memory records built) right before send, or if it is expired, or when the producer is closed, whichever
      *  comes first.
      */
     private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
             FutureRecordMetadata future = last.tryAppend(timestamp, key, value, callback, time.milliseconds());
-            if (future != null)
+            if (future == null)
+                last.closeBuffers();
+            else
                 return new RecordAppendResult(future, deque.size() > 1 || last.isFull(), false);
+
         }
         return null;
     }

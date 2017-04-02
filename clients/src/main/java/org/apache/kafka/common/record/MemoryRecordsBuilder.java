@@ -61,6 +61,7 @@ public class MemoryRecordsBuilder {
     private final int writeLimit;
     private final int initialCapacity;
 
+    private boolean appendStreamIsClosed = false;
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
@@ -206,15 +207,22 @@ public class MemoryRecordsBuilder {
         this.baseSequence = baseSequence;
     }
 
+    public void closeDataStream() {
+        if (!appendStreamIsClosed) {
+            try {
+                appendStream.close();
+                appendStreamIsClosed = true;
+            } catch (IOException e) {
+                throw new KafkaException(e);
+            }
+        }
+    }
+
     public void close() {
         if (builtRecords != null)
             return;
 
-        try {
-            appendStream.close();
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
+        closeDataStream();
 
         if (numRecords == 0L) {
             buffer().position(initPos);

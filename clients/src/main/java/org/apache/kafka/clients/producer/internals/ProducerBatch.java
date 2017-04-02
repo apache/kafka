@@ -234,6 +234,10 @@ public final class ProducerBatch {
         recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
     }
 
+    public void closeBuffers() {
+        recordsBuilder.closeDataStream();
+    }
+
     public void close() {
         recordsBuilder.close();
     }
