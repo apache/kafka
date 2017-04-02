@@ -220,11 +220,10 @@ public class KafkaStreams {
     }
 
     private void setState(final State newState) {
-        synchronized (this.stateLock) {
+        synchronized (stateLock) {
             final State oldState = state;
             if (!state.isValidTransition(newState)) {
-                log.warn(
-                    "{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
             } else {
                 log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
             }

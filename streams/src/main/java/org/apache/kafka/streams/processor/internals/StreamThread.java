@@ -463,7 +463,7 @@ public class StreamThread extends Thread {
                 action.apply(task);
             } catch (RuntimeException t) {
                 log.error("{} Failed while executing {} {} due to {}: ",
-                        this.logPrefix,
+                        logPrefix,
                         task.getClass().getSimpleName(),
                         task.id(),
                         exceptionMessage,
