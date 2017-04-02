@@ -13,7 +13,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-PIDS=$(ps ax | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $1}')
+PIDS=$(ps -elf | pgrep -f 'kafka\.Kafka')
 
 if [ -z "$PIDS" ]; then
   echo "No kafka server to stop"
@@ -21,4 +21,3 @@ if [ -z "$PIDS" ]; then
 else 
   kill -s TERM $PIDS
 fi
-
