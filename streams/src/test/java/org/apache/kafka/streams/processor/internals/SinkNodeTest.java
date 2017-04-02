@@ -51,6 +51,8 @@ public class SinkNodeTest {
             sink.process(anyKey, anyValue);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException ignored) {
+        } finally {
+            context.baseMetrics().close();
         }
     }
 
@@ -74,6 +76,8 @@ public class SinkNodeTest {
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
+        } finally {
+            context.baseMetrics().close();
         }
     }
 
@@ -97,6 +101,8 @@ public class SinkNodeTest {
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
             assertThat(e.getMessage(), containsString("unknown because key is null"));
+        } finally {
+            context.baseMetrics().close();
         }
     }
 
@@ -120,6 +126,8 @@ public class SinkNodeTest {
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
             assertThat(e.getMessage(), containsString("unknown because value is null"));
+        } finally {
+            context.baseMetrics().close();
         }
     }
 

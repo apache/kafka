@@ -211,6 +211,9 @@ public class ProcessorStateManagerTest {
                 put(nonPersistentStoreName, nonPersistentStoreTopicName);
             }
         }, changelogReader);
+        final MockProcessorContext context = new MockProcessorContext(
+            StateSerdes.withBuiltinTypes("foo", String.class, String.class),
+            new NoOpRecordCollector());
         try {
             // make sure the checkpoint file isn't deleted
             assertTrue(checkpointFile.exists());
@@ -219,10 +222,10 @@ public class ProcessorStateManagerTest {
             stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
         } finally {
             // close the state manager with the ack'ed offsets
-            stateMgr.flush(new MockProcessorContext(StateSerdes.withBuiltinTypes("foo", String.class, String.class), new NoOpRecordCollector()));
+            stateMgr.flush(context);
+            context.baseMetrics().close();
             stateMgr.close(ackedOffsets);
         }
-
         // make sure all stores are closed, and the checkpoint file is written.
         assertTrue(persistentStore.flushed);
         assertTrue(persistentStore.closed);

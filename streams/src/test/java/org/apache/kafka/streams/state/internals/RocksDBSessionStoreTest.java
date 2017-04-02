@@ -65,6 +65,7 @@ public class RocksDBSessionStoreTest {
 
     @After
     public void close() {
+        context.baseMetrics().close();
         sessionStore.close();
     }
 

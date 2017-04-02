@@ -52,6 +52,7 @@ public class RocksDBWindowStoreSupplierTest {
 
     @After
     public void close() {
+        context.baseMetrics().close();
         store.close();
     }
 

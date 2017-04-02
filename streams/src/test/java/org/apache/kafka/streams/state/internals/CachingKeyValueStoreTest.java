@@ -47,6 +47,7 @@ import static org.junit.Assert.assertNull;
 public class CachingKeyValueStoreTest {
 
     private final int maxCacheSizeBytes = 150;
+    private MockProcessorContext context;
     private CachingKeyValueStore<String, String> store;
     private InMemoryKeyValueStore<Bytes, byte[]> underlyingStore;
     private ThreadCache cache;
@@ -61,7 +62,7 @@ public class CachingKeyValueStoreTest {
         store = new CachingKeyValueStore<>(underlyingStore, Serdes.String(), Serdes.String());
         store.setFlushListener(cacheFlushListener);
         cache = new ThreadCache("testCache", maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
-        final MockProcessorContext context = new MockProcessorContext(null, null, null, (RecordCollector) null, cache);
+        context = new MockProcessorContext(null, null, null, (RecordCollector) null, cache);
         topic = "topic";
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
         store.init(context, null);
@@ -69,6 +70,7 @@ public class CachingKeyValueStoreTest {
 
     @Test
     public void shouldPutGetToFromCache() throws Exception {
+        context.baseMetrics().close();
         store.put("key", "value");
         store.put("key2", "value2");
         assertEquals("value", store.get("key"));

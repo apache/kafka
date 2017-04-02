@@ -25,6 +25,7 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.SegmentedBytesStoreStub;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -37,6 +38,7 @@ import static org.junit.Assert.assertTrue;
 
 public class ChangeLoggingSegmentedBytesStoreTest {
 
+    private MockProcessorContext context;
     private final SegmentedBytesStoreStub bytesStore = new SegmentedBytesStoreStub();
     private final ChangeLoggingSegmentedBytesStore store = new ChangeLoggingSegmentedBytesStore(bytesStore);
     private final Map sent = new HashMap<>();
@@ -56,13 +58,20 @@ public class ChangeLoggingSegmentedBytesStoreTest {
                 sent.put(key, value);
             }
         };
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      collector,
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        context = new MockProcessorContext(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            collector,
+            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         context.setTime(0);
         store.init(context, store);
+    }
+
+    @After
+    public void after() {
+        context.baseMetrics().close();
+        store.close();
     }
 
     @SuppressWarnings("unchecked")

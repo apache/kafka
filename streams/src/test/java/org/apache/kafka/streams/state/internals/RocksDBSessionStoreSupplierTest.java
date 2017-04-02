@@ -55,6 +55,7 @@ public class RocksDBSessionStoreSupplierTest {
 
     @After
     public void close() {
+        context.baseMetrics().close();
         store.close();
     }
 
@@ -110,6 +111,7 @@ public class RocksDBSessionStoreSupplierTest {
         store.init(context, store);
         store.put(new Windowed<>("a", new SessionWindow(0, 10)), "b");
         assertTrue(logged.isEmpty());
+        context.baseMetrics().close();
     }
 
     @Test

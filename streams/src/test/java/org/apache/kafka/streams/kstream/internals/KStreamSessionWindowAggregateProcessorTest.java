@@ -115,6 +115,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     @After
     public void closeStore() {
+        context.baseMetrics().close();
         sessionStore.close();
     }
 

@@ -52,6 +52,7 @@ public class RocksDBKeyValueStoreSupplierTest {
 
     @After
     public void close() {
+        context.baseMetrics().close();
         store.close();
     }
 
