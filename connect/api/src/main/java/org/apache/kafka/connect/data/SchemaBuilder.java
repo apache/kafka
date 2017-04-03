@@ -399,7 +399,6 @@ public class SchemaBuilder implements Schema {
         return build();
     }
 
-
     private static void checkCanSet(String fieldName, Object fieldVal, Object val) {
         if (fieldVal != null && fieldVal != val)
             throw new SchemaBuilderException("Invalid SchemaBuilder call: " + fieldName + " has already been set.");
