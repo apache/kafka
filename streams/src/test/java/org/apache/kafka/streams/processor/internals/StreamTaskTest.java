@@ -558,8 +558,9 @@ public class StreamTaskTest {
         task.closeProducer();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
-    public void shouldCloseProducer() {
+    public void shouldCloseProducerWhenExactlyOneEnabled() {
         final Map properties = this.config.values();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         final StreamsConfig config = new StreamsConfig(properties);

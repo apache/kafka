@@ -27,7 +27,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -107,7 +106,7 @@ public class StreamThreadTest {
         new PartitionInfo("topic3", 2, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster metadata = new Cluster("cluster", Arrays.asList(Node.noNode()), infos, Collections.<String>emptySet(),
+    private Cluster metadata = new Cluster("cluster", Collections.singleton(Node.noNode()), infos, Collections.<String>emptySet(),
             Collections.<String>emptySet());
 
     private final PartitionAssignor.Subscription subscription =
@@ -149,20 +148,20 @@ public class StreamThreadTest {
     }
 
     private static class TestStreamTask extends StreamTask {
-        public boolean committed = false;
+        boolean committed = false;
         private boolean closed;
         private boolean closedStateManager;
 
-        public TestStreamTask(TaskId id,
-                              String applicationId,
-                              Collection<TopicPartition> partitions,
-                              ProcessorTopology topology,
-                              Consumer<byte[], byte[]> consumer,
-                              Producer<byte[], byte[]> producer,
-                              Consumer<byte[], byte[]> restoreConsumer,
-                              StreamsConfig config,
-                              StreamsMetrics metrics,
-                              StateDirectory stateDirectory) {
+        TestStreamTask(TaskId id,
+                       String applicationId,
+                       Collection<TopicPartition> partitions,
+                       ProcessorTopology topology,
+                       Consumer<byte[], byte[]> consumer,
+                       Producer<byte[], byte[]> producer,
+                       Consumer<byte[], byte[]> restoreConsumer,
+                       StreamsConfig config,
+                       StreamsMetrics metrics,
+                       StateDirectory stateDirectory) {
             super(id, applicationId, partitions, topology, consumer, new StoreChangelogReader(restoreConsumer, Time.SYSTEM, 5000), config, metrics,
                   stateDirectory, null, new MockTime(), new RecordCollectorImpl(producer, id.toString()));
         }
@@ -239,7 +238,7 @@ public class StreamThreadTest {
 
         revokedPartitions = Collections.emptyList();
         assignedPartitions = Collections.singletonList(t1p1);
-        expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
+        expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         assertEquals(thread.state(), StreamThread.State.PARTITIONS_REVOKED);
@@ -258,7 +257,7 @@ public class StreamThreadTest {
 
         revokedPartitions = assignedPartitions;
         assignedPartitions = Collections.singletonList(t1p2);
-        expectedGroup2 = new HashSet<>(Arrays.asList(t1p2));
+        expectedGroup2 = new HashSet<>(Collections.singleton(t1p2));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
         assertFalse(thread.tasks().containsKey(task1));
@@ -299,7 +298,7 @@ public class StreamThreadTest {
 
         revokedPartitions = assignedPartitions;
         assignedPartitions = Arrays.asList(t1p1, t2p1, t3p1);
-        expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
+        expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
         expectedGroup2 = new HashSet<>(Arrays.asList(t2p1, t3p1));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
@@ -313,7 +312,7 @@ public class StreamThreadTest {
 
         revokedPartitions = assignedPartitions;
         assignedPartitions = Arrays.asList(t1p1, t2p1, t3p1);
-        expectedGroup1 = new HashSet<>(Arrays.asList(t1p1));
+        expectedGroup1 = new HashSet<>(Collections.singleton(t1p1));
         expectedGroup2 = new HashSet<>(Arrays.asList(t2p1, t3p1));
 
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
@@ -338,10 +337,11 @@ public class StreamThreadTest {
             (thread.state() == StreamThread.State.NOT_RUNNING));
     }
 
-    final static String TOPIC = "topic";
-    final Set<TopicPartition> task0Assignment = Collections.singleton(new TopicPartition(TOPIC, 0));
-    final Set<TopicPartition> task1Assignment = Collections.singleton(new TopicPartition(TOPIC, 1));
+    private final static String TOPIC = "topic";
+    private final Set<TopicPartition> task0Assignment = Collections.singleton(new TopicPartition(TOPIC, 0));
+    private final Set<TopicPartition> task1Assignment = Collections.singleton(new TopicPartition(TOPIC, 1));
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testHandingOverTaskFromOneToAnotherThread() throws Exception {
         final TopologyBuilder builder = new TopologyBuilder();
@@ -378,13 +378,9 @@ public class StreamThreadTest {
         thread2.rebalanceListener.onPartitionsAssigned(task1Assignment);
 
         final Set<TaskId> originalTaskAssignmentThread1 = new HashSet<>();
-        for (TaskId tid : thread1.tasks().keySet()) {
-            originalTaskAssignmentThread1.add(tid);
-        }
+        originalTaskAssignmentThread1.addAll(thread1.tasks().keySet());
         final Set<TaskId> originalTaskAssignmentThread2 = new HashSet<>();
-        for (TaskId tid : thread2.tasks().keySet()) {
-            originalTaskAssignmentThread2.add(tid);
-        }
+        originalTaskAssignmentThread2.addAll(thread2.tasks().keySet());
 
         // revoke (task will be suspended)
         thread1.rebalanceListener.onPartitionsRevoked(task0Assignment);
@@ -420,7 +416,7 @@ public class StreamThreadTest {
 
         private final Map<TaskId, Set<TopicPartition>> activeTaskAssignment;
 
-        public MockStreamsPartitionAssignor(final Map<TaskId, Set<TopicPartition>> activeTaskAssignment) {
+        MockStreamsPartitionAssignor(final Map<TaskId, Set<TopicPartition>> activeTaskAssignment) {
             this.activeTaskAssignment = activeTaskAssignment;
         }
 
@@ -768,13 +764,11 @@ public class StreamThreadTest {
     }
 
     private static class EoSMockClientSupplier extends MockClientSupplier {
-        private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
-
         final List<Producer> producers = new LinkedList<>();
 
         @Override
         public Producer<byte[], byte[]> getProducer(Map<String, Object> config) {
-            final Producer producer = new MockedProducer();
+            final Producer<byte[], byte[]> producer = new MockedProducer<>();
             producers.add(producer);
             ++numberOfCreatedProducers;
             return producer;
@@ -1261,10 +1255,10 @@ public class StreamThreadTest {
         partitionAssignor.onAssignment(assignments.get("client"));
     }
 
-    public static class StateListenerStub implements StreamThread.StateListener {
-        public int numChanges = 0;
-        public StreamThread.State oldState = null;
-        public StreamThread.State newState = null;
+    private static class StateListenerStub implements StreamThread.StateListener {
+        int numChanges = 0;
+        StreamThread.State oldState = null;
+        StreamThread.State newState = null;
 
         @Override
         public void onChange(final StreamThread thread, final StreamThread.State newState, final StreamThread.State oldState) {
@@ -1279,7 +1273,7 @@ public class StreamThreadTest {
         }
     }
 
-    private final static class MockedProducer extends MockProducer {
+    private final static class MockedProducer<K, V> extends MockProducer<K, V> {
         boolean closed = false;
 
         MockedProducer() {
