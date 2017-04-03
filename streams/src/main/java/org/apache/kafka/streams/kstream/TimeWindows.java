@@ -74,7 +74,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     /**
      * Return a window definition with the given window size, and with the advance interval being equal to the window
      * size.
-     * The time interval represented by the the N-th window is: {@code [N * size, N * size + size)}.
+     * The time interval represented by the N-th window is: {@code [N * size, N * size + size)}.
      * <p>
      * This provides the semantics of tumbling windows, which are fixed-sized, gap-less, non-overlapping windows.
      * Tumbling windows are a special case of hopping windows with {@code advance == size}.
@@ -93,7 +93,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     /**
      * Return a window definition with the original size, but advance ("hop") the window by the given interval, which
      * specifies by how much a window moves forward relative to the previous one.
-     * The time interval represented by the the N-th window is: {@code [N * advance, N * advance + size)}.
+     * The time interval represented by the N-th window is: {@code [N * advance, N * advance + size)}.
      * <p>
      * This provides the semantics of hopping windows, which are fixed-sized, overlapping windows.
      *

@@ -121,7 +121,7 @@ class AbstractFetcherThreadTest {
       fetchRequest.offsets.mapValues(_ => new TestPartitionData()).toSeq
 
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
-      new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.offset) }.toMap)
+      new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap)
   }
 
 
@@ -199,7 +199,7 @@ class AbstractFetcherThreadTest {
       partitionMap.foreach { case (topicPartition, partitionFetchState) =>
         // Add backoff delay check
         if (partitionFetchState.isActive)
-          requestMap.put(topicPartition, partitionFetchState.offset)
+          requestMap.put(topicPartition, partitionFetchState.fetchOffset)
       }
       new DummyFetchRequest(requestMap)
     }

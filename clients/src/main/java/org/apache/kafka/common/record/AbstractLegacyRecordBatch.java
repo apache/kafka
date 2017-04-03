@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
@@ -29,8 +30,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
-import java.util.Collections;
-import java.util.Iterator;
+import java.util.NoSuchElementException;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.OFFSET_OFFSET;
@@ -155,7 +155,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public String toString() {
-        return "LegacyRecordBatch(" + offset() + ", " + outerRecord() + ")";
+        return "LegacyRecordBatch(offset=" + offset() + ", " + outerRecord() + ")";
     }
 
     @Override
@@ -211,11 +211,40 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
      * @return An iterator over the records contained within this batch
      */
     @Override
-    public Iterator<Record> iterator() {
+    public CloseableIterator<Record> iterator() {
         if (isCompressed())
             return new DeepRecordsIterator(this, false, Integer.MAX_VALUE);
-        else
-            return Collections.<Record>singletonList(this).iterator();
+
+        return new CloseableIterator<Record>() {
+            private boolean hasNext = true;
+
+            @Override
+            public void close() {}
+
+            @Override
+            public boolean hasNext() {
+                return hasNext;
+            }
+
+            @Override
+            public Record next() {
+                if (!hasNext)
+                    throw new NoSuchElementException();
+                hasNext = false;
+                return AbstractLegacyRecordBatch.this;
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
+    }
+
+    @Override
+    public CloseableIterator<Record> streamingIterator() {
+        // the older message format versions do not support streaming, so we return the normal iterator
+        return iterator();
     }
 
     static void writeHeader(ByteBuffer buffer, long offset, int size) {
@@ -256,7 +285,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         }
     }
 
-    private static class DeepRecordsIterator extends AbstractIterator<Record> {
+    private static class DeepRecordsIterator extends AbstractIterator<Record> implements CloseableIterator<Record> {
         private final ArrayDeque<AbstractLegacyRecordBatch> batches;
         private final long absoluteBaseOffset;
         private final byte wrapperMagic;
@@ -341,6 +370,9 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
             return entry;
         }
+
+        @Override
+        public void close() {}
     }
 
     private static class BasicLegacyRecordBatch extends AbstractLegacyRecordBatch {

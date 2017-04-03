@@ -102,6 +102,10 @@ public class MemoryRecordsTest {
                     assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
                     assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                     assertNull(batch.countOrNull());
+                    if (magic == RecordBatch.MAGIC_VALUE_V0)
+                        assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
+                    else
+                        assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
                 }
 
                 int recordCount = 0;
@@ -116,10 +120,18 @@ public class MemoryRecordsTest {
                     if (magic >= RecordBatch.MAGIC_VALUE_V2)
                         assertEquals(firstSequence + total, record.sequence());
 
-                    if (magic > RecordBatch.MAGIC_VALUE_V0) {
+                    assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
+                    if (magic == RecordBatch.MAGIC_VALUE_V0) {
+                        assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
+                        assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                    } else {
                         assertEquals(records[total].timestamp(), record.timestamp());
+                        assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
                         if (magic < RecordBatch.MAGIC_VALUE_V2)
-                            assertTrue(record.hasTimestampType(batch.timestampType()));
+                            assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
+                        else
+                            assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
                     }
 
                     total++;
@@ -139,6 +151,42 @@ public class MemoryRecordsTest {
         assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
         builder.close();
         assertFalse(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
+    }
+
+    /**
+     * This test verifies that the checksum returned for various versions matches hardcoded values to catch unintentional
+     * changes to how the checksum is computed.
+     */
+    @Test
+    public void testChecksum() {
+        // we get reasonable coverage with uncompressed and one compression type
+        if (compression != CompressionType.NONE && compression != CompressionType.LZ4)
+            return;
+
+        SimpleRecord[] records = {
+            new SimpleRecord(283843L, "key1".getBytes(), "value1".getBytes()),
+            new SimpleRecord(1234L, "key2".getBytes(), "value2".getBytes())
+        };
+        RecordBatch batch = MemoryRecords.withRecords(magic, compression, records).batches().iterator().next();
+        long expectedChecksum;
+        if (magic == RecordBatch.MAGIC_VALUE_V0) {
+            if (compression == CompressionType.NONE)
+                expectedChecksum = 1978725405L;
+            else
+                expectedChecksum = 66944826L;
+        } else if (magic == RecordBatch.MAGIC_VALUE_V1) {
+            if (compression == CompressionType.NONE)
+                expectedChecksum = 109425508L;
+            else
+                expectedChecksum = 1407303399L;
+        } else {
+            if (compression == CompressionType.NONE)
+                expectedChecksum = 3851219455L;
+            else
+                expectedChecksum = 2745969314L;
+        }
+        assertEquals("Unexpected checksum for magic " + magic + " and compression type " + compression,
+                expectedChecksum, batch.checksum());
     }
 
     @Test

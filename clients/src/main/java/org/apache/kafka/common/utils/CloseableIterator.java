@@ -1,11 +1,11 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * 
+ * the License. You may obtain a copy of the License at
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,12 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.utils;
 
-package kafka.utils
+import java.io.Closeable;
+import java.util.Iterator;
 
-import java.util.Locale
-
-object Os {
-  val name = System.getProperty("os.name").toLowerCase(Locale.ROOT)
-  val isWindows = name.startsWith("windows")
+/**
+ * Iterators that need to be closed in order to release resources should implement this interface.
+ *
+ * Warning: before implementing this interface, consider if there are better options. The chance of misuse is
+ * a bit high since people are used to iterating without closing.
+ */
+public interface CloseableIterator<T> extends Iterator<T>, Closeable {
+    void close();
 }

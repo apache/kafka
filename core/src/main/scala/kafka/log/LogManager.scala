@@ -48,12 +48,14 @@ class LogManager(val logDirs: Array[File],
                  val cleanerConfig: CleanerConfig,
                  ioThreads: Int,
                  val flushCheckMs: Long,
-                 val flushCheckpointMs: Long,
+                 val flushRecoveryOffsetCheckpointMs: Long,
+                 val flushStartOffsetCheckpointMs: Long,
                  val retentionCheckMs: Long,
                  scheduler: Scheduler,
                  val brokerState: BrokerState,
                  time: Time) extends Logging {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
+  val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val LockFile = ".lock"
   val InitialTaskDelayMs = 30*1000
 
@@ -64,6 +66,7 @@ class LogManager(val logDirs: Array[File],
   createAndValidateLogDirs(logDirs)
   private val dirLocks = lockLogDirs(logDirs)
   private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, RecoveryPointCheckpointFile)))).toMap
+  private val logStartOffsetCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, LogStartOffsetCheckpointFile)))).toMap
   loadLogs()
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
@@ -139,8 +142,16 @@ class LogManager(val logDirs: Array[File],
         recoveryPoints = this.recoveryPointCheckpoints(dir).read
       } catch {
         case e: Exception =>
-          warn("Error occured while reading recovery-point-offset-checkpoint file of directory " + dir, e)
+          warn("Error occurred while reading recovery-point-offset-checkpoint file of directory " + dir, e)
           warn("Resetting the recovery checkpoint to 0")
+      }
+
+      var logStartOffsets = Map[TopicPartition, Long]()
+      try {
+        logStartOffsets = this.logStartOffsetCheckpoints(dir).read
+      } catch {
+        case e: Exception =>
+          warn("Error occurred while reading log-start-offset-checkpoint file of directory " + dir, e)
       }
 
       val jobsForDir = for {
@@ -153,8 +164,9 @@ class LogManager(val logDirs: Array[File],
           val topicPartition = Log.parseTopicPartitionName(logDir)
           val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
+          val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
-          val current = new Log(logDir, config, logRecoveryPoint, scheduler, time)
+          val current = new Log(logDir, config, logStartOffset, logRecoveryPoint, scheduler, time)
           if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
             this.logsToBeDeleted.add(current)
           } else {
@@ -210,7 +222,12 @@ class LogManager(val logDirs: Array[File],
       scheduler.schedule("kafka-recovery-point-checkpoint",
                          checkpointRecoveryPointOffsets,
                          delay = InitialTaskDelayMs,
-                         period = flushCheckpointMs,
+                         period = flushRecoveryOffsetCheckpointMs,
+                         TimeUnit.MILLISECONDS)
+      scheduler.schedule("kafka-log-start-offset-checkpoint",
+                         checkpointLogStartOffsets,
+                         delay = InitialTaskDelayMs,
+                         period = flushStartOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-delete-logs",
                          deleteLogs,
@@ -263,7 +280,10 @@ class LogManager(val logDirs: Array[File],
 
         // update the last flush point
         debug("Updating recovery points at " + dir)
-        checkpointLogsInDir(dir)
+        checkpointLogRecoveryOffsetsInDir(dir)
+
+        debug("Updating log start offsets at " + dir)
+        checkpointLogStartOffsetsInDir(dir)
 
         // mark that the shutdown was clean by creating marker file
         debug("Writing clean shutdown marker at " + dir)
@@ -333,16 +353,35 @@ class LogManager(val logDirs: Array[File],
    * to avoid recovering the whole log on startup.
    */
   def checkpointRecoveryPointOffsets() {
-    this.logDirs.foreach(checkpointLogsInDir)
+    this.logDirs.foreach(checkpointLogRecoveryOffsetsInDir)
+  }
+
+  /**
+   * Write out the current log start offset for all logs to a text file in the log directory
+   * to avoid exposing data that have been deleted by DeleteRecordsRequest
+   */
+  def checkpointLogStartOffsets() {
+    this.logDirs.foreach(checkpointLogStartOffsetsInDir)
   }
 
   /**
    * Make a checkpoint for all logs in provided directory.
    */
-  private def checkpointLogsInDir(dir: File): Unit = {
+  private def checkpointLogRecoveryOffsetsInDir(dir: File): Unit = {
     val recoveryPoints = this.logsByDir.get(dir.toString)
     if (recoveryPoints.isDefined) {
       this.recoveryPointCheckpoints(dir).write(recoveryPoints.get.mapValues(_.recoveryPoint))
+    }
+  }
+
+  /**
+   * Checkpoint log start offset for all logs in provided directory.
+   */
+  private def checkpointLogStartOffsetsInDir(dir: File): Unit = {
+    val logs = this.logsByDir.get(dir.toString)
+    if (logs.isDefined) {
+      this.logStartOffsetCheckpoints(dir).write(
+        logs.get.filter{case (tp, log) => log.logStartOffset > log.logSegments.head.baseOffset}.mapValues(_.logStartOffset))
     }
   }
 
@@ -362,7 +401,7 @@ class LogManager(val logDirs: Array[File],
         val dataDir = nextLogDir()
         val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
         dir.mkdirs()
-        val log = new Log(dir, config, recoveryPoint = 0L, scheduler, time)
+        val log = new Log(dir, config, logStartOffset = 0L, recoveryPoint = 0L, scheduler, time)
         logs.put(topicPartition, log)
         info("Created log for partition [%s,%d] in %s with properties {%s}."
           .format(topicPartition.topic,
@@ -425,6 +464,7 @@ class LogManager(val logDirs: Array[File],
       val renamedDir = new File(removedLog.dir.getParent, dirName)
       val renameSuccessful = removedLog.dir.renameTo(renamedDir)
       if (renameSuccessful) {
+        checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
         removedLog.dir = renamedDir
         // change the file pointers for log and index file
         for (logSegment <- removedLog.logSegments) {

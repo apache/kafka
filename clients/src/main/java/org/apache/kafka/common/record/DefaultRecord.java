@@ -18,13 +18,16 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Crc32;
+import org.apache.kafka.common.utils.Checksums;
+import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
@@ -258,14 +261,14 @@ public class DefaultRecord implements Record {
     private static long computeChecksum(long timestamp,
                                         ByteBuffer key,
                                         ByteBuffer value) {
-        Crc32 crc = new Crc32();
-        crc.updateLong(timestamp);
+        Checksum crc = Crc32C.create();
+        Checksums.updateLong(crc, timestamp);
 
         if (key != null)
-            crc.update(key, key.remaining());
+            Checksums.update(crc, key, key.remaining());
 
         if (value != null)
-            crc.update(value, value.remaining());
+            Checksums.update(crc, value, value.remaining());
 
         return crc.getValue();
     }
@@ -288,6 +291,46 @@ public class DefaultRecord implements Record {
     @Override
     public boolean isControlRecord() {
         return (attributes & CONTROL_FLAG_MASK) != 0;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("DefaultRecord(offset=%d, timestamp=%d, key=%d bytes, value=%d bytes)",
+                offset,
+                timestamp,
+                key == null ? 0 : key.limit(),
+                value == null ? 0 : value.limit());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o)
+            return true;
+        if (o == null || getClass() != o.getClass())
+            return false;
+
+        DefaultRecord that = (DefaultRecord) o;
+        return sizeInBytes == that.sizeInBytes &&
+                attributes == that.attributes &&
+                offset == that.offset &&
+                timestamp == that.timestamp &&
+                sequence == that.sequence &&
+                (key == null ? that.key == null : key.equals(that.key)) &&
+                (value == null ? that.value == null : value.equals(that.value)) &&
+                Arrays.equals(headers, that.headers);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = sizeInBytes;
+        result = 31 * result + (int) attributes;
+        result = 31 * result + (int) (offset ^ (offset >>> 32));
+        result = 31 * result + (int) (timestamp ^ (timestamp >>> 32));
+        result = 31 * result + sequence;
+        result = 31 * result + (key != null ? key.hashCode() : 0);
+        result = 31 * result + (value != null ? value.hashCode() : 0);
+        result = 31 * result + Arrays.hashCode(headers);
+        return result;
     }
 
     public static DefaultRecord readFrom(DataInputStream input,

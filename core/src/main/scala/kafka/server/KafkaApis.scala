@@ -99,6 +99,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
+        case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -147,7 +148,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       val leaderAndIsrResponse =
         if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-          val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, metadataCache, onLeadershipChange)
+          val result = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
           new LeaderAndIsrResponse(result.error, result.responseMap.asJava)
         } else {
           val result = leaderAndIsrRequest.partitionStates.asScala.keys.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
@@ -199,7 +200,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val updateMetadataResponse =
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-        val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest, metadataCache)
+        val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
         if (deletedPartitions.nonEmpty)
           coordinator.handleDeletedPartitions(deletedPartitions)
 
@@ -451,12 +452,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val nonExistingOrUnauthorizedForDescribePartitionData = nonExistingOrUnauthorizedForDescribeTopics.map {
       case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION,
-        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LSO, null, MemoryRecords.EMPTY))
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
     val unauthorizedForReadPartitionData = unauthorizedForReadRequestInfo.map {
       case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED,
-        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LSO, null, MemoryRecords.EMPTY))
+        FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
     // the callback for sending a fetch response
@@ -474,17 +475,17 @@ class KafkaApis(val requestChannel: RequestChannel,
           val convertedData = replicaManager.getMagic(tp) match {
             case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0) =>
               trace(s"Down converting message to V0 for fetch request from $clientId")
-              FetchPartitionData(data.error, data.hw, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
+              FetchPartitionData(data.error, data.hw, data.logStartOffset, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
 
             case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1) =>
               trace(s"Down converting message to V1 for fetch request from $clientId")
-              FetchPartitionData(data.error, data.hw, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
+              FetchPartitionData(data.error, data.hw, data.logStartOffset, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
 
             case _ => data
           }
 
-          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, FetchResponse.INVALID_LSO,
-            null, convertedData.records)
+          tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+            convertedData.logStartOffset, null, convertedData.records)
         }
       }
 
@@ -728,7 +729,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         new Array[(Long, Long)](segments.length)
 
     for (i <- segments.indices)
-      offsetTimeArray(i) = (segments(i).baseOffset, segments(i).lastModified)
+      offsetTimeArray(i) = (math.max(segments(i).baseOffset, log.logStartOffset), segments(i).lastModified)
     if (lastSegmentHasSize)
       offsetTimeArray(segments.length) = (log.logEndOffset, time.milliseconds)
 
@@ -1256,6 +1257,54 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendResponseCallback
         )
       }
+    }
+  }
+
+  def handleDeleteRecordsRequest(request: RequestChannel.Request) {
+    val deleteRecordsRequest = request.body[DeleteRecordsRequest]
+
+    val (authorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = deleteRecordsRequest.partitionOffsets.asScala.partition {
+      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
+    }
+
+    val (authorizedForDeleteTopics, unauthorizedForDeleteTopics) = authorizedForDescribeTopics.partition {
+      case (topicPartition, _) => authorize(request.session, Delete, new Resource(auth.Topic, topicPartition.topic))
+    }
+
+    // the callback for sending a DeleteRecordsResponse
+    def sendResponseCallback(responseStatus: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse]) {
+
+      val mergedResponseStatus = responseStatus ++
+        unauthorizedForDeleteTopics.mapValues(_ =>
+          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.TOPIC_AUTHORIZATION_FAILED)) ++
+        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ =>
+          new DeleteRecordsResponse.PartitionResponse(DeleteRecordsResponse.INVALID_LOW_WATERMARK, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+
+      mergedResponseStatus.foreach { case (topicPartition, status) =>
+        if (status.error != Errors.NONE) {
+          debug("DeleteRecordsRequest with correlation id %d from client %s on partition %s failed due to %s".format(
+            request.header.correlationId,
+            request.header.clientId,
+            topicPartition,
+            status.error.exceptionName))
+        }
+      }
+
+      val respBody = new DeleteRecordsResponse(mergedResponseStatus.asJava)
+      requestChannel.sendResponse(new RequestChannel.Response(request, respBody))
+
+      // When this callback is triggered, the remote API call has completed
+      request.apiRemoteCompleteTimeMs = time.milliseconds
+    }
+
+    if (authorizedForDeleteTopics.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      // call the replica manager to append messages to the replicas
+      replicaManager.deleteRecords(
+        deleteRecordsRequest.timeout.toLong,
+        authorizedForDeleteTopics.mapValues(_.toLong),
+        sendResponseCallback)
     }
   }
 

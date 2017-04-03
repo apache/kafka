@@ -28,7 +28,7 @@ import kafka.controller.KafkaController
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException}
+import org.apache.kafka.common.errors.{PolicyViolationException, NotEnoughReplicasException, NotLeaderForPartitionException}
 import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.JavaConverters._
@@ -235,10 +235,20 @@ class Partition(val topic: String,
   def updateReplicaLogReadResult(replicaId: Int, logReadResult: LogReadResult) {
     getReplica(replicaId) match {
       case Some(replica) =>
+        // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
+        val oldLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed() > 0) lowWatermarkIfLeader else -1L
         replica.updateLogReadResult(logReadResult)
+        val newLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed() > 0) lowWatermarkIfLeader else -1L
+        // check if the LW of the partition has incremented
+        // since the replica's logStartOffset may have incremented
+        val leaderLWIncremented = newLeaderLW > oldLeaderLW
         // check if we need to expand ISR to include this replica
         // if it is not in the ISR yet
-        maybeExpandIsr(replicaId, logReadResult)
+        val leaderHWIncremented = maybeExpandIsr(replicaId, logReadResult)
+
+        // some delayed operations may be unblocked after HW or LW changed
+        if (leaderLWIncremented || leaderHWIncremented)
+          tryCompleteDelayedRequests()
 
         debug("Recorded replica %d log end offset (LEO) position %d for partition %s."
           .format(replicaId, logReadResult.info.fetchOffsetMetadata.messageOffset, topicPartition))
@@ -263,8 +273,8 @@ class Partition(val topic: String,
    *
    * This function can be triggered when a replica's LEO has incremented
    */
-  def maybeExpandIsr(replicaId: Int, logReadResult: LogReadResult) {
-    val leaderHWIncremented = inWriteLock(leaderIsrUpdateLock) {
+  def maybeExpandIsr(replicaId: Int, logReadResult: LogReadResult): Boolean = {
+    inWriteLock(leaderIsrUpdateLock) {
       // check if this replica needs to be added to the ISR
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
@@ -280,18 +290,12 @@ class Partition(val topic: String,
             updateIsr(newInSyncReplicas)
             replicaManager.isrExpandRate.mark()
           }
-
           // check if the HW of the partition can now be incremented
           // since the replica may already be in the ISR and its LEO has just incremented
           maybeIncrementLeaderHW(leaderReplica, logReadResult.fetchTimeMs)
-
         case None => false // nothing to do if no longer leader
       }
     }
-
-    // some delayed operations may be unblocked after HW changed
-    if (leaderHWIncremented)
-      tryCompleteDelayedRequests()
   }
 
   /*
@@ -376,12 +380,25 @@ class Partition(val topic: String,
   }
 
   /**
+   * The low watermark offset value, calculated only if the local replica is the partition leader
+   * It is only used by leader broker to decide when DeleteRecordsRequest is satisfied. Its value is minimum logStartOffset of all live replicas
+   * Low watermark will increase when the leader broker receives either FetchRequest or DeleteRecordsRequest.
+   */
+  def lowWatermarkIfLeader: Long = {
+    if (!isLeaderReplicaLocal)
+      throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d".format(topicPartition, localBrokerId))
+    assignedReplicas.filter(replica =>
+      replicaManager.metadataCache.isBrokerAlive(replica.brokerId)).map(_.logStartOffset).reduceOption(_ min _).getOrElse(0L)
+  }
+
+  /**
    * Try to complete any pending requests. This should be called without holding the leaderIsrUpdateLock.
    */
   private def tryCompleteDelayedRequests() {
     val requestKey = new TopicPartitionOperationKey(topicPartition)
     replicaManager.tryCompleteDelayedFetch(requestKey)
     replicaManager.tryCompleteDelayedProduce(requestKey)
+    replicaManager.tryCompleteDelayedDeleteRecords(requestKey)
   }
 
   def maybeShrinkIsr(replicaMaxLagTimeMs: Long) {
@@ -465,6 +482,27 @@ class Partition(val topic: String,
       tryCompleteDelayedRequests()
 
     info
+  }
+
+  /**
+   * Update logStartOffset and low watermark if 1) offset <= highWatermark and 2) it is the leader replica.
+   * This function can trigger log segment deletion and log rolling.
+   *
+   * Return low watermark of the partition.
+   */
+  def deleteRecordsOnLeader(offset: Long): Long = {
+    inReadLock(leaderIsrUpdateLock) {
+      leaderReplicaIfLocal match {
+        case Some(leaderReplica) =>
+          leaderReplica.maybeIncrementLogStartOffset(offset)
+          if (!leaderReplica.log.get.config.delete)
+            throw new PolicyViolationException("Records of partition %s can not be deleted due to the configured policy".format(topicPartition))
+          lowWatermarkIfLeader
+        case None =>
+          throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d"
+            .format(topicPartition, localBrokerId))
+      }
+    }
   }
 
   private def updateIsr(newIsr: Set[Replica]) {

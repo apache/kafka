@@ -55,4 +55,10 @@
         <Method name="toLogical"/>
         <Bug pattern="ICAST_INT_2_LONG_AS_INSTANT"/>
     </Match>
+
+    <Match>
+        <!-- Suppress some minor warnings about machine-generated code for LRU cache
+             benchmarking. -->
+        <Package name="org.apache.kafka.jmh.cache.generated"/>
+    </Match>
 </FindBugsFilter>
