@@ -62,6 +62,7 @@ private[kafka] object LogValidator extends Logging {
         assignOffsetsNonCompressed(records, offsetCounter, now, compactedTopic, messageTimestampType,
           messageTimestampDiffMaxMs)
     } else {
+
       validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, now, sourceCodec, targetCodec, compactedTopic,
         messageFormatVersion, messageTimestampType, messageTimestampDiffMaxMs)
     }
@@ -214,8 +215,15 @@ private[kafka] object LogValidator extends Logging {
       }
 
       if (!inPlaceAssignment) {
+        val (pid, epoch, sequence) = {
+          // note that we only reassign offsets for requests coming straight from a producer. For records with MagicV2,
+          // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
+          // with older magic versions, this will always be NO_PRODUCER_ID, etc.
+          val first = records.batches.asScala.head
+          (first.producerId, first.producerEpoch, first.baseSequence)
+        }
         buildRecordsAndAssignOffsets(messageFormatVersion, offsetCounter, messageTimestampType,
-          CompressionType.forId(targetCodec.codec), currentTimestamp, validatedRecords)
+          CompressionType.forId(targetCodec.codec), currentTimestamp, validatedRecords, pid, epoch, sequence)
       } else {
         // we can update the batch only and write the compressed payload as is
         val batch = records.batches.iterator.next()
@@ -238,10 +246,12 @@ private[kafka] object LogValidator extends Logging {
 
   private def buildRecordsAndAssignOffsets(magic: Byte, offsetCounter: LongRef, timestampType: TimestampType,
                                            compressionType: CompressionType, logAppendTime: Long,
-                                           validatedRecords: Seq[Record]): ValidationAndOffsetAssignResult = {
+                                           validatedRecords: Seq[Record],
+                                           producerId: Long, epoch: Short, baseSequence: Int): ValidationAndOffsetAssignResult = {
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType, validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
-    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value, logAppendTime)
+    val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
+      logAppendTime, producerId, epoch, baseSequence)
 
     validatedRecords.foreach { record =>
       builder.appendWithOffset(offsetCounter.getAndIncrement(), record)

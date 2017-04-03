@@ -27,7 +27,7 @@ import kafka.api.{FetchRequest => _, _}
 import kafka.common.KafkaStorageException
 import ReplicaFetcherThread._
 import kafka.utils.Exit
-import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.clients._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.network.{ChannelBuilders, NetworkReceive, Selectable, Selector}
 import org.apache.kafka.common.requests.{AbstractRequest, FetchResponse, ListOffsetRequest, ListOffsetResponse}
@@ -248,14 +248,13 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse = {
-    import kafka.utils.NetworkClientBlockingOps._
     try {
-      if (!networkClient.blockingReady(sourceNode, socketTimeout)(time))
+      if (!NetworkClientUtils.awaitReady(networkClient, sourceNode, time, socketTimeout))
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
         val clientRequest = networkClient.newClientRequest(sourceBroker.id.toString, requestBuilder,
           time.milliseconds(), true)
-        networkClient.blockingSendAndReceive(clientRequest)(time)
+        NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
       }
     }
     catch {
