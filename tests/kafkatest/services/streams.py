@@ -50,6 +50,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
         self.kafka = kafka
         self.args = {'streams_class_name': streams_class_name,
                      'user_test_args': user_test_args}
+        self.log_level = "DEBUG"
 
     @property
     def node(self):
@@ -94,7 +95,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
             self.logger.info("Restarting Kafka Streams on " + str(node.account))
             self.start_node(node)
 
-    def wait(self, timeout_sec=360):
+    def wait(self, timeout_sec=1440):
         for node in self.nodes:
             self.wait_node(node, timeout_sec)
 

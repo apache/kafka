@@ -1,25 +1,26 @@
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -41,7 +42,7 @@ public class InternalTopicManagerTest {
     private final String topic = "test_topic";
     private final String userEndPoint = "localhost:2171";
     private MockStreamKafkaClient streamsKafkaClient;
-
+    private final Time time = new MockTime();
     @Before
     public void init() {
         final StreamsConfig config = new StreamsConfig(configProps());
@@ -55,19 +56,22 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldReturnCorrectPartitionCounts() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         Assert.assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
     }
 
     @Test
     public void shouldCreateRequiredTopics() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
     }
 
     @Test
     public void shouldNotCreateTopicIfExistsWithDifferentPartitions() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         boolean exceptionWasThrown = false;
         try {
             internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 2));
@@ -105,8 +109,8 @@ public class InternalTopicManagerTest {
             Node node = new Node(1, "host1", 1001);
             MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, new ArrayList<Node>(), new ArrayList<Node>());
             MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE, topic, true, Collections.singletonList(partitionMetadata));
-            MetadataResponse response = new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID,
-                Collections.singletonList(topicMetadata), 0);
+            MetadataResponse response = new MetadataResponse(Collections.<Node>singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID,
+                Collections.singletonList(topicMetadata));
             return response;
         }
     }

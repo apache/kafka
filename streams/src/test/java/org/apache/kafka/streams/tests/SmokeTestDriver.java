@@ -1,10 +1,10 @@
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -131,13 +130,17 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     public static Map<String, Set<Integer>> generate(String kafka, final int numKeys, final int maxRecordsPerKey) throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        final Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        // the next 4 config values make sure that all records are produced with no loss and
+        // no duplicates
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
 
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
         int numRecordsProduced = 0;
 
@@ -169,7 +172,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                     public void onCompletion(final RecordMetadata metadata, final Exception exception) {
                         if (exception != null) {
                             exception.printStackTrace();
-                            System.exit(-1);
+                            System.exit(1);
                         }
                     }
                 });
@@ -232,7 +235,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         int retry = 0;
         final long start = System.currentTimeMillis();
-        while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(3)) {
+        while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
             ConsumerRecords<byte[], byte[]> records = consumer.poll(500);
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
                 if (verifyMin(min, allData, false)

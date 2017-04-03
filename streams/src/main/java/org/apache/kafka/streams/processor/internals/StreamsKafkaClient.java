@@ -198,7 +198,11 @@ public class StreamsKafkaClient {
                     break;
                 }
             }
-            kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            try {
+                kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            } catch (final Exception e) {
+                throw new StreamsException("Could not poll.", e);
+            }
         }
         if (brokerId == null) {
             throw new StreamsException("Could not find any available broker.");
@@ -230,11 +234,20 @@ public class StreamsKafkaClient {
     }
 
     private ClientResponse sendRequest(final ClientRequest clientRequest) {
-        kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
+        try {
+            kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
+        } catch (final Exception e) {
+            throw new StreamsException("Could not send request.", e);
+        }
         final long responseTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         // Poll for the response.
         while (Time.SYSTEM.milliseconds() < responseTimeout) {
-            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            final List<ClientResponse> responseList;
+            try {
+                responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            } catch (final IllegalStateException e) {
+                throw new StreamsException("Could not poll.", e);
+            }
             if (!responseList.isEmpty()) {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");
