@@ -769,7 +769,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         log.info("Closing the Kafka producer with timeoutMillis = {} ms.", timeUnit.toMillis(timeout));
         // this will keep track of the first encountered exception
-        AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+        AtomicReference<Throwable> firstException = new AtomicReference<>();
         boolean invokedFromCallback = Thread.currentThread() == this.ioThread;
         if (timeout > 0) {
             if (invokedFromCallback) {

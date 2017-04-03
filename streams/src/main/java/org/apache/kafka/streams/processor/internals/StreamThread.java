@@ -124,7 +124,7 @@ public class StreamThread extends Thread {
     }
 
     private volatile State state = State.NOT_RUNNING;
-    private StateListener stateListener = null;
+    private StreamThread.StateListener stateListener = null;
 
     /**
      * Listen to state change events
@@ -141,10 +141,10 @@ public class StreamThread extends Thread {
     }
 
     /**
-     * Set the {@link StateListener} to be notified when state changes. Note this API is internal to
+     * Set the {@link StreamThread.StateListener} to be notified when state changes. Note this API is internal to
      * Kafka Streams and is not intended to be used by an external application.
      */
-    public void setStateListener(final StateListener listener) {
+    public void setStateListener(final StreamThread.StateListener listener) {
         this.stateListener = listener;
     }
 
@@ -463,7 +463,7 @@ public class StreamThread extends Thread {
                 action.apply(task);
             } catch (RuntimeException t) {
                 log.error("{} Failed while executing {} {} due to {}: ",
-                        StreamThread.this.logPrefix,
+                        logPrefix,
                         task.getClass().getSimpleName(),
                         task.id(),
                         exceptionMessage,
