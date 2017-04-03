@@ -421,7 +421,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return false;
 
         // we need to rejoin if we performed the assignment and metadata has changed
-        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot))
+        if (assignmentSnapshot != null && assignmentSnapshot.topicsChanged(metadataSnapshot))
             return true;
 
         // we need to join if our subscription has changed since the last join
@@ -916,6 +916,31 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public int hashCode() {
             return partitionsPerTopic != null ? partitionsPerTopic.hashCode() : 0;
+        }
+
+        public boolean topicsChanged(MetadataSnapshot that) {
+
+            if (partitionsPerTopic == null) {
+                return (that.partitionsPerTopic == null);
+            } else {
+                if (partitionsPerTopic.size() != that.partitionsPerTopic.size())
+                    return true;
+
+                for (String topic: partitionsPerTopic.keySet()) {
+                    if (that.partitionsPerTopic.containsKey(topic)) {
+                        if (that.partitionsPerTopic.get(topic) != null
+                                && this.partitionsPerTopic.get(topic) != null
+                                && !that.partitionsPerTopic.get(topic).equals(this.partitionsPerTopic.get(topic))) {
+
+                            return true;
+                        }
+                    } else {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
         }
     }
 
