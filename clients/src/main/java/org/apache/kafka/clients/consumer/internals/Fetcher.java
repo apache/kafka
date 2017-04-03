@@ -845,50 +845,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return partitionRecords;
     }
 
-    private boolean isBatchAborted(RecordBatch batch, Set<Long> abortedPids, Queue<FetchResponse.AbortedTransaction> abortedTransactions) {
-        if (isolationLevel == IsolationLevel.READ_COMMITTED) {
-            FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
-            if (abortedPids.contains(batch.producerId())
-                    || (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset())) {
-                if (abortedPids.contains(batch.producerId()) && containsAbortMarker(batch)) {
-                    abortedPids.remove(batch.producerId());
-                } else if (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
-                    abortedPids.add(batch.producerId());
-                    abortedTransactions.remove(nextAbortedTransaction);
-                }
-                log.trace("Skipping aborted record with pid {} and base offset {}", batch.producerId(), batch.baseOffset());
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private Queue<FetchResponse.AbortedTransaction> getAbortedTransactions(FetchResponse.PartitionData partition) {
-        PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = null;
-        if (partition.abortedTransactions != null && 0 < partition.abortedTransactions.size()) {
-            abortedTransactions = new PriorityQueue<>(
-                    partition.abortedTransactions.size(),
-                    new Comparator<FetchResponse.AbortedTransaction>() {
-                        @Override
-                        public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
-                            return (int) o1.firstOffset - (int) o2.firstOffset;
-                        }
-                    }
-            );
-            abortedTransactions.addAll(partition.abortedTransactions);
-        } else {
-            abortedTransactions = new PriorityQueue<>();
-        }
-        return abortedTransactions;
-    }
-
-    private boolean containsAbortMarker(RecordBatch batch) {
-        Iterator<Record> batchIterator = batch.iterator();
-        Record firstRecord = batchIterator.hasNext() ? batchIterator.next() : null;
-        if (firstRecord != null && batchIterator.hasNext())
-            throw new CorruptRecordException("A RecordBatch containing a control message contained more than one message.");
-        return firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
-    }
 
     /**
      * Parse the record entry, deserializing the key / value fields if necessary
@@ -896,16 +852,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
                                              RecordBatch batch,
                                              Record record) {
-        if (this.checkCrcs) {
-            try {
-                record.ensureValid();
-            } catch (InvalidRecordException e) {
-                throw new KafkaException("Record for partition " + partition + " at offset " + record.offset()
-                        + " is invalid, cause: " + e.getMessage());
-            }
-        }
-
-    private ConsumerRecord<K, V> parseRecord(TopicPartition partition, RecordBatch batch, Record record) {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();
@@ -938,8 +884,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final CompletedFetch completedFetch;
         private final Iterator<? extends RecordBatch> batches;
         private final Set<Long> abortedPids;
+        private final Queue<FetchResponse.AbortedTransaction> abortedTransactions;
 
-        private Queue<FetchResponse.AbortedTransaction> abortedTransactions;
         private int recordsRead;
         private int bytesRead;
         private RecordBatch currentBatch;
@@ -954,8 +900,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.completedFetch = completedFetch;
             this.batches = batches;
             this.nextFetchOffset = completedFetch.fetchedOffset;
-            this.abortedPids = new HashSet<Long>;
-            this.abortedTransaction = null;
+            this.abortedPids = new HashSet<>();
+            this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
         }
 
         private void drain() {
@@ -995,26 +941,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private void maybeCloseRecordStream() {
-            if (records != null)
+            if (records != null) {
                 records.close();
+                records = null;
+            }
         }
 
         private Record nextFetchedRecord() {
-                Set<Long> abortedPids = new HashSet<>();
-
-                /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
-                 *   0. Check whether the pid is in the 'abortedPids' set && the entry does not include an abort marker.
-                 *      If so, skip the entry.
-                 *   1. If the pid is in aborted pids and the entry contains an abort marker, remove the pid from
-                 *      aborted pids and skip the entry.
-                 *   2. Check lowest offset entry in the abort index. If the PID of the current entry matches the
-                 *      pid of the abort index entry, and the incoming offset is no smaller than the abort index offset,
-                 *      this means that the entry has been aborted. Add the pid to the aborted pids set, and remove
-                 *      the entry from the abort index.
-                 */
-                Queue<FetchResponse.AbortedTransaction> abortedTransactions = getAbortedTransactions(partition);
-
-
             while (true) {
                 if (records == null || !records.hasNext()) {
                     maybeCloseRecordStream();
@@ -1024,6 +957,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         return null;
                     }
                     currentBatch = batches.next();
+                    if (isBatchAborted(currentBatch, abortedPids, abortedTransactions)) {
+                        continue;
+                    }
+
                     maybeEnsureValid(currentBatch);
                     records = currentBatch.streamingIterator();
                 }
@@ -1058,6 +995,62 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
             return records;
         }
+
+        private boolean isBatchAborted(RecordBatch batch, Set<Long> abortedPids, Queue<FetchResponse.AbortedTransaction> abortedTransactions) {
+           /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
+            *   0. Check whether the pid is in the 'abortedPids' set && the entry does not include an abort marker.
+            *      If so, skip the entry.
+            *   1. If the pid is in aborted pids and the entry contains an abort marker, remove the pid from
+            *      aborted pids and skip the entry.
+            *   2. Check lowest offset entry in the abort index. If the PID of the current entry matches the
+            *      pid of the abort index entry, and the incoming offset is no smaller than the abort index offset,
+            *      this means that the entry has been aborted. Add the pid to the aborted pids set, and remove
+            *      the entry from the abort index.
+            */
+            if (isolationLevel == IsolationLevel.READ_COMMITTED) {
+                FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
+                if (abortedPids.contains(batch.producerId())
+                        || (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset())) {
+                    if (abortedPids.contains(batch.producerId()) && containsAbortMarker(batch)) {
+                        abortedPids.remove(batch.producerId());
+                    } else if (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
+                        abortedPids.add(batch.producerId());
+                        abortedTransactions.remove(nextAbortedTransaction);
+                    }
+                    log.trace("Skipping aborted record with pid {} and base offset {}", batch.producerId(), batch.baseOffset());
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private Queue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {
+            PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = null;
+            if (partition.abortedTransactions != null && 0 < partition.abortedTransactions.size()) {
+                abortedTransactions = new PriorityQueue<>(
+                        partition.abortedTransactions.size(),
+                        new Comparator<FetchResponse.AbortedTransaction>() {
+                            @Override
+                            public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
+                                return (int) o1.firstOffset - (int) o2.firstOffset;
+                            }
+                        }
+                );
+                abortedTransactions.addAll(partition.abortedTransactions);
+            } else {
+                abortedTransactions = new PriorityQueue<>();
+            }
+            return abortedTransactions;
+        }
+
+        private boolean containsAbortMarker(RecordBatch batch) {
+            Iterator<Record> batchIterator = batch.iterator();
+            Record firstRecord = batchIterator.hasNext() ? batchIterator.next() : null;
+            if (firstRecord != null && batchIterator.hasNext())
+                throw new CorruptRecordException("A RecordBatch containing a control message contained more than one message.");
+            return firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+        }
+
     }
 
     private static class CompletedFetch {

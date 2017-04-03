@@ -50,8 +50,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
-import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -1052,9 +1050,9 @@ public class FetcherTest {
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
         abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.assignFromUser(singleton(tp1));
 
-        subscriptions.seek(tp, 0);
+        subscriptions.seek(tp1, 0);
 
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
@@ -1065,7 +1063,7 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
-        assertFalse(fetchedRecords.containsKey(tp));
+        assertFalse(fetchedRecords.containsKey(tp1));
     }
 
     @Test
@@ -1084,9 +1082,9 @@ public class FetcherTest {
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.assignFromUser(singleton(tp1));
 
-        subscriptions.seek(tp, 0);
+        subscriptions.seek(tp1, 0);
 
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
@@ -1097,8 +1095,8 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
-        assertTrue(fetchedRecords.containsKey(tp));
-        assertEquals(fetchedRecords.get(tp).size(), 2);
+        assertTrue(fetchedRecords.containsKey(tp1));
+        assertEquals(fetchedRecords.get(tp1).size(), 2);
     }
 
     @Test
@@ -1151,9 +1149,9 @@ public class FetcherTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.assignFromUser(singleton(tp1));
 
-        subscriptions.seek(tp, 0);
+        subscriptions.seek(tp1, 0);
 
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
@@ -1164,9 +1162,9 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
-        assertTrue(fetchedRecords.containsKey(tp));
+        assertTrue(fetchedRecords.containsKey(tp1));
         // There are only 3 committed records
-        List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp);
+        List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp1);
         Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2", "commit2-1"));
         Set<String> actuallyCommittedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
@@ -1199,9 +1197,9 @@ public class FetcherTest {
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
         abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.assignFromUser(singleton(tp1));
 
-        subscriptions.seek(tp, 0);
+        subscriptions.seek(tp1, 0);
 
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
@@ -1212,9 +1210,9 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
-        assertTrue(fetchedRecords.containsKey(tp));
-        assertEquals(fetchedRecords.get(tp).size(), 2);
-        List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp);
+        assertTrue(fetchedRecords.containsKey(tp1));
+        assertEquals(fetchedRecords.get(tp1).size(), 2);
+        List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp1);
         Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
         Set<String> actuallyCommittedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
@@ -1241,9 +1239,9 @@ public class FetcherTest {
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
         abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.assignFromUser(singleton(tp1));
 
-        subscriptions.seek(tp, 0);
+        subscriptions.seek(tp1, 0);
 
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
@@ -1254,7 +1252,7 @@ public class FetcherTest {
         assertTrue(fetcher.hasCompletedFetches());
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
-        assertTrue(fetchedRecords.containsKey(tp));
+        assertTrue(fetchedRecords.containsKey(tp1));
     }
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, int baseOffset, SimpleRecord... records) {
@@ -1350,7 +1348,7 @@ public class FetcherTest {
                                                                List<FetchResponse.AbortedTransaction> abortedTransactions,
                                                                Errors error,
                                                                long lastStableOffset, long hw, int throttleTime) {
-        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp1,
                 new FetchResponse.PartitionData(error, hw, lastStableOffset, 0L, abortedTransactions, records));
         return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
     }
