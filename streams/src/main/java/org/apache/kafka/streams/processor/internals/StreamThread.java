@@ -582,39 +582,7 @@ public class StreamThread extends Thread {
                 try {
                     records = consumer.poll(longPoll ? this.pollTimeMs : 0);
                 } catch (final InvalidOffsetException e) {
-                    final Set<TopicPartition> partitions = e.partitions();
-                    final Set<String> loggedTopics = new HashSet<>();
-                    final Set<TopicPartition> seekToBeginning = new HashSet<>();
-                    final Set<TopicPartition> seekToEnd = new HashSet<>();
-
-                    for (final TopicPartition partition : partitions) {
-                        if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                            addToResetList(partition, seekToBeginning, "stream-thread [%s] setting topic %s to consume from %s offset", "earliest", loggedTopics);
-                        } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                            addToResetList(partition, seekToEnd, "stream-thread [%s] setting topic %s to consume from %s offset", "latest", loggedTopics);
-                        } else {
-                            if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                                setState(State.PENDING_SHUTDOWN);
-                                final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
-                                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                                    "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
-                                throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
-                            }
-
-                            if (originalReset.equals("earliest")) {
-                                addToResetList(partition, seekToBeginning, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "earliest", loggedTopics);
-                            } else if (originalReset.equals("latest")) {
-                                addToResetList(partition, seekToEnd, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "latest", loggedTopics);
-                            }
-                        }
-                    }
-
-                    if (!seekToBeginning.isEmpty()) {
-                        consumer.seekToBeginning(seekToBeginning);
-                    }
-                    if (!seekToEnd.isEmpty()) {
-                        consumer.seekToEnd(seekToEnd);
-                    }
+                    resetInvalidOffsets(e);
                 }
 
                 if (rebalanceException != null)
@@ -673,6 +641,42 @@ public class StreamThread extends Thread {
             maybeClean();
         }
         log.info("{} Shutting down at user request", logPrefix);
+    }
+
+    private void resetInvalidOffsets(final InvalidOffsetException e) {
+        final Set<TopicPartition> partitions = e.partitions();
+        final Set<String> loggedTopics = new HashSet<>();
+        final Set<TopicPartition> seekToBeginning = new HashSet<>();
+        final Set<TopicPartition> seekToEnd = new HashSet<>();
+
+        for (final TopicPartition partition : partitions) {
+            if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                addToResetList(partition, seekToBeginning, "stream-thread [%s] setting topic %s to consume from %s offset", "earliest", loggedTopics);
+            } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                addToResetList(partition, seekToEnd, "stream-thread [%s] setting topic %s to consume from %s offset", "latest", loggedTopics);
+            } else {
+                if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                    setState(State.PENDING_SHUTDOWN);
+                    final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
+                        " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                        "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                    throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
+                }
+
+                if (originalReset.equals("earliest")) {
+                    addToResetList(partition, seekToBeginning, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "earliest", loggedTopics);
+                } else if (originalReset.equals("latest")) {
+                    addToResetList(partition, seekToEnd, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "latest", loggedTopics);
+                }
+            }
+        }
+
+        if (!seekToBeginning.isEmpty()) {
+            consumer.seekToBeginning(seekToBeginning);
+        }
+        if (!seekToEnd.isEmpty()) {
+            consumer.seekToEnd(seekToEnd);
+        }
     }
 
     private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
