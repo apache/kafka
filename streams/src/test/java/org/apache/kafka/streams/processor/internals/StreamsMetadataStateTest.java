@@ -131,6 +131,11 @@ public class StreamsMetadataStateTest {
     }
 
     @Test
+    public void shouldNotThrowNPEWhenOnChangeNotCalled() throws Exception {
+        new StreamsMetadataState(builder).getAllMetadataForStore("store");
+    }
+
+    @Test
     public void shouldGetAllStreamInstances() throws Exception {
         final StreamsMetadata one = new StreamsMetadata(hostOne, Utils.mkSet(globalTable, "table-one", "table-two", "merged-table"),
                 Utils.mkSet(topic1P0, topic2P1, topic4P0));
