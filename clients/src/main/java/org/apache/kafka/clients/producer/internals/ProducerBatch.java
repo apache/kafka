@@ -234,8 +234,12 @@ public final class ProducerBatch {
         recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
     }
 
-    public void closeBuffers() {
-        recordsBuilder.closeDataStream();
+    /**
+     * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
+     * possible to update the RecordBatch header.
+     */
+    public void closeForRecordAppends() {
+        recordsBuilder.closeForRecordAppends();
     }
 
     public void close() {
