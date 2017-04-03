@@ -51,8 +51,8 @@ public abstract class AbstractKeyValueStoreTest {
 
     @After
     public void after() {
-        context.baseMetrics().close();
         store.close();
+        context.close();
     }
 
     @Test

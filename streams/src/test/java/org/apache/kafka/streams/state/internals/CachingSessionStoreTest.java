@@ -72,7 +72,7 @@ public class CachingSessionStoreTest {
 
     @After
     public void close() {
-        context.baseMetrics().close();
+        context.close();
         cachingStore.close();
     }
 

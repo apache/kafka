@@ -158,7 +158,7 @@ public class KStreamTestDriver {
             }
         }
 
-        context.baseMetrics().close();
+        context.close();
         closeState();
     }
 

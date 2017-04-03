@@ -83,7 +83,7 @@ public class ChangeLoggingKeyValueStoreTest {
 
     @After
     public void after() {
-        context.baseMetrics().close();
+        context.close();
         store.close();
     }
 

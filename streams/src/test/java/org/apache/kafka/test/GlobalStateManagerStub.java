@@ -56,9 +56,7 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public void flush(final InternalProcessorContext context) {
-
-    }
+    public void flush() {}
 
     @Override
     public void close(final Map<TopicPartition, Long> offsets) throws IOException {

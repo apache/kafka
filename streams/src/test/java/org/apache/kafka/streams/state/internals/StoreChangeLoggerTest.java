@@ -71,7 +71,7 @@ public class StoreChangeLoggerTest {
 
     @After
     public void after() {
-        context.baseMetrics().close();
+        context.close();
     }
 
     @SuppressWarnings("unchecked")

@@ -103,7 +103,7 @@ public class RocksDBWindowStoreTest {
 
     @After
     public void closeStore() {
-        context.baseMetrics().close();
+        context.close();
         windowStore.close();
     }
 

@@ -92,7 +92,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
         createKeyValueStore(driver.context(), Integer.class, String.class, false);
         assertTrue(TheRocksDbConfigSetter.called);
-        ((MockProcessorContext) driver.context()).baseMetrics().close();
+        ((MockProcessorContext) driver.context()).close();
     }
 
     @Test
@@ -107,7 +107,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals("hi", range.next().value);
         assertEquals("goodbye", range.next().value);
         assertFalse(range.hasNext());
-        context.baseMetrics().close();
+        context.close();
     }
 
     @Test
@@ -122,7 +122,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals("hi", range.next().value);
         assertEquals("goodbye", range.next().value);
         assertFalse(range.hasNext());
-        context.baseMetrics().close();
+        context.close();
     }
 
     @Test
@@ -169,7 +169,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
             // ok
         }
 
-        context.baseMetrics().close();
+        context.close();
     }
 
 }

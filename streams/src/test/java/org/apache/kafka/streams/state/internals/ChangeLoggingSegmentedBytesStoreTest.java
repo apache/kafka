@@ -70,7 +70,7 @@ public class ChangeLoggingSegmentedBytesStoreTest {
 
     @After
     public void after() {
-        context.baseMetrics().close();
+        context.close();
         store.close();
     }
 

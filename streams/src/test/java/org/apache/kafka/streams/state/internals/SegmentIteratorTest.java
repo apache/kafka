@@ -75,7 +75,7 @@ public class SegmentIteratorTest {
         }
         segmentOne.close();
         segmentTwo.close();
-        context.baseMetrics().close();
+        context.close();
     }
 
     @Test

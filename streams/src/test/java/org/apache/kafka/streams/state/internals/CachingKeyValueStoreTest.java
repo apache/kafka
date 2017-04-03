@@ -70,7 +70,7 @@ public class CachingKeyValueStoreTest {
 
     @Test
     public void shouldPutGetToFromCache() throws Exception {
-        context.baseMetrics().close();
+        context.close();
         store.put("key", "value");
         store.put("key2", "value2");
         assertEquals("value", store.get("key"));
@@ -227,7 +227,7 @@ public class CachingKeyValueStoreTest {
     }
 
     public static class CacheFlushListenerStub<K> implements CacheFlushListener<K, String> {
-        public final Map<K, Change<String>> forwarded = new HashMap<>();
+        final Map<K, Change<String>> forwarded = new HashMap<>();
 
         @Override
         public void apply(final K key, final String newValue, final String oldValue) {

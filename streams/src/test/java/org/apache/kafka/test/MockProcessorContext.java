@@ -16,12 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -30,19 +24,24 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
-import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.File;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 public class MockProcessorContext implements InternalProcessorContext, RecordCollector.Supplier {
 
@@ -59,7 +58,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     private Map<String, StateRestoreCallback> restoreFuncs = new HashMap<>();
 
-    long timestamp = -1L;
+    private long timestamp = -1L;
     private RecordContext recordContext;
     private ProcessorNode currentNode;
 
@@ -143,9 +142,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     }
 
     @Override
-    public void initialized() {
-
-    }
+    public void initialized() {}
 
     @Override
     public File stateDir() {
@@ -297,6 +294,10 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     @Override
     public ProcessorNode currentNode() {
         return currentNode;
+    }
+
+    public void close() {
+        metrics.close();
     }
 
 }

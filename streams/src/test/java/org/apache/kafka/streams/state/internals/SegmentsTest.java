@@ -52,7 +52,7 @@ public class SegmentsTest {
 
     @After
     public void close() {
-        context.baseMetrics().close();
+        context.close();
         segments.close();
     }
 

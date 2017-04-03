@@ -81,7 +81,7 @@ public class CachingWindowStoreTest {
 
     @After
     public void closeStore() {
-        context.baseMetrics().close();
+        context.close();
         cachingStore.close();
     }
 

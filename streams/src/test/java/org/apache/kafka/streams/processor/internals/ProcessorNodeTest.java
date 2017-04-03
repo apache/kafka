@@ -125,7 +125,7 @@ public class ProcessorNodeTest {
                 "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
         }
 
-        context.baseMetrics().close();
+        context.close();
     }
 
 }
