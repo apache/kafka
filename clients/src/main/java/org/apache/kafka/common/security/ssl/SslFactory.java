@@ -19,23 +19,20 @@ package org.apache.kafka.common.security.ssl;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.network.Mode;
 
+import javax.net.ssl.*;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.List;
 import java.util.Map;
-
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLParameters;
-import javax.net.ssl.TrustManagerFactory;
 
 public class SslFactory implements Configurable {
 
@@ -145,6 +142,15 @@ public class SslFactory implements Configurable {
         KeyStore ts = truststore == null ? null : truststore.load();
         tmf.init(ts);
 
+        TrustManager[] trustManagers = tmf.getTrustManagers();
+        TrustManager reloadableTrustManager = new ReloadableX509TrustManager(truststore, tmf);
+
+        for (int i=0; i< trustManagers.length; i++) {
+            if (trustManagers[i] instanceof X509TrustManager) {
+                trustManagers[i] = reloadableTrustManager;
+            }
+        }
+
         sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
         return sslContext;
     }
@@ -222,4 +228,50 @@ public class SslFactory implements Configurable {
         }
     }
 
+    private class ReloadableX509TrustManager implements X509TrustManager {
+        private final SecurityStore trustStore;
+        private TrustManagerFactory tmf;
+        private X509TrustManager trustManager;
+
+        public ReloadableX509TrustManager(SecurityStore trustStore, TrustManagerFactory tmf) {
+            this.trustStore = trustStore;
+            this.tmf = tmf;
+        }
+
+        @Override
+        public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            reloadTrustManager();
+            trustManager.checkClientTrusted(chain, authType);
+        }
+
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            reloadTrustManager();
+            trustManager.checkServerTrusted(chain, authType);
+        }
+
+        @Override
+        public X509Certificate[] getAcceptedIssuers() {
+            return trustManager.getAcceptedIssuers();
+        }
+
+        private void reloadTrustManager() throws KafkaException {
+            try {
+                KeyStore ts = trustStore.load();
+                tmf.init(ts);
+
+                TrustManager tms[] = tmf.getTrustManagers();
+                for (int i = 0; i < tms.length; i++) {
+                    if (tms[i] instanceof X509TrustManager) {
+                        trustManager = (X509TrustManager) tms[i];
+                        return;
+                    }
+                }
+
+                throw new NoSuchAlgorithmException("No X509TrustManager in TrustManagerFactory");
+            } catch (Exception ex) {
+                throw new KafkaException(ex);
+            }
+        }
+    }
 }
