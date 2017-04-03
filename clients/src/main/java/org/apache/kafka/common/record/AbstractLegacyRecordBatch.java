@@ -175,6 +175,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
+    public boolean hasProducerId() {
+        return false;
+    }
+
+    @Override
     public long sequence() {
         return RecordBatch.NO_SEQUENCE;
     }

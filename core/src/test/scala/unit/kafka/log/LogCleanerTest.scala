@@ -174,6 +174,27 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   @Test
+  def testLogCleanerRetainsLastWrittenRecordForEachPid(): Unit = {
+    val cleaner = makeCleaner(10)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    log.append(record(0, 0)) // offset 0
+    log.append(record(0, 1, pid = 1, epoch = 0, sequence = 0)) // offset 1
+    log.append(record(0, 2, pid = 2, epoch = 0, sequence = 0)) // offset 2
+    log.append(record(0, 3, pid = 3, epoch = 0, sequence = 0)) // offset 3
+    log.append(record(1, 1, pid = 2, epoch = 0, sequence = 1)) // offset 4
+
+    // roll the segment, so we can clean the messages already appended
+    log.roll()
+
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    assertEquals(immutable.List(0, 0, 1), keysInLog(log))
+    assertEquals(immutable.List(1, 3, 4), offsetsInLog(log))
+  }
+
+  @Test
   def testPartialSegmentClean(): Unit = {
     // because loadFactor is 0.75, this means we can fit 2 messages in the map
     val cleaner = makeCleaner(2)
@@ -796,8 +817,12 @@ class LogCleanerTest extends JUnitSuite {
 
   def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
 
-  def record(key: Int, value: Int): MemoryRecords =
-    record(key, value.toString.getBytes)
+
+  def record(key: Int, value: Int, pid: Long = RecordBatch.NO_PRODUCER_ID, epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+             sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
+    MemoryRecords.withRecords(0L, CompressionType.NONE, pid, epoch, sequence,
+      new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
+  }
 
   def record(key: Int, value: Array[Byte]) =
     TestUtils.singletonRecords(key = key.toString.getBytes, value = value)

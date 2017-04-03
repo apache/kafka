@@ -15,25 +15,22 @@
 
 import json
 import os
-import signal
 import time
 
 from ducktape.services.background_thread import BackgroundThreadService
 from ducktape.cluster.remoteaccount import RemoteCommandError
-from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import DEV_BRANCH
-from kafkatest.utils.remote_account import line_count
 
 class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, BackgroundThreadService):
     """This service wraps org.apache.kafka.tools.VerifiableProducer for use in
-    system testing. 
+    system testing.
 
     NOTE: this class should be treated as a PUBLIC API. Downstream users use
-    this service both directly and through class extension, so care must be 
+    this service both directly and through class extension, so care must be
     taken to ensure compatibility.
     """
 
@@ -59,7 +56,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000,
                  message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
-                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO"):
+                 stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO", enable_idempotence=False):
         """
         :param max_messages is a number of messages to be produced per producer
         :param message_validator checks for an expected format of messages produced. There are
@@ -92,6 +89,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.acks = acks
         self.stop_timeout_sec = stop_timeout_sec
         self.request_timeout_sec = request_timeout_sec
+        self.enable_idempotence = enable_idempotence
 
     def java_class_name(self):
         return "VerifiableProducer"
@@ -124,6 +122,12 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             producer_prop_file += "\nacks=%s\n" % self.acks
 
         producer_prop_file += "\nrequest.timeout.ms=%d\n" % (self.request_timeout_sec * 1000)
+        if self.enable_idempotence:
+            self.logger.info("Setting up an idempotent producer")
+            producer_prop_file += "\nmax.in.flight.requests.per.connection=1\n"
+            producer_prop_file += "\nretries=50\n"
+            producer_prop_file += "\nenable.idempotence=true\n"
+
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
         node.account.create_file(VerifiableProducer.CONFIG_FILE, producer_prop_file)

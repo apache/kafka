@@ -149,7 +149,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
       logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
 
-      val log = new Log(dir = dir,
+      val log = new Log(dir,
         LogConfig(logProps),
         logStartOffset = 0L,
         recoveryPoint = 0L,
