@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -66,6 +67,7 @@ public final class ProducerBatch {
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
+        this.retry = false;
     }
 
     /**
@@ -208,7 +210,7 @@ public final class ProducerBatch {
     /**
      * Returns if the batch is been retried for sending to kafka
      */
-    private boolean inRetry() {
+    public boolean inRetry() {
         return this.retry;
     }
 
@@ -228,8 +230,16 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
+    public void setProducerState(TransactionState.PidAndEpoch pidAndEpoch, int baseSequence) {
+        recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
+    }
+
     public void close() {
         recordsBuilder.close();
+    }
+
+    public boolean isClosed() {
+        return recordsBuilder.isClosed();
     }
 
     public ByteBuffer buffer() {
@@ -246,5 +256,12 @@ public final class ProducerBatch {
 
     public byte magic() {
         return recordsBuilder.magic();
+    }
+
+    /**
+     * Return the ProducerId (Pid) of the current batch.
+     */
+    public long producerId() {
+        return recordsBuilder.producerId();
     }
 }

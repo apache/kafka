@@ -355,7 +355,7 @@ public class MemoryRecordsTest {
 
     private static class RetainNonNullKeysFilter implements MemoryRecords.RecordFilter {
         @Override
-        public boolean shouldRetain(Record record) {
+        public boolean shouldRetain(RecordBatch batch, Record record) {
             return record.hasKey();
         }
     }

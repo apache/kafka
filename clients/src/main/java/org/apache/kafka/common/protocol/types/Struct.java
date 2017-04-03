@@ -134,6 +134,10 @@ public class Struct {
         return (Integer) get(name);
     }
 
+    public Long getUnsignedInt(String name) {
+        return (Long) get(name);
+    }
+
     public Long getLong(Field field) {
         return (Long) get(field);
     }

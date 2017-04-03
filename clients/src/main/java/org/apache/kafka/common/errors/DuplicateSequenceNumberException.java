@@ -14,23 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.errors;
 
-abstract class AbstractRecordBatch implements RecordBatch {
+public class DuplicateSequenceNumberException extends RetriableException {
 
-    @Override
-    public boolean hasProducerId() {
-        return RecordBatch.NO_PRODUCER_ID < producerId();
+    public DuplicateSequenceNumberException(String message) {
+        super(message);
     }
-
-    @Override
-    public long nextOffset() {
-        return lastOffset() + 1;
-    }
-
-    @Override
-    public boolean isCompressed() {
-        return compressionType() != CompressionType.NONE;
-    }
-
 }

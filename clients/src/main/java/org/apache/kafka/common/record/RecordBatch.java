@@ -146,6 +146,11 @@ public interface RecordBatch extends Iterable<Record> {
     short producerEpoch();
 
     /**
+     * Does the batch have a valid producer id set.
+     */
+    boolean hasProducerId();
+
+    /**
      * Get the first sequence number of this record batch.
      * @return The first sequence number or -1 if there is none
      */
