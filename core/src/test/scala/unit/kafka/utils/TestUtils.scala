@@ -156,11 +156,12 @@ object TestUtils extends Logging {
     enableSsl: Boolean = false,
     enableSaslPlaintext: Boolean = false,
     enableSaslSsl: Boolean = false,
-    rackInfo: Map[Int, String] = Map()): Seq[Properties] = {
+    rackInfo: Map[Int, String] = Map(),
+    logDirCount: Int = 1): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
-        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node))
+        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount)
     }
   }
 
@@ -205,7 +206,7 @@ object TestUtils extends Logging {
     enablePlaintext: Boolean = true,
     enableSaslPlaintext: Boolean = false, saslPlaintextPort: Int = RandomPort,
     enableSsl: Boolean = false, sslPort: Int = RandomPort,
-    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: Option[String] = None)
+    enableSaslSsl: Boolean = false, saslSslPort: Int = RandomPort, rack: Option[String] = None, logDirCount: Int = 1)
   : Properties = {
 
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
@@ -227,7 +228,8 @@ object TestUtils extends Logging {
     val props = new Properties
     if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
     props.put(KafkaConfig.ListenersProp, listeners)
-    props.put(KafkaConfig.LogDirProp, TestUtils.tempDir().getAbsolutePath)
+    val logDir = (1 to logDirCount).toList.map(i => TestUtils.tempDir().getAbsolutePath).mkString(",")
+    props.put(KafkaConfig.LogDirProp, logDir)
     props.put(KafkaConfig.ZkConnectProp, zkConnect)
     props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
     props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
@@ -1006,10 +1008,13 @@ object TestUtils extends Logging {
    * Create new LogManager instance with default configuration for testing
    */
   def createLogManager(logDirs: Array[File] = Array.empty[File],
+                       zkUtils: ZkUtils,
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime()): LogManager = {
+                       time: MockTime = new MockTime(),
+                       brokerId: Int = 0): LogManager = {
     new LogManager(logDirs = logDirs,
+                   initialOfflineDirs = Array.empty[File],
                    topicConfigs = Map(),
                    defaultConfig = defaultConfig,
                    cleanerConfig = cleanerConfig,
@@ -1021,8 +1026,9 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = BrokerState(),
-                   brokerTopicStats = new BrokerTopicStats)
+                   brokerState = new BrokerState(),
+                   brokerTopicStats = new BrokerTopicStats,
+                   logDirFailureChannel = new LogDirFailureChannel(logDirs.size))
   }
 
   @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
@@ -1161,7 +1167,7 @@ object TestUtils extends Logging {
       servers.forall(server => topicPartitions.forall(tp => server.getLogManager().getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets
     TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
-      val checkpoints = server.getLogManager().logDirs.map { logDir =>
+      val checkpoints = server.getLogManager().liveLogDirs.map { logDir =>
         new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))

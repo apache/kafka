@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import java.io.PrintStream
+import java.io.{IOException, PrintStream}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -455,6 +455,9 @@ class GroupMetadataManager(brokerId: Int,
         loadGroupsAndOffsets(topicPartition, onGroupLoaded)
         info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
       } catch {
+        case e: IOException =>
+          replicaManager.getLogDir(topicPartition).foreach(replicaManager.maybeAddLogFailureEvent)
+          error(s"Error loading offsets from $topicPartition", e)
         case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
       } finally {
         inLock(partitionLock) {

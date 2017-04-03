@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
@@ -69,6 +70,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownRetriableException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -87,6 +89,13 @@ import java.util.Map;
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
+    UNKNOWN_RETRIABLE(-2, "The client received an unexpected error code when processing the response",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new UnknownRetriableException(message);
+            }
+        }),
     UNKNOWN(-1, "The server experienced an unexpected error when processing the request",
         new ApiExceptionBuilder() {
             @Override
@@ -495,7 +504,14 @@ public enum Errors {
             public ApiException build(String message) {
                 return new OperationNotAttemptedException(message);
             }
-        });
+    }),
+    KAFKA_STORAGE_ERROR(56, "Disk error when trying to access log file on the disk.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new KafkaStorageException(message);
+            }
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);
@@ -587,8 +603,8 @@ public enum Errors {
         if (error != null) {
             return error;
         } else {
-            log.warn("Unexpected error code: {}.", code);
-            return UNKNOWN;
+            log.warn("Unknown error code: {}.", code);
+            return UNKNOWN_RETRIABLE;
         }
     }
 

@@ -20,13 +20,13 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 
-import kafka.server.BrokerTopicStats
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 import org.junit.After
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 abstract class AbstractLogCleanerIntegrationTest {
 
@@ -110,6 +110,7 @@ abstract class AbstractLogCleanerIntegrationTest {
     new LogCleaner(cleanerConfig,
       logDirs = Array(logDir),
       logs = logMap,
+      logDirFailureChannel = new LogDirFailureChannel(1),
       time = time)
   }
 }

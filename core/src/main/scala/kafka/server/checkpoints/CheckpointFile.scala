@@ -33,7 +33,7 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
-  
+
   try Files.createFile(file.toPath) // create the file if it doesn't exist
   catch { case _: FileAlreadyExistsException => }
 
