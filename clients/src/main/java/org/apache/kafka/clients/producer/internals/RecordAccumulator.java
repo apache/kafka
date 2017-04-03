@@ -209,7 +209,10 @@ public final class RecordAccumulator {
                     return appendResult;
                 }
 
-                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
+                // We have to pass `size` because the buffer returned from `free.allocate` could, in theory, be larger
+                // than the requested size if `deallocate(ByteBuffer buffer, int size)` is invoked with a buffer larger
+                // than the `size` parameter
+                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic, size);
                 ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
                 FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, callback, time.milliseconds()));
 
@@ -228,12 +231,13 @@ public final class RecordAccumulator {
         }
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
+    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic, int writeLimit) {
         if (transactionState != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                     "support the required message format (v2). The broker must be version 0.11 or later.");
         }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, this.batchSize);
+        return MemoryRecords.builderWithWriteLimit(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME,
+                writeLimit);
     }
 
     /**
