@@ -660,9 +660,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     val brokerIdSet = mutable.HashSet[Int]()
 
     for (logDir <- config.logDirs) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      brokerMetadataOpt.foreach { brokerMetadata =>
-        brokerIdSet.add(brokerMetadata.brokerId)
+      try {
+        val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+        brokerMetadataOpt.foreach { brokerMetadata =>
+          brokerIdSet.add(brokerMetadata.brokerId)
+        }
+      } catch {
+        case e : IOException =>
+          error(s"Fail to read ${brokerMetaPropsFile} under log directory ${logDir}", e)
       }
     }
 
@@ -684,17 +689,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   private def checkpointBrokerId(brokerId: Int) {
-    var logDirsWithoutMetaProps: List[String] = List()
-
     for (logDir <- config.logDirs) {
-      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
-      if(brokerMetadataOpt.isEmpty)
-          logDirsWithoutMetaProps ++= List(logDir)
-    }
-
-    for(logDir <- logDirsWithoutMetaProps) {
-      val checkpoint = brokerMetadataCheckpoints(logDir)
-      checkpoint.write(BrokerMetadata(brokerId))
+      try {
+        val checkpoint = brokerMetadataCheckpoints(logDir)
+        val brokerMetadataOpt = checkpoint.read()
+        if (brokerMetadataOpt.isEmpty)
+          checkpoint.write(BrokerMetadata(brokerId))
+      } catch {
+        case e : IOException =>
+          error(s"Fail to checkpoint brokerId in ${brokerMetaPropsFile} under log directory ${logDir}", e)
+      }
     }
   }
 

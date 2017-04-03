@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
@@ -495,7 +496,14 @@ public enum Errors {
             public ApiException build(String message) {
                 return new OperationNotAttemptedException(message);
             }
-        });
+    }),
+    KAFKA_STORAGE_ERROR(56, "Disk error when trying to access log file on the disk.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new KafkaStorageException(message);
+            }
+    });
 
     private interface ApiExceptionBuilder {
         ApiException build(String message);

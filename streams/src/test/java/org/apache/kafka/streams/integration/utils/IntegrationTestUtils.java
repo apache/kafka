@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.api.PartitionStateInfo;
+import kafka.api.MetadataPartitionState;
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
@@ -225,13 +225,13 @@ public class IntegrationTestUtils {
             public boolean conditionMet() {
                 for (final KafkaServer server : servers) {
                     final MetadataCache metadataCache = server.apis().metadataCache();
-                    final Option<PartitionStateInfo> partitionInfo =
+                    final Option<MetadataPartitionState> partitionInfo =
                             metadataCache.getPartitionInfo(topic, partition);
                     if (partitionInfo.isEmpty()) {
                         return false;
                     }
-                    final PartitionStateInfo partitionStateInfo = partitionInfo.get();
-                    if (!Request.isValidBrokerId(partitionStateInfo.leaderIsrAndControllerEpoch().leaderAndIsr().leader())) {
+                    final MetadataPartitionState metadataPartitionState = partitionInfo.get();
+                    if (!Request.isValidBrokerId(metadataPartitionState.leaderIsrAndControllerEpoch().leaderAndIsr().leader())) {
                         return false;
                     }
                 }

@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -37,11 +38,11 @@ public class UpdateMetadataRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<UpdateMetadataRequest> {
         private final int controllerId;
         private final int controllerEpoch;
-        private final Map<TopicPartition, PartitionState> partitionStates;
+        private final Map<TopicPartition, UpdateMetadataRequestPartitionState> partitionStates;
         private final Set<Broker> liveBrokers;
 
         public Builder(short version, int controllerId, int controllerEpoch,
-                       Map<TopicPartition, PartitionState> partitionStates, Set<Broker> liveBrokers) {
+                       Map<TopicPartition, UpdateMetadataRequestPartitionState> partitionStates, Set<Broker> liveBrokers) {
             super(ApiKeys.UPDATE_METADATA_KEY, version);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
@@ -71,6 +72,43 @@ public class UpdateMetadataRequest extends AbstractRequest {
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
             return bld.toString();
+        }
+    }
+
+    // TODO: rename this class to UpdateMetadataPartitionState and probably move it to its own class
+    public static final class UpdateMetadataRequestPartitionState {
+        public final int controllerEpoch;
+        public final int leader;
+        public final int leaderEpoch;
+        public final List<Integer> isr;
+        public final int zkVersion;
+        public final List<Integer> replicas;
+        public final List<Integer> offlineReplicas;
+
+        public UpdateMetadataRequestPartitionState(int controllerEpoch,
+                                                   int leader, int leaderEpoch,
+                                                   List<Integer> isr,
+                                                   int zkVersion,
+                                                   List<Integer> replicas,
+                                                   List<Integer> offlineReplicas) {
+            this.controllerEpoch = controllerEpoch;
+            this.leader = leader;
+            this.leaderEpoch = leaderEpoch;
+            this.isr = isr;
+            this.zkVersion = zkVersion;
+            this.replicas = replicas;
+            this.offlineReplicas = offlineReplicas;
+        }
+
+        @Override
+        public String toString() {
+            return "UpdateMetadataRequestPartitionState(controllerEpoch=" + controllerEpoch +
+                ", leader=" + leader +
+                ", leaderEpoch=" + leaderEpoch +
+                ", isr=" + Arrays.toString(isr.toArray()) +
+                ", zkVersion=" + zkVersion +
+                ", replicas=" + Arrays.toString(replicas.toArray()) +
+                ", offlineReplicas=" + Arrays.toString(replicas.toArray()) + ")";
         }
     }
 
@@ -121,7 +159,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String PARTITION_STATES_KEY_NAME = "partition_states";
     private static final String LIVE_BROKERS_KEY_NAME = "live_brokers";
 
-    // PartitionState key names
+    // UpdateMetadataRequestPartitionState key names
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String LEADER_KEY_NAME = "leader";
@@ -129,6 +167,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     private static final String ISR_KEY_NAME = "isr";
     private static final String ZK_VERSION_KEY_NAME = "zk_version";
     private static final String REPLICAS_KEY_NAME = "replicas";
+    private static final String OFFLINE_REPLICAS_KEY_NAME = "offline_replicas";
 
     // Broker key names
     private static final String BROKER_ID_KEY_NAME = "id";
@@ -143,11 +182,11 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
     private final int controllerId;
     private final int controllerEpoch;
-    private final Map<TopicPartition, PartitionState> partitionStates;
+    private final Map<TopicPartition, UpdateMetadataRequestPartitionState> partitionStates;
     private final Set<Broker> liveBrokers;
 
-    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch, Map<TopicPartition,
-            PartitionState> partitionStates, Set<Broker> liveBrokers) {
+    private UpdateMetadataRequest(short version, int controllerId, int controllerEpoch,
+                                  Map<TopicPartition, UpdateMetadataRequestPartitionState> partitionStates, Set<Broker> liveBrokers) {
         super(version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
@@ -157,7 +196,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
 
     public UpdateMetadataRequest(Struct struct, short versionId) {
         super(versionId);
-        Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
+        Map<TopicPartition, UpdateMetadataRequestPartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {
             Struct partitionStateData = (Struct) partitionStateDataObj;
             String topic = partitionStateData.getString(TOPIC_KEY_NAME);
@@ -178,9 +217,15 @@ public class UpdateMetadataRequest extends AbstractRequest {
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
 
-            PartitionState partitionState = new PartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
-            partitionStates.put(new TopicPartition(topic, partition), partitionState);
+            Object[] offlineReplicasArray = partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME) ?
+                partitionStateData.getArray(OFFLINE_REPLICAS_KEY_NAME) : new Object[0];
+            List<Integer> offlineReplicas = new ArrayList<>(offlineReplicasArray.length);
+            for (Object r : offlineReplicasArray)
+                offlineReplicas.add((Integer) r);
 
+            UpdateMetadataRequestPartitionState partitionState =
+                new UpdateMetadataRequestPartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas, offlineReplicas);
+            partitionStates.put(new TopicPartition(topic, partition), partitionState);
         }
 
         Set<Broker> liveBrokers = new HashSet<>();
@@ -233,18 +278,20 @@ public class UpdateMetadataRequest extends AbstractRequest {
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
 
         List<Struct> partitionStatesData = new ArrayList<>(partitionStates.size());
-        for (Map.Entry<TopicPartition, PartitionState> entry : partitionStates.entrySet()) {
+        for (Map.Entry<TopicPartition, UpdateMetadataRequestPartitionState> entry : partitionStates.entrySet()) {
             Struct partitionStateData = struct.instance(PARTITION_STATES_KEY_NAME);
             TopicPartition topicPartition = entry.getKey();
             partitionStateData.set(TOPIC_KEY_NAME, topicPartition.topic());
             partitionStateData.set(PARTITION_KEY_NAME, topicPartition.partition());
-            PartitionState partitionState = entry.getValue();
+            UpdateMetadataRequestPartitionState partitionState = entry.getValue();
             partitionStateData.set(CONTROLLER_EPOCH_KEY_NAME, partitionState.controllerEpoch);
             partitionStateData.set(LEADER_KEY_NAME, partitionState.leader);
             partitionStateData.set(LEADER_EPOCH_KEY_NAME, partitionState.leaderEpoch);
             partitionStateData.set(ISR_KEY_NAME, partitionState.isr.toArray());
             partitionStateData.set(ZK_VERSION_KEY_NAME, partitionState.zkVersion);
             partitionStateData.set(REPLICAS_KEY_NAME, partitionState.replicas.toArray());
+            if (partitionStateData.hasField(OFFLINE_REPLICAS_KEY_NAME))
+              partitionStateData.set(OFFLINE_REPLICAS_KEY_NAME, partitionState.offlineReplicas.toArray());
             partitionStatesData.add(partitionStateData);
         }
         struct.set(PARTITION_STATES_KEY_NAME, partitionStatesData.toArray());
@@ -301,7 +348,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
         return controllerEpoch;
     }
 
-    public Map<TopicPartition, PartitionState> partitionStates() {
+    public Map<TopicPartition, UpdateMetadataRequestPartitionState> partitionStates() {
         return partitionStates;
     }
 

@@ -532,6 +532,16 @@ class Log(@volatile var dir: File,
   }
 
   /**
+   * Close file handlers used by log but don't write to disk. This is used when the disk may have failed
+   */
+  def closeHandlers() {
+    debug(s"Closing handlers of log $name")
+    lock synchronized {
+      logSegments.foreach(_.closeHandlers())
+    }
+  }
+
+  /**
    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
    * @param records The records to append
    * @param isFromClient Whether or not this append is from a producer

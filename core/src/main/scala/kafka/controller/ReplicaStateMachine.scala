@@ -40,12 +40,12 @@ import scala.collection._
  * 7. NonExistentReplica: If a replica is deleted successfully, it is moved to this state. Valid previous state is
  *                        ReplicaDeletionSuccessful
  */
-class ReplicaStateMachine(controller: KafkaController) extends Logging {
+class ReplicaStateMachine(controller: KafkaController, eventManager: ControllerEventManager) extends Logging {
   private val controllerContext = controller.controllerContext
   private val controllerId = controller.config.brokerId
   private val zkUtils = controllerContext.zkUtils
   private val replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
-  private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
+  private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller, eventManager)
 
   private val stateChangeLogger = KafkaController.stateChangeLogger
 
@@ -149,7 +149,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   .format(replicaId, topicAndPartition) + "state as it is being requested to become leader")
               brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
                                                                   topic, partition, leaderIsrAndControllerEpoch,
-                                                                  replicaAssignment)
+                                                                  replicaAssignment, callback = null, isNew = true)
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put(partitionAndReplica, NewReplica)
@@ -283,7 +283,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       val partition = topicPartition.partition
       assignedReplicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(topic, partition, replicaId)
-        if (controllerContext.liveBrokerIds.contains(replicaId))
+        if (controllerContext.isReplicaOnline(replicaId, topicPartition))
           replicaState.put(partitionAndReplica, OnlineReplica)
         else
           // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.

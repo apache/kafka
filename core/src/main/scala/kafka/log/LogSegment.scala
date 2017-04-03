@@ -481,6 +481,13 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
+    * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+    */
+  def closeHandlers() {
+    CoreUtils.swallow(log.closeHandlers())
+  }
+
+  /**
    * Delete this log segment from the filesystem.
    *
    * @throws KafkaStorageException if the delete fails.

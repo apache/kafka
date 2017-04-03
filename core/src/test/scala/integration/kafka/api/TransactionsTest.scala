@@ -389,7 +389,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { server =>
-        error(s"log dirs: ${server.logManager.logDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {
@@ -436,7 +436,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       val recordMetadata = result.get()
       error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic}-${recordMetadata.partition}. Grab the logs!!")
       servers.foreach { case (server) =>
-        error(s"log dirs: ${server.logManager.logDirs.map(_.getAbsolutePath).head}")
+        error(s"log dirs: ${server.logManager.liveLogDirs.map(_.getAbsolutePath).head}")
       }
       fail("Should not be able to send messages from a fenced producer.")
     } catch {

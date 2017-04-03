@@ -33,7 +33,7 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
-  
+
   try Files.createFile(file.toPath) // create the file if it doesn't exist
   catch { case _: FileAlreadyExistsException => }
 
@@ -56,13 +56,6 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
 
         writer.flush()
         fileOutputStream.getFD().sync()
-      } catch {
-        case e: FileNotFoundException =>
-          if (FileSystems.getDefault.isReadOnly) {
-            fatal(s"Halting writes to checkpoint file (${file.getAbsolutePath}) because the underlying file system is inaccessible: ", e)
-            Exit.halt(1)
-          }
-          throw e
       } finally {
         writer.close()
       }

@@ -1006,9 +1006,11 @@ object TestUtils extends Logging {
    * Create new LogManager instance with default configuration for testing
    */
   def createLogManager(logDirs: Array[File] = Array.empty[File],
+                       zkUtils: ZkUtils,
                        defaultConfig: LogConfig = LogConfig(),
                        cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-                       time: MockTime = new MockTime()): LogManager = {
+                       time: MockTime = new MockTime(),
+                       brokerId: Int = 0): LogManager = {
     new LogManager(logDirs = logDirs,
                    topicConfigs = Map(),
                    defaultConfig = defaultConfig,
@@ -1021,8 +1023,10 @@ object TestUtils extends Logging {
                    maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = BrokerState(),
-                   brokerTopicStats = new BrokerTopicStats)
+                   brokerState = new BrokerState(),
+                   brokerTopicStats = new BrokerTopicStats,
+                   zkUtils = zkUtils,
+                   brokerId = brokerId)
   }
 
   @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
@@ -1161,7 +1165,7 @@ object TestUtils extends Logging {
       servers.forall(server => topicPartitions.forall(tp => server.getLogManager().getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets
     TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
-      val checkpoints = server.getLogManager().logDirs.map { logDir =>
+      val checkpoints = server.getLogManager().liveLogDirs.map { logDir =>
         new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))

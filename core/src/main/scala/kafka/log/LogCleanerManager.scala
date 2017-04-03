@@ -17,19 +17,20 @@
 
 package kafka.log
 
-import java.io.File
+import java.io.{IOException, File}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
 import kafka.common.LogCleaningAbortedException
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{immutable, mutable}
 
 private[log] sealed trait LogCleaningState
@@ -45,7 +46,7 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  *  While a partition is in the LogCleaningPaused state, it won't be scheduled for cleaning again, until cleaning is
  *  requested to be resumed.
  */
-private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicPartition, Log]) extends Logging with KafkaMetricsGroup {
+private[log] class LogCleanerManager(val logDirs: ArrayBuffer[File], val logs: Pool[TopicPartition, Log]) extends Logging with KafkaMetricsGroup {
 
   import LogCleanerManager._
 
@@ -53,19 +54,19 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
-  
+
   /* the offset checkpoints holding the last cleaned point for each log */
-  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile)))).toMap
+  @volatile private var checkpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile)))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock
-  
+
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
-  
+
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
   newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
@@ -77,8 +78,21 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   /**
    * @return the position processed for all logs.
    */
-  def allCleanerCheckpoints: Map[TopicPartition, Long] =
-    checkpoints.values.flatMap(_.read()).toMap
+  def allCleanerCheckpoints: Map[TopicPartition, Long] = {
+    inLock(lock) {
+      checkpoints.values.flatMap(checkpoint => {
+        try {
+          checkpoint.read()
+        } catch {
+          case e: IOException =>
+            error(s"Failed to access checkpoint file ${checkpoint.f}", e)
+            handleLogDirFailure(checkpoint.f.getParentFile.getAbsolutePath)
+            Map.empty[TopicPartition, Long]
+        }
+      }).toMap
+    }
+  }
+
 
    /**
     * Choose the log to clean next and add it to the in-progress set. We recompute this
@@ -217,19 +231,43 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]) {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
-      val existing = checkpoint.read().filterKeys(logs.keys) ++ update
-      checkpoint.write(existing)
+      if (checkpoint != null) {
+        try {
+          val existing = checkpoint.read().filterKeys(logs.keys) ++ update
+          checkpoint.write(existing)
+        } catch {
+          case e: IOException =>
+            error(s"Failed to access checkpoint file ${checkpoint.f}", e)
+            handleLogDirFailure(checkpoint.f.getParentFile.getAbsolutePath)
+        }
+      }
     }
+  }
+
+  def handleLogDirFailure(dir: String) {
+    info(s"Stopping cleaning logs in dir $dir")
+    inLock(lock) {
+      checkpoints = checkpoints.filterKeys(_.getAbsolutePath != dir)
+    }
+    info(s"Stopped cleaning logs in dir $dir")
   }
 
   def maybeTruncateCheckpoint(dataDir: File, topicPartition: TopicPartition, offset: Long) {
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
-        val existing = checkpoint.read()
 
-        if (existing.getOrElse(topicPartition, 0L) > offset)
-          checkpoint.write(existing + (topicPartition -> offset))
+        if (checkpoint != null) {
+          try {
+            val existing = checkpoint.read()
+            if (existing.getOrElse(topicPartition, 0L) > offset)
+              checkpoint.write(existing + (topicPartition -> offset))
+          } catch {
+            case e: IOException =>
+              error(s"Failed to access checkpoint file ${checkpoint.f}", e)
+              handleLogDirFailure(checkpoint.f.getParentFile.getAbsolutePath)
+          }
+        }
       }
     }
   }
