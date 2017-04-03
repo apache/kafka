@@ -20,13 +20,11 @@ import java.io.{File, IOException}
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
-
-import kafka.common._
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochCache
-import kafka.server.{FetchDataInfo, LogOffsetMetadata}
+import kafka.server.{FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.errors.CorruptRecordException
+import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
@@ -57,7 +55,8 @@ class LogSegment(val log: FileRecords,
                  val baseOffset: Long,
                  val indexIntervalBytes: Int,
                  val rollJitterMs: Long,
-                 time: Time) extends Logging {
+                 time: Time,
+                 val logDirFailureChannel: LogDirFailureChannel) extends Logging {
 
   private var created = time.milliseconds
 
@@ -72,7 +71,7 @@ class LogSegment(val log: FileRecords,
   @volatile private var offsetOfMaxTimestamp: Long = timeIndex.lastEntry.offset
 
   def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time,
-           fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
+           fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false, logDirFailureChannel: LogDirFailureChannel = null) =
     this(FileRecords.open(Log.logFile(dir, startOffset), fileAlreadyExists, initFileSize, preallocate),
          new OffsetIndex(Log.offsetIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          new TimeIndex(Log.timeIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
@@ -80,7 +79,8 @@ class LogSegment(val log: FileRecords,
          startOffset,
          indexIntervalBytes,
          rollJitterMs,
-         time)
+         time,
+         logDirFailureChannel)
 
   /* Return the size in bytes of this log segment */
   def size: Int = log.sizeInBytes()
@@ -386,8 +386,10 @@ class LogSegment(val log: FileRecords,
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
 
-    def kafkaStorageException(fileType: String, e: IOException) =
+    def kafkaStorageException(fileType: String, e: IOException) = {
+      logDirFailureChannel.maybeAddLogFailureEvent(log.file.getParentFile.getParent)
       new KafkaStorageException(s"Failed to change the $fileType file suffix from $oldSuffix to $newSuffix for log segment $baseOffset", e)
+    }
 
     try log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     catch {
@@ -481,23 +483,39 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
+    * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
+    */
+  def closeHandlers() {
+    CoreUtils.swallow(index.closeHandler())
+    CoreUtils.swallow(timeIndex.closeHandler())
+    CoreUtils.swallow(log.closeHandlers())
+    CoreUtils.swallow(txnIndex.close())
+  }
+
+  /**
    * Delete this log segment from the filesystem.
    *
    * @throws KafkaStorageException if the delete fails.
    */
   def delete() {
-    val deletedLog = log.delete()
-    val deletedIndex = index.delete()
-    val deletedTimeIndex = timeIndex.delete()
-    val deletedTxnIndex = txnIndex.delete()
-    if (!deletedLog && log.file.exists)
-      throw new KafkaStorageException("Delete of log " + log.file.getName + " failed.")
-    if (!deletedIndex && index.file.exists)
-      throw new KafkaStorageException("Delete of index " + index.file.getName + " failed.")
-    if (!deletedTimeIndex && timeIndex.file.exists)
-      throw new KafkaStorageException("Delete of time index " + timeIndex.file.getName + " failed.")
-    if (!deletedTxnIndex && txnIndex.file.exists)
-      throw new KafkaStorageException("Delete of transaction index " + txnIndex.file.getName + " failed.")
+    try {
+      val deletedLog = log.delete()
+      val deletedIndex = index.delete()
+      val deletedTimeIndex = timeIndex.delete()
+      val deletedTxnIndex = txnIndex.delete()
+      if (!deletedLog && log.file.exists)
+        throw new IOException("Delete of log " + log.file.getName + " failed.")
+      if (!deletedIndex && index.file.exists)
+        throw new IOException("Delete of index " + index.file.getName + " failed.")
+      if (!deletedTimeIndex && timeIndex.file.exists)
+        throw new IOException("Delete of time index " + timeIndex.file.getName + " failed.")
+      if (!deletedTxnIndex && txnIndex.file.exists)
+        throw new IOException("Delete of transaction index " + txnIndex.file.getName + " failed.")
+    } catch {
+      case e: IOException =>
+        logDirFailureChannel.maybeAddLogFailureEvent(log.file.getParentFile.getParent)
+        throw new KafkaStorageException("Log segment deletion failed", e)
+    }
   }
 
   /**

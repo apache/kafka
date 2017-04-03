@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import java.io.PrintStream
+import java.io.{IOException, PrintStream}
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
@@ -212,7 +212,7 @@ class GroupMetadataManager(brokerId: Int,
                 error(s"Appending metadata message for group ${group.groupId} generation $generationId failed due to " +
                   s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
 
-                Errors.UNKNOWN
+                Errors.UNKNOWN_SERVER_ERROR
 
               case other =>
                 error(s"Appending metadata message for group ${group.groupId} generation $generationId failed " +
@@ -455,6 +455,10 @@ class GroupMetadataManager(brokerId: Int,
         loadGroupsAndOffsets(topicPartition, onGroupLoaded)
         info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
       } catch {
+        case e: IOException =>
+          val dirOpt = replicaManager.getLogDir(topicPartition)
+          error(s"Error loading offsets from $topicPartition in dir $dirOpt", e)
+          dirOpt.foreach(replicaManager.maybeAddLogFailureEvent)
         case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
       } finally {
         inLock(partitionLock) {
@@ -695,7 +699,7 @@ class GroupMetadataManager(brokerId: Int,
           val timestampType = TimestampType.CREATE_TIME
           val timestamp = time.milliseconds()
 
-          val partitionOpt = replicaManager.getPartition(appendPartition)
+          val partitionOpt = replicaManager.getPartition(appendPartition).filter(_ != ReplicaManager.OfflinePartition)
           partitionOpt.foreach { partition =>
             val tombstones = ListBuffer.empty[SimpleRecord]
             removedOffsets.foreach { case (topicPartition, offsetAndMetadata) =>

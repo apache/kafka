@@ -44,6 +44,7 @@ import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
+import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
@@ -69,6 +70,7 @@ import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.errors.UnknownErrorCodeException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
@@ -87,7 +89,7 @@ import java.util.Map;
  * Do not add exceptions that occur only on the client or only on the server here.
  */
 public enum Errors {
-    UNKNOWN(-1, "The server experienced an unexpected error when processing the request",
+    UNKNOWN_SERVER_ERROR(-1, "The server experienced an unexpected error when processing the request",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -495,8 +497,22 @@ public enum Errors {
             public ApiException build(String message) {
                 return new OperationNotAttemptedException(message);
             }
-        });
-
+    }),
+    KAFKA_STORAGE_ERROR(56, "Disk error when trying to access log file on the disk.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new KafkaStorageException(message);
+            }
+    }),
+    UNKNOWN_ERROR_CODE(57, "The client received an unknown error code when processing the response. This may happen if " +
+            "the client library version is lower than the server library version",
+        new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new UnknownErrorCodeException(message);
+        }
+    });
     private interface ApiExceptionBuilder {
         ApiException build(String message);
     }
@@ -587,8 +603,8 @@ public enum Errors {
         if (error != null) {
             return error;
         } else {
-            log.warn("Unexpected error code: {}.", code);
-            return UNKNOWN;
+            log.warn("Unknown error code: {}.", code);
+            return UNKNOWN_ERROR_CODE;
         }
     }
 
@@ -604,7 +620,7 @@ public enum Errors {
                 return error;
             clazz = clazz.getSuperclass();
         }
-        return UNKNOWN;
+        return UNKNOWN_SERVER_ERROR;
     }
 
     private static String toHtml() {

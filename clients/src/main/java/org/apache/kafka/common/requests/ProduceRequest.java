@@ -62,7 +62,7 @@ public class ProduceRequest extends AbstractRequest {
                        int timeout,
                        Map<TopicPartition, MemoryRecords> partitionRecords,
                        String transactionalId) {
-            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
+            super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 4 : 2));
             this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
@@ -246,6 +246,7 @@ public class ProduceRequest extends AbstractRequest {
             case 1:
             case 2:
             case 3:
+            case 4:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -307,6 +308,9 @@ public class ProduceRequest extends AbstractRequest {
                 return RecordBatch.MAGIC_VALUE_V1;
 
             case 3:
+                return RecordBatch.MAGIC_VALUE_V2;
+
+            case 4:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:

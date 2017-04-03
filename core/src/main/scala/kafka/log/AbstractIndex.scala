@@ -178,6 +178,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     trimToValidSize()
   }
 
+  def closeHandler() = {
+    // File handler of the index field will be closed after the mmap is garbage collected
+    CoreUtils.swallow(forceUnmap(mmap))
+    mmap = null
+  }
+
   /**
    * Do a basic sanity check on this index to detect obvious problems
    *

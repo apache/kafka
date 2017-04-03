@@ -17,7 +17,56 @@
 
 <script><!--#include virtual="js/templateData.js" --></script>
 
-<script id="upgrade-template" type="text/x-handlebars-template">
+<h4><a id="upgrade_11_1_0" href="#upgrade_11_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x or 0.11.0.0 to 0.11.1.0</a></h4>
+<p>Kafka 0.11.1.0 introduces wire protocol changes. By following the recommended rolling upgrade plan below,
+    you guarantee no downtime during the upgrade. However, please review the <a href="#upgrade_1110_notable">notable changes in 0.11.1.0</a> before upgrading.
+</p>
+
+<p><b>For a rolling upgrade:</b></p>
+
+<ol>
+    <li> Update server.properties on all brokers and add the following properties. CURRENT_KAFKA_VERSION refers to the version you
+        are upgrading from. CURRENT_MESSAGE_FORMAT_VERSION refers to the current message format version currently in use. If you have
+        not overridden the message format previously, then CURRENT_MESSAGE_FORMAT_VERSION should be set to match CURRENT_KAFKA_VERSION.
+        <ul>
+            <li>inter.broker.protocol.version=CURRENT_KAFKA_VERSION (e.g. 0.8.2, 0.9.0, 0.10.0, 0.10.1, 0.10.2, 0.11.0).</li>
+        </ul>
+    </li>
+    <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing <code>inter.broker.protocol.version</code> and setting it to 0.11.1.
+    <li> Restart the brokers one by one for the new protocol version to take effect. </li>
+</ol>
+
+<p><b>Additional Upgrade Notes:</b></p>
+
+<ol>
+    <li>If you are willing to accept downtime, you can simply take all the brokers down, update the code and start them back up. They will start
+        with the new protocol by default.</li>
+    <li>Bumping the protocol version and restarting can be done any time after the brokers are upgraded. It does not have to be immediately after.
+        Similarly for the message format version.</li>
+</ol>
+
+<h5><a id="upgrade_1110_notable" href="#upgrade_1100_notable">Notable changes in 0.11.1.0</a></h5>
+<ul>
+    <li>A broker will now stay online to serve replicas on live log directories even if there are offline log directories. A log
+        directory may become offline due to IOException caused by hardware failure. Users need to monitor the per-broker metric
+        <code>offlineLogDirectoryCount</code> to check whether is offline log directory. </li>
+    <li>If a new replica is assigned to be created on a broker with offline log directory AND the
+        <code>inter.broker.protocol.version</code> is 0.11.0 or earlier, the broker will not create this replica and the replica will
+        be offline until the log failure on that broker is fixed. In order to make sure that new topics not be created with offline replicas,
+        user can use upgrade <code>inter.broker.protocol.version</code> to 0.11.1 or simply shutdown the broker before the hardware issue is fixed.</li>
+    <li>Added KafkaStorageException which is a retriable exception. KafkaStorageException will be converted to NotLeaderForPartitionException in the response
+        if the version of client's FetchRequest or ProducerRequest does not support KafkaStorageException. </li>
+    <li>Added UnknownErrorCodeException which is a retriable exception.</li>
+</ul>
+
+<h5><a id="upgrade_1110_new_protocols" href="#upgrade_1110_new_protocols">New Protocol Versions</a></h5>
+<ul>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: LeaderAndIsrRequest v1 introduces a partition-level <code>is_new</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: UpdateMetadataRequest v4 introduces a partition-level <code>offline_replicas</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-112%3A+Handle+disk+failure+for+JBOD">KIP-112</a>: MetadataResponse v5 introduces a partition-level <code>offline_replicas</code> field. </li>
+</ul>
+
 
 <h4><a id="upgrade_11_0_0" href="#upgrade_11_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x or 0.10.2.x to 0.11.0.0</a></h4>
 <p>Kafka 0.11.0.0 introduces a new message format version as well as wire protocol changes. By following the recommended rolling upgrade plan below,
@@ -60,7 +109,7 @@
     Similarly for the message format version.</li>
   <li>It is also possible to enable the 0.11.0 message format on individual topics using the topic admin tool (<code>bin/kafka-topics.sh</code>)
     prior to updating the global setting <code>log.message.format.version</code>.</li>
-  <li>If  you are upgrading from a version prior to 0.10.0, it is NOT necessary to first update the message format to 0.10.0
+  <li>If you are upgrading from a version prior to 0.10.0, it is NOT necessary to first update the message format to 0.10.0
     before you switch to 0.11.0.</li>
 </ol>
 
@@ -85,7 +134,7 @@
         individual messages is only reduced by the overhead of the batch format. However, there are some subtle implications
         for message format conversion (see <a href="#upgrade_11_message_format">below</a> for more detail). Note also
         that while previously the broker would ensure that at least one message is returned in each fetch request (regardless of the
-        total and partition-level fetch sizes), the same behavior now applies to one message batch.</li> 
+        total and partition-level fetch sizes), the same behavior now applies to one message batch.</li>
     <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
     <li>Deprecated constructors of RecordMetadata, MetricName and Cluster classes have been removed.</li>
     <li>Added user headers support through a new Headers interface providing user headers read and write access.</li>
@@ -138,7 +187,7 @@
   <li>EoS in Kafka introduces new request APIs and modifies several existing ones. See
     <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-98+-+Exactly+Once+Delivery+and+Transactional+Messaging#KIP-98-ExactlyOnceDeliveryandTransactionalMessaging-RPCProtocolSummary">KIP-98</a>
     for the full details</code></li>
-</ol>    
+</ol>
 
 <h5><a id="upgrade_11_message_format" href="#upgrade_11_message_format">Notes on the new message format in 0.11.0</a></h5>
 <p>The 0.11.0 message format includes several major enhancements in order to support better delivery semantics for the producer
@@ -169,7 +218,7 @@
   are upgraded to the latest 0.11.0 client. Significantly, since the old consumer has been deprecated in 0.11.0.0, it does not support
   the new message format. You must upgrade to use the new consumer to use the new message format without the cost of down-conversion.
   Note that 0.11.0 consumers support backwards compability with brokers 0.10.0 brokers and upward, so it is possible to upgrade the
-  clients first before the brokers. 
+  clients first before the brokers.
 </p>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
