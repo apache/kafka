@@ -37,7 +37,6 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-
 /**
  * A mock of the producer interface you can use for testing code that uses Kafka.
  * <p>

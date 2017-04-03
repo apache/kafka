@@ -189,8 +189,12 @@ public class KafkaStreams {
             return validTransitions.contains(newState.ordinal());
         }
     }
+
+    private final Object stateLock = new Object();
+
     private volatile State state = State.CREATED;
-    private StateListener stateListener = null;
+
+    private KafkaStreams.StateListener stateListener = null;
 
 
     /**
@@ -208,25 +212,25 @@ public class KafkaStreams {
     }
 
     /**
-     * An app can set a single {@link StateListener} so that the app is notified when state changes.
+     * An app can set a single {@link KafkaStreams.StateListener} so that the app is notified when state changes.
      * @param listener a new state listener
      */
-    public void setStateListener(final StateListener listener) {
+    public void setStateListener(final KafkaStreams.StateListener listener) {
         stateListener = listener;
     }
 
-    private synchronized void setState(final State newState) {
-        final State oldState = state;
-        if (!state.isValidTransition(newState)) {
-            log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
-        } else {
-            log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
-        }
-
-        state = newState;
-
-        if (stateListener != null) {
-            stateListener.onChange(state, oldState);
+    private void setState(final State newState) {
+        synchronized (stateLock) {
+            final State oldState = state;
+            if (!state.isValidTransition(newState)) {
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+            } else {
+                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+            }
+            state = newState;
+            if (stateListener != null) {
+                stateListener.onChange(state, oldState);
+            }
         }
     }
 
@@ -248,7 +252,7 @@ public class KafkaStreams {
         return Collections.unmodifiableMap(metrics.metrics());
     }
 
-    private class StreamStateListener implements StreamThread.StateListener {
+    private final class StreamStateListener implements StreamThread.StateListener {
         @Override
         public synchronized void onChange(final StreamThread thread,
                                           final StreamThread.State newState,
