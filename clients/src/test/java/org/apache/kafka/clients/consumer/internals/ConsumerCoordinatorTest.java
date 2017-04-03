@@ -1526,6 +1526,9 @@ public class ConsumerCoordinatorTest {
             long expectedMinTimeMs, long expectedMaxTimeMs) throws Exception {
         ExecutorService executor = Executors.newSingleThreadExecutor();
         try {
+            boolean coordinatorUnknown = coordinator.coordinatorUnknown();
+            // Run close on a different thread. Coordinator is locked by this thread, so it is
+            // not safe to use the coordinator from the main thread until the task completes.
             Future<?> future = executor.submit(new Runnable() {
                 @Override
                 public void run() {
@@ -1534,7 +1537,7 @@ public class ConsumerCoordinatorTest {
             });
             // Wait for close to start. If coordinator is known, wait for close to queue
             // at least one request. Otherwise, sleep for a short time.
-            if (!coordinator.coordinatorUnknown())
+            if (!coordinatorUnknown)
                 client.waitForRequests(1, 1000);
             else
                 Thread.sleep(200);
