@@ -56,14 +56,14 @@ public class MemoryRecordsBuilder {
     private final int initPos;
     private final long baseOffset;
     private final long logAppendTime;
-    private final long producerId;
-    private final short producerEpoch;
-    private final int baseSequence;
     private final boolean isTransactional;
     private final int partitionLeaderEpoch;
     private final int writeLimit;
     private final int initialCapacity;
 
+    private long producerId;
+    private short producerEpoch;
+    private int baseSequence;
     private long writtenUncompressed = 0;
     private int numRecords = 0;
     private float compressionRate = 1;
@@ -191,6 +191,19 @@ public class MemoryRecordsBuilder {
             return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
         else
             return new RecordsInfo(maxTimestamp, compressionType == CompressionType.NONE ? offsetOfMaxTimestamp : lastOffset);
+    }
+
+    public void setProducerState(long pid, short epoch, int baseSequence) {
+        if (isClosed()) {
+            // Sequence numbers are assigned when the batch is closed while the accumulator is being drained.
+            // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
+            // be re queued. In this case, we should not attempt to set the state again, since changing the pid and sequence
+            // once a batch has been sent to the broker risks introducing duplicates.
+            throw new IllegalStateException("Trying to set producer state of an already closed batch. This indicates a bug on the client.");
+        }
+        this.producerId = pid;
+        this.producerEpoch = epoch;
+        this.baseSequence = baseSequence;
     }
 
     public void close() {
@@ -576,5 +589,12 @@ public class MemoryRecordsBuilder {
             this.maxTimestamp = maxTimestamp;
             this.shallowOffsetOfMaxTimestamp = shallowOffsetOfMaxTimestamp;
         }
+    }
+
+    /**
+     * Return the ProducerId (PID) of the RecordBatches created by this builder.
+     */
+    public long producerId() {
+        return this.producerId;
     }
 }
