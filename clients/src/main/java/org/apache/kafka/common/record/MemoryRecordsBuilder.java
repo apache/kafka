@@ -30,6 +30,10 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * This class is used to write new log data in memory, i.e. this is the write path for {@link MemoryRecords}.
  * It transparently handles compression and exposes methods for appending new records, possibly with message
  * format conversion.
+ *
+ * In cases where keeping memory retention low is important and there's a gap between the time that record appends stop
+ * and the builder is closed (e.g. the Producer), it's important to call `closeForRecordAppends` when the former happens.
+ * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
 public class MemoryRecordsBuilder {
     private static final float COMPRESSION_RATE_DAMPING_FACTOR = 0.9f;
@@ -50,7 +54,11 @@ public class MemoryRecordsBuilder {
 
     private final TimestampType timestampType;
     private final CompressionType compressionType;
+    // Used to append records, may compress data on the fly
     private final DataOutputStream appendStream;
+    // Used to hold a reference to the underlying ByteBuffer so that we can write the record batch header and access
+    // the written bytes. ByteBufferOutputStream allocates a new ByteBuffer if the existing one is not large enough,
+    // so it's not safe to hold a direct reference to the underlying ByteBuffer.
     private final ByteBufferOutputStream bufferStream;
     private final byte magic;
     private final int initPos;
@@ -61,6 +69,7 @@ public class MemoryRecordsBuilder {
     private final int writeLimit;
     private final int initialCapacity;
 
+    private boolean appendStreamIsClosed = false;
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
@@ -206,15 +215,26 @@ public class MemoryRecordsBuilder {
         this.baseSequence = baseSequence;
     }
 
+    /**
+     * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
+     * possible to update the RecordBatch header.
+     */
+    public void closeForRecordAppends() {
+        if (!appendStreamIsClosed) {
+            try {
+                appendStream.close();
+                appendStreamIsClosed = true;
+            } catch (IOException e) {
+                throw new KafkaException(e);
+            }
+        }
+    }
+
     public void close() {
         if (builtRecords != null)
             return;
 
-        try {
-            appendStream.close();
-        } catch (IOException e) {
-            throw new KafkaException(e);
-        }
+        closeForRecordAppends();
 
         if (numRecords == 0L) {
             buffer().position(initPos);
@@ -233,6 +253,7 @@ public class MemoryRecordsBuilder {
     }
 
     private void writeDefaultBatchHeader() {
+        ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initPos);
@@ -257,6 +278,7 @@ public class MemoryRecordsBuilder {
     }
 
     private void writeLegacyCompressedWrapperHeader() {
+        ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initPos);
@@ -416,6 +438,7 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void appendUncheckedWithOffset(long offset, LegacyRecord record) {
+        ensureOpenForRecordAppend();
         try {
             int size = record.sizeInBytes();
             AbstractLegacyRecordBatch.writeHeader(appendStream, toInnerOffset(offset), size);
@@ -469,6 +492,7 @@ public class MemoryRecordsBuilder {
 
     private long appendDefaultRecord(long offset, boolean isControlRecord, long timestamp,
                                      ByteBuffer key, ByteBuffer value, Header[] headers) throws IOException {
+        ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
         long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value, headers);
@@ -478,6 +502,7 @@ public class MemoryRecordsBuilder {
     }
 
     private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {
+        ensureOpenForRecordAppend();
         if (compressionType == CompressionType.NONE && timestampType == TimestampType.LOG_APPEND_TIME)
             timestamp = logAppendTime;
 
@@ -513,6 +538,18 @@ public class MemoryRecordsBuilder {
             maxTimestamp = timestamp;
             offsetOfMaxTimestamp = offset;
         }
+    }
+
+    private void ensureOpenForRecordAppend() {
+        if (appendStreamIsClosed)
+            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
+        if (isClosed())
+            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed");
+    }
+
+    private void ensureOpenForRecordBatchWrite() {
+        if (isClosed())
+            throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is closed");
     }
 
     /**
