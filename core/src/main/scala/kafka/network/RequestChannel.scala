@@ -53,6 +53,8 @@ object RequestChannel extends Logging {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
     @volatile var requestDequeueTimeMs = -1L
+    @volatile var followerLogReadCompleteTimeMs = -1L
+    @volatile var followerUpdateOffsetCompleteTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
@@ -98,6 +100,7 @@ object RequestChannel extends Logging {
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
 
     def updateRequestMetrics() {
+      var isFromFollower : Boolean = false
       val endTimeMs = SystemTime.milliseconds
       // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
@@ -112,6 +115,8 @@ object RequestChannel extends Logging {
 
       val requestQueueTime = (requestDequeueTimeMs - startTimeMs).max(0L)
       val apiLocalTime = (apiLocalCompleteTimeMs - requestDequeueTimeMs).max(0L)
+      val followerLogReadTime = (followerLogReadCompleteTimeMs - requestDequeueTimeMs).max(0L)
+      val followerUpdateOffsetTime = (followerUpdateOffsetCompleteTimeMs - followerLogReadCompleteTimeMs).max(0L)
       val apiRemoteTime = (apiRemoteCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
       val apiThrottleTime = (responseCompleteTimeMs - apiRemoteCompleteTimeMs).max(0L)
       val responseQueueTime = (responseDequeueTimeMs - responseCompleteTimeMs).max(0L)
@@ -119,7 +124,7 @@ object RequestChannel extends Logging {
       val totalTime = endTimeMs - startTimeMs
       var metricsList = List(RequestMetrics.metricsMap(ApiKeys.forId(requestId).name))
       if (requestId == RequestKeys.FetchKey) {
-        val isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
+        isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
         metricsList ::= ( if (isFromFollower)
                             RequestMetrics.metricsMap(RequestMetrics.followFetchMetricName)
                           else
@@ -136,12 +141,21 @@ object RequestChannel extends Logging {
              m.totalTimeHist.update(totalTime)
       }
 
-      if(requestLogger.isTraceEnabled)
-        requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+      if(requestLogger.isTraceEnabled) {
+        if (!isFromFollower)
+          requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
+            .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+        else
+          requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,logReadTime:%d,offsetUpdateTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
+            .format(requestDesc(true), connectionId, totalTime, requestQueueTime, apiLocalTime, followerLogReadTime, followerUpdateOffsetTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+      }
       else if(requestLogger.isDebugEnabled)
-        requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
-          .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+        if (!isFromFollower)
+          requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
+            .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
+        else
+          requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,logReadTime:%d,offsetUpdateTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s"
+            .format(requestDesc(false), connectionId, totalTime, requestQueueTime, apiLocalTime, followerLogReadTime, followerUpdateOffsetTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal))
     }
   }
   
