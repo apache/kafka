@@ -692,7 +692,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldUseClientSupplierToInjectClients() {
+    public void shouldInjectSharedProducerForAllTasksUsingClientSupplierWhenEosDisabled() {
         final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
         final StreamsConfig config = new StreamsConfig(configProps());
         final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -725,7 +725,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldInjectProducerPerTaskForEoS() {
+    public void shouldInjectProducerPerTaskUsingClientSupplierForEoS() {
         final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
         final Properties properties = configProps();
         properties.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
