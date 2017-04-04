@@ -109,6 +109,17 @@ public class ProducerRecord<K, V> {
     }
 
     /**
+     * Create a record with no key and a timestamp
+     *
+     * @param topic The topic the record will be appended to
+     * @param timestamp The timestamp of the record
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, Long timestamp, V value) {
+        this(topic, null, timestamp, null, value);
+    }
+
+    /**
      * Create a record with no key
      * 
      * @param topic The topic this record should be sent to
