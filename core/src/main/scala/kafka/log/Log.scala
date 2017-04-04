@@ -1076,10 +1076,11 @@ class Log(@volatile var dir: File,
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
         this.logStartOffset = math.min(targetOffset, this.logStartOffset)
+        leaderEpochCache.clearLatest(targetOffset)
       }
       buildAndRecoverPidMap(targetOffset)
     }
-    leaderEpochCache.clearLatest(targetOffset)
+
   }
 
   /**
