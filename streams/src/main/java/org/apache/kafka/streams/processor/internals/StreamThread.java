@@ -310,7 +310,6 @@ public class StreamThread extends Thread {
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
         this.partitionAssignor = partitionAssignor;
-        this.partitionAssignor.time(this.time);
     }
 
     /**
