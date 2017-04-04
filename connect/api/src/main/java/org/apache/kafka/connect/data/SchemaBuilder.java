@@ -94,7 +94,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder optional() {
-        checkNull(OPTIONAL_FIELD, optional);
+        checkCanSet(OPTIONAL_FIELD, optional, true);
         optional = true;
         return this;
     }
@@ -104,7 +104,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder required() {
-        checkNull(OPTIONAL_FIELD, optional);
+        checkCanSet(OPTIONAL_FIELD, optional, false);
         optional = false;
         return this;
     }
@@ -121,7 +121,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder defaultValue(Object value) {
-        checkNull(DEFAULT_FIELD, defaultValue);
+        checkCanSet(DEFAULT_FIELD, defaultValue, value);
         checkNotNull(TYPE_FIELD, type, DEFAULT_FIELD);
         try {
             ConnectSchema.validateValue(this, value);
@@ -143,7 +143,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder name(String name) {
-        checkNull(NAME_FIELD, this.name);
+        checkCanSet(NAME_FIELD, this.name, name);
         this.name = name;
         return this;
     }
@@ -160,7 +160,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder version(Integer version) {
-        checkNull(VERSION_FIELD, this.version);
+        checkCanSet(VERSION_FIELD, this.version, version);
         this.version = version;
         return this;
     }
@@ -176,7 +176,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder doc(String doc) {
-        checkNull(DOC_FIELD, this.doc);
+        checkCanSet(DOC_FIELD, this.doc, doc);
         this.doc = doc;
         return this;
     }
@@ -398,9 +398,8 @@ public class SchemaBuilder implements Schema {
         return build();
     }
 
-
-    private static void checkNull(String fieldName, Object val) {
-        if (val != null)
+    private static void checkCanSet(String fieldName, Object fieldVal, Object val) {
+        if (fieldVal != null && fieldVal != val)
             throw new SchemaBuilderException("Invalid SchemaBuilder call: " + fieldName + " has already been set.");
     }
 
