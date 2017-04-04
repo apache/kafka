@@ -44,7 +44,8 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.assign(epoch = 2, offset = 10); leo = 11
+    cache.assign(epoch = 2, offset = 10)
+    leo = 11
 
     //Then
     assertEquals(2, cache.latestEpoch())
@@ -262,7 +263,8 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.assign(epoch = 2, offset = 6); leo = 7
+    cache.assign(epoch = 2, offset = 6)
+    leo = 7
 
     //Then
     assertEquals(leo, cache.endOffsetFor(2))
@@ -390,7 +392,7 @@ class LeaderEpochFileCacheTest {
     assertEquals(0, cache.latestEpoch())
     assertEquals(leo, cache.endOffsetFor(0))
 
-    //When messags arrive with greater epoch
+    //When messages arrive with greater epoch
     cache.assign(epoch = 1, offset = 3); leo = 4
     cache.assign(epoch = 1, offset = 4); leo = 5
     cache.assign(epoch = 1, offset = 5); leo = 6
