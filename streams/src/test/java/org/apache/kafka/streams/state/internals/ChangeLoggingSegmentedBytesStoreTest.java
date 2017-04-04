@@ -38,7 +38,25 @@ import static org.junit.Assert.assertTrue;
 
 public class ChangeLoggingSegmentedBytesStoreTest {
 
-    private MockProcessorContext context;
+    private final NoOpRecordCollector collector = new NoOpRecordCollector() {
+        @Override
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer) {
+            sent.put(key, value);
+        }
+    };
+    private final MockProcessorContext context = new MockProcessorContext(
+        TestUtils.tempDirectory(),
+        Serdes.String(),
+        Serdes.Long(),
+        collector,
+        new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+
     private final SegmentedBytesStoreStub bytesStore = new SegmentedBytesStoreStub();
     private final ChangeLoggingSegmentedBytesStore store = new ChangeLoggingSegmentedBytesStore(bytesStore);
     private final Map sent = new HashMap<>();
@@ -46,24 +64,6 @@ public class ChangeLoggingSegmentedBytesStoreTest {
     @SuppressWarnings("unchecked")
     @Before
     public void setUp() throws Exception {
-        final NoOpRecordCollector collector = new NoOpRecordCollector() {
-            @Override
-            public <K, V> void send(final String topic,
-                                    K key,
-                                    V value,
-                                    Integer partition,
-                                    Long timestamp,
-                                    Serializer<K> keySerializer,
-                                    Serializer<V> valueSerializer) {
-                sent.put(key, value);
-            }
-        };
-        context = new MockProcessorContext(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.Long(),
-            collector,
-            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         context.setTime(0);
         store.init(context, store);
     }
