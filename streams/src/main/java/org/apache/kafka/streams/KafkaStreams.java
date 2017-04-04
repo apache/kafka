@@ -364,7 +364,7 @@ public class KafkaStreams {
                                                         globalThreadId);
         }
 
-        StreamStateListener streamStateListener = new StreamStateListener(threadState);
+        final StreamStateListener streamStateListener = new StreamStateListener(threadState);
         for (int i = 0; i < threads.length; i++) {
             threads[i] = new StreamThread(builder,
                                           config,
