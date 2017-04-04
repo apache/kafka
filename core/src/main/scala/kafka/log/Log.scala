@@ -214,7 +214,6 @@ class Log(@volatile var dir: File,
 
     return new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
       new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
-
   }
 
   /* Load the log segments from the log files on disk */
