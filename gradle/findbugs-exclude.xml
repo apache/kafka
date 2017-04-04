@@ -61,4 +61,38 @@
              benchmarking. -->
         <Package name="org.apache.kafka.jmh.cache.generated"/>
     </Match>
+
+    <Match>
+        <!-- Suppress warnings about comparing a config string to
+             ConfigDef.NO_DEFAULT_VALUE using object equality.  This is intentional. -->
+        <Class name="org.apache.kafka.connect.runtime.AbstractHerder"/>
+        <Method name="convertConfigKey"/>
+        <Bug pattern="ES_COMPARING_STRINGS_WITH_EQ"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short. -->
+        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Method name="execute"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some warnings about intentional switch statement fallthrough. -->
+        <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
+        <Or>
+            <Method name="doStart"/>
+            <Method name="pause"/>
+        </Or>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some inconsistent synchronization warnings.  TODO: fix these.  See
+             KAFKA-4994. -->
+        <Class name="org.apache.kafka.connect.storage.OffsetStorageWriter"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
 </FindBugsFilter>
