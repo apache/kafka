@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -95,8 +96,7 @@ public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K
         public void init(ProcessorContext context, StateStore root) {
             // construct the serde
             this.serdes = new StateSerdes<>(
-                name,
-                context.applicationId(),
+                ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
                 keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                 valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
