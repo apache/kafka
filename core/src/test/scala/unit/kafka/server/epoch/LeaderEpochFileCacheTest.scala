@@ -482,7 +482,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldNoClearAnythingIfOffsetToFirstOffset(): Unit = {
+  def shouldNotClearAnythingIfOffsetToFirstOffset(): Unit = {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given

@@ -144,10 +144,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * Clears old epoch entries. This method searches for the oldest epoch < offset, updates the saved epoch offset to
     * be offset, then clears any previous epoch entries.
     *
+    * This method is exclusive: so clearEarliest(6) will retain an entry at offset 6.
+    *
     * @param offset the offset to clear up to
     */
   override def clearEarliest(offset: Long): Unit = {
-    //TODO - Ben to double check this - committing now as about to get on plane.
     inWriteLock(lock) {
       val before = epochs
       if (offset >= 0 && earliestOffset() <= offset) {
