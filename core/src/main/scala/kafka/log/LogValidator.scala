@@ -63,7 +63,6 @@ private[kafka] object LogValidator extends Logging {
         assignOffsetsNonCompressed(records, offsetCounter, now, compactedTopic, timestampType, timestampDiffMaxMs,
           partitionLeaderEpoch)
     } else {
-
       validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, now, sourceCodec, targetCodec, compactedTopic,
         magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch)
     }

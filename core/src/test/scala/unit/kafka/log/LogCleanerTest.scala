@@ -820,17 +820,17 @@ class LogCleanerTest extends JUnitSuite {
 
   def record(key: Int, value: Int, pid: Long = RecordBatch.NO_PRODUCER_ID, epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
              sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
-    MemoryRecords.withRecords(0L, CompressionType.NONE, pid, epoch, sequence,
+    MemoryRecords.withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, pid, epoch, sequence,
       new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  def record(key: Int, value: Array[Byte]) =
+  def record(key: Int, value: Array[Byte]): MemoryRecords =
     TestUtils.singletonRecords(key = key.toString.getBytes, value = value)
 
-  def unkeyedRecord(value: Int) =
+  def unkeyedRecord(value: Int): MemoryRecords =
     TestUtils.singletonRecords(value = value.toString.getBytes)
 
-  def tombstoneRecord(key: Int) = record(key, null)
+  def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
 }
 

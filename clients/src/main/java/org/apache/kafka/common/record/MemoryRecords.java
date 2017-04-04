@@ -357,10 +357,11 @@ public class MemoryRecords extends AbstractRecords {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME, records);
     }
 
-    public static MemoryRecords withRecords(long initialOffset, CompressionType compressionType, long producerId,
-                                            short producerEpoch, int baseSequence, SimpleRecord... records) {
-        return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME,
-                producerId, producerEpoch, baseSequence, records);
+    public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                            long producerId, short producerEpoch, int baseSequence,
+                                            SimpleRecord... records) {
+        return withRecords(magic, initialOffset, compressionType, TimestampType.CREATE_TIME, producerId, producerEpoch,
+                baseSequence, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,

@@ -19,16 +19,15 @@ package kafka.log
 import java.nio.ByteBuffer
 
 import kafka.common.LongRef
-import kafka.message._
+import kafka.message.{DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record._
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
 
-class LogValidatorTest extends JUnitSuite {
+class LogValidatorTest {
 
   @Test
   def testLogAppendTimeNonCompressedV1() {
@@ -129,18 +128,21 @@ class LogValidatorTest extends JUnitSuite {
   }
 
   @Test
-  def testCreateTimeNonCompressedV1() {
-    checkCreateTimeNonCompressed(RecordBatch.MAGIC_VALUE_V1)
+  def testNonCompressedV1() {
+    checkNonCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
-  def checkCreateTimeNonCompressed(magic: Byte) {
+  private def checkNonCompressed(magic: Byte) {
     val now = System.currentTimeMillis()
     val timestampSeq = Seq(now - 1, now + 1, now)
-    val records =
-      MemoryRecords.withRecords(magic, CompressionType.NONE,
-        new SimpleRecord(timestampSeq(0), "hello".getBytes),
-        new SimpleRecord(timestampSeq(1), "there".getBytes),
-        new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+    val producerId = if (magic >= RecordBatch.MAGIC_VALUE_V2) 1324L else RecordBatch.NO_PRODUCER_ID
+    val producerEpoch = if (magic >= RecordBatch.MAGIC_VALUE_V2) 10: Short else RecordBatch.NO_PRODUCER_EPOCH
+    val baseSequence = if (magic >= RecordBatch.MAGIC_VALUE_V2) 20 else RecordBatch.NO_SEQUENCE
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.NONE, producerId, producerEpoch, baseSequence,
+      new SimpleRecord(timestampSeq(0), "hello".getBytes),
+      new SimpleRecord(timestampSeq(1), "there".getBytes),
+      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+
 
     val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
@@ -157,6 +159,9 @@ class LogValidatorTest extends JUnitSuite {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
+      assertEquals(producerEpoch, batch.producerEpoch)
+      assertEquals(producerId, batch.producerId)
+      assertEquals(baseSequence, batch.baseSequence)
       for (record <- batch.asScala) {
         assertTrue(record.isValid)
         assertEquals(timestampSeq(i), record.timestamp)
@@ -169,16 +174,67 @@ class LogValidatorTest extends JUnitSuite {
   }
 
   @Test
-  def testCreateTimeNonCompressedV2() {
-    checkCreateTimeNonCompressed(RecordBatch.MAGIC_VALUE_V2)
+  def testNonCompressedV2() {
+    checkNonCompressed(RecordBatch.MAGIC_VALUE_V2)
+  }
+
+  @Test
+  def testRecompressionV1(): Unit = {
+    checkRecompression(RecordBatch.MAGIC_VALUE_V1)
+  }
+
+  private def checkRecompression(magic: Byte): Unit = {
+    val now = System.currentTimeMillis()
+    val timestampSeq = Seq(now - 1, now + 1, now)
+    val producerId = if (magic >= RecordBatch.MAGIC_VALUE_V2) 1324L else RecordBatch.NO_PRODUCER_ID
+    val producerEpoch = if (magic >= RecordBatch.MAGIC_VALUE_V2) 10: Short else RecordBatch.NO_PRODUCER_EPOCH
+    val baseSequence = if (magic >= RecordBatch.MAGIC_VALUE_V2) 20 else RecordBatch.NO_SEQUENCE
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.NONE, producerId, producerEpoch, baseSequence,
+      new SimpleRecord(timestampSeq(0), "hello".getBytes),
+      new SimpleRecord(timestampSeq(1), "there".getBytes),
+      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+
+
+    val validatingResults = LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(0),
+      now = System.currentTimeMillis(),
+      sourceCodec = NoCompressionCodec,
+      targetCodec = GZIPCompressionCodec,
+      magic = magic,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
+    val validatedRecords = validatingResults.validatedRecords
+
+    var i = 0
+    for (batch <- validatedRecords.batches.asScala) {
+      assertTrue(batch.isValid)
+      assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
+      assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
+      assertEquals(producerEpoch, batch.producerEpoch)
+      assertEquals(producerId, batch.producerId)
+      assertEquals(baseSequence, batch.baseSequence)
+      for (record <- batch.asScala) {
+        assertTrue(record.isValid)
+        assertEquals(timestampSeq(i), record.timestamp)
+        i += 1
+      }
+    }
+    assertEquals(s"Max timestamp should be ${now + 1}", now + 1, validatingResults.maxTimestamp)
+    assertEquals(s"Offset of max timestamp should be 1", 2, validatingResults.shallowOffsetOfMaxTimestamp)
+    assertTrue("Message size should have been changed", validatingResults.messageSizeMaybeChanged)
+  }
+
+  @Test
+  def testRecompressionV2(): Unit = {
+    checkRecompression(RecordBatch.MAGIC_VALUE_V2)
   }
 
   @Test
   def testCreateTimeUpConversionV0ToV1(): Unit = {
-    checkCreateTimeUpConvertionFromV0(RecordBatch.MAGIC_VALUE_V1)
+    checkCreateTimeUpConversionFromV0(RecordBatch.MAGIC_VALUE_V1)
   }
 
-  private def checkCreateTimeUpConvertionFromV0(toMagic: Byte) {
+  private def checkCreateTimeUpConversionFromV0(toMagic: Byte) {
     val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, codec = CompressionType.GZIP)
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(0),
@@ -194,6 +250,9 @@ class LogValidatorTest extends JUnitSuite {
       assertTrue(batch.isValid)
       assertEquals(RecordBatch.NO_TIMESTAMP, batch.maxTimestamp)
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
+      assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch)
+      assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId)
+      assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence)
     }
     assertEquals(s"Max timestamp should be ${RecordBatch.NO_TIMESTAMP}", RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestamp)
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
@@ -203,7 +262,7 @@ class LogValidatorTest extends JUnitSuite {
 
   @Test
   def testCreateTimeUpConversionV0ToV2() {
-    checkCreateTimeUpConvertionFromV0(RecordBatch.MAGIC_VALUE_V2)
+    checkCreateTimeUpConversionFromV0(RecordBatch.MAGIC_VALUE_V2)
   }
 
   @Test
@@ -224,6 +283,9 @@ class LogValidatorTest extends JUnitSuite {
       assertTrue(batch.isValid)
       assertEquals(timestamp, batch.maxTimestamp)
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
+      assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch)
+      assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId)
+      assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence)
     }
     assertEquals(timestamp, validatedResults.maxTimestamp)
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
@@ -232,18 +294,20 @@ class LogValidatorTest extends JUnitSuite {
   }
 
   @Test
-  def testCreateTimeCompressedV1() {
-    createCreateTimeCompressed(RecordBatch.MAGIC_VALUE_V1)
+  def testCompressedV1() {
+    checkCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
-  def createCreateTimeCompressed(magic: Byte) {
+  private def checkCompressed(magic: Byte) {
     val now = System.currentTimeMillis()
     val timestampSeq = Seq(now - 1, now + 1, now)
-    val records =
-      MemoryRecords.withRecords(magic, CompressionType.GZIP,
-        new SimpleRecord(timestampSeq(0), "hello".getBytes),
-        new SimpleRecord(timestampSeq(1), "there".getBytes),
-        new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+    val producerId = if (magic >= RecordBatch.MAGIC_VALUE_V2) 1324L else RecordBatch.NO_PRODUCER_ID
+    val producerEpoch = if (magic >= RecordBatch.MAGIC_VALUE_V2) 10: Short else RecordBatch.NO_PRODUCER_EPOCH
+    val baseSequence = if (magic >= RecordBatch.MAGIC_VALUE_V2) 20 else RecordBatch.NO_SEQUENCE
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, producerId, producerEpoch, baseSequence,
+      new SimpleRecord(timestampSeq(0), "hello".getBytes),
+      new SimpleRecord(timestampSeq(1), "there".getBytes),
+      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
     val validatedResults = LogValidator.validateMessagesAndAssignOffsets(records,
         offsetCounter = new LongRef(0),
@@ -260,6 +324,9 @@ class LogValidatorTest extends JUnitSuite {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
+      assertEquals(producerEpoch, batch.producerEpoch)
+      assertEquals(producerId, batch.producerId)
+      assertEquals(baseSequence, batch.baseSequence)
       for (record <- batch.asScala) {
         assertTrue(record.isValid)
         assertEquals(timestampSeq(i), record.timestamp)
@@ -273,8 +340,8 @@ class LogValidatorTest extends JUnitSuite {
   }
 
   @Test
-  def testCreateTimeCompressedV2() {
-    createCreateTimeCompressed(RecordBatch.MAGIC_VALUE_V2)
+  def testCompressedV2() {
+    checkCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
   @Test(expected = classOf[InvalidTimestampException])
@@ -641,8 +708,8 @@ class LogValidatorTest extends JUnitSuite {
       timestampDiffMaxMs = 5000L)
   }
 
-  private def createRecords(magicValue: Byte = Message.CurrentMagicValue,
-                            timestamp: Long = Message.NoTimestamp,
+  private def createRecords(magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+                            timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: CompressionType = CompressionType.NONE): MemoryRecords = {
     val buf = ByteBuffer.allocate(512)
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
