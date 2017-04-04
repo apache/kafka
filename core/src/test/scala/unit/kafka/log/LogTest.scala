@@ -1726,6 +1726,61 @@ class LogTest extends JUnitSuite {
     assertEquals(0, cache.epochEntries().size)
   }
 
+  /**
+    * Append a bunch of messages to a log and then re-open it with recovery and check that the leader epochs are recovered properly.
+    */
+  @Test
+  def testLogRecoversForLeaderEpoch() {
+    val log = new Log(logDir, LogConfig(new Properties()), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    val leaderEpochCache = epochCache(log)
+    val firstBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
+    log.append(records = firstBatch, assignOffsets = false)
+
+    val secondBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 2, offset = 1)
+    log.append(records = secondBatch, assignOffsets = false)
+
+    val thirdBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 2, offset = 2)
+    log.append(records = thirdBatch, assignOffsets = false)
+
+    val fourthBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 3, offset = 3)
+    log.append(records = fourthBatch, assignOffsets = false)
+
+    assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+
+    // deliberately remove some of the epoch entries
+    leaderEpochCache.clearLatest(2)
+    assertNotEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+    log.close()
+
+    // reopen the log and recover from the beginning
+    val recoveredLog = new Log(logDir, LogConfig(new Properties()), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    val recoveredLeaderEpochCache = epochCache(recoveredLog)
+
+    // epoch entries should be recovered
+    assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
+    recoveredLog.close()
+  }
+
+  /**
+    * Wrap a single record log buffer with leader epoch.
+    */
+  private def singletonRecordsWithLeaderEpoch(value: Array[Byte],
+                                      key: Array[Byte] = null,
+                                      leaderEpoch: Int,
+                                      offset: Long,
+                                      codec: CompressionType = CompressionType.NONE,
+                                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                      magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+    val records = Seq(new SimpleRecord(timestamp, key, value))
+
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, offset,
+      System.currentTimeMillis, leaderEpoch)
+    records.foreach(builder.append)
+    builder.build()
+  }
+
+
   def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
                 retentionBytes: Int = -1, cleanupPolicy: String = "delete"): Log = {
     val logProps = new Properties()

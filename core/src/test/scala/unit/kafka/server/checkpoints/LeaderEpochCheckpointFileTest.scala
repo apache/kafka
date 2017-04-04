@@ -18,7 +18,6 @@ package kafka.server.checkpoints
 
 import java.io.File
 
-import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.EpochEntry
 import kafka.utils.Logging
 import org.junit.Assert._

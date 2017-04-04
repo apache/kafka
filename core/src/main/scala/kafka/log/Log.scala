@@ -142,8 +142,7 @@ class Log(@volatile var dir: File,
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
-  val leaderEpochCache: LeaderEpochCache = new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
-    new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
+  val leaderEpochCache: LeaderEpochCache = initializeLeaderEpochCache()
 
   locally {
     val startMs = time.milliseconds
@@ -157,6 +156,10 @@ class Log(@volatile var dir: File,
     leaderEpochCache.clearLatest(nextOffsetMetadata.messageOffset)
 
     logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
+
+    // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
+    leaderEpochCache.clearEarliest(logStartOffset)
+
     buildAndRecoverPidMap(logEndOffset)
 
     info("Completed load of log %s with %d log segments, log start offset %d and log end offset %d in %d ms"
@@ -205,10 +208,17 @@ class Log(@volatile var dir: File,
   /** The name of this log */
   def name  = dir.getName()
 
-  /* Load the log segments from the log files on disk */
-  private def loadSegments() {
+  private def initializeLeaderEpochCache(): LeaderEpochCache = {
     // create the log directory if it doesn't exist
     dir.mkdirs()
+
+    return new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
+      new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
+
+  }
+
+  /* Load the log segments from the log files on disk */
+  private def loadSegments() {
     var swapFiles = Set[File]()
 
     // first do a pass through the files in the log directory and remove any temporary files
@@ -353,7 +363,7 @@ class Log(@volatile var dir: File,
       info("Recovering unflushed segment %d in log %s.".format(curr.baseOffset, name))
       val truncatedBytes =
         try {
-          curr.recover(config.maxMessageSize)
+          curr.recover(config.maxMessageSize, Some(leaderEpochCache))
         } catch {
           case _: InvalidOffsetException =>
             val startOffset = curr.baseOffset
@@ -364,7 +374,7 @@ class Log(@volatile var dir: File,
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
         warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
-        unflushed.foreach(deleteSegment(_, deleteCorrespondingLeaderEpochs = false))
+        unflushed.foreach(deleteSegment(_))
       }
     }
   }
@@ -827,9 +837,12 @@ class Log(@volatile var dir: File,
       // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
       if (segments.size == numToDelete)
         roll()
-      // remove the segments for lookups
-      deletable.foreach(deleteSegment(_))
-      logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
+      lock synchronized {
+        // remove the segments for lookups
+        deletable.foreach(deleteSegment(_))
+        logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
+        leaderEpochCache.clearEarliest(logStartOffset)
+      }
     }
     numToDelete
   }
@@ -1059,7 +1072,7 @@ class Log(@volatile var dir: File,
         truncateFullyAndStartAt(targetOffset)
       } else {
         val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-        deletable.foreach(deleteSegment(_, false))
+        deletable.foreach(deleteSegment(_))
         activeSegment.truncateTo(targetOffset)
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
@@ -1079,7 +1092,7 @@ class Log(@volatile var dir: File,
     debug("Truncate and start log '" + name + "' to " + newOffset)
     lock synchronized {
       val segmentsToDelete = logSegments.toList
-      segmentsToDelete.foreach(deleteSegment(_, false))
+      segmentsToDelete.foreach(deleteSegment(_))
       addSegment(new LogSegment(dir,
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval,
@@ -1138,13 +1151,10 @@ class Log(@volatile var dir: File,
    * deleting a file while it is being read from.
    *
    * @param segment The log segment to schedule for deletion
-   * @param deleteCorrespondingLeaderEpochs Optionally clear the epoch cache
    */
-  private def deleteSegment(segment: LogSegment, deleteCorrespondingLeaderEpochs: Boolean = true) {
+  private def deleteSegment(segment: LogSegment) {
     info("Scheduling log segment %d for log %s for deletion.".format(segment.baseOffset, name))
     lock synchronized {
-      if(deleteCorrespondingLeaderEpochs)
-        leaderEpochCache.clearEarliest(segment.nextOffset())
       segments.remove(segment.baseOffset)
       asyncDeleteSegment(segment)
     }

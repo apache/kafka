@@ -49,6 +49,9 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       case ApiKeys.FETCH =>
         fetchCount += 1
         new FetchResponse(new java.util.LinkedHashMap[TopicPartition, PartitionData], 0)
+
+      case _ =>
+        throw new UnsupportedOperationException
     }
 
     //Use mock client to create the appropriate response object
