@@ -47,7 +47,7 @@ private[log] case class ProducerIdEntry(epoch: Short, lastSeq: Int, lastOffset: 
 }
 
 private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEntry) {
-  // the initialEntry here is the last successfull appended batch. we validate incoming entries transitively, starting
+  // the initialEntry here is the last successful appended batch. we validate incoming entries transitively, starting
   // with the last appended entry.
   private var epoch = initialEntry.epoch
   private var firstSeq = initialEntry.firstSeq
