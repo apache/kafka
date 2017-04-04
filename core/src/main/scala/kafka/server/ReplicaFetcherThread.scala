@@ -260,7 +260,7 @@ class ReplicaFetcherThread(name: String,
       val replica = replicaMgr.getReplica(tp).get
 
       if (epochOffset.hasError) {
-        info(s"Retrying OffsetsForLeaderEpoch fetch for epoch: $epochOffset as the leader reported an error: ${epochOffset.error}")
+        info(s"Retrying OffsetsForLeaderEpoch fetch for epoch: $epochOffset on partition ${replica.topicPartition} as the leader reported an error: ${epochOffset.error}")
       } else {
         val truncationOffset =
           if (epochOffset.endOffset() == UNDEFINED_EPOCH_OFFSET)

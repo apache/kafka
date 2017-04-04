@@ -364,7 +364,7 @@ class Log(@volatile var dir: File,
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
         warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
-        unflushed.foreach(deleteSegment(_))
+        unflushed.foreach(deleteSegment(_, deleteCorrespondingLeaderEpochs = false))
       }
     }
   }
@@ -1047,13 +1047,13 @@ class Log(@volatile var dir: File,
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    */
   private[log] def truncateTo(targetOffset: Long) {
-    info("Truncating log %s to offset %d.".format(name, targetOffset))
     if(targetOffset < 0)
       throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
     if(targetOffset >= logEndOffset) {
       info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset-1))
       return
     }
+    info("Truncating log %s to offset %d.".format(name, targetOffset))
     lock synchronized {
       if(segments.firstEntry.getValue.baseOffset > targetOffset) {
         truncateFullyAndStartAt(targetOffset)

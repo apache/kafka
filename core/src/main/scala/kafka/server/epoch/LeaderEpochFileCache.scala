@@ -80,8 +80,9 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
         info(s"Updated PartitionLeaderEpoch ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
+      }else {
+        maybeWarn(epoch, offset)
       }
-      maybeWarn(epoch, offset)
     }
   }
 
@@ -118,7 +119,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
           else
             subsequentEpochs.head.startOffset
         }
-      info(s"Processed offset for epoch request for epoch:$requestedEpoch and returning offset $offset from epoch list of size ${epochs.size}")
+      debug(s"Processed offset for epoch request for partition ${topicPartition} epoch:$requestedEpoch and returning offset $offset from epoch list of size ${epochs.size}")
       offset
     }
   }
@@ -193,7 +194,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
 
   def maybeWarn(epoch: Int, offset: Long) = {
     if(epoch < latestEpoch())
-      warn(s"Received an PartitionLeaderEpoch assignment for an offset < LogEndOffset. " +
+      warn(s"Received a PartitionLeaderEpoch Assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
     else if(epoch < 0 && epoch != RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH)
       warn(s"Received an PartitionLeaderEpoch assignment for an epoch < 0. ${epochChangeMsg(epoch, offset)}")

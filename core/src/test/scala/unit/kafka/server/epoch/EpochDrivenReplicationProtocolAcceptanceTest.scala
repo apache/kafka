@@ -194,7 +194,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     ))
     producer = bufferingProducer()
 
-    //Write 100 messages in batches of 10
+    //Write 100 messages
     (0 until 100).foreach { i =>
       producer.send(new ProducerRecord(topic, 0, null, msg))
       producer.flush()
@@ -327,7 +327,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     consumer
   }
 
-  def deleteMessagesFromLogFile(bytes: Long, broker: KafkaServer, partitionId: Int): Unit = {
+  private def deleteMessagesFromLogFile(bytes: Long, broker: KafkaServer, partitionId: Int): Unit = {
     val logFile = getLogFile(broker, partitionId)
     val writable = new RandomAccessFile(logFile, "rwd")
     writable.setLength(logFile.length() - bytes)

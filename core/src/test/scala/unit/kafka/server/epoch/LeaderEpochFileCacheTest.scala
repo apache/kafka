@@ -145,10 +145,10 @@ class LeaderEpochFileCacheTest {
   def shouldNotOverwriteOffsetForALeaderEpochOnceItHasBeenAssigned() = {
     //Given
     val cache = new LeaderEpochFileCache(tp, () => new LogOffsetMetadata(0), checkpoint)
-    cache.assign(2, 6);
+    cache.assign(2, 6)
 
     //When called again later with a greater offset
-    cache.assign(2, 10);
+    cache.assign(2, 10)
 
     //Then later update should have been ignored
     assertEquals(6, cache.epochEntries()(0).startOffset)

@@ -1325,7 +1325,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
     val offsetForEpoch = request.body[OffsetsForLeaderEpochRequest]
-    val requestInfo = offsetForEpoch.epochsByTopic()
+    val requestInfo = offsetForEpoch.epochsByTopicPartition()
     authorizeClusterAction(request)
 
     val responseBody = new OffsetsForLeaderEpochResponse(
