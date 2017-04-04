@@ -68,8 +68,8 @@ public class SslTransportLayerTest {
     @Before
     public void setup() throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.
-        serverCertStores = new CertStores(true, "localhost");
-        clientCertStores = new CertStores(false, "localhost");
+        serverCertStores = new CertStores(true, "server",  "localhost");
+        clientCertStores = new CertStores(false, "client", "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
@@ -86,11 +86,11 @@ public class SslTransportLayerTest {
     }
 
     /**
-     * Tests that server certificate with valid IP address is accepted by
-     * a client that validates server endpoint.
+     * Tests that server certificate with SubjectAltName containing the valid hostname
+     * is accepted by a client that connects using the hostname and validates server endpoint.
      */
     @Test
-    public void testValidEndpointIdentification() throws Exception {
+    public void testValidEndpointIdentificationSanDns() throws Exception {
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
@@ -99,6 +99,62 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests that server certificate with SubjectAltName containing valid IP address
+     * is accepted by a client that connects using IP address and validates server endpoint.
+     */
+    @Test
+    public void testValidEndpointIdentificationSanIp() throws Exception {
+        String node = "0";
+        serverCertStores = new CertStores(true, "server", InetAddress.getByName("127.0.0.1"));
+        clientCertStores = new CertStores(false, "client", InetAddress.getByName("127.0.0.1"));
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+        server = createEchoServer(SecurityProtocol.SSL);
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests that server certificate with CN containing valid hostname
+     * is accepted by a client that connects using hostname and validates server endpoint.
+     */
+    @Test
+    public void testValidEndpointIdentificationCN() throws Exception {
+        String node = "0";
+        serverCertStores = new CertStores(true, "localhost");
+        clientCertStores = new CertStores(false, "localhost");
+        sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
+        sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
+        server = createEchoServer(SecurityProtocol.SSL);
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
+    }
+
+    /**
+     * Tests that hostname verification is performed on the host name or address
+     * specified by the client without using reverse DNS lookup.
+     */
+    @Test
+    public void testEndpointIdentificationNoReverseLookup() throws Exception {
+        String node = "0";
+        server = createEchoServer(SecurityProtocol.SSL);
+        sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        createSelector(sslClientConfigs);
+        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        NetworkTestUtils.waitForChannelClose(selector, node, ChannelState.AUTHENTICATE);
     }
     
     /**
@@ -109,8 +165,8 @@ public class SslTransportLayerTest {
     @Test
     public void testInvalidEndpointIdentification() throws Exception {
         String node = "0";
-        serverCertStores = new CertStores(true, "notahost");
-        clientCertStores = new CertStores(false, "localhost");
+        serverCertStores = new CertStores(true, "server", "notahost");
+        clientCertStores = new CertStores(false, "client", "localhost");
         sslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
         sslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         sslClientConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
@@ -551,10 +607,9 @@ public class SslTransportLayerTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT) {
 
             @Override
-            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key) throws IOException {
+            protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
                 SocketChannel socketChannel = (SocketChannel) key.channel();
-                SSLEngine sslEngine = sslFactory.createSslEngine(socketChannel.socket().getInetAddress().getHostName(),
-                                socketChannel.socket().getPort());
+                SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
                 TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine, netReadBufSize, netWriteBufSize, appBufSize);
                 transportLayer.startHandshake();
                 return transportLayer;
