@@ -223,15 +223,6 @@ public class ConsumerConfig extends AbstractConfig {
                                                             + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
-    /** <code>isolation.level</code> */
-    public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
-    public static final String ISOLATION_LEVEL_DOC = "Controls how to read messages written transactionally. If set to <code>READ_COMMITTED</code>, consumer.poll() will only return "
-                                                    + "transactional messages which have been committed. If set to <code>READ_UNCOMMITTED</code>' (the default), consumer.poll() will return all messages, even transactional messages "
-                                                    + "which have been aborted. Non-transactional messages will be returned unconditionally in either mode.</p> <p>Messages will be  always returned in offset order. Hence, in "
-                                                    + " <code>READ_COMMITTED</code> mode, consumer.poll() will only return messages upto the last resolved (committed or aborted) transaction. In particular any messages appearing after "
-                                                    + " messages belonging onging transactions will be withheld until the said transaction has been completed and its messages are delivered to the application. As a result, <code>READ_COMMITTED</code> "
-                                                    + " consumers will not be able to read upto the log end offset when there are inflight transactions.";
-
     /**
      * <code>internal.leave.group.on.close</code>
      * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance

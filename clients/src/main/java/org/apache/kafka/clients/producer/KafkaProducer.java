@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
@@ -33,7 +32,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -913,31 +911,4 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.userCallback.onCompletion(metadata, exception);
         }
     }
-
-    @Override
-    public void abortTransaction() throws ProducerFencedException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void beginTransaction() throws ProducerFencedException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void commitTransaction() throws ProducerFencedException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void initTransactions() throws IllegalStateException {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public void sendOffsetsToTransaction(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         final String consumerGroupId) throws ProducerFencedException {
-        throw new UnsupportedOperationException();
-    }
-
 }
