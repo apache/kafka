@@ -474,7 +474,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, offset = 8)
     cache.assign(epoch = 4, offset = 11)
 
-    //When reset to offset BETWEEN epoch boundaries
+    //When reset to offset before first epoch offset
     cache.clearEarliest(offset = 1)
 
     //Then nothing should change
@@ -491,7 +491,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, offset = 8)
     cache.assign(epoch = 4, offset = 11)
 
-    //When reset to offset BETWEEN epoch boundaries
+    //When reset to offset on earliest epoch boundary
     cache.clearEarliest(offset = 6)
 
     //Then nothing should change
