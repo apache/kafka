@@ -257,7 +257,7 @@ public class RegexSourceIntegrationTest {
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
         IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList("testMessage"), producerConfig, mockTime);
-        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, TOPIC_1, 1, 5000);
+        IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, TOPIC_1, 1, 30000);
 
         streams.close();
 
