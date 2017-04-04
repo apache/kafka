@@ -194,12 +194,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   def epochChangeMsg(epoch: Int, offset: Long) = s"NewEpoch->Offset{epoch:$epoch, offset:$offset}, ExistingEpoch->Offset:{epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
 
   def maybeWarn(epoch: Int, offset: Long) = {
-    if(epoch < latestEpoch())
+    if (epoch < latestEpoch())
       warn(s"Received a PartitionLeaderEpoch Assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
-    else if(epoch < 0 && epoch != RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH)
-      warn(s"Received an PartitionLeaderEpoch assignment for an epoch < 0. ${epochChangeMsg(epoch, offset)}")
-    else if(offset < latestOffset() && epoch >= 0)
+    else if (epoch < 0)
+      warn(s"Received an PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
+    else if (offset < latestOffset() && epoch >= 0)
       warn(s"Received an PartitionLeaderEpoch assignment for an offset < latest offset for the most recent, stored PartitionLeaderEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
   }
