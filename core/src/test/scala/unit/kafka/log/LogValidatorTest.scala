@@ -220,7 +220,7 @@ class LogValidatorTest {
       }
     }
     assertEquals(s"Max timestamp should be ${now + 1}", now + 1, validatingResults.maxTimestamp)
-    assertEquals(s"Offset of max timestamp should be 1", 2, validatingResults.shallowOffsetOfMaxTimestamp)
+    assertEquals("Offset of max timestamp should be 2", 2, validatingResults.shallowOffsetOfMaxTimestamp)
     assertTrue("Message size should have been changed", validatingResults.messageSizeMaybeChanged)
   }
 

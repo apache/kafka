@@ -194,12 +194,25 @@ public class MemoryRecordsBuilder {
      * @return The max timestamp and its offset
      */
     public RecordsInfo info() {
-        if (timestampType == TimestampType.LOG_APPEND_TIME)
-            return new RecordsInfo(logAppendTime,  lastOffset);
-        else if (maxTimestamp == RecordBatch.NO_TIMESTAMP)
+        if (timestampType == TimestampType.LOG_APPEND_TIME) {
+            long shallowOffsetOfMaxTimestamp;
+            // Use the last offset when dealing with record batches
+            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+                shallowOffsetOfMaxTimestamp = lastOffset;
+            else
+                shallowOffsetOfMaxTimestamp = baseOffset;
+            return new RecordsInfo(logAppendTime, shallowOffsetOfMaxTimestamp);
+        } else if (maxTimestamp == RecordBatch.NO_TIMESTAMP) {
             return new RecordsInfo(RecordBatch.NO_TIMESTAMP, lastOffset);
-        else
-            return new RecordsInfo(maxTimestamp, compressionType == CompressionType.NONE ? offsetOfMaxTimestamp : lastOffset);
+        } else {
+            long shallowOffsetOfMaxTimestamp;
+            // Use the last offset when dealing with record batches
+            if (compressionType != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2)
+                shallowOffsetOfMaxTimestamp = lastOffset;
+            else
+                shallowOffsetOfMaxTimestamp = offsetOfMaxTimestamp;
+            return new RecordsInfo(maxTimestamp, shallowOffsetOfMaxTimestamp);
+        }
     }
 
     public void setProducerState(long pid, short epoch, int baseSequence) {

@@ -130,6 +130,7 @@ private[kafka] object LogValidator extends Logging {
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
+    var isMagicV2 = false
 
     for (batch <- records.batches.asScala) {
       validateBatch(batch)
@@ -163,11 +164,16 @@ private[kafka] object LogValidator extends Logging {
         else
           batch.setMaxTimestamp(timestampType, maxBatchTimestamp)
       }
+
+      isMagicV2 = batch.magic >= RecordBatch.MAGIC_VALUE_V2
     }
 
     if (timestampType == TimestampType.LOG_APPEND_TIME) {
       maxTimestamp = now
-      offsetOfMaxTimestamp = initialOffset
+      if (isMagicV2)
+        offsetOfMaxTimestamp = offsetCounter.value - 1
+      else
+        offsetOfMaxTimestamp = initialOffset
     }
 
     ValidationAndOffsetAssignResult(
