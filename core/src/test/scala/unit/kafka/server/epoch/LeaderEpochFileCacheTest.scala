@@ -29,7 +29,7 @@ import org.junit.{Before, Test}
 import scala.collection.mutable.ListBuffer
 
 /**
-  * Unit test for the LeaderEpochFileCache
+  * Unit test for the LeaderEpochFileCache.
   */
 class LeaderEpochFileCacheTest {
   val tp = new TopicPartition("TestTopic", 5)
