@@ -1079,7 +1079,7 @@ class Log(@volatile var dir: File,
       }
       buildAndRecoverPidMap(targetOffset)
     }
-    leaderEpochCache.clearLatest(targetOffset) //TODO hmm... might be clearer to clear the epoch cache with each segment
+    leaderEpochCache.clearLatest(targetOffset)
   }
 
   /**
