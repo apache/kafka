@@ -542,7 +542,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, offset = 8)
     cache.assign(epoch = 4, offset = 11)
 
-    //When reset to offset BETWEEN epoch boundaries
+    //When reset to offset beyond last epoch
     cache.clearEarliest(offset = 15)
 
     //Then update the last
