@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -144,8 +145,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // we need to construct the serde while opening DB since
         // it is also triggered by windowed DB segments without initialization
         this.serdes = new StateSerdes<>(
-            name,
-            context.applicationId(),
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 

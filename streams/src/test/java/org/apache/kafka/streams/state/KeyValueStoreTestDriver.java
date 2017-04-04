@@ -16,16 +16,6 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.io.File;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Properties;
-import java.util.Set;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -53,6 +43,17 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
+
+import java.io.File;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
@@ -174,7 +175,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               final Deserializer<K> keyDeserializer,
                                                               final Serializer<V> valueSerializer,
                                                               final Deserializer<V> valueDeserializer) {
-        StateSerdes<K, V> serdes = new StateSerdes<K, V>("unexpected",
+        StateSerdes<K, V> serdes = new StateSerdes<K, V>(
+            "unexpected",
             Serdes.serdeFrom(keySerializer, keyDeserializer),
             Serdes.serdeFrom(valueSerializer, valueDeserializer));
         return new KeyValueStoreTestDriver<K, V>(serdes);
@@ -234,7 +236,7 @@ public class KeyValueStoreTestDriver<K, V> {
         this.stateDir.mkdirs();
 
         props = new Properties();
-        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "applicationId");
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());

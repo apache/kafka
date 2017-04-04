@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 
 /**
  * Factory for creating serializers / deserializers for state stores in Kafka Streams.
@@ -33,22 +32,21 @@ public final class StateSerdes<K, V> {
     /**
      * Create a new instance of {@link StateSerdes} for the given state name and key-/value-type classes.
      *
-     * @param stateName   the name of the state
-     * @param keyClass    the class of the key type
-     * @param valueClass  the class of the value type
-     * @param <K>         the key type
-     * @param <V>         the value type
-     * @return            a new instance of {@link StateSerdes}
+     * @param topic      the topic name
+     * @param keyClass   the class of the key type
+     * @param valueClass the class of the value type
+     * @param <K>        the key type
+     * @param <V>        the value type
+     * @return a new instance of {@link StateSerdes}
      */
     public static <K, V> StateSerdes<K, V> withBuiltinTypes(
-        final String stateName,
+        final String topic,
         final Class<K> keyClass,
         final Class<V> valueClass) {
-        return new StateSerdes<>(stateName, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
+        return new StateSerdes<>(topic, Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
     }
 
-    private final String stateName;
-    private String topic = null;
+    private final String topic;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
 
@@ -58,52 +56,28 @@ public final class StateSerdes<K, V> {
      * is provided to bind this serde factory to, so that future calls for serialize / deserialize do not
      * need to provide the topic name any more.
      *
-     * @param stateName     the name of the state
+     * @param topic         the topic name
      * @param keySerde      the serde for keys; cannot be null
      * @param valueSerde    the serde for values; cannot be null
      * @throws IllegalArgumentException if key or value serde is null
      */
     @SuppressWarnings("unchecked")
-    public StateSerdes(final String stateName,
+    public StateSerdes(final String topic,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde) {
-        this(stateName, null, keySerde, valueSerde);
-    }
-
-    /**
-     * Create a context for serialization using the specified serializers and deserializers which
-     * <em>must</em> match the key and value types used as parameters for this object; the state changelog topic
-     * is provided to bind this serde factory to, so that future calls for serialize / deserialize do not
-     * need to provide the topic name any more.
-     *
-     * @param stateName     the name of the state
-     * @param applicationId the application id
-     * @param keySerde      the serde for keys; cannot be null
-     * @param valueSerde    the serde for values; cannot be null
-     * @throws IllegalArgumentException if key or value serde is null
-     */
-    @SuppressWarnings("unchecked")
-    public StateSerdes(final String stateName,
-                       final String applicationId,
-                       final Serde<K> keySerde,
-                       final Serde<V> valueSerde) {
-        this.stateName = stateName;
-        if (applicationId != null) {
-            topic = ProcessorStateManager.storeChangelogTopic(applicationId, stateName);
+        if (topic == null) {
+            throw new IllegalArgumentException("topic cannot be null");
+        }
+        if (keySerde == null) {
+            throw new IllegalArgumentException("key serde cannot be null");
+        }
+        if (valueSerde == null) {
+            throw new IllegalArgumentException("value serde cannot be null");
         }
 
-        if (keySerde == null)
-            throw new IllegalArgumentException("key serde cannot be null");
-        if (valueSerde == null)
-            throw new IllegalArgumentException("value serde cannot be null");
-
+        this.topic = topic;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-    }
-
-    public StateSerdes<K, V> setApplicationId(final String applicationId) {
-        topic = ProcessorStateManager.storeChangelogTopic(applicationId, stateName);
-        return this;
     }
 
     /**
@@ -161,12 +135,12 @@ public final class StateSerdes<K, V> {
     }
 
     /**
-     * Return the name of the state.
+     * Return the topic.
      *
-     * @return the name of the state
+     * @return the topic
      */
-    public String stateName() {
-        return stateName;
+    public String topic() {
+        return topic;
     }
 
     /**
