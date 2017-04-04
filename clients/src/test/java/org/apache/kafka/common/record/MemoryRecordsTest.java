@@ -222,9 +222,9 @@ public class MemoryRecordsTest {
         assertEquals(4, result.messagesRetained);
         assertEquals(buffer.limit(), result.bytesRead);
         assertEquals(filtered.limit(), result.bytesRetained);
-        if (magic > 0) {
+        if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp);
-            if (compression == CompressionType.NONE)
+            if (compression == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
                 assertEquals(4L, result.shallowOffsetOfMaxTimestamp);
             else
                 assertEquals(5L, result.shallowOffsetOfMaxTimestamp);

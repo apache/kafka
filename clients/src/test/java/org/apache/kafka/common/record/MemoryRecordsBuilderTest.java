@@ -220,7 +220,10 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder.RecordsInfo info = builder.info();
         assertEquals(logAppendTime, info.maxTimestamp);
 
-        assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        if (compressionType != CompressionType.NONE)
+            assertEquals(2L, info.shallowOffsetOfMaxTimestamp);
+        else
+            assertEquals(0L, info.shallowOffsetOfMaxTimestamp);
 
         for (RecordBatch batch : records.batches()) {
             assertEquals(TimestampType.LOG_APPEND_TIME, batch.timestampType());
