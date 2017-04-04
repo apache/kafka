@@ -44,9 +44,9 @@ class LogValidatorTest extends JUnitSuite {
       now = now,
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = magic,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = magic,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
     validatedRecords.batches.asScala.foreach(batch => validateLogAppendTime(now, batch))
@@ -74,9 +74,9 @@ class LogValidatorTest extends JUnitSuite {
       now = now,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = targetMagic,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = targetMagic,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals("message set size should not change", records.records.asScala.size, validatedRecords.records.asScala.size)
@@ -108,9 +108,9 @@ class LogValidatorTest extends JUnitSuite {
       now = now,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = magic,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = magic,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
     assertEquals("message set size should not change", records.records.asScala.size,
@@ -147,9 +147,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = magic,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = magic,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
     val validatedRecords = validatingResults.validatedRecords
 
     var i = 0
@@ -185,9 +185,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = toMagic,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = toMagic,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -215,9 +215,9 @@ class LogValidatorTest extends JUnitSuite {
       now = timestamp,
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
     for (batch <- validatedRecords.batches.asScala) {
@@ -250,9 +250,9 @@ class LogValidatorTest extends JUnitSuite {
         now = System.currentTimeMillis(),
         sourceCodec = DefaultCompressionCodec,
         targetCodec = DefaultCompressionCodec,
-        messageFormatVersion = magic,
-        messageTimestampType = TimestampType.CREATE_TIME,
-        messageTimestampDiffMaxMs = 1000L)
+        magic = magic,
+        timestampType = TimestampType.CREATE_TIME,
+        timestampDiffMaxMs = 1000L)
     val validatedRecords = validatedResults.validatedRecords
 
     var i = 0
@@ -288,9 +288,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
   }
 
   @Test(expected = classOf[InvalidTimestampException])
@@ -304,9 +304,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
   }
 
   @Test(expected = classOf[InvalidTimestampException])
@@ -320,9 +320,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
   }
 
   @Test(expected = classOf[InvalidTimestampException])
@@ -336,9 +336,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L)
   }
 
   @Test
@@ -351,9 +351,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V0,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -366,9 +366,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V0,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -382,9 +382,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -399,9 +399,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords
     checkOffsets(messageWithOffset, offset)
   }
 
@@ -417,9 +417,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -435,9 +435,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords
     checkOffsets(compressedMessagesWithOffset, offset)
   }
 
@@ -451,9 +451,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -466,9 +466,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -481,9 +481,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -496,9 +496,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -512,9 +512,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V0,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords, offset)
   }
 
   @Test
@@ -528,9 +528,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V0,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords, offset)
   }
 
   @Test
@@ -543,9 +543,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -558,9 +558,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V2,
-      messageTimestampType = TimestampType.LOG_APPEND_TIME,
-      messageTimestampDiffMaxMs = 1000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L).validatedRecords, offset)
   }
 
   @Test
@@ -574,9 +574,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords, offset)
   }
 
   @Test
@@ -590,9 +590,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords, offset)
   }
 
   @Test
@@ -606,9 +606,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = NoCompressionCodec,
       targetCodec = NoCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V0,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords, offset)
   }
 
   @Test
@@ -622,9 +622,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V0,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L).validatedRecords, offset)
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L).validatedRecords, offset)
   }
 
   @Test(expected = classOf[InvalidRecordException])
@@ -636,9 +636,9 @@ class LogValidatorTest extends JUnitSuite {
       now = System.currentTimeMillis(),
       sourceCodec = SnappyCompressionCodec,
       targetCodec = SnappyCompressionCodec,
-      messageFormatVersion = RecordBatch.MAGIC_VALUE_V1,
-      messageTimestampType = TimestampType.CREATE_TIME,
-      messageTimestampDiffMaxMs = 5000L)
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L)
   }
 
   private def createRecords(magicValue: Byte = Message.CurrentMagicValue,
