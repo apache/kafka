@@ -23,7 +23,8 @@ import org.apache.kafka.common.protocol.Errors;
  */
 
 public class EpochEndOffset {
-    public static final long UNDEFINED_OFFSET = -1;
+    public static final long UNDEFINED_EPOCH_OFFSET = -1;
+    public static final int UNDEFINED_EPOCH = -1;
 
     private Errors error;
     private long endOffset;

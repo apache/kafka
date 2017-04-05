@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.LogOffsetMetadata
 import kafka.server.checkpoints.LeaderEpochCheckpoint
-import kafka.server.epoch.LeaderEpochConstants.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
@@ -37,11 +37,6 @@ trait LeaderEpochCache {
   def clearLatest(offset: Long)
   def clearEarliest(offset: Long)
   def clear()
-}
-
-object LeaderEpochConstants {
-  val UNDEFINED_EPOCH_OFFSET = EpochEndOffset.UNDEFINED_OFFSET
-  val UNDEFINED_EPOCH = -1
 }
 
 /**

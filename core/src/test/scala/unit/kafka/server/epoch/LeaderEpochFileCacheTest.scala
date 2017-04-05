@@ -20,7 +20,7 @@ import java.io.File
 
 import kafka.server.LogOffsetMetadata
 import kafka.server.checkpoints.{LeaderEpochCheckpoint, LeaderEpochCheckpointFile}
-import kafka.server.epoch.LeaderEpochConstants.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
+import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
@@ -98,10 +98,10 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, offset = 12)
 
     //When (say a bootstraping follower) sends request for UNDEFINED_EPOCH
-    val offsetFor = cache.endOffsetFor(LeaderEpochConstants.UNDEFINED_EPOCH)
+    val offsetFor = cache.endOffsetFor(UNDEFINED_EPOCH)
 
     //Then
-    assertEquals(LeaderEpochConstants.UNDEFINED_EPOCH_OFFSET, offsetFor)
+    assertEquals(UNDEFINED_EPOCH_OFFSET, offsetFor)
   }
 
   @Test

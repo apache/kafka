@@ -26,7 +26,7 @@ import kafka.common.KafkaStorageException
 import kafka.log.LogConfig
 import kafka.server.ReplicaFetcherThread._
 import kafka.server.epoch.LeaderEpochCache
-import kafka.server.epoch.LeaderEpochConstants._
+import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.Exit
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.FatalExitError

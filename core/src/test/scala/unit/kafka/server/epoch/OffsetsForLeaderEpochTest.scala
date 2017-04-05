@@ -73,7 +73,7 @@ class OffsetsForLeaderEpochTest {
     val response = OffsetsForLeaderEpoch.getResponseFor(replicaManager, request)
 
     //Then
-    assertEquals(new EpochEndOffset(Errors.NOT_LEADER_FOR_PARTITION, UNDEFINED_OFFSET), response.get(tp))
+    assertEquals(new EpochEndOffset(Errors.NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH_OFFSET), response.get(tp))
   }
 
   @Test
@@ -93,6 +93,6 @@ class OffsetsForLeaderEpochTest {
     val response = OffsetsForLeaderEpoch.getResponseFor(replicaManager, request)
 
     //Then
-    assertEquals(new EpochEndOffset(Errors.UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_OFFSET), response.get(tp))
+    assertEquals(new EpochEndOffset(Errors.UNKNOWN_TOPIC_OR_PARTITION, UNDEFINED_EPOCH_OFFSET), response.get(tp))
   }
 }

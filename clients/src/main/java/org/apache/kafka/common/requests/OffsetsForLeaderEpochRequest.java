@@ -140,7 +140,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         Errors error = Errors.forException(e);
         Map<TopicPartition, EpochEndOffset> errorResponse = new HashMap();
         for (TopicPartition tp : epochsByPartition.keySet()) {
-            errorResponse.put(tp, new EpochEndOffset(error, EpochEndOffset.UNDEFINED_OFFSET));
+            errorResponse.put(tp, new EpochEndOffset(error, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
         }
         return new OffsetsForLeaderEpochResponse(errorResponse);
     }
