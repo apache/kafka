@@ -536,6 +536,10 @@ public final class RecordAccumulator {
         }
     }
 
+    public boolean hasUnflushedBatches() {
+        return 0 < this.incomplete.incomplete.size() || 0 < this.batches.size();
+    }
+
     /**
      * This function is only called when sender is closed forcefully. It will fail all the
      * incomplete batches and return.

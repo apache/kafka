@@ -187,8 +187,16 @@ public class Sender implements Runnable {
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
-        Cluster cluster = metadata.fetch();
+        long pollTimeout = 0;
+        if (!maybeSendTransactionalRequest(now))
+            pollTimeout = sendProducerData(now);
 
+       this.client.poll(pollTimeout, now);
+    }
+
+
+    private long sendProducerData(long now) {
+        Cluster cluster = metadata.fetch();
         maybeWaitForPid();
 
         // get the list of partitions with data ready to send
@@ -241,7 +249,7 @@ public class Sender implements Runnable {
 
         if (needsTransactionStateReset) {
             transactionState.resetProducerId();
-            return;
+            return 0;
         }
 
         sensors.updateProduceRequestMetrics(batches);
@@ -253,17 +261,73 @@ public class Sender implements Runnable {
         long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
         if (!result.readyNodes.isEmpty()) {
             log.trace("Nodes with data ready to send: {}", result.readyNodes);
+            // if some partitions are already ready to be sent, the select time would be 0;
+            // otherwise if some partition already has some data accumulated but not ready yet,
+            // the select time will be the time difference between now and its linger expiry time;
+            // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
         sendProduceRequests(batches, now);
 
-        // if some partitions are already ready to be sent, the select time would be 0;
-        // otherwise if some partition already has some data accumulated but not ready yet,
-        // the select time will be the time difference between now and its linger expiry time;
-        // otherwise the select time will be the time difference between now and the metadata expiry time;
-        this.client.poll(pollTimeout, now);
+        return pollTimeout;
+
     }
 
+    private boolean maybeSendTransactionalRequest(long now) {
+        if (transactionState == null)
+            return false;
+
+        if (transactionState.hasInflightTransactionalRequest())
+            return true;
+
+        if (!transactionState.hasPendingTransactionalRequests())
+            return false;
+
+        if (transactionState.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+            if (!accumulator.flushInProgress())
+                accumulator.beginFlush();
+            return false;
+        }
+
+        TransactionState.TransactionalRequest nextRequest = transactionState.nextTransactionalRequest();
+
+        Node targetNode = null;
+        long expiryTime = now + requestTimeout;
+        long nextIterationTime = now;
+
+        while (targetNode == null && nextIterationTime < expiryTime) {
+            try {
+                if (nextRequest.mustBeSentToCoordinator()) {
+                    targetNode = transactionState.coordinator();
+                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, expiryTime - nextIterationTime)) {
+                        transactionState.markCoordinatorDead(targetNode);
+                        targetNode = null;
+                        break;
+                    }
+                } else {
+                    targetNode = awaitLeastLoadedNodeReady(expiryTime - nextIterationTime);
+                }
+
+                if (targetNode != null) {
+                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequest.requestBuilder(),
+                            now, true, nextRequest.responseHandler());
+                    transactionState.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    client.send(clientRequest, now);
+                    return true;
+                }
+            } catch (IOException e) {
+                log.warn("Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", e);
+            }
+            time.sleep(retryBackoffMs);
+            metadata.requestUpdate();
+            nextIterationTime = time.milliseconds();
+        }
+
+        if (targetNode == null)
+            transactionState.needsRetry(nextRequest);
+
+        return true;
+    }
     /**
      * Start closing the sender (won't actually complete until all data is sent out)
      */
@@ -301,18 +365,9 @@ public class Sender implements Runnable {
     private void maybeWaitForPid() {
         // If this is a transactional producer, the PID will be received when recovering transactions in the
         // initTransactions() method of the producer.
-        if (transactionState != null && !transactionState.isTransactional())
-            getPid();
-    }
-
-    private void maybeWaitForTransactionCoordinator() {
-        if (transactionState == null || !transactionState.isTransactional())
+        if (transactionState == null || transactionState.isTransactional())
             return;
 
-
-    }
-
-    private void getPid() {
         while (!transactionState.hasPid()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
