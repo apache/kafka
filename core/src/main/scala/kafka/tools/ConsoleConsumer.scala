@@ -1,23 +1,24 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 
 package kafka.tools
 
 import java.io.PrintStream
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.CountDownLatch
 import java.util.{Locale, Properties, Random}
 
@@ -38,8 +39,8 @@ import org.apache.log4j.Logger
 import scala.collection.JavaConverters._
 
 /**
- * Consumer that dumps messages to standard out.
- */
+  * Consumer that dumps messages to standard out.
+  */
 object ConsoleConsumer extends Logging {
 
   var messageCount = 0
@@ -137,7 +138,7 @@ object ConsoleConsumer extends Logging {
       messageCount += 1
       try {
         formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value), output)
+          msg.timestampType, 0, 0, 0, msg.key, msg.value), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -281,8 +282,8 @@ object ConsoleConsumer extends Logging {
       .describedAs("deserializer for values")
       .ofType(classOf[String])
     val enableSystestEventsLoggingOpt = parser.accepts("enable-systest-events",
-                                                       "Log lifecycle events of the consumer in addition to logging consumed " +
-                                                       "messages. (This is specific for system tests.)")
+      "Log lifecycle events of the consumer in addition to logging consumed " +
+        "messages. (This is specific for system tests.)")
 
     if (args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
@@ -415,8 +416,8 @@ class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
   var printValue = true
   var printTimestamp = false
-  var keySeparator = "\t".getBytes
-  var lineSeparator = "\n".getBytes
+  var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
+  var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
 
   var keyDeserializer: Option[Deserializer[_]] = None
   var valueDeserializer: Option[Deserializer[_]] = None
@@ -429,9 +430,9 @@ class DefaultMessageFormatter extends MessageFormatter {
     if (props.containsKey("print.value"))
       printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
-      keySeparator = props.getProperty("key.separator").getBytes
+      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
     if (props.containsKey("line.separator"))
-      lineSeparator = props.getProperty("line.separator").getBytes
+      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("key.deserializer"))
       keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
@@ -490,8 +491,8 @@ class LoggingMessageFormatter extends MessageFormatter   {
     defaultWriter.writeTo(consumerRecord, output)
     if (logger.isInfoEnabled)
       logger.info({if (timestampType != TimestampType.NO_TIMESTAMP_TYPE) s"$timestampType:$timestamp, " else ""} +
-                  s"key:${if (key == null) "null" else new String(key)}, " +
-                  s"value:${if (value == null) "null" else new String(value)}")
+        s"key:${if (key == null) "null" else new String(key, StandardCharsets.UTF_8)}, " +
+        s"value:${if (value == null) "null" else new String(value, StandardCharsets.UTF_8)}")
   }
 }
 
