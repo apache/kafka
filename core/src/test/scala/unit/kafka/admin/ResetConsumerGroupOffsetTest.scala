@@ -13,12 +13,12 @@
 package unit.kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.time.{Duration, LocalDateTime}
+import java.time.{Duration, LocalDateTime, ZonedDateTime}
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
 
-import kafka.admin.{AdminUtils, ConsumerGroupCommand}
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
+import kafka.admin.{AdminUtils, ConsumerGroupCommand}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -49,7 +49,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
     * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
     */
-  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+  override def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
   override def setUp() {
@@ -60,7 +60,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
   @Test
   def testResetOffsetsNotExistingGroup() {
-    val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic1)
+    new ConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "missing.group", "--all-topics")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
@@ -84,14 +84,12 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testResetOffsetsToDateTime() {
+  def testResetOffsetsToLocalDateTime() {
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
-    TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
 
-    val checkpoint = LocalDateTime.now()
+    val checkpoint = LocalDateTime.now().minusDays(1)
 
-    TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
-
+    TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
@@ -103,13 +101,75 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       try {
         val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
         assignmentsOption match {
-          case Some(assignments) => {
+          case Some(assignments) =>
             val sumOffset = assignments.filter(_.topic.exists(_ == topic1))
               .filter(_.offset.isDefined)
               .map(assignment => assignment.offset.get)
               .foldLeft(0.toLong)(_ + _)
             sumOffset == 100
-          }
+          case _ => false
+        }
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected that consumer group has consumed all messages from topic/partition.")
+
+    executor.shutdown()
+
+    val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", checkpoint.toString, "--execute")
+    val opts1 = new ConsumerGroupCommandOptions(cgcArgs1)
+    val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val assignmentsResetted = consumerGroupCommand1.resetOffsets()
+        assignmentsResetted.exists { assignment => assignment._2 == 0 }
+      } catch {
+        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
+          // Do nothing while the group initializes
+          false
+        case e: Throwable =>
+          e.printStackTrace()
+          throw e
+      }
+    }, "Expected the consumer group to reset to when offset was 50.")
+
+    printConsumerGroup()
+
+    AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand.close()
+  }
+
+  @Test
+  def testResetOffsetsToZonedDateTime() {
+    AdminUtils.createTopic(zkUtils, topic1, 1, 1)
+    TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
+
+    val checkpoint = ZonedDateTime.now()
+
+    TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
+
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics")
+    val opts = new ConsumerGroupCommandOptions(cgcArgs)
+    val consumerGroupCommand = new KafkaConsumerGroupService(opts)
+
+    val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic1)
+
+    TestUtils.waitUntilTrue(() => {
+      try {
+        val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+        assignmentsOption match {
+          case Some(assignments) =>
+            val sumOffset = assignments.filter(_.topic.exists(_ == topic1))
+              .filter(_.offset.isDefined)
+              .map(assignment => assignment.offset.get)
+              .foldLeft(0.toLong)(_ + _)
+            sumOffset == 100
           case _ => false
         }
       } catch {
@@ -142,7 +202,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to when offset was 50.")
 
-    printConsumerGroup
+    printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
@@ -172,7 +232,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest by duration).")
 
-    printConsumerGroup
+    printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
@@ -202,7 +262,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 100 (latest by duration).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -231,7 +291,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -263,7 +323,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 200 (latest).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -295,7 +355,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 100 (current).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -309,13 +369,12 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       try {
         val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
         assignmentsOption match {
-          case Some(assignments) => {
+          case Some(assignments) =>
             val sumOffset = assignments.filter(_.topic.exists(_ == topic))
               .filter(_.offset.isDefined)
               .map(assignment => assignment.offset.get)
               .foldLeft(0.toLong)(_ + _)
             sumOffset == totalMessages
-          }
           case _ => false
         }
       } catch {
@@ -356,7 +415,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 1 (specific offset).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -387,7 +446,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 150 (current + 50).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -419,7 +478,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 50 (current - 50).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -450,7 +509,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest by shift).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -481,7 +540,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 200 (latest by shift).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -510,7 +569,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -539,7 +598,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest) in partition 1.")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -575,7 +634,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest).")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     AdminUtils.deleteTopic(zkUtils, topic2)
     consumerGroupCommand.close()
@@ -612,7 +671,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
       }
     }, "Expected the consumer group to reset to offset 0 (earliest) in partition 1.")
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     AdminUtils.deleteTopic(zkUtils, topic2)
     consumerGroupCommand.close()
@@ -669,7 +728,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     file.deleteOnExit()
 
-    printConsumerGroup
+    printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
     consumerGroupCommand.close()
   }
@@ -696,7 +755,7 @@ class ConsumerThread(broker: String, id: Int, groupId: String, topic: String) ex
       while (true)
         consumer.poll(Long.MaxValue)
     } catch {
-      case e: WakeupException => // OK
+      case _: WakeupException => // OK
     } finally {
       consumer.close()
     }
@@ -709,7 +768,7 @@ class ConsumerThread(broker: String, id: Int, groupId: String, topic: String) ex
 
 class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, topic: String) {
   val executor: ExecutorService = Executors.newFixedThreadPool(numConsumers)
-  var consumers = List[ConsumerThread]()
+  var consumers: List[ConsumerThread] = List[ConsumerThread]()
 
   for (i <- 1 to numConsumers) {
     val consumer = new ConsumerThread(broker, i, groupId, topic)
@@ -717,17 +776,17 @@ class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, 
     executor.submit(consumer)
   }
 
-  Runtime.getRuntime().addShutdownHook(new Thread() {
+  Runtime.getRuntime.addShutdownHook(new Thread() {
     override def run() {
       shutdown()
     }
   })
 
   def shutdown() {
-    consumers.foreach(_.shutdown)
-    executor.shutdown();
+    consumers.foreach(_.shutdown())
+    executor.shutdown()
     try {
-      executor.awaitTermination(5000, TimeUnit.MILLISECONDS);
+      executor.awaitTermination(5000, TimeUnit.MILLISECONDS)
     } catch {
       case e: InterruptedException =>
         e.printStackTrace()

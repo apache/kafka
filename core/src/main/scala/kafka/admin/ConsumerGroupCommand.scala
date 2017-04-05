@@ -150,7 +150,7 @@ object ConsumerGroupCommand extends Logging {
   }
 
   def printAssignmentResetted(groupAssignmentsResetted: Map[PartitionAssignmentState, Long], useNewConsumer: Boolean): Unit = {
-    print("\n%-30s %-10s %-15s %-15s %-15s %-10s %-50s".format("TOPIC", "PARTITION", "CURRENT-OFFSET", "NEW-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID"))
+    print("\n%-30s %-10s %-15s %-15s %-10s %-50s".format("TOPIC", "PARTITION", "NEW-OFFSET", "NEW-LAG", "LOG-END-OFFSET", "CONSUMER-ID"))
     if (useNewConsumer)
       print("%-30s %s".format("HOST", "CLIENT-ID"))
     println()
@@ -160,10 +160,9 @@ object ConsumerGroupCommand extends Logging {
         print("%-30s %-10s %-15s %-15s %-15s %-10s %-50s".format(
           consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE),
           consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
-          consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE),
           newOffset,
+          consumerAssignment.logEndOffset.map(endOffset => endOffset - newOffset).getOrElse(MISSING_COLUMN_VALUE),
           consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
-          consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE),
           consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
         if (useNewConsumer)
           print("%-30s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
@@ -653,8 +652,11 @@ object ConsumerGroupCommand extends Logging {
       } else if(opts.options.has(opts.resetToDatetimeOpt)){
         assignmentsToReset.map(
           assignment => {
-            val datetime = opts.options.valueOf(opts.resetToDatetimeOpt)
-            val zonedDateTime = LocalDateTime.parse(datetime).atZone(ZoneId.systemDefault())
+            val datetime: String = opts.options.valueOf(opts.resetToDatetimeOpt) match {
+              case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
+              case ts => s"${ts}Z"
+            }
+            val zonedDateTime = ZonedDateTime.parse(datetime)
             println(zonedDateTime)
             val timestamp = zonedDateTime.toInstant.toEpochMilli
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
