@@ -175,7 +175,7 @@ class Partition(val topic: String,
       allReplicas.map(id => getOrCreateReplica(id))
         .filter(_.isLocal)
         .foreach { replica =>
-          replica.epochs.get.cacheEpoch(leaderEpoch)
+          replica.epochs.get.cacheLatestEpoch(leaderEpoch)
         }
 
       zkVersion = partitionStateInfo.zkVersion

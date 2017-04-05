@@ -211,8 +211,7 @@ class Log(@volatile var dir: File,
   private def initializeLeaderEpochCache(): LeaderEpochCache = {
     // create the log directory if it doesn't exist
     dir.mkdirs()
-
-    return new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
+    new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
       new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
   }
 

@@ -1651,7 +1651,7 @@ class LogTest extends JUnitSuite {
     cache.assign(1, 5)
     cache.assign(2, 10)
 
-    //When first two segments (of 3) removed
+    //When first segment is removed
     log.deleteOldSegments
 
     //The oldest epoch entry should have been removed

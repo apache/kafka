@@ -29,7 +29,7 @@ import org.apache.kafka.common.requests.EpochEndOffset
 import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
-  def cacheEpoch(leaderEpoch: Int)
+  def cacheLatestEpoch(leaderEpoch: Int)
   def assignCachedEpochToLeoIfPresent()
   def assign(leaderEpoch: Int, offset: Long)
   def latestEpoch(): Int
@@ -143,8 +143,8 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   override def clearEarliest(offset: Long): Unit = {
     inWriteLock(lock) {
       val before = epochs
-      if (offset >= 0 && earliestOffset() <= offset) {
-        val earliest = epochs.filter(entry => entry.startOffset <= offset)
+      if (offset >= 0 && earliestOffset() < offset) {
+        val earliest = epochs.filter(entry => entry.startOffset < offset)
         if(earliest.size > 0) {
           epochs = epochs --= earliest
           //If the offset is less than the earliest offset remaining, add previous epoch back, but with an updated offset
@@ -201,12 +201,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     * This will be cached until {@link #assignCachedEpochToLeoIfPresent()} is called.
     *
     * This allows us to register an epoch in response to a leadership change, but not persist
-    * that epoch until a message arrives and is stamped. This alisgns the assigment of leadership
+    * that epoch until a message arrives and is stamped. This asigns the aassignment of leadership
     * on leader and follower, for eases debugability.
     *
     * @param epoch
     */
-  override def cacheEpoch(epoch: Int) = {
+  override def cacheLatestEpoch(epoch: Int) = {
     inWriteLock(lock) {
       cachedLatestEpoch = Some(epoch)
     }
@@ -214,15 +214,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
 
   /**
     * If there is a cached epoch, it will be assigned to the LEO.
-    * @return the latest epoch
     */
   override def assignCachedEpochToLeoIfPresent() = {
     inWriteLock(lock) {
-      cachedLatestEpoch match {
-        case Some(epoch) =>
-          assign(epoch, leo().messageOffset)
-          cachedLatestEpoch = None
-        case None => //nothing to do
+      cachedLatestEpoch.foreach { epoch =>
+        assign(epoch, leo().messageOffset)
       }
     }
   }

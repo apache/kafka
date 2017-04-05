@@ -63,7 +63,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.cacheEpoch(2)
+    cache.cacheLatestEpoch(2)
     cache.assignCachedEpochToLeoIfPresent()
 
     //Then
@@ -113,12 +113,12 @@ class LeaderEpochFileCacheTest {
     leo = 9
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
-    cache.cacheEpoch(2)
+    cache.cacheLatestEpoch(2)
     cache.assignCachedEpochToLeoIfPresent()
 
     //When called again later
     leo = 10
-    cache.cacheEpoch(2)
+    cache.cacheLatestEpoch(2)
     cache.assignCachedEpochToLeoIfPresent()
 
     //Then the offset should NOT have been updated
@@ -134,11 +134,11 @@ class LeaderEpochFileCacheTest {
     leo = 9
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
-    cache.cacheEpoch(2)
+    cache.cacheLatestEpoch(2)
     cache.assignCachedEpochToLeoIfPresent()
 
     //When update epoch with same leo
-    cache.cacheEpoch(3)
+    cache.cacheLatestEpoch(3)
     cache.assignCachedEpochToLeoIfPresent()
 
     //Then the offset should NOT have been updated
@@ -253,7 +253,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.cacheEpoch(epoch = 2)
+    cache.cacheLatestEpoch(epoch = 2)
     cache.assignCachedEpochToLeoIfPresent()
 
     //Then
@@ -347,11 +347,11 @@ class LeaderEpochFileCacheTest {
 
     //Given
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
-    cache.cacheEpoch(epoch = 0) //leo=0
+    cache.cacheLatestEpoch(epoch = 0) //leo=0
     cache.assignCachedEpochToLeoIfPresent()
 
     //When
-    cache.cacheEpoch(epoch = 1) //leo=0
+    cache.cacheLatestEpoch(epoch = 1) //leo=0
     cache.assignCachedEpochToLeoIfPresent()
 
     //Then epoch should go up
@@ -370,7 +370,7 @@ class LeaderEpochFileCacheTest {
     assertEquals(0, cache.endOffsetFor(0))
 
     //When
-    cache.cacheEpoch(epoch = 2) //leo=5
+    cache.cacheLatestEpoch(epoch = 2) //leo=5
     cache.assignCachedEpochToLeoIfPresent()
     leo = 10 //write another 5 messages
 
@@ -682,7 +682,7 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.cacheEpoch(2)
+    cache.cacheLatestEpoch(2)
 
     //Then
     assertEquals(UNDEFINED_EPOCH, cache.latestEpoch())

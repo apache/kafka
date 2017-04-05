@@ -401,7 +401,7 @@ case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: 
   * This represents a partition as being either:
   * (1) Truncating its log, for example having recently become a follower
   * (2) Delayed, for example due to an error, where we subsequently back off a bit
-  * (3) ReadyForFetch, the is the active state where the thread is actively replicating.
+  * (3) ReadyForFetch, the is the active state where the thread is actively fetching data.
   */
 case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncatingLog: Boolean = false) {
 

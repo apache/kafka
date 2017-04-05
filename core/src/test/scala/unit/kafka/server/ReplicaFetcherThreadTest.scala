@@ -342,9 +342,10 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldFilterPartitionsMadeLeaderDuringOffsetRequest(): Unit ={
+  def shouldFilterPartitionsMadeLeaderDuringLeaderEpochRequest(): Unit ={
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
     val truncateToCapture: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
+    val initialLEO = 100
 
     //Setup all stubs
     val quota = createNiceMock(classOf[ReplicationQuotaManager])
@@ -356,7 +357,7 @@ class ReplicaFetcherThreadTest {
     //Stub return values
     expect(logManager.truncateTo(capture(truncateToCapture))).once
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
+    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
     expect(leaderEpochs.latestEpoch).andReturn(5)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
@@ -365,7 +366,7 @@ class ReplicaFetcherThreadTest {
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
-      t1p0 -> new EpochEndOffset(1), t1p1 -> new EpochEndOffset(1)
+      t1p0 -> new EpochEndOffset(52), t1p1 -> new EpochEndOffset(49)
     ).asJava
 
     //Create the fetcher thread
@@ -385,9 +386,9 @@ class ReplicaFetcherThreadTest {
     //When
     thread.doWork()
 
-    //Then we should not have truncated the partitino that became leader
+    //Then we should not have truncated the partition that became leader
     assertEquals(None, truncateToCapture.getValue.get(partitionThatBecameLeader))
-    assertEquals(0, truncateToCapture.getValue.get(t1p1).get)
+    assertEquals(49, truncateToCapture.getValue.get(t1p1).get)
   }
 
   def stub(replica: Replica, replicaManager: ReplicaManager) = {

@@ -19,7 +19,7 @@ package kafka.server.checkpoints
 import java.io._
 import java.nio.charset.StandardCharsets
 import java.nio.file.{FileSystems, Paths}
-import kafka.utils.Logging
+import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.Utils
 import scala.collection.{Seq, mutable}
 
@@ -58,7 +58,7 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
         case e: FileNotFoundException =>
           if (FileSystems.getDefault.isReadOnly) {
             fatal("Halting writes to offset checkpoint file because the underlying file system is inaccessible : ", e)
-            Runtime.getRuntime.halt(1)
+            Exit.halt(1)
           }
           throw e
       } finally {
