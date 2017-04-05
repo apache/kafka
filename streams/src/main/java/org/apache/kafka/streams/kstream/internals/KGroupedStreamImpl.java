@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -202,6 +203,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 final Serde<T> aggValueSerde,
                                                 final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return aggregate(initializer,
                          aggregator,
                          sessionMerger,
@@ -237,6 +239,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @SuppressWarnings("unchecked")
     public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return count(sessionWindows,
                      storeFactory(keySerde, Serdes.Long(), storeName)
                              .sessionWindowed(sessionWindows.maintainMs()).build());
@@ -278,6 +281,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                          final String storeName) {
 
         Objects.requireNonNull(storeName, "storeName can't be null");
+        Topic.validate(storeName);
         return reduce(reducer, sessionWindows,
                       storeFactory(keySerde, valSerde, storeName)
                               .sessionWindowed(sessionWindows.maintainMs()).build());

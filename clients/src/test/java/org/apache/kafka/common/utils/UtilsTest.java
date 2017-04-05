@@ -22,10 +22,14 @@ import org.easymock.IAnswer;
 import org.junit.Test;
 
 import java.io.Closeable;
+import java.io.DataOutputStream;
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
@@ -34,6 +38,7 @@ import java.util.Random;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -78,7 +83,7 @@ public class UtilsTest {
         assertEquals("1", Utils.join(Arrays.asList("1"), ","));
         assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
     }
-
+    
     @Test
     public void testAbs() {
         assertEquals(0, Utils.abs(Integer.MIN_VALUE));
@@ -86,6 +91,95 @@ public class UtilsTest {
         assertEquals(10, Utils.abs(10));
         assertEquals(0, Utils.abs(0));
         assertEquals(1, Utils.abs(-1));
+    }
+
+    @Test
+    public void writeToBuffer() throws IOException {
+        byte[] input = {0, 1, 2, 3, 4, 5};
+        ByteBuffer source = ByteBuffer.wrap(input);
+
+        doTestWriteToByteBuffer(source, ByteBuffer.allocate(input.length));
+        doTestWriteToByteBuffer(source, ByteBuffer.allocateDirect(input.length));
+        assertEquals(0, source.position());
+
+        source.position(2);
+        doTestWriteToByteBuffer(source, ByteBuffer.allocate(input.length));
+        doTestWriteToByteBuffer(source, ByteBuffer.allocateDirect(input.length));
+    }
+
+    private void doTestWriteToByteBuffer(ByteBuffer source, ByteBuffer dest) throws IOException {
+        int numBytes = source.remaining();
+        int position = source.position();
+        DataOutputStream out = new DataOutputStream(new ByteBufferOutputStream(dest));
+        Utils.writeTo(out, source, source.remaining());
+        dest.flip();
+        assertEquals(numBytes, dest.remaining());
+        assertEquals(position, source.position());
+        assertEquals(source, dest);
+    }
+
+    @Test
+    public void toArray() {
+        byte[] input = {0, 1, 2, 3, 4};
+        ByteBuffer buffer = ByteBuffer.wrap(input);
+        assertArrayEquals(input, Utils.toArray(buffer));
+        assertEquals(0, buffer.position());
+
+        assertArrayEquals(new byte[] {1, 2}, Utils.toArray(buffer, 1, 2));
+        assertEquals(0, buffer.position());
+
+        buffer.position(2);
+        assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
+        assertEquals(2, buffer.position());
+    }
+
+    @Test
+    public void toArrayDirectByteBuffer() {
+        byte[] input = {0, 1, 2, 3, 4};
+        ByteBuffer buffer = ByteBuffer.allocateDirect(5);
+        buffer.put(input);
+        buffer.rewind();
+
+        assertArrayEquals(input, Utils.toArray(buffer));
+        assertEquals(0, buffer.position());
+
+        assertArrayEquals(new byte[] {1, 2}, Utils.toArray(buffer, 1, 2));
+        assertEquals(0, buffer.position());
+
+        buffer.position(2);
+        assertArrayEquals(new byte[] {2, 3, 4}, Utils.toArray(buffer));
+        assertEquals(2, buffer.position());
+    }
+
+    @Test
+    public void utf8ByteArraySerde() {
+        String utf8String = "A\u00ea\u00f1\u00fcC";
+        byte[] utf8Bytes = utf8String.getBytes(StandardCharsets.UTF_8);
+        assertArrayEquals(utf8Bytes, Utils.utf8(utf8String));
+        assertEquals(utf8Bytes.length, Utils.utf8Length(utf8String));
+        assertEquals(utf8String, Utils.utf8(utf8Bytes));
+    }
+
+    @Test
+    public void utf8ByteBufferSerde() {
+        doTestUtf8ByteBuffer(ByteBuffer.allocate(20));
+        doTestUtf8ByteBuffer(ByteBuffer.allocateDirect(20));
+    }
+
+    private void doTestUtf8ByteBuffer(ByteBuffer utf8Buffer) {
+        String utf8String = "A\u00ea\u00f1\u00fcC";
+        byte[] utf8Bytes = utf8String.getBytes(StandardCharsets.UTF_8);
+
+        utf8Buffer.position(4);
+        utf8Buffer.put(utf8Bytes);
+
+        utf8Buffer.position(4);
+        assertEquals(utf8String, Utils.utf8(utf8Buffer, utf8Bytes.length));
+        assertEquals(4, utf8Buffer.position());
+
+        utf8Buffer.position(0);
+        assertEquals(utf8String, Utils.utf8(utf8Buffer, 4, utf8Bytes.length));
+        assertEquals(0, utf8Buffer.position());
     }
 
     private void subTest(ByteBuffer buffer) {
@@ -333,4 +427,26 @@ public class UtilsTest {
         }
     }
 
+    @Test(timeout = 120000)
+    public void testRecursiveDelete() throws IOException {
+        Utils.delete(null); // delete of null does nothing.
+
+        // Test that deleting a temporary file works.
+        File tempFile = TestUtils.tempFile();
+        Utils.delete(tempFile);
+        assertFalse(Files.exists(tempFile.toPath()));
+
+        // Test recursive deletes
+        File tempDir = TestUtils.tempDirectory();
+        File tempDir2 = TestUtils.tempDirectory(tempDir.toPath(), "a");
+        TestUtils.tempDirectory(tempDir.toPath(), "b");
+        TestUtils.tempDirectory(tempDir2.toPath(), "c");
+        Utils.delete(tempDir);
+        assertFalse(Files.exists(tempDir.toPath()));
+        assertFalse(Files.exists(tempDir2.toPath()));
+
+        // Test that deleting a non-existent directory hierarchy works.
+        Utils.delete(tempDir);
+        assertFalse(Files.exists(tempDir.toPath()));
+    }
 }

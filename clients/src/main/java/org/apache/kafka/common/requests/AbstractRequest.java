@@ -46,6 +46,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             return desiredVersion == null ? apiKey.latestVersion() : desiredVersion;
         }
 
+        public Short desiredVersion() {
+            return desiredVersion;
+        }
+
         public T build() {
             return build(desiredOrLatestVersion());
         }
@@ -78,6 +82,15 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     protected abstract Struct toStruct();
+
+    public String toString(boolean verbose) {
+        return toStruct().toString();
+    }
+
+    @Override
+    public final String toString() {
+        return toString(true);
+    }
 
     /**
      * Get an error response for a request
@@ -154,6 +167,12 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case DELETE_TOPICS:
                 request = new DeleteTopicsRequest(struct, version);
+                break;
+            case DELETE_RECORDS:
+                request = new DeleteRecordsRequest(struct, version);
+                break;
+            case INIT_PRODUCER_ID:
+                request = new InitPidRequest(struct, version);
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +

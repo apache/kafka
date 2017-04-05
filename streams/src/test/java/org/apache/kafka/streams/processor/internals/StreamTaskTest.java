@@ -55,6 +55,7 @@ import org.junit.Test;
 import org.junit.Before;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -146,7 +147,7 @@ public class StreamTaskTest {
     }
 
     @After
-    public void cleanup() {
+    public void cleanup() throws IOException {
         if (task != null) {
             try {
                 task.close();
@@ -172,27 +173,33 @@ public class StreamTaskTest {
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 45, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
         ));
 
-        assertEquals(5, task.process());
+        assertTrue(task.process());
+        assertEquals(5, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
-        assertEquals(4, task.process());
+        assertTrue(task.process());
+        assertEquals(4, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
-        assertEquals(3, task.process());
+        assertTrue(task.process());
+        assertEquals(3, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertEquals(2, task.process());
+        assertTrue(task.process());
+        assertEquals(2, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
-        assertEquals(1, task.process());
+        assertTrue(task.process());
+        assertEquals(1, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
-        assertEquals(0, task.process());
+        assertTrue(task.process());
+        assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
     }
@@ -234,7 +241,7 @@ public class StreamTaskTest {
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 65, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)
         ));
 
-        assertEquals(5, task.process());
+        assertTrue(task.process());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
@@ -251,21 +258,21 @@ public class StreamTaskTest {
         assertTrue(consumer.paused().contains(partition1));
         assertTrue(consumer.paused().contains(partition2));
 
-        assertEquals(7, task.process());
+        assertTrue(task.process());
         assertEquals(2, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        assertEquals(6, task.process());
+        assertTrue(task.process());
         assertEquals(3, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        assertEquals(5, task.process());
+        assertTrue(task.process());
         assertEquals(3, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
@@ -289,40 +296,47 @@ public class StreamTaskTest {
 
         assertTrue(task.maybePunctuate());
 
-        assertEquals(5, task.process());
+        assertTrue(task.process());
+        assertEquals(5, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(0, source2.numReceived);
 
         assertFalse(task.maybePunctuate());
 
-        assertEquals(4, task.process());
+        assertTrue(task.process());
+        assertEquals(4, task.numBuffered());
         assertEquals(1, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
         assertTrue(task.maybePunctuate());
 
-        assertEquals(3, task.process());
+        assertTrue(task.process());
+        assertEquals(3, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(1, source2.numReceived);
 
         assertFalse(task.maybePunctuate());
 
-        assertEquals(2, task.process());
+        assertTrue(task.process());
+        assertEquals(2, task.numBuffered());
         assertEquals(2, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
         assertTrue(task.maybePunctuate());
 
-        assertEquals(1, task.process());
+        assertTrue(task.process());
+        assertEquals(1, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(2, source2.numReceived);
 
         assertFalse(task.maybePunctuate());
 
-        assertEquals(0, task.process());
+        assertTrue(task.process());
+        assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
 
+        assertFalse(task.process());
         assertFalse(task.maybePunctuate());
 
         processor.supplier.checkAndClearPunctuateResult(20L, 30L, 40L);

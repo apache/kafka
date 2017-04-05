@@ -133,7 +133,7 @@ class ThrottlingTest(ProduceConsumeValidateTest):
         self.logger.debug("Transfer took %d second. Estimated time : %ds",
                           time_taken,
                           estimated_throttled_time)
-        assert time_taken >= estimated_throttled_time, \
+        assert time_taken >= estimated_throttled_time * 0.9, \
             ("Expected rebalance to take at least %ds, but it took %ds" % (
                 estimated_throttled_time,
                 time_taken))

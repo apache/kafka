@@ -29,20 +29,18 @@ object ByteBufferMessageSet {
 
   private def create(offsetAssigner: OffsetAssigner,
                      compressionCodec: CompressionCodec,
-                     wrapperMessageTimestamp: Option[Long],
                      timestampType: TimestampType,
                      messages: Message*): ByteBuffer = {
     if (messages.isEmpty)
       MessageSet.Empty.buffer
     else {
-      val magicAndTimestamp = wrapperMessageTimestamp match {
-        case Some(ts) => MagicAndTimestamp(messages.head.magic, ts)
-        case None => MessageSet.magicAndLargestTimestamp(messages)
-      }
+      val buffer = ByteBuffer.allocate(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+      val builder = MemoryRecords.builder(buffer, messages.head.magic, CompressionType.forId(compressionCodec.codec),
+        timestampType, offsetAssigner.baseOffset)
 
-      val entries = messages.map(message => LogEntry.create(offsetAssigner.nextAbsoluteOffset(), message.asRecord))
-      val builder = MemoryRecords.builderWithEntries(timestampType, CompressionType.forId(compressionCodec.codec),
-        magicAndTimestamp.timestamp, entries.asJava)
+      for (message <- messages)
+        builder.appendWithOffset(offsetAssigner.nextAbsoluteOffset(), message.asRecord)
+
       builder.build().buffer
     }
   }
@@ -64,6 +62,8 @@ private class OffsetAssigner(offsets: Seq[Long]) {
     index += 1
     result
   }
+
+  def baseOffset = offsets.head
 
   def toInnerOffset(offset: Long): Long = offset - offsets.head
 
@@ -130,20 +130,19 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   private[kafka] def this(compressionCodec: CompressionCodec,
                           offsetCounter: LongRef,
-                          wrapperMessageTimestamp: Option[Long],
                           timestampType: TimestampType,
                           messages: Message*) {
     this(ByteBufferMessageSet.create(OffsetAssigner(offsetCounter, messages.size), compressionCodec,
-      wrapperMessageTimestamp, timestampType, messages:_*))
+      timestampType, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec, offsetCounter: LongRef, messages: Message*) {
-    this(compressionCodec, offsetCounter, None, TimestampType.CREATE_TIME, messages:_*)
+    this(compressionCodec, offsetCounter, TimestampType.CREATE_TIME, messages:_*)
   }
 
   def this(compressionCodec: CompressionCodec, offsetSeq: Seq[Long], messages: Message*) {
     this(ByteBufferMessageSet.create(new OffsetAssigner(offsetSeq), compressionCodec,
-      None, TimestampType.CREATE_TIME, messages:_*))
+      TimestampType.CREATE_TIME, messages:_*))
   }
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
@@ -166,11 +165,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. **/
   private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
-    val entries = if (isShallow)
-      asRecords.shallowEntries
+    if (isShallow)
+      asRecords.batches.asScala.iterator.map(batch => MessageAndOffset.fromRecordBatch(batch.asInstanceOf[AbstractLegacyRecordBatch]))
     else
-      asRecords.deepEntries
-    entries.iterator.asScala.map(MessageAndOffset.fromLogEntry)
+      asRecords.records.asScala.iterator.map(record => MessageAndOffset.fromRecordBatch(record.asInstanceOf[AbstractLegacyRecordBatch]))
   }
 
   /**

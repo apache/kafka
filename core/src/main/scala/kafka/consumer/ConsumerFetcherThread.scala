@@ -54,7 +54,7 @@ class ConsumerFetcherThread(name: String,
     replicaId(Request.OrdinaryConsumerId).
     maxWait(config.fetchWaitMaxMs).
     minBytes(config.fetchMinBytes).
-    requestVersion(kafka.api.FetchRequest.CurrentVersion)
+    requestVersion(3) // for now, the old consumer is pinned to the old message format through the fetch request
 
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
@@ -101,8 +101,7 @@ class ConsumerFetcherThread(name: String,
   protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
     partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
       if (partitionFetchState.isActive)
-        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.offset,
-          fetchSize)
+        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
     }
 
     new FetchRequest(fetchRequestBuilder.build())

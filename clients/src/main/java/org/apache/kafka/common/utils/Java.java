@@ -14,29 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.utils;
 
-import org.junit.Test;
+import java.util.StringTokenizer;
 
-import static org.junit.Assert.assertEquals;
+public final class Java {
 
-public class TimestampTypeTest {
-
-    @Test
-    public void toAndFromAttributesCreateTime() {
-        byte attributes = TimestampType.CREATE_TIME.updateAttributes((byte) 0);
-        assertEquals(TimestampType.CREATE_TIME, TimestampType.forAttributes(attributes));
+    private Java() {
     }
 
-    @Test
-    public void toAndFromAttributesLogAppendTime() {
-        byte attributes = TimestampType.LOG_APPEND_TIME.updateAttributes((byte) 0);
-        assertEquals(TimestampType.LOG_APPEND_TIME, TimestampType.forAttributes(attributes));
+    public static final String JVM_SPEC_VERSION = System.getProperty("java.specification.version");
+
+    private static final int JVM_MAJOR_VERSION;
+    private static final int JVM_MINOR_VERSION;
+
+    static {
+        final StringTokenizer st = new StringTokenizer(JVM_SPEC_VERSION, ".");
+        JVM_MAJOR_VERSION = Integer.parseInt(st.nextToken());
+        if (st.hasMoreTokens()) {
+            JVM_MINOR_VERSION = Integer.parseInt(st.nextToken());
+        } else {
+            JVM_MINOR_VERSION = 0;
+        }
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void updateAttributesNotAllowedForNoTimestampType() {
-        TimestampType.NO_TIMESTAMP_TYPE.updateAttributes((byte) 0);
-    }
+    public static final boolean IS_JAVA9_COMPATIBLE = JVM_MAJOR_VERSION > 1 ||
+            (JVM_MAJOR_VERSION == 1 && JVM_MINOR_VERSION >= 9);
 
 }

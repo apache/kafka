@@ -25,4 +25,74 @@
     <Match>
         <Bug code="EI,EI2,MS"/>
     </Match>
+
+    <Match>
+        <!-- Suppress a warning about some static initializers in Schema using instances of a
+             subclass. -->
+        <Or>
+            <Class name="org.apache.kafka.connect.data.Schema"/>
+            <Class name="org.apache.kafka.connect.data.SchemaBuilder"/>
+        </Or>
+        <Bug pattern="IC_SUPERCLASS_USES_SUBCLASS_DURING_INITIALIZATION"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about unread protected fields in some public classes.
+             Although these are not read in Kafka Connect code, they are part of the API. -->
+        <Or>
+            <Class name="org.apache.kafka.connect.connector.Connector"/>
+            <Class name="org.apache.kafka.connect.sink.SinkTask"/>
+            <Class name="org.apache.kafka.connect.source.SourceTask"/>
+        </Or>
+        <Bug pattern="URF_UNREAD_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about converting an integer number of
+             milliseconds to a java.util.Date object.  We do this intentionally in
+             org.apache.kafka.connect.data.Time. -->
+        <Class name="org.apache.kafka.connect.data.Time"/>
+        <Method name="toLogical"/>
+        <Bug pattern="ICAST_INT_2_LONG_AS_INSTANT"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some minor warnings about machine-generated code for LRU cache
+             benchmarking. -->
+        <Package name="org.apache.kafka.jmh.cache.generated"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about comparing a config string to
+             ConfigDef.NO_DEFAULT_VALUE using object equality.  This is intentional. -->
+        <Class name="org.apache.kafka.connect.runtime.AbstractHerder"/>
+        <Method name="convertConfigKey"/>
+        <Bug pattern="ES_COMPARING_STRINGS_WITH_EQ"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short. -->
+        <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
+        <Method name="execute"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some warnings about intentional switch statement fallthrough. -->
+        <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
+        <Or>
+            <Method name="doStart"/>
+            <Method name="pause"/>
+        </Or>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress some inconsistent synchronization warnings.  TODO: fix these.  See
+             KAFKA-4994. -->
+        <Class name="org.apache.kafka.connect.storage.OffsetStorageWriter"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
 </FindBugsFilter>

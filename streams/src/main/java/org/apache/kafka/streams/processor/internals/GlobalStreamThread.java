@@ -41,6 +41,7 @@ import java.util.Map;
 public class GlobalStreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalStreamThread.class);
+
     private final StreamsConfig config;
     private final Consumer<byte[], byte[]> consumer;
     private final StateDirectory stateDirectory;
@@ -57,17 +58,15 @@ public class GlobalStreamThread extends Thread {
                               final StateDirectory stateDirectory,
                               final Metrics metrics,
                               final Time time,
-                              final String clientId
-    ) {
-        super("GlobalStreamThread");
-        this.topology = topology;
+                              final String threadClientId) {
+        super(threadClientId);
+        this.time = time;
         this.config = config;
+        this.topology = topology;
         this.consumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.time = time;
         long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
-        final String threadClientId = clientId + "-" + getName();
         this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
     }

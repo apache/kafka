@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -57,7 +58,7 @@ import static org.apache.kafka.streams.processor.internals.InternalTopicManager.
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
-
+    private Time time = Time.SYSTEM;
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
 
@@ -79,7 +80,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private static class ClientMetadata {
         final HostInfo hostInfo;
         final Set<String> consumers;
-        final ClientState<TaskId> state;
+        final ClientState state;
 
         ClientMetadata(final String endPoint) {
 
@@ -100,7 +101,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             consumers = new HashSet<>();
 
             // initialize the client state
-            state = new ClientState<>();
+            state = new ClientState();
         }
 
         void addConsumer(final String consumerMemberId, final SubscriptionInfo info) {
@@ -159,6 +160,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
     /**
+     * Package-private method to set the time. Used for tests.
+     * @param time Time to be used.
+     */
+    void time(final Time time) {
+        this.time = time;
+    }
+
+    /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,
      * and the latter needs former's returned assignment when adding tasks.
@@ -207,7 +216,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
                 configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
                         (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
 
         this.copartitionedTopicsValidator = new CopartitionedTopicsValidator(streamThread.getName());
     }
@@ -449,7 +458,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // ---------------- Step Two ---------------- //
 
         // assign tasks to clients
-        Map<UUID, ClientState<TaskId>> states = new HashMap<>();
+        Map<UUID, ClientState> states = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             states.put(entry.getKey(), entry.getValue().state);
         }
@@ -471,7 +480,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
 
             if (hostInfo != null) {
                 final Set<TopicPartition> topicPartitions = new HashSet<>();
-                final ClientState<TaskId> state = entry.getValue().state;
+                final ClientState state = entry.getValue().state;
 
                 for (final TaskId id : state.activeTasks()) {
                     topicPartitions.addAll(partitionsForTask.get(id));
@@ -485,7 +494,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Map<String, Assignment> assignment = new HashMap<>();
         for (Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
             final Set<String> consumers = entry.getValue().consumers;
-            final ClientState<TaskId> state = entry.getValue().state;
+            final ClientState state = entry.getValue().state;
 
             final ArrayList<TaskId> taskIds = new ArrayList<>(state.assignedTaskCount());
             final int numActiveTasks = state.activeTaskCount();
@@ -736,7 +745,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                     } else if (numPartitions != partitions) {
                         final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
                         Arrays.sort(topics);
-                        throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", threadName, Utils.mkString(Arrays.asList(topics), ",")));
+                        throw new TopologyBuilderException(String.format("stream-thread [%s] Topics not co-partitioned: [%s]", threadName, Utils.join(Arrays.asList(topics), ",")));
                     }
                 } else if (allRepartitionTopicsNumPartitions.get(topic).numPartitions == NOT_AVAILABLE) {
                     numPartitions = NOT_AVAILABLE;

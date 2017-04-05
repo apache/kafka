@@ -18,7 +18,8 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.protocol.Errors;
-
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -46,6 +47,7 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
     private static final Object INCOMPLETE_SENTINEL = new Object();
     private final AtomicReference<Object> result = new AtomicReference<>(INCOMPLETE_SENTINEL);
     private final ConcurrentLinkedQueue<RequestFutureListener<T>> listeners = new ConcurrentLinkedQueue<>();
+    private final CountDownLatch completedLatch = new CountDownLatch(1);
 
     /**
      * Check whether the response is ready to be handled
@@ -53,6 +55,10 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      */
     public boolean isDone() {
         return result.get() != INCOMPLETE_SENTINEL;
+    }
+
+    public boolean awaitDone(long timeout, TimeUnit unit) throws InterruptedException {
+        return completedLatch.await(timeout, unit);
     }
 
     /**
@@ -112,12 +118,16 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @throws IllegalArgumentException if the argument is an instance of {@link RuntimeException}
      */
     public void complete(T value) {
-        if (value instanceof RuntimeException)
-            throw new IllegalArgumentException("The argument to complete can not be an instance of RuntimeException");
+        try {
+            if (value instanceof RuntimeException)
+                throw new IllegalArgumentException("The argument to complete can not be an instance of RuntimeException");
 
-        if (!result.compareAndSet(INCOMPLETE_SENTINEL, value))
-            throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
-        fireSuccess();
+            if (!result.compareAndSet(INCOMPLETE_SENTINEL, value))
+                throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
+            fireSuccess();
+        } finally {
+            completedLatch.countDown();
+        }
     }
 
     /**
@@ -127,13 +137,17 @@ public class RequestFuture<T> implements ConsumerNetworkClient.PollCondition {
      * @throws IllegalStateException if the future has already been completed
      */
     public void raise(RuntimeException e) {
-        if (e == null)
-            throw new IllegalArgumentException("The exception passed to raise must not be null");
+        try {
+            if (e == null)
+                throw new IllegalArgumentException("The exception passed to raise must not be null");
 
-        if (!result.compareAndSet(INCOMPLETE_SENTINEL, e))
-            throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
+            if (!result.compareAndSet(INCOMPLETE_SENTINEL, e))
+                throw new IllegalStateException("Invalid attempt to complete a request future which is already complete");
 
-        fireFailure();
+            fireFailure();
+        } finally {
+            completedLatch.countDown();
+        }
     }
 
     /**

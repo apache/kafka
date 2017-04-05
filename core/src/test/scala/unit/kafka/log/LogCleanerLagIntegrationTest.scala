@@ -106,9 +106,9 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
     import JavaConverters._
 
-    for (segment <- log.logSegments; logEntry <- segment.log.deepEntries.asScala) yield {
-      val key = TestUtils.readString(logEntry.record.key).toInt
-      val value = TestUtils.readString(logEntry.record.value).toInt
+    for (segment <- log.logSegments; record <- segment.log.records.asScala) yield {
+      val key = TestUtils.readString(record.key).toInt
+      val value = TestUtils.readString(record.value).toInt
       key -> value
     }
   }
@@ -149,8 +149,9 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
       logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
       logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
 
-      val log = new Log(dir = dir,
+      val log = new Log(dir,
         LogConfig(logProps),
+        logStartOffset = 0L,
         recoveryPoint = 0L,
         scheduler = time.scheduler,
         time = time)

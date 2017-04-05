@@ -33,7 +33,7 @@ import org.apache.kafka.common.errors.WakeupException
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
-abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
+abstract class BaseConsumerTest extends IntegrationTestHarness {
 
   val epsilon = 0.1
   val producerCount = 1
@@ -255,7 +255,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
      */
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
       if (subscriptionChanged) {
-        throw new IllegalStateException("Do not call subscribe until the previous subsribe request is processed.")
+        throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
       }
       topicsSubscription = newTopicsToSubscribe
       subscriptionChanged = true
