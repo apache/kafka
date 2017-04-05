@@ -116,7 +116,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
   }
 
-  @Test @Ignore //TODO This test passes locally, but it's failing consistently on jenkins. Commenting out for now to get a clean build.
+  @Test
   def testEndToEnd() {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
