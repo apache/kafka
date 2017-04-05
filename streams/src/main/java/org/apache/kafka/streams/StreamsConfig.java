@@ -241,7 +241,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
                     1,
-                    Importance.MEDIUM,
+                    Importance.HIGH,
                     REPLICATION_FACTOR_DOC)
             .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
