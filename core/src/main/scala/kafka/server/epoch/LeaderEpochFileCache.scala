@@ -24,7 +24,6 @@ import kafka.server.epoch.LeaderEpochConstants.{UNDEFINED_EPOCH, UNDEFINED_EPOCH
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.EpochEndOffset
 
 import scala.collection.mutable.ListBuffer

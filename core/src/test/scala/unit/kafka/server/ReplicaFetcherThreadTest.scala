@@ -43,7 +43,7 @@ class ReplicaFetcherThreadTest {
   private val t2p1 = new TopicPartition("topic2", 1)
 
   @Test
-  def shouldNotIssureLeaderEpochRequestIfInterbrokerVersionBelow11(): Unit = {
+  def shouldNotIssueLeaderEpochRequestIfInterbrokerVersionBelow11(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.10.2")
     props.put(KafkaConfig.LogMessageFormatVersionProp, "0.10.2")
