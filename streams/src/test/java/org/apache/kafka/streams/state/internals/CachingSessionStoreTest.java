@@ -58,7 +58,9 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema());
+        final SessionKeySchema schema = new SessionKeySchema();
+        schema.init("topic");
+        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore,
                                                  Serdes.String(),
@@ -116,7 +118,7 @@ public class CachingSessionStoreTest {
         assertEquals(added.size() - 1, cache.size());
         final KeyValueIterator<Bytes, byte[]> iterator = underlying.fetch(Bytes.wrap(added.get(0).key.key().getBytes()), 0, 0);
         final KeyValue<Bytes, byte[]> next = iterator.next();
-        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()));
+        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "dummy"));
         assertArrayEquals(serdes.rawValue(added.get(0).value), next.value);
     }
 

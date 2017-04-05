@@ -360,16 +360,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @SuppressWarnings("unchecked")
     @Override
-    public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, String topic) {
+    public void to(final Serde<K> keySerde, final Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, final String topic) {
         Objects.requireNonNull(topic, "topic can't be null");
-        String name = topology.newName(SINK_NAME);
+        final String name = topology.newName(SINK_NAME);
 
-        Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Serializer<V> valSerializer = valSerde == null ? null : valSerde.serializer();
+        final Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
+        final Serializer<V> valSerializer = valSerde == null ? null : valSerde.serializer();
 
         if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
-            WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
-            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(windowedSerializer);
+            final WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
+            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, windowedSerializer);
         }
 
         topology.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
