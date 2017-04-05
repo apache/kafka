@@ -274,8 +274,8 @@ abstract class AbstractFetcherThread(name: String,
     try {
       for (partition <- partitions) {
         Option(partitionStates.stateValue(partition)).foreach (currentPartitionFetchState =>
-          if (currentPartitionFetchState.isActive)
-            partitionStates.updateAndMoveToEnd(partition, new PartitionFetchState(currentPartitionFetchState.fetchOffset, new DelayedItem(delay)))
+          if (!currentPartitionFetchState.isDelayed)
+            partitionStates.updateAndMoveToEnd(partition, new PartitionFetchState(currentPartitionFetchState.fetchOffset, new DelayedItem(delay), currentPartitionFetchState.initialising))
         )
       }
       partitionMapCond.signalAll()
@@ -397,7 +397,7 @@ case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: 
 }
 
 /**
-  * case class to keep partition offset and its state(initialising, active, delayed)
+  * case class to keep partition offset and its state(initialising, delayed)
   */
 case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, initialising: Boolean = false) {
 
@@ -407,9 +407,12 @@ case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, initialisi
 
   def this(fetchOffset: Long) = this(fetchOffset, new DelayedItem(0))
 
+  // is ready for fetching data
   def isActive: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0 && !initialising
 
-  def isInitialising: Boolean = initialising
+  def isInitialising: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0 && initialising
+
+  def isDelayed: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) > 0
 
   override def toString = "offset:%d-active:%b-initialising:%b".format(fetchOffset, isActive, initialising)
 }

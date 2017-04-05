@@ -16,10 +16,10 @@
   */
 package kafka.server
 
-import kafka.api.KAFKA_0_10_2_IV0
 import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.log.LogManager
 import kafka.server.epoch.LeaderEpochCache
+import kafka.server.epoch.LeaderEpochConstants._
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
@@ -41,6 +41,66 @@ class ReplicaFetcherThreadTest {
   private val t1p0 = new TopicPartition("topic1", 0)
   private val t1p1 = new TopicPartition("topic1", 1)
   private val t2p1 = new TopicPartition("topic2", 1)
+
+  @Test
+  def shouldNotIssureLeaderEpochRequestIfInterbrokerVersionBelow11(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.10.2")
+    props.put(KafkaConfig.LogMessageFormatVersionProp, "0.10.2")
+    val config = KafkaConfig.fromProps(props)
+    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val thread = new ReplicaFetcherThread(
+      name = "bob",
+      fetcherId = 0,
+      sourceBroker = endPoint,
+      brokerConfig = config,
+      replicaMgr = null,
+      metrics =  new Metrics(),
+      time = new SystemTime(),
+      quota = null,
+      leaderEndpointBlockingSend = None)
+
+    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> 0, t1p1 -> 0))
+
+    val expected = Map(
+      t1p0 -> new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH_OFFSET)
+    )
+
+    assertEquals("results from leader epoch request should have undefined offset", expected, result)
+  }
+
+  @Test
+  def shouldHandleExceptionFromBlockingSend(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    val config = KafkaConfig.fromProps(props)
+    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val mockBlockingSend = createMock(classOf[BlockingSend])
+
+    expect(mockBlockingSend.sendRequest(anyObject())).andThrow(new NullPointerException).once()
+    replay(mockBlockingSend)
+
+    val thread = new ReplicaFetcherThread(
+      name = "bob",
+      fetcherId = 0,
+      sourceBroker = endPoint,
+      brokerConfig = config,
+      replicaMgr = null,
+      metrics =  new Metrics(),
+      time = new SystemTime(),
+      quota = null,
+      leaderEndpointBlockingSend = Some(mockBlockingSend))
+
+    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> 0, t1p1 -> 0))
+
+    val expected = Map(
+      t1p0 -> new EpochEndOffset(Errors.UNKNOWN, UNDEFINED_EPOCH_OFFSET),
+      t1p1 -> new EpochEndOffset(Errors.UNKNOWN, UNDEFINED_EPOCH_OFFSET)
+    )
+
+    assertEquals("results from leader epoch request should have undefined offset", expected, result)
+    verify(mockBlockingSend)
+  }
 
   @Test
   def shouldFetchLeaderEpochOnFirstFetchOnly(): Unit = {
@@ -279,40 +339,6 @@ class ReplicaFetcherThreadTest {
 
     //Then
     assertFalse(thread.partitionStates.partitionStates().asScala.forall(_.value().initialising))
-  }
-
-  @Test
-  def shouldNotFetchLeaderEpochOffsetsIfInterbrokerVersionBelow11(): Unit = {
-
-    // Given the protocol is a version that does not support epochs
-    val props = TestUtils.createBrokerConfigs(1, "localhost:1234")(0)
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_0_10_2_IV0.version)
-    props.put(KafkaConfig.LogMessageFormatVersionProp, KAFKA_0_10_2_IV0.version)
-    val configs = KafkaConfig.fromProps(props)
-
-    //Stubs
-    val quota = createNiceMock(classOf[kafka.server.ReplicationQuotaManager])
-    val logManager = createMock(classOf[kafka.log.LogManager])
-    val replica = createNiceMock(classOf[Replica])
-    val replicaManager = createMock(classOf[kafka.server.ReplicaManager])
-    val ignored = Map(t1p1 -> new EpochEndOffset(0)).asJava
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
-    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
-    stub(replica, replicaManager)
-    replay(replicaManager, logManager, replica, quota)
-
-    //Create the thread
-    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val mockNetwork = new ReplicaFetcherMockBlockingSend(ignored, endPoint, new SystemTime())
-    val thread = new ReplicaFetcherThread("bob", 0, endPoint, configs, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
-    thread.addPartitions(Map(t1p0 -> 0))
-
-    //Run it
-    thread.doWork()
-
-    //Should only have done a fetch request (and no truncation)
-    assertEquals(1, mockNetwork.fetchCount)
-    assertEquals(0, mockNetwork.epochFetchCount)
   }
 
   //TODO  test should filter any partitions made leader during leader offset epoch request
