@@ -58,29 +58,29 @@ public class SessionKeySerdeTest {
     @Test
     public void shouldConvertToBinaryAndBack() throws Exception {
         final Windowed<String> key = new Windowed<>("key", new SessionWindow(10, 20));
-        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
-        final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer());
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer(), "topic");
+        final Windowed<String> result = SessionKeySerde.from(serialized.get(), Serdes.String().deserializer(), "topic");
         assertEquals(key, result);
     }
 
     @Test
     public void shouldExtractEndTimeFromBinary() throws Exception {
         final Windowed<String> key = new Windowed<>("key", new SessionWindow(10, 100));
-        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer(), "topic");
         assertEquals(100, SessionKeySerde.extractEnd(serialized.get()));
     }
 
     @Test
     public void shouldExtractStartTimeFromBinary() throws Exception {
         final Windowed<String> key = new Windowed<>("key", new SessionWindow(50, 100));
-        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer(), "topic");
         assertEquals(50, SessionKeySerde.extractStart(serialized.get()));
     }
 
     @Test
     public void shouldExtractKeyBytesFromBinary() throws Exception {
         final Windowed<String> key = new Windowed<>("blah", new SessionWindow(50, 100));
-        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        final Bytes serialized = SessionKeySerde.toBinary(key, Serdes.String().serializer(), "topic");
         assertArrayEquals("blah".getBytes(), SessionKeySerde.extractKeyBytes(serialized.get()));
     }
 
