@@ -447,11 +447,11 @@ class Log(@volatile var dir: File,
    *
    * @param records The log records to append
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
-   * @param epochCache Optional Cache of Leader Epoch Offsets.
+   * @param leaderEpochCache Optional cache of Leader Epoch Offsets.
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  def append(records: MemoryRecords, assignOffsets: Boolean = true, epochCache: LeaderEpochCache = leaderEpochCache): LogAppendInfo = {
+  def append(records: MemoryRecords, assignOffsets: Boolean = true, leaderEpochCache: LeaderEpochCache = leaderEpochCache): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -471,7 +471,7 @@ class Log(@volatile var dir: File,
           appendInfo.firstOffset = offset.value
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
-            epochCache.maybeAssignLatestCachedEpochToLeo()
+            leaderEpochCache.maybeAssignLatestCachedEpochToLeo()
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
                                                           offset,
                                                           now,
@@ -481,7 +481,7 @@ class Log(@volatile var dir: File,
                                                           config.messageFormatVersion.messageFormatVersion,
                                                           config.messageTimestampType,
                                                           config.messageTimestampDifferenceMaxMs,
-                                                          epochCache.latestUsedEpoch())
+                                                          leaderEpochCache.latestUsedEpoch())
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
@@ -510,7 +510,7 @@ class Log(@volatile var dir: File,
           //Update the epoch cache with the epoch stamped by the leader
           records.batches().asScala.map { batch =>
             if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-              epochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+              leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
           }
 
           // we are taking the offsets we are given

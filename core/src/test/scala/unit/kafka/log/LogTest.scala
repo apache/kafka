@@ -1594,7 +1594,7 @@ class LogTest extends JUnitSuite {
     for (i <- records.indices)
       log.append(
         MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i)),
-        epochCache = mockCache(epoch),
+        leaderEpochCache = mockCache(epoch),
         assignOffsets = true
       )
 
@@ -1630,7 +1630,7 @@ class LogTest extends JUnitSuite {
 
     //When appending as follower (assignOffsets = false)
     for (i <- records.indices)
-      log.append(recordsForEpoch(i), assignOffsets = false, epochCache = cache)
+      log.append(recordsForEpoch(i), assignOffsets = false, leaderEpochCache = cache)
 
     verify(cache)
   }

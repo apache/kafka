@@ -18,23 +18,18 @@
 package kafka.log
 
 import java.io._
-import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
-
-import kafka.utils._
-
-import scala.collection._
-import scala.collection.JavaConverters._
-import kafka.common.{KafkaException, KafkaStorageException}
-import kafka.server._
-import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
+import java.util.concurrent._
 
 import kafka.admin.AdminUtils
-import kafka.server.{BrokerState, RecoveringFromUncleanShutdown}
-import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
-
+import kafka.common.{KafkaException, KafkaStorageException}
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
+import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
+
+import scala.collection.JavaConverters._
+import scala.collection._
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
