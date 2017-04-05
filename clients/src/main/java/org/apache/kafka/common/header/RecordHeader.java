@@ -14,33 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.record;
+package org.apache.kafka.common.header;
 
-import org.apache.kafka.common.utils.Utils;
-
-import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Objects;
 
-public class Header {
+public class RecordHeader implements Header {
     private final String key;
-    private final ByteBuffer value;
+    private final byte[] value;
 
-    public Header(String key, ByteBuffer value) {
+    public RecordHeader(String key, byte[] value) {
         Objects.requireNonNull(key, "Null header keys are not permitted");
         this.key = key;
         this.value = value;
-    }
-
-    public Header(String key, byte[] value) {
-        this(key, Utils.wrapNullable(value));
     }
 
     public String key() {
         return key;
     }
 
-    public ByteBuffer value() {
-        return value == null ? null : value.duplicate();
+    public byte[] value() {
+        return value;
     }
 
     @Override
@@ -50,15 +44,21 @@ public class Header {
         if (o == null || getClass() != o.getClass())
             return false;
 
-        Header header = (Header) o;
+        RecordHeader header = (RecordHeader) o;
         return (key == null ? header.key == null : key.equals(header.key)) &&
-                (value == null ? header.value == null : value.equals(header.value));
+                (value == null ? header.value == null : Arrays.equals(value, header.value));
     }
 
     @Override
     public int hashCode() {
         int result = key != null ? key.hashCode() : 0;
-        result = 31 * result + (value != null ? value.hashCode() : 0);
+        result = 31 * result + (value != null ? Arrays.hashCode(value) : 0);
         return result;
     }
+
+    @Override
+    public String toString() {
+        return "RecordHeader(key = " + key + ", value = " + Arrays.toString(value) + ")";
+    }
+
 }

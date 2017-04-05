@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.RecordHeader;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -30,10 +31,10 @@ public class DefaultRecordTest {
 
     @Test
     public void testBasicSerde() {
-        Header[] headers = new Header[] {
-            new Header("foo", "value".getBytes()),
-            new Header("bar", Utils.wrapNullable(null)),
-            new Header("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
+        Header[] headers = new RecordHeader[] {
+            new RecordHeader("foo", "value".getBytes()),
+            new RecordHeader("bar", null),
+            new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
         };
 
         SimpleRecord[] records = new SimpleRecord[] {

@@ -27,6 +27,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.ArrayDeque;
@@ -53,8 +54,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private final Deque<Completion> completions;
     private boolean autoComplete;
     private Map<TopicPartition, Long> offsets;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
+    private final ExtendedSerializer<K> keySerializer;
+    private final ExtendedSerializer<V> valueSerializer;
     private boolean closed;
 
     /**
@@ -77,8 +78,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.cluster = cluster;
         this.autoComplete = autoComplete;
         this.partitioner = partitioner;
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
+        this.keySerializer = ensureExtended(keySerializer);
+        this.valueSerializer = ensureExtended(valueSerializer);
         this.offsets = new HashMap<TopicPartition, Long>();
         this.sent = new ArrayList<ProducerRecord<K, V>>();
         this.completions = new ArrayDeque<Completion>();
@@ -134,7 +135,11 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public void abortTransaction() throws ProducerFencedException {
+        
+    }
 
+    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
+        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     /**
@@ -273,8 +278,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
                                                    + "].");
             return partition;
         }
-        byte[] keyBytes = keySerializer.serialize(topic, record.key());
-        byte[] valueBytes = valueSerializer.serialize(topic, record.value());
+        byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
+        byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
         return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster);
     }
 

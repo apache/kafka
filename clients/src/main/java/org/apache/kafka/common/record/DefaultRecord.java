@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.RecordHeader;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Checksums;
@@ -223,13 +225,12 @@ public class DefaultRecord implements Record {
             ByteUtils.writeVarint(utf8Bytes.length, out);
             out.write(utf8Bytes);
 
-            ByteBuffer headerValue = header.value();
+            byte[] headerValue = header.value();
             if (headerValue == null) {
                 ByteUtils.writeVarint(-1, out);
             } else {
-                int headerValueSize = headerValue.remaining();
-                ByteUtils.writeVarint(headerValueSize, out);
-                Utils.writeTo(out, headerValue, headerValueSize);
+                ByteUtils.writeVarint(headerValue.length, out);
+                out.write(headerValue);
             }
         }
 
@@ -406,15 +407,13 @@ public class DefaultRecord implements Record {
             String headerKey = Utils.utf8(buffer, headerKeySize);
             buffer.position(buffer.position() + headerKeySize);
 
-            ByteBuffer headerValue = null;
+            byte[] headerValue = null;
             int headerValueSize = ByteUtils.readVarint(buffer);
             if (headerValueSize >= 0) {
-                headerValue = buffer.slice();
-                headerValue.limit(headerValueSize);
+                headerValue = Utils.toArray(buffer, headerValueSize);
                 buffer.position(buffer.position() + headerValueSize);
             }
-
-            headers[i] = new Header(headerKey, headerValue);
+            headers[i] = new RecordHeader(headerKey, headerValue);
         }
 
         return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
@@ -480,12 +479,11 @@ public class DefaultRecord implements Record {
             int headerKeySize = Utils.utf8Length(headerKey);
             size += ByteUtils.sizeOfVarint(headerKeySize) + headerKeySize;
 
-            ByteBuffer headerValue = header.value();
+            byte[] headerValue = header.value();
             if (headerValue == null) {
                 size += NULL_VARINT_SIZE_BYTES;
             } else {
-                int headerValueSize = headerValue.remaining();
-                size += ByteUtils.sizeOfVarint(headerValueSize) + headerValueSize;
+                size += ByteUtils.sizeOfVarint(headerValue.length) + headerValue.length;
             }
         }
         return size;
