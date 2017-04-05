@@ -135,17 +135,17 @@ class ReplicaFetcherThreadTest {
     val thread = new ReplicaFetcherThread("bob", 0, endPoint, config, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
     thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
 
-    //Loop 1 just initialises, fetching the epoch and truncating
+    //Loop 1
     thread.doWork()
     assertEquals(1, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
 
-    //Loop 2 does fetch
+    //Loop 2 we should not fetch epochs
     thread.doWork()
     assertEquals(1, mockNetwork.epochFetchCount)
     assertEquals(2, mockNetwork.fetchCount)
 
-    //Loop 3 does fetch
+    //Loop 3 we should not fetch epochs
     thread.doWork()
     assertEquals(1, mockNetwork.epochFetchCount)
     assertEquals(3, mockNetwork.fetchCount)
@@ -299,7 +299,7 @@ class ReplicaFetcherThreadTest {
   }
 
   @Test
-  def shouldMovePartitionsOutOfInitialisingState(): Unit = {
+  def shouldMovePartitionsOutOfTruncatingLogState(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all stubs
@@ -331,13 +331,13 @@ class ReplicaFetcherThreadTest {
     //When
     thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
 
-    //Then all partitions should start in an initialising state
+    //Then all partitions should start in an TruncatingLog state
     assertTrue(thread.partitionStates.partitionStates().asScala.forall(_.value().truncatingLog))
 
     //When
     thread.doWork()
 
-    //Then
+    //Then none should be TruncatingLog anymore
     assertFalse(thread.partitionStates.partitionStates().asScala.forall(_.value().truncatingLog))
   }
 

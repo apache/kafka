@@ -89,7 +89,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldReturnUndefinedEpochIfUndefinedEpochRequested() = {
+  def shouldReturnUndefinedOffsetIfUndefinedEpochRequested() = {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given cache with some data on leader
@@ -525,7 +525,7 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
-  def shouldResetOffsetOfLastEpochOnClearEarliest(): Unit = {
+  def shouldUpdateOffsetBetweenEpochBoundariesOnClearEarliest(): Unit = {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
@@ -534,15 +534,15 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, offset = 8)
     cache.assign(epoch = 4, offset = 11)
 
-    //When
+    //When we clear from a postition between offset 8 & offset 11
     cache.clearEarliest(offset = 9)
 
-    //Then retain the last
+    //Then we should update the middle epoch entry's offset
     assertEquals(ListBuffer(EpochEntry(3, 9), EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
-  def shouldUpdateFirstEpochOffsetOnClearEarliest(): Unit = {
+  def shouldUpdateOffsetBetweenEpochBoundariesOnClearEarliest2(): Unit = {
     def leoFinder() = new LogOffsetMetadata(0)
 
     //Given
