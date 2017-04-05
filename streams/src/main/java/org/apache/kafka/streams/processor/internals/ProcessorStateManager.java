@@ -333,7 +333,6 @@ public class ProcessorStateManager implements StateManager {
 
     private int getPartition(final String topic) {
         final TopicPartition partition = partitionForTopic.get(topic);
-
         return partition == null ? taskId.partition : partition.partition();
     }
 

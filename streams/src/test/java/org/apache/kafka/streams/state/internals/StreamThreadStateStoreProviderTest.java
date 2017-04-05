@@ -113,23 +113,29 @@ public class StreamThreadStateStoreProviderTest {
                   taskTwo);
 
         storesAvailable = true;
-        thread = new StreamThread(builder, streamsConfig, clientSupplier,
-                                  applicationId,
-                                  "clientId", UUID.randomUUID(), new Metrics(),
-                                  Time.SYSTEM, new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
-                                  0) {
-            @Override
-            public Map<TaskId, StreamTask> tasks() {
-                return tasks;
-            }
+        provider = new StreamThreadStateStoreProvider(
+            new StreamThread(
+                builder,
+                streamsConfig,
+                clientSupplier,
+                applicationId,
+                "clientId",
+                UUID.randomUUID(),
+                new Metrics(),
+                Time.SYSTEM,
+                new StreamsMetadataState(builder, StreamsMetadataState.UNKNOWN_HOST),
+                0) {
 
-            @Override
-            public boolean isInitialized() {
-                return storesAvailable;
-            }
-        };
-        provider = new StreamThreadStateStoreProvider(thread);
+                @Override
+                public Map<TaskId, StreamTask> tasks() {
+                    return tasks;
+                }
 
+                @Override
+                public boolean isInitialized() {
+                    return storesAvailable;
+                }
+            });
     }
 
     @After

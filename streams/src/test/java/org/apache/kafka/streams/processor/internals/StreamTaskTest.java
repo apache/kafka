@@ -43,7 +43,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -115,7 +114,6 @@ public class StreamTaskTest {
     private File baseDir;
     private StateDirectory stateDirectory;
     private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
-    private final ThreadCache testCache =  new ThreadCache("testCache", 0, streamsMetrics);
     private StreamsConfig config;
     private StreamTask task;
 
@@ -365,8 +363,8 @@ public class StreamTaskTest {
 
         task.close();
 
-        task  = new StreamTask(taskId00, applicationId, Utils.mkSet(partition1),
-                topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
+            streamsMetrics, stateDirectory, null, time, recordCollector);
         final int offset = 20;
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -423,8 +421,7 @@ public class StreamTaskTest {
         };
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final StreamTask streamTask = new StreamTask(taskId00, "appId", partitions, topology, consumer,
-                                                     changelogReader, createConfig(baseDir), streamsMetrics,
-                                                     stateDirectory, testCache, time, recordCollector);
+            changelogReader, createConfig(baseDir), streamsMetrics, stateDirectory, null, time, recordCollector);
         streamTask.flushState();
         assertTrue(flushed.get());
     }
@@ -472,19 +469,14 @@ public class StreamTaskTest {
         restoreStateConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
         restoreStateConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
 
-        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
-        final TaskId taskId = new TaskId(0, 0);
-        final MockTime time = new MockTime();
         final StreamsConfig config = createConfig(baseDir);
-        final StreamTask streamTask = new StreamTask(taskId, "appId", partitions, topology, consumer,
-                                                     changelogReader, config, streamsMetrics,
-                                                     stateDirectory, new ThreadCache("testCache", 0, streamsMetrics),
-                                                     time, recordCollector);
+        final StreamTask streamTask = new StreamTask(taskId00, "appId", partitions, topology, consumer,
+            changelogReader, config, streamsMetrics, stateDirectory, null, time, recordCollector);
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
         streamTask.commit();
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId00),
                                                                           ProcessorStateManager.CHECKPOINT_FILE_NAME));
 
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(partition, 544L)));
@@ -588,8 +580,8 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-        return new StreamTask(taskId00, applicationId, Utils.mkSet(partition1),
-                topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
+        return new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
+            streamsMetrics, stateDirectory, null, time, recordCollector);
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {

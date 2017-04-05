@@ -127,7 +127,8 @@ public class StandbyTask extends AbstractTask {
      *
      * @return a list of records not consumed
      */
-    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> records) {
+    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition,
+                                                       final List<ConsumerRecord<byte[], byte[]>> records) {
         log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
         return stateMgr.updateStandbyStates(partition, records);
     }

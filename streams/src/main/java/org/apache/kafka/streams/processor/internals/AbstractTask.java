@@ -40,14 +40,14 @@ import java.util.Set;
 public abstract class AbstractTask {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
-    private final TaskId id;
-    protected final String applicationId;
-    protected final ProcessorTopology topology;
-    protected final Consumer consumer;
-    protected final ProcessorStateManager stateMgr;
-    protected final Set<TopicPartition> partitions;
+    final TaskId id;
+    final String applicationId;
+    final ProcessorTopology topology;
+    final Consumer consumer;
+    final ProcessorStateManager stateMgr;
+    final Set<TopicPartition> partitions;
     InternalProcessorContext processorContext;
-    protected final ThreadCache cache;
+    private final ThreadCache cache;
     final String logPrefix;
 
     /**
@@ -107,7 +107,6 @@ public abstract class AbstractTask {
     public final ThreadCache cache() {
         return cache;
     }
-
 
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
@@ -199,6 +198,5 @@ public abstract class AbstractTask {
         log.trace("{} Closing state manager", logPrefix);
         stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
     }
-
 
 }

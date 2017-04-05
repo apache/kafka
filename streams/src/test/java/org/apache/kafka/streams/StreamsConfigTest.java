@@ -43,7 +43,7 @@ import static org.junit.Assert.assertNull;
 
 public class StreamsConfigTest {
 
-    private Properties props = new Properties();
+    private final Properties props = new Properties();
     private StreamsConfig streamsConfig;
 
     @Before
@@ -60,38 +60,42 @@ public class StreamsConfigTest {
 
     @Test
     public void testGetProducerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getProducerConfigs("client");
-        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), "client-producer");
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
+        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), clientId + "-producer");
         assertEquals(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), "100");
         assertNull(returnedProps.get("DUMMY"));
     }
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(null, "example-application", "client");
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
-        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-application");
+        final String groupId = "example-application";
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(null, groupId, clientId);
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-consumer");
+        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), groupId);
         assertEquals(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "1000");
         assertNull(returnedProps.get("DUMMY"));
     }
 
     @Test
     public void testGetRestoreConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs("client");
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-restore-consumer");
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-restore-consumer");
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
         assertNull(returnedProps.get("DUMMY"));
     }
 
     @Test
     public void defaultSerdeShouldBeConfigured() {
-        Map<String, Object> serializerConfigs = new HashMap<>();
+        final Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", "UTF8");
         serializerConfigs.put("value.serializer.encoding", "UTF-16");
-        Serializer<String> serializer = Serdes.String().serializer();
+        final Serializer<String> serializer = Serdes.String().serializer();
 
-        String str = "my string for testing";
-        String topic = "my topic";
+        final String str = "my string for testing";
+        final String topic = "my topic";
 
         serializer.configure(serializerConfigs, true);
         assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
@@ -104,14 +108,14 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSupportMultipleBootstrapServers() {
-        List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
-        String bootstrapServersString = Utils.join(expectedBootstrapServers, ",");
-        Properties props = new Properties();
+        final List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
+        final String bootstrapServersString = Utils.join(expectedBootstrapServers, ",");
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "irrelevant");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);
-        StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig config = new StreamsConfig(props);
 
-        List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        final List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
         assertEquals(expectedBootstrapServers, actualBootstrapServers);
     }
 
@@ -165,7 +169,7 @@ public class StreamsConfigTest {
         props.put(producerPrefix(ProducerConfig.BUFFER_MEMORY_CONFIG), 10);
         props.put(producerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs("client");
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs("clientId");
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -195,7 +199,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 10);
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs("client");
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs("clientId");
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -230,7 +234,7 @@ public class StreamsConfigTest {
     public void shouldOverrideStreamsDefaultProducerConfigs() throws Exception {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("client");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
     }
 
@@ -239,7 +243,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
         assertEquals("latest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
         assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
@@ -261,7 +265,7 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() throws Exception {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "group", "client");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
         assertThat(consumerConfigs.get("internal.leave.group.on.close"), CoreMatchers.<Object>equalTo(false));
     }
 
