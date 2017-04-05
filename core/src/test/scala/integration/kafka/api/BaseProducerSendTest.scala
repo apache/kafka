@@ -43,7 +43,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val overridingProps = new Properties()
     val numServers = 2
     overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
-    overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "5") //TODO don't merge me - us separate fix in https://github.com/apache/kafka/pull/2734
     TestUtils.createBrokerConfigs(numServers, zkConnect, false, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties).map(KafkaConfig.fromProps(_, overridingProps))
   }

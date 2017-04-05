@@ -52,10 +52,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   val props = new Properties
 
   // configure the servers and clients
-  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map { config =>
-    config.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "5")//TODO don't merge me - us seperate fix in https://github.com/apache/kafka/pull/2734
-    KafkaConfig.fromProps(config, overridingProps)
-  }
+  override def generateConfigs() = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
 
   @Before
   override def setUp() {
