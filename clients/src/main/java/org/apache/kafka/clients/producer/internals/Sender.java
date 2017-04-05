@@ -191,7 +191,7 @@ public class Sender implements Runnable {
         if (!maybeSendTransactionalRequest(now))
             pollTimeout = sendProducerData(now);
 
-       this.client.poll(pollTimeout, now);
+        this.client.poll(pollTimeout, now);
     }
 
 
@@ -566,8 +566,12 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
 
+        String transactionalId = null;
+        if (transactionState != null && transactionState.isTransactional()) {
+            transactionalId = transactionState.transactionalId();
+        }
         ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(minUsedMagic, acks, timeout,
-                produceRecordsByPartition);
+                produceRecordsByPartition, transactionalId);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());

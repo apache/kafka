@@ -60,7 +60,7 @@ public class TransactionState {
     private final String transactionalId;
     private final TransactionCoordinator coordinator;
     private final int transactionTimeoutMs;
-    private final Deque<TransactionalRequest> producerTransactionalRequests;
+    private final Deque<TransactionalRequest> pendingTransactionalRequests;
     private final Set<TopicPartition> newPartitionsToBeAddedToTransaction;
     private final Set<TopicPartition> pendingPartitionsToBeAddedToTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
@@ -75,7 +75,7 @@ public class TransactionState {
         this.time = time;
         this.transactionalId = transactionalId;
         this.transactionTimeoutMs = transactionTimeoutMs;
-        this.producerTransactionalRequests = new ArrayDeque<>();
+        this.pendingTransactionalRequests = new ArrayDeque<>();
         this.coordinator = new TransactionCoordinator();
         this.newPartitionsToBeAddedToTransaction = new HashSet<>();
         this.pendingPartitionsToBeAddedToTransaction = new HashSet<>();
@@ -122,7 +122,7 @@ public class TransactionState {
     }
 
     public boolean hasPendingTransactionalRequests() {
-        return !(producerTransactionalRequests.isEmpty()
+        return !(pendingTransactionalRequests.isEmpty()
                 && newPartitionsToBeAddedToTransaction.isEmpty()
                 && pendingPartitionsToBeAddedToTransaction.isEmpty());
     }
@@ -131,8 +131,8 @@ public class TransactionState {
         if (!hasPendingTransactionalRequests())
             return null;
 
-        if (!producerTransactionalRequests.isEmpty())
-            return producerTransactionalRequests.pollFirst();
+        if (!pendingTransactionalRequests.isEmpty())
+            return pendingTransactionalRequests.pollFirst();
 
         return addPartitionsToTransactionRequest();
     }
@@ -163,12 +163,12 @@ public class TransactionState {
 
     public void beginCommittingTransaction() {
         isCompletingTransaction = true;
-        producerTransactionalRequests.add(endTransactionRequest(true));
+        pendingTransactionalRequests.add(endTransactionRequest(true));
     }
 
     public void beginAbortingTransaction() {
         isCompletingTransaction = true;
-        producerTransactionalRequests.add(endTransactionRequest(false));
+        pendingTransactionalRequests.add(endTransactionRequest(false));
     }
 
     public boolean isInTransaction() {
@@ -176,13 +176,13 @@ public class TransactionState {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-       if (partitionsInTransaction.contains(topicPartition))
+        if (partitionsInTransaction.contains(topicPartition))
             return;
         newPartitionsToBeAddedToTransaction.add(topicPartition);
     }
 
     public void needsRetry(TransactionalRequest request) {
-        producerTransactionalRequests.addFirst(request);
+        pendingTransactionalRequests.addFirst(request);
     }
 
     public Node coordinator() {
@@ -190,8 +190,8 @@ public class TransactionState {
     }
 
     public void markCoordinatorDead(Node node) {
-       coordinator.markCoordinatorDead(node);
-       producerTransactionalRequests.addFirst(findCoordinatorRequest());
+        coordinator.markCoordinatorDead(node);
+        pendingTransactionalRequests.addFirst(findCoordinatorRequest());
     }
 
     public void setInFlightRequestCorrelationId(int correlationId) {
@@ -206,6 +206,11 @@ public class TransactionState {
         return inFlightRequestCorrelationId != Integer.MIN_VALUE;
     }
 
+    // visible for testing
+    public boolean transactionContainsPartition(TopicPartition topicPartition) {
+        return isInTransaction && partitionsInTransaction.contains(topicPartition);
+    }
+
     /**
      * A blocking call to get the pid and epoch for the producer. If the PID and epoch has not been set, this method
      * will block for at most maxWaitTimeMs. It is expected that this method be called from application thread
@@ -217,10 +222,10 @@ public class TransactionState {
     public synchronized PidAndEpoch awaitPidAndEpoch(long maxWaitTimeMs) throws InterruptedException {
         if (isTransactional()) {
             if (!coordinator.isValid())
-                producerTransactionalRequests.add(findCoordinatorRequest());
+                pendingTransactionalRequests.add(findCoordinatorRequest());
 
             if (!hasPid())
-                producerTransactionalRequests.add(initPidRequest());
+                pendingTransactionalRequests.add(initPidRequest());
         }
         long start = time.milliseconds();
         long elapsed = 0;
@@ -339,19 +344,19 @@ public class TransactionState {
     }
 
     private class InitPidCallback extends TransactionalRequestCallBack {
-       @Override
-       protected void handleResponse(AbstractResponse responseBody) {
-           InitPidResponse initPidResponse = (InitPidResponse) responseBody;
-           if (initPidResponse.error() == Errors.NONE) {
-               setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
-           } else {
-               throw new KafkaException("Need to handle error: " + initPidResponse.error());
-           }
-       }
+        @Override
+        protected void handleResponse(AbstractResponse responseBody) {
+            InitPidResponse initPidResponse = (InitPidResponse) responseBody;
+            if (initPidResponse.error() == Errors.NONE) {
+                setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+            } else {
+                throw new KafkaException("Need to handle error: " + initPidResponse.error());
+            }
+        }
 
         @Override
         protected  void maybeReenqueue() {
-           producerTransactionalRequests.addFirst(initPidRequest());
+            pendingTransactionalRequests.addFirst(initPidRequest());
         }
 
     }
@@ -368,7 +373,7 @@ public class TransactionState {
 
         @Override
         protected void maybeReenqueue() {
-           // no need to reenqueue since the pending partitions will automatically be added back in the next loop.
+            // no need to reenqueue since the pending partitions will automatically be added back in the next loop.
         }
     }
 
@@ -387,7 +392,7 @@ public class TransactionState {
 
         @Override
         protected void maybeReenqueue() {
-           producerTransactionalRequests.addFirst(initPidRequest());
+            pendingTransactionalRequests.addFirst(initPidRequest());
         }
     }
 
@@ -398,6 +403,7 @@ public class TransactionState {
             if (endTxnResponse.error() == Errors.NONE) {
                 isCompletingTransaction = false;
                 isInTransaction = false;
+                partitionsInTransaction.clear();
             }
         }
 

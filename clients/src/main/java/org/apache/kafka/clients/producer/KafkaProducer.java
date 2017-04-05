@@ -456,16 +456,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         in the configuration.
      */
     public void initTransactions() {
-       if (transactionState == null || !transactionState.isTransactional()) {
+        if (transactionState == null || !transactionState.isTransactional()) {
             throw new IllegalStateException("Cannot call initTransactions without setting a transactional id.");
         }
         TransactionState.PidAndEpoch pidAndEpoch = null;
         while (pidAndEpoch == null || !pidAndEpoch.isValid()) {
-           try {
-               pidAndEpoch = transactionState.awaitPidAndEpoch(maxBlockTimeMs);
-           } catch (InterruptedException e) {
+            try {
+                pidAndEpoch = transactionState.awaitPidAndEpoch(maxBlockTimeMs);
+            } catch (InterruptedException e) {
 
-           }
+            }
         }
     }
 
@@ -477,7 +477,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void beginTransaction() throws ProducerFencedException {
         // Set the transactional bit in the producer.
-        assert (transactionState != null && transactionState.isTransactional() && transactionState.hasPid());
+        assert transactionState != null && transactionState.isTransactional() && transactionState.hasPid();
         transactionState.beginTransaction();
     }
 
@@ -493,7 +493,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         transactional.id is active.
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  String consumerGroupId) throws ProducerFencedException {
+                                         String consumerGroupId) throws ProducerFencedException {
 
     }
 
@@ -504,7 +504,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         transactional.id is active.
      */
     public void commitTransaction() throws ProducerFencedException {
-        assert (transactionState != null && transactionState.isTransactional() && transactionState.hasPid());
+        assert transactionState != null && transactionState.isTransactional() && transactionState.hasPid();
         transactionState.beginCommittingTransaction();
     }
 
@@ -515,7 +515,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         transactional.id is active.
      */
     public void abortTransaction() throws ProducerFencedException {
-        assert (transactionState != null && transactionState.isTransactional() && transactionState.hasPid());
+        assert transactionState != null && transactionState.isTransactional() && transactionState.hasPid();
         transactionState.beginAbortingTransaction();
     }
 
@@ -619,7 +619,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (transactionState != null && transactionState.isCompletingTransaction()) {
             throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
         }
-
 
         if (transactionState != null && transactionState.isInTransaction()) {
             transactionState.maybeAddPartitionToTransaction(new TopicPartition(record.topic(), record.partition()));

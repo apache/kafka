@@ -55,16 +55,26 @@ public class ProduceRequest extends AbstractRequest {
         private final short acks;
         private final int timeout;
         private final Map<TopicPartition, MemoryRecords> partitionRecords;
+        private final String transactioanlId;
 
         public Builder(byte magic,
                        short acks,
                        int timeout,
-                       Map<TopicPartition, MemoryRecords> partitionRecords) {
+                       Map<TopicPartition, MemoryRecords> partitionRecords,
+                       String transactionalId) {
             super(ApiKeys.PRODUCE, (short) (magic == RecordBatch.MAGIC_VALUE_V2 ? 3 : 2));
             this.magic = magic;
             this.acks = acks;
             this.timeout = timeout;
             this.partitionRecords = partitionRecords;
+            this.transactioanlId = transactionalId;
+        }
+
+        public Builder(byte magic,
+                       short acks,
+                       int timeout,
+                       Map<TopicPartition, MemoryRecords> partitionRecords) {
+            this(magic, acks, timeout, partitionRecords, null);
         }
 
         @Override
@@ -72,7 +82,7 @@ public class ProduceRequest extends AbstractRequest {
             if (version < 2)
                 throw new UnsupportedVersionException("ProduceRequest versions older than 2 are not supported.");
 
-            return new ProduceRequest(version, acks, timeout, partitionRecords);
+            return new ProduceRequest(version, acks, timeout, partitionRecords, transactioanlId);
         }
 
         @Override
@@ -83,6 +93,7 @@ public class ProduceRequest extends AbstractRequest {
                     .append(", acks=").append(acks)
                     .append(", timeout=").append(timeout)
                     .append(", partitionRecords=(").append(partitionRecords)
+                    .append(", transactionalId=(").append(transactioanlId != null ? transactioanlId : "")
                     .append("))");
             return bld.toString();
         }
@@ -100,12 +111,15 @@ public class ProduceRequest extends AbstractRequest {
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
+       this(version, acks, timeout, partitionRecords, null);
+    }
+
+    private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(version);
         this.acks = acks;
         this.timeout = timeout;
 
-        // TODO: Include transactional id in constructor once transactions are supported
-        this.transactionalId = null;
+        this.transactionalId = transactionalId;
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
 
