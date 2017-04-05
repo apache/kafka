@@ -122,7 +122,6 @@ public class KafkaStreams {
     private GlobalStreamThread globalStreamThread;
 
     private final StreamThread[] threads;
-    private final Map<Long, StreamThread.State> threadState;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
 
@@ -253,6 +252,13 @@ public class KafkaStreams {
     }
 
     private final class StreamStateListener implements StreamThread.StateListener {
+
+        private final Map<Long, StreamThread.State> threadState;
+
+        StreamStateListener(Map<Long, StreamThread.State> threadState) {
+            this.threadState = threadState;
+        }
+
         @Override
         public synchronized void onChange(final StreamThread thread,
                                           final StreamThread.State newState,
@@ -333,7 +339,7 @@ public class KafkaStreams {
         metrics = new Metrics(metricConfig, reporters, time);
 
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
-        threadState = new HashMap<>(threads.length);
+        final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
@@ -358,6 +364,7 @@ public class KafkaStreams {
                                                         globalThreadId);
         }
 
+        final StreamStateListener streamStateListener = new StreamStateListener(threadState);
         for (int i = 0; i < threads.length; i++) {
             threads[i] = new StreamThread(builder,
                                           config,
@@ -369,7 +376,7 @@ public class KafkaStreams {
                                           time,
                                           streamsMetadataState,
                                           cacheSizeBytes);
-            threads[i].setStateListener(new StreamStateListener());
+            threads[i].setStateListener(streamStateListener);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }
