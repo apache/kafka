@@ -1,10 +1,10 @@
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import java.util.LinkedList;
@@ -35,7 +34,7 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     /**
      * @throws NullPointerException if the element is null
      */
-    public void addElement(Stamped<E> elem) {
+    public void addElement(final Stamped<E> elem) {
         if (elem == null) throw new NullPointerException();
 
         Stamped<E> minElem = descendingSubsequence.peekLast();
@@ -46,12 +45,19 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
         descendingSubsequence.offerLast(elem);
     }
 
-    public void removeElement(Stamped<E> elem) {
-        if (elem != null && descendingSubsequence.peekFirst() == elem)
-            descendingSubsequence.removeFirst();
+    public void removeElement(final Stamped<E> elem) {
+        if (elem == null) {
+            return;
+        }
 
-        if (descendingSubsequence.isEmpty())
+        if (descendingSubsequence.peekFirst() == elem) {
+            descendingSubsequence.removeFirst();
+        }
+
+        if (descendingSubsequence.isEmpty()) {
             lastKnownTime = elem.timestamp;
+        }
+
     }
 
     public int size() {
