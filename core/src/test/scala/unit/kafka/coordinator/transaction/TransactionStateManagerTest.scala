@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.loadTransactionsForPartition(partitionId)
+    transactionManager.loadTransactionsForPartition(partitionId, 0)
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()

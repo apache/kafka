@@ -35,6 +35,7 @@ import scala.collection.{concurrent, immutable, mutable}
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
 import collection.JavaConverters._
+import collection.JavaConversions._
 
 class TransactionMarkerChannelManager(config: KafkaConfig,
                                       metrics: Metrics,
@@ -136,9 +137,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     val delayedTxnMarker = new DelayedTxnMarker(metadataToWrite)
     txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(metadata.pid))
 
-    val exisintMetadataToWrite = pendingTxnMap.putIfAbsent(metadata.pid, metadata)
-    if (exisintMetadataToWrite.isDefined)
-      throw new IllegalStateException(s"There is already a pending txn to write its markers ${exisintMetadataToWrite.get}; this should not happen")
+    val existingMetadataToWrite = pendingTxnMap.putIfAbsent(metadata.pid, metadata)
+    if (existingMetadataToWrite.isDefined)
+      throw new IllegalStateException(s"There is already a pending txn to write its markers ${existingMetadataToWrite.get}; this should not happen")
 
     val result = metadataToWrite.state match {
       case PrepareCommit => TransactionResult.COMMIT
