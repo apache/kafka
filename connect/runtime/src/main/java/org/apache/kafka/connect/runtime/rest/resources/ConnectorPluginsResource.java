@@ -49,10 +49,8 @@ public class ConnectorPluginsResource {
 
     @PUT
     @Path("/{connectorType}/config/validate")
-    public ConfigInfos validateConfigs(
-        final @PathParam("connectorType") String connType,
-        final Map<String, String> connectorConfig
-    ) throws Throwable {
+    public ConfigInfos validateConfigs(final @PathParam("connectorType") String connType,
+                                       final Map<String, String> connectorConfig) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (includedConnType != null
             && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(connType))) {
