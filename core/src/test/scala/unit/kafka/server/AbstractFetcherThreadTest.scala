@@ -105,7 +105,7 @@ class AbstractFetcherThreadTest {
                            clientId: String,
                            sourceBroker: BrokerEndPoint,
                            fetchBackOffMs: Int = 0)
-    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includePartitionInitialisation = false) {
+    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includeLogTruncation = false) {
 
     type REQ = DummyFetchRequest
     type PD = PartitionData
@@ -205,7 +205,7 @@ class AbstractFetcherThreadTest {
       val requestMap = new mutable.HashMap[TopicPartition, Long]
       partitionMap.foreach { case (topicPartition, partitionFetchState) =>
         // Add backoff delay check
-        if (partitionFetchState.isActive)
+        if (partitionFetchState.isReadyForFetch)
           requestMap.put(topicPartition, partitionFetchState.fetchOffset)
       }
       new DummyFetchRequest(requestMap)

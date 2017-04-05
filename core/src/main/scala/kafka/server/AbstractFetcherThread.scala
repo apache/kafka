@@ -48,7 +48,7 @@ abstract class AbstractFetcherThread(name: String,
                                      val sourceBroker: BrokerEndPoint,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true,
-                                     includePartitionInitialisation: Boolean
+                                     includeLogTruncation: Boolean
                                     )
   extends ShutdownableThread(name, isInterruptible) {
 
@@ -242,9 +242,9 @@ abstract class AbstractFetcherThread(name: String,
       }.map { case (tp, offset) =>
         val fetchState =
           if (PartitionTopicInfo.isOffsetInvalid(offset))
-            new PartitionFetchState(handleOffsetOutOfRange(tp), includePartitionInitialisation)
+            new PartitionFetchState(handleOffsetOutOfRange(tp), includeLogTruncation)
           else
-            new PartitionFetchState(offset, includePartitionInitialisation)
+            new PartitionFetchState(offset, includeLogTruncation)
         tp -> fetchState
       }
       val existingPartitionToState = states().toMap
@@ -275,7 +275,7 @@ abstract class AbstractFetcherThread(name: String,
       for (partition <- partitions) {
         Option(partitionStates.stateValue(partition)).foreach (currentPartitionFetchState =>
           if (!currentPartitionFetchState.isDelayed)
-            partitionStates.updateAndMoveToEnd(partition, new PartitionFetchState(currentPartitionFetchState.fetchOffset, new DelayedItem(delay), currentPartitionFetchState.initialising))
+            partitionStates.updateAndMoveToEnd(partition, new PartitionFetchState(currentPartitionFetchState.fetchOffset, new DelayedItem(delay), currentPartitionFetchState.truncatingLog))
         )
       }
       partitionMapCond.signalAll()
@@ -397,22 +397,25 @@ case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: 
 }
 
 /**
-  * case class to keep partition offset and its state(initialising, delayed)
+  * case class to keep partition offset and its state(truncatingLog, delayed)
+  * This represents a partition as being either:
+  * (1) Truncating its log, for example having recently become a follower
+  * (2) Delayed, for example due to an error, where we subsequently back off a bit
+  * (3) ReadyForFetch, the is the active state where the thread is actively replicating.
   */
-case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, initialising: Boolean = false) {
+case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncatingLog: Boolean = false) {
 
-  def this(offset: Long, initialising: Boolean) = this(offset, new DelayedItem(0), initialising)
+  def this(offset: Long, truncatingLog: Boolean) = this(offset, new DelayedItem(0), truncatingLog)
 
   def this(offset: Long, delay: DelayedItem) = this(offset, new DelayedItem(0), false)
 
   def this(fetchOffset: Long) = this(fetchOffset, new DelayedItem(0))
 
-  // is ready for fetching data
-  def isActive: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0 && !initialising
+  def isReadyForFetch: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0 && !truncatingLog
 
-  def isInitialising: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0 && initialising
+  def isTruncatingLog: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) == 0 && truncatingLog
 
   def isDelayed: Boolean = delay.getDelay(TimeUnit.MILLISECONDS) > 0
 
-  override def toString = "offset:%d-active:%b-initialising:%b".format(fetchOffset, isActive, initialising)
+  override def toString = "offset:%d-isReadyForFetch:%b-isTruncatingLog:%b".format(fetchOffset, isReadyForFetch, truncatingLog)
 }

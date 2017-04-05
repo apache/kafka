@@ -40,7 +40,7 @@ class ConsumerFetcherThread(name: String,
                                       sourceBroker = sourceBroker,
                                       fetchBackOffMs = config.refreshLeaderBackoffMs,
                                       isInterruptible = true,
-                                      includePartitionInitialisation = false) {
+                                      includeLogTruncation = false) {
 
   type REQ = FetchRequest
   type PD = PartitionData
@@ -102,7 +102,7 @@ class ConsumerFetcherThread(name: String,
 
   protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
     partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
-      if (partitionFetchState.isActive)
+      if (partitionFetchState.isReadyForFetch)
         fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
     }
 

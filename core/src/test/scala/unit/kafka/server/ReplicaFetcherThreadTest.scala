@@ -332,13 +332,13 @@ class ReplicaFetcherThreadTest {
     thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
 
     //Then all partitions should start in an initialising state
-    assertTrue(thread.partitionStates.partitionStates().asScala.forall(_.value().initialising))
+    assertTrue(thread.partitionStates.partitionStates().asScala.forall(_.value().truncatingLog))
 
     //When
     thread.doWork()
 
     //Then
-    assertFalse(thread.partitionStates.partitionStates().asScala.forall(_.value().initialising))
+    assertFalse(thread.partitionStates.partitionStates().asScala.forall(_.value().truncatingLog))
   }
 
   //TODO  test should filter any partitions made leader during leader offset epoch request

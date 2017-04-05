@@ -53,7 +53,7 @@ class ReplicaFetcherThread(name: String,
                                 sourceBroker = sourceBroker,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false,
-                                includePartitionInitialisation = true) {
+                                includeLogTruncation = true) {
 
   type REQ = FetchRequest
   type PD = PartitionData
@@ -237,7 +237,7 @@ class ReplicaFetcherThread(name: String,
 
     partitionMap.foreach { case (topicPartition, partitionFetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
-      if (partitionFetchState.isActive && !shouldFollowerThrottle(quota, topicPartition)) {
+      if (partitionFetchState.isReadyForFetch && !shouldFollowerThrottle(quota, topicPartition)) {
         val logStartOffset = replicaMgr.getReplicaOrException(topicPartition).logStartOffset
         requestMap.put(topicPartition, new JFetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset, fetchSize))
       }
@@ -286,7 +286,7 @@ class ReplicaFetcherThread(name: String,
 
   override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = {
     allPartitions
-      .filter { case (_, state) => state.isInitialising }
+      .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCache(tp).latestEpoch }.toMap
   }
 
