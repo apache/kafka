@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.server.DelayedOperationPurgatory
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.MockTime
@@ -106,7 +105,7 @@ class TransactionCoordinatorTest {
 
     coordinator.startup()
     // only give one of the two partitions of the transaction topic
-    coordinator.handleTxnImmigration(1)
+    coordinator.handleTxnImmigration(1, 0)
   }
 
   @After

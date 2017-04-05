@@ -39,7 +39,7 @@ abstract class InterBrokerSendThread(name: String,
   extends ShutdownableThread(name, isInterruptible = false) {
 
   // generate a request for each required destination broker
-  abstract def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler]
+  def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler]
 
   override def doWork() {
     val now = time.milliseconds()

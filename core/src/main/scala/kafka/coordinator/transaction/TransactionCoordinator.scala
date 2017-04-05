@@ -47,7 +47,7 @@ object TransactionCoordinator {
     val pidManager = new ProducerIdManager(config.brokerId, zkUtils)
     val logManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
 
-    new TransactionCoordinator(config, pidManager, logManager)
+    new TransactionCoordinator(config.brokerId, pidManager, logManager)
   }
 
   private def initTransactionError(error: Errors): InitPidResult = {
@@ -67,10 +67,10 @@ object TransactionCoordinator {
  * producers. Producers with specific transactional ids are assigned to their corresponding coordinators;
  * Producers with no specific transactional id may talk to a random broker as their coordinators.
  */
-class TransactionCoordinator(config: KafkaConfig,
+class TransactionCoordinator(brokerId: Int,
                              pidManager: ProducerIdManager,
                              txnManager: TransactionStateManager) extends Logging {
-  this.logIdent = "[Transaction Coordinator " + config.brokerId + "]: "
+  this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
 
   import TransactionCoordinator._
 
