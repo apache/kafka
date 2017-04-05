@@ -113,12 +113,12 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   /**
-    * - Build a leader epoch fetch based on partitions in an initialising state
+    * - Build a leader epoch fetch based on partitions that are in the Truncating phase
     * - Issue LeaderEpochRequeust, retrieving the latest offset for each partition's
     *   leader epoch. This is the offset the follower should truncate to ensure
     *   accurate log replication.
-    * - Finally truncate the logs for initialising partitions and mark them
-    *   initialised. Do this within a lock to ensure no leadership changes can
+    * - Finally truncate the logs for partitions in the truncating phase and mark them
+    *   truncation complete. Do this within a lock to ensure no leadership changes can
     *   occur during truncation.
     */
   def maybeTruncate(): Unit = {
@@ -131,7 +131,7 @@ abstract class AbstractFetcherThread(name: String,
         //Check no leadership changes happened whilst we were unlocked, fetching epochs
         val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
         val truncationPoints = maybeTruncate(leaderEpochs)
-        markPartitionsInitialized(truncationPoints)
+        markTruncationComplete(truncationPoints)
       }
     }
   }
@@ -254,17 +254,17 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   /**
-    * Loop through all partitions, marking them initialised and applying the correct offset
-    * @param toInitialize the partitions to mark initialised
+    * Loop through all partitions, marking them as truncation complete and applying the correct offset
+    * @param partitions the partitions to mark truncation complete
     */
-  private def markPartitionsInitialized(toInitialize: Map[TopicPartition, Long]) {
+  private def markTruncationComplete(partitions: Map[TopicPartition, Long]) {
     val newStates: Map[TopicPartition, PartitionFetchState] = partitionStates.partitionStates.asScala
       .map { state =>
-        val maybeInitialisedState = toInitialize.get(state.topicPartition()) match {
-          case Some(offset) => new PartitionFetchState(offset, state.value.delay, false)
+        val maybeTruncationComplete = partitions.get(state.topicPartition()) match {
+          case Some(offset) => new PartitionFetchState(offset, state.value.delay, truncatingLog = false)
           case None => state.value()
         }
-        (state.topicPartition(), maybeInitialisedState)
+        (state.topicPartition(), maybeTruncationComplete)
       }.toMap
     partitionStates.set(newStates.asJava)
   }

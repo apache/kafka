@@ -70,7 +70,6 @@ public class EpochEndOffset {
 
         if (error != that.error) return false;
         return endOffset == that.endOffset;
-
     }
 
     @Override

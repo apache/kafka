@@ -120,7 +120,6 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
 
             if (partition != that.partition) return false;
             return epochEndOffset != null ? epochEndOffset.equals(that.epochEndOffset) : that.epochEndOffset == null;
-
         }
 
         @Override

@@ -1080,7 +1080,6 @@ class Log(@volatile var dir: File,
       }
       buildAndRecoverPidMap(targetOffset)
     }
-
   }
 
   /**
