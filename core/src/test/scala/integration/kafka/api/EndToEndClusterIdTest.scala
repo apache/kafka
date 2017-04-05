@@ -19,7 +19,7 @@ package kafka.api
 
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
-import java.util.Properties
+import java.util.{Properties}
 
 import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
@@ -30,7 +30,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
 import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.Assert._
-import org.junit.{Before, Ignore, Test}
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId

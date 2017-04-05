@@ -66,14 +66,14 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
         info(s"Updated PartitionLeaderEpoch ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
-      }else {
+      } else {
         maybeWarn(epoch, offset)
       }
     }
   }
 
   /**
-    * Returns the current Leader Epoch. This is the laatest epoch
+    * Returns the current Leader Epoch. This is the latest epoch
     * which has messages assigned to it.
     *
     * @return
@@ -140,10 +140,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
       val before = epochs
       if (offset >= 0 && earliestOffset() < offset) {
         val earliest = epochs.filter(entry => entry.startOffset < offset)
-        if(earliest.size > 0) {
+        if (earliest.size > 0) {
           epochs = epochs --= earliest
           //If the offset is less than the earliest offset remaining, add previous epoch back, but with an updated offset
-          if(offset < earliestOffset() || epochs.isEmpty)
+          if (offset < earliestOffset() || epochs.isEmpty)
             new EpochEntry(earliest.last.epoch, offset) +=: epochs
           flush()
           info(s"Cleared earliest ${before.toSet.filterNot(epochs.toSet).size} entries from epoch cache based on passed offset $offset leaving ${epochs.size} in EpochFile for partition $topicPartition")

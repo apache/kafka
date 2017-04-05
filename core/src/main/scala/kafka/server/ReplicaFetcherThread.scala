@@ -278,7 +278,7 @@ class ReplicaFetcherThread(name: String,
     }
     replicaMgr.logManager.truncateTo(truncationPoints)
 
-    // For partitions encountered an error, delay them a bit before retrying the leader epoch request
+    // For partitions that encountered an error, delay them a bit before retrying the leader epoch request
     delayPartitions(partitionsWithError, brokerConfig.replicaFetchBackoffMs.toLong)
 
     truncationPoints

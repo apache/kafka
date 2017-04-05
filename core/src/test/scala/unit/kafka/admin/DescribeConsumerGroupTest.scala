@@ -37,6 +37,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
@@ -48,7 +49,6 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
   val topic = "foo"
   val topicFilter = Whitelist(topic)
   val group = "test.group"
-  val timeout = "10000"
   val props = new Properties
 
   // configure the servers and clients

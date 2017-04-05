@@ -82,7 +82,6 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
     )
   }
 
-
   override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse =  {
     try {
       if (!NetworkClientUtils.awaitReady(networkClient, sourceNode, time, socketTimeout))
