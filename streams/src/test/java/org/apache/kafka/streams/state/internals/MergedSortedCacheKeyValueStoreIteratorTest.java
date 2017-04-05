@@ -32,7 +32,7 @@ import static org.junit.Assert.assertFalse;
 public class MergedSortedCacheKeyValueStoreIteratorTest {
 
     private final String namespace = "one";
-    private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>(namespace, Serdes.ByteArray(), Serdes.ByteArray());
+    private final StateSerdes<byte[], byte[]> serdes =  new StateSerdes<>("dummy", Serdes.ByteArray(), Serdes.ByteArray());
     private KeyValueStore<Bytes, byte[]> store;
     private ThreadCache cache;
 
