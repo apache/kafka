@@ -149,7 +149,6 @@ class Partition(val topic: String,
     }
   }
 
-  //TODO Maybe refactor this out, replacing it with a reference to the leader epoch cache (or remove this comment)
   def getLeaderEpoch: Int = this.leaderEpoch
 
   /**

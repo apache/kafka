@@ -1581,7 +1581,6 @@ class LogTest extends JUnitSuite {
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
 
-  //TODO there should be a comparable test for compressed messages
   @Test
   def shouldApplyEpochToMessageOnAppendIfLeader() {
     val messageIds = (0 until 50).toArray

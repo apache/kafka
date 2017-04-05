@@ -341,7 +341,54 @@ class ReplicaFetcherThreadTest {
     assertFalse(thread.partitionStates.partitionStates().asScala.forall(_.value().truncatingLog))
   }
 
-  //TODO  test should filter any partitions made leader during leader offset epoch request
+  @Test
+  def shouldFilterPartitionsMadeLeaderDuringOffsetRequest(): Unit ={
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
+    val truncateToCapture: Capture[Map[TopicPartition, Long]] = newCapture(CaptureType.ALL)
+
+    //Setup all stubs
+    val quota = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs = createNiceMock(classOf[LeaderEpochCache])
+    val logManager = createNiceMock(classOf[LogManager])
+    val replica = createNiceMock(classOf[Replica])
+    val replicaManager = createNiceMock(classOf[ReplicaManager])
+
+    //Stub return values
+    expect(logManager.truncateTo(capture(truncateToCapture))).once
+    expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
+    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
+    expect(leaderEpochs.latestEpoch).andReturn(5)
+    expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    stub(replica, replicaManager)
+
+    replay(leaderEpochs, replicaManager, logManager, quota, replica)
+
+    //Define the offsets for the OffsetsForLeaderEpochResponse
+    val offsetsReply = Map(
+      t1p0 -> new EpochEndOffset(1), t1p1 -> new EpochEndOffset(1)
+    ).asJava
+
+    //Create the fetcher thread
+    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val mockNetwork = new ReplicaFetcherMockBlockingSend(offsetsReply, endPoint, new SystemTime())
+    val thread = new ReplicaFetcherThread("bob", 0, endPoint, config, replicaManager, new Metrics(), new SystemTime(), quota, Some(mockNetwork))
+
+    //When
+    thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
+
+    //When the epoch request is outstanding, remove one of the partitions to simulate a leader change. We do this via a callback passed to the mock thread
+    val partitionThatBecameLeader = t1p0
+    mockNetwork.setEpochRequestCallback(() => {
+      thread.removePartitions(Set(partitionThatBecameLeader))
+    })
+
+    //When
+    thread.doWork()
+
+    //Then we should not have truncated the partitino that became leader
+    assertEquals(None, truncateToCapture.getValue.get(partitionThatBecameLeader))
+    assertEquals(0, truncateToCapture.getValue.get(t1p1).get)
+  }
 
   def stub(replica: Replica, replicaManager: ReplicaManager) = {
     expect(replicaManager.getReplica(t1p0)).andReturn(Some(replica)).anyTimes()
