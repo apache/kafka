@@ -97,8 +97,8 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     bounce(follower)
     awaitISR(tp)
 
-    //Epochs on leader in increase (NB Bouncing the follower causes the leader epoch to change too)
-    assertEquals(Buffer(EpochEntry(0, 0), EpochEntry(1, 1)), epochCache(leader).epochEntries())
+    //Nothing happens yet as we haven't sent any new messages.
+    assertEquals(Buffer(EpochEntry(0, 0)), epochCache(leader).epochEntries())
     assertEquals(Buffer(EpochEntry(0, 0)), epochCache(follower).epochEntries())
 
     //Send a message
@@ -117,7 +117,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     awaitISR(tp)
 
     //Epochs 2 should be added to the leader, but not on the follower (yet), as there has been no replication.
-    assertEquals(Buffer(EpochEntry(0, 0), EpochEntry(1, 1), EpochEntry(2, 2)), epochCache(leader).epochEntries())
+    assertEquals(Buffer(EpochEntry(0, 0), EpochEntry(1, 1)), epochCache(leader).epochEntries())
     assertEquals(Buffer(EpochEntry(0, 0), EpochEntry(1, 1)), epochCache(follower).epochEntries())
 
     //Send a message

@@ -29,7 +29,8 @@ import org.apache.kafka.common.requests.EpochEndOffset
 import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
-  def assignToLeo(leaderEpoch: Int)
+  def cacheEpoch(leaderEpoch: Int)
+  def assignCachedEpochToLeoIfPresent()
   def assign(leaderEpoch: Int, offset: Long)
   def latestEpoch(): Int
   def endOffsetFor(epoch: Int): Long
@@ -55,16 +56,7 @@ object LeaderEpochConstants {
 class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetMetadata, checkpoint: LeaderEpochCheckpoint) extends LeaderEpochCache with Logging {
   private val lock = new ReentrantReadWriteLock()
   private var epochs: ListBuffer[EpochEntry] = lock synchronized { ListBuffer(checkpoint.read(): _*) }
-
-  /**
-    * Assigns the supplied Leader Epoch to the current LEO
-    * Once the epoch is assigned it cannot be reassigned
-    *
-    * @param epoch
-    */
-  override def assignToLeo(epoch: Int) = {
-    assign(epoch, leo().messageOffset)
-  }
+  private var cachedLatestEpoch: Option[Int] = None //epoch which has yet to be assigned to a message.
 
   /**
     * Assigns the supplied Leader Epoch to the supplied Offset
@@ -86,7 +78,8 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   }
 
   /**
-    * Returns the current Leader Epoch
+    * Returns the current Leader Epoch. This is the laatest epoch
+    * which has messages assigned to it.
     *
     * @return
     */
@@ -201,6 +194,37 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     else if (offset < latestOffset() && epoch >= 0)
       warn(s"Received an PartitionLeaderEpoch assignment for an offset < latest offset for the most recent, stored PartitionLeaderEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
+  }
+
+  /**
+    * Registers a PartitionLeaderEpoch (typically in response to a leadership change).
+    * This will be cached until {@link #assignCachedEpochToLeoIfPresent()} is called.
+    *
+    * This allows us to register an epoch in response to a leadership change, but not persist
+    * that epoch until a message arrives and is stamped. This alisgns the assigment of leadership
+    * on leader and follower, for eases debugability.
+    *
+    * @param epoch
+    */
+  override def cacheEpoch(epoch: Int) = {
+    inWriteLock(lock) {
+      cachedLatestEpoch = Some(epoch)
+    }
+  }
+
+  /**
+    * If there is a cached epoch, it will be assigned to the LEO.
+    * @return the latest epoch
+    */
+  override def assignCachedEpochToLeoIfPresent() = {
+    inWriteLock(lock) {
+      cachedLatestEpoch match {
+        case Some(epoch) =>
+          assign(epoch, leo().messageOffset)
+          cachedLatestEpoch = None
+        case None => //nothing to do
+      }
+    }
   }
 }
 

@@ -63,7 +63,8 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.assignToLeo(2)
+    cache.cacheEpoch(2)
+    cache.assignCachedEpochToLeoIfPresent()
 
     //Then
     assertEquals(2, cache.latestEpoch())
@@ -112,11 +113,13 @@ class LeaderEpochFileCacheTest {
     leo = 9
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
-    cache.assignToLeo(2)
+    cache.cacheEpoch(2)
+    cache.assignCachedEpochToLeoIfPresent()
 
     //When called again later
     leo = 10
-    cache.assignToLeo(2)
+    cache.cacheEpoch(2)
+    cache.assignCachedEpochToLeoIfPresent()
 
     //Then the offset should NOT have been updated
     assertEquals(9, cache.epochEntries()(0).startOffset)
@@ -131,10 +134,12 @@ class LeaderEpochFileCacheTest {
     leo = 9
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
-    cache.assignToLeo(2)
+    cache.cacheEpoch(2)
+    cache.assignCachedEpochToLeoIfPresent()
 
     //When update epoch with same leo
-    cache.assignToLeo(3)
+    cache.cacheEpoch(3)
+    cache.assignCachedEpochToLeoIfPresent()
 
     //Then the offset should NOT have been updated
     assertEquals(9, cache.endOffsetFor(3))
@@ -248,7 +253,8 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
 
     //When
-    cache.assignToLeo(epoch = 2)
+    cache.cacheEpoch(epoch = 2)
+    cache.assignCachedEpochToLeoIfPresent()
 
     //Then
     assertEquals(UNDEFINED_EPOCH_OFFSET, cache.endOffsetFor(3))
@@ -341,10 +347,12 @@ class LeaderEpochFileCacheTest {
 
     //Given
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
-    cache.assignToLeo(epoch = 0) //leo=0
+    cache.cacheEpoch(epoch = 0) //leo=0
+    cache.assignCachedEpochToLeoIfPresent()
 
     //When
-    cache.assignToLeo(epoch = 1) //leo=0
+    cache.cacheEpoch(epoch = 1) //leo=0
+    cache.assignCachedEpochToLeoIfPresent()
 
     //Then epoch should go up
     assertEquals(1, cache.latestEpoch())
@@ -362,7 +370,8 @@ class LeaderEpochFileCacheTest {
     assertEquals(0, cache.endOffsetFor(0))
 
     //When
-    cache.assignToLeo(epoch = 2) //leo=5
+    cache.cacheEpoch(epoch = 2) //leo=5
+    cache.assignCachedEpochToLeoIfPresent()
     leo = 10 //write another 5 messages
 
     //Then end offset for epoch(2) should be leo => 10
@@ -664,6 +673,28 @@ class LeaderEpochFileCacheTest {
 
     //Then
     cache.clearLatest(7)
+  }
+
+  @Test
+  def shouldUpdateEpochCacheOnLeadershipChangeThenCommit(): Unit ={
+    //Given
+    def leoFinder() = new LogOffsetMetadata(5)
+    val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
+
+    //When
+    cache.cacheEpoch(2)
+
+    //Then
+    assertEquals(UNDEFINED_EPOCH, cache.latestEpoch())
+
+    //When
+    cache.assignCachedEpochToLeoIfPresent()
+
+    //Then should have saved epoch
+    assertEquals(2, cache.latestEpoch())
+
+    //Then should have applied LEO to epoch
+    assertEquals(5, cache.endOffsetFor(2))
   }
 
   @Before

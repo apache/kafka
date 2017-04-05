@@ -248,8 +248,7 @@ class LogSegment(val log: FileRecords,
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           leaderEpochCache match {
             case Some(epochCache) =>
-              if (batch.partitionLeaderEpoch > epochCache.latestEpoch())
-                epochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+              epochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
             case _ => //nothing to do
           }
         }
