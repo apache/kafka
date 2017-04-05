@@ -20,6 +20,7 @@ package kafka.tools
 import java.io.PrintStream
 import java.util.concurrent.CountDownLatch
 import java.util.{Locale, Properties, Random}
+
 import joptsimple._
 import kafka.api.OffsetRequest
 import kafka.common.{MessageFormatter, StreamEndException}
@@ -33,6 +34,7 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.Deserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
+
 import scala.collection.JavaConverters._
 
 /**
@@ -440,11 +442,22 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Array[Byte]) {
+    def outputSeparator = (predicate: Boolean, separator: Array[Byte], endSeparator: Array[Byte]) => {
+      if (predicate) {
+        output.write(separator)
+      } else {
+        output.write(endSeparator)
+      }
+    }
+
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Option[Array[Byte]] = None) {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes)
       val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.getBytes).getOrElse(nonNullBytes)
       output.write(convertedBytes)
-      output.write(separator)
+      separator match {
+        case Some(sep) => output.write(sep)
+        case None =>
+      }
     }
 
     import consumerRecord._
@@ -454,14 +467,14 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(s"$timestampType:$timestamp".getBytes)
       else
         output.write(s"NO_TIMESTAMP".getBytes)
-      output.write(keySeparator)
+      outputSeparator(printKey || printValue, keySeparator, lineSeparator)
     }
-
-    if (printKey) write(keyDeserializer, key, keySeparator)
+    if (printKey) {
+      write(keyDeserializer, key)
+      outputSeparator(printValue, keySeparator, lineSeparator)
+    }
     if (printValue) {
-      write(valueDeserializer, value, lineSeparator)
-    } else {
-      output.write(lineSeparator)
+      write(valueDeserializer, value, Some(lineSeparator))
     }
   }
 }
