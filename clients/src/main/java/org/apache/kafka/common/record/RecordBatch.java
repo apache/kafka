@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.utils.CloseableIterator;
 
 import java.nio.ByteBuffer;
@@ -59,7 +58,7 @@ public interface RecordBatch extends Iterable<Record> {
      * Used to indicate an unknown leader epoch, which will be the case when the record set is
      * first created by the producer.
      */
-    int UNKNOWN_PARTITION_LEADER_EPOCH = EpochEndOffset.UNDEFINED_EPOCH;
+    int UNKNOWN_PARTITION_LEADER_EPOCH = -1;
 
     /**
      * Check whether the checksum of this batch is correct.
