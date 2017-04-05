@@ -542,6 +542,23 @@ class LeaderEpochFileCacheTest {
   }
 
   @Test
+  def shouldUpdateFirstEpochOffsetOnClearEarliest(): Unit = {
+    def leoFinder() = new LogOffsetMetadata(0)
+
+    //Given
+    val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
+    cache.assign(epoch = 0, offset = 0)
+    cache.assign(epoch = 1, offset = 7)
+    cache.assign(epoch = 2, offset = 10)
+
+    //When we clear from a postition between offset 0 & offset 7
+    cache.clearEarliest(offset = 5)
+
+    //Then we should keeep epoch 0 but update the offset appropriately
+    assertEquals(ListBuffer(EpochEntry(0,5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
+  }
+
+  @Test
   def shouldRetainLatestEpochOnClearAllEarliestAndUpdateItsOffset(): Unit = {
     def leoFinder() = new LogOffsetMetadata(0)
 

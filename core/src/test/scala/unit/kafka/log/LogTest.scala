@@ -1590,7 +1590,7 @@ class LogTest extends JUnitSuite {
     val epoch = 72
     val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
-    //When appending messages as a leader (assignOffsets = true)
+    //When appending messages as a leader (i.e. assignOffsets = true)
     for (i <- records.indices)
       log.append(
         MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i)),
@@ -1642,9 +1642,9 @@ class LogTest extends JUnitSuite {
     val cache = epochCache(log)
 
     // Given three segments of 5 messages each
-      for (e <- 0 until 15) {
-        log.append(set)
-      }
+    for (e <- 0 until 15) {
+      log.append(set)
+    }
 
     //Given epochs
     cache.assign(0, 0)
@@ -1659,25 +1659,25 @@ class LogTest extends JUnitSuite {
   }
 
   @Test
-  def shouldTruncateLeaderEpochsWhenDeletingSegments2() {
+  def shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments() {
     val set = TestUtils.singletonRecords("test".getBytes)
     val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
     val cache = epochCache(log)
 
     // Given three segments of 5 messages each
-      for (e <- 0 until 15) {
-        log.append(set)
-      }
+    for (e <- 0 until 15) {
+      log.append(set)
+    }
 
     //Given epochs
     cache.assign(0, 0)
     cache.assign(1, 7)
     cache.assign(2, 10)
 
-    //When first segment up to offset 5
+    //When first segment removed (up to offset 5)
     log.deleteOldSegments
 
-    //The oldest epoch entry should have been removed
+    //The the first entry should have gone from (0,0) => (0,5)
     assertEquals(ListBuffer(EpochEntry(0, 5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
   }
 
