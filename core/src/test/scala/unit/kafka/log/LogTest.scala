@@ -1800,7 +1800,7 @@ class LogTest extends JUnitSuite {
 
   private def mockCache(epoch: Int) = {
     val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
-    EasyMock.expect(cache.latestEpoch()).andReturn(epoch).anyTimes()
+    EasyMock.expect(cache.latestUsedEpoch()).andReturn(epoch).anyTimes()
     EasyMock.replay(cache)
     cache
   }

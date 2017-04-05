@@ -30,9 +30,9 @@ import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
   def cacheLatestEpoch(leaderEpoch: Int)
-  def assignCachedEpochToLeoIfPresent()
+  def maybeAssignLatestCachedEpochToLeo()
   def assign(leaderEpoch: Int, offset: Long)
-  def latestEpoch(): Int
+  def latestUsedEpoch(): Int
   def endOffsetFor(epoch: Int): Long
   def clearLatest(offset: Long)
   def clearEarliest(offset: Long)
@@ -62,7 +62,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     */
   override def assign(epoch: Int, offset: Long): Unit = {
     inWriteLock(lock) {
-      if (epoch >= 0 && epoch > latestEpoch && offset >= latestOffset) {
+      if (epoch >= 0 && epoch > latestUsedEpoch && offset >= latestOffset) {
         info(s"Updated PartitionLeaderEpoch ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
@@ -78,7 +78,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @return
     */
-  override def latestEpoch(): Int = {
+  override def latestUsedEpoch(): Int = {
     inReadLock(lock) {
       if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
     }
@@ -96,7 +96,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   override def endOffsetFor(requestedEpoch: Int): Long = {
     inReadLock(lock) {
       val offset =
-        if (requestedEpoch == latestEpoch) {
+        if (requestedEpoch == latestUsedEpoch) {
           leo().messageOffset
         }
         else {
@@ -178,10 +178,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"NewEpoch->Offset{epoch:$epoch, offset:$offset}, ExistingEpoch->Offset:{epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"NewEpoch->Offset{epoch:$epoch, offset:$offset}, ExistingEpoch->Offset:{epoch:$latestUsedEpoch, offset$latestOffset} for Partition: $topicPartition"
 
   def maybeWarn(epoch: Int, offset: Long) = {
-    if (epoch < latestEpoch())
+    if (epoch < latestUsedEpoch())
       warn(s"Received a PartitionLeaderEpoch Assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
     else if (epoch < 0)
@@ -208,9 +208,9 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   }
 
   /**
-    * If there is a cached epoch, it will be assigned to the LEO.
+    * If there is a cached epoch, associate its start offset with the current log end offset if it's not in the epoch list yet.
     */
-  override def assignCachedEpochToLeoIfPresent() = {
+  override def maybeAssignLatestCachedEpochToLeo() = {
     inWriteLock(lock) {
       if (cachedLatestEpoch == None) error("Attempt to assign log end offset to epoch before epoch has been set. This should never happen.")
       cachedLatestEpoch.foreach { epoch =>

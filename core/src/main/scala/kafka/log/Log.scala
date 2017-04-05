@@ -471,7 +471,7 @@ class Log(@volatile var dir: File,
           appendInfo.firstOffset = offset.value
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
-            epochCache.assignCachedEpochToLeoIfPresent()
+            epochCache.maybeAssignLatestCachedEpochToLeo()
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
                                                           offset,
                                                           now,
@@ -481,7 +481,7 @@ class Log(@volatile var dir: File,
                                                           config.messageFormatVersion.messageFormatVersion,
                                                           config.messageTimestampType,
                                                           config.messageTimestampDifferenceMaxMs,
-                                                          epochCache.latestEpoch())
+                                                          epochCache.latestUsedEpoch())
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
