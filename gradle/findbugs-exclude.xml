@@ -63,14 +63,6 @@
     </Match>
 
     <Match>
-        <!-- Suppress warnings about comparing a config string to
-             ConfigDef.NO_DEFAULT_VALUE using object equality.  This is intentional. -->
-        <Class name="org.apache.kafka.connect.runtime.AbstractHerder"/>
-        <Method name="convertConfigKey"/>
-        <Bug pattern="ES_COMPARING_STRINGS_WITH_EQ"/>
-    </Match>
-
-    <Match>
         <!-- Suppress warnings about ignoring the return value of await.
              This is done intentionally because we use other clues to determine
              if the wait was cut short. -->
@@ -93,6 +85,64 @@
         <!-- Suppress some inconsistent synchronization warnings.  TODO: fix these.  See
              KAFKA-4994. -->
         <Class name="org.apache.kafka.connect.storage.OffsetStorageWriter"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about intentional switch statement fallthrough. -->
+        <Class name="org.apache.kafka.common.security.authenticator.SaslClientAuthenticator"/>
+        <Method name="authenticate"/>
+        <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about a missing default case. -->
+        <Or>
+            <Class name="org.apache.kafka.common.utils.Crc32"/>
+            <Class name="org.apache.kafka.common.utils.PureJavaCrc32C"/>
+        </Or>
+        <Method name="update"/>
+        <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about intentional missing default cases and fallthroughs. -->
+        <Class name="org.apache.kafka.common.utils.Utils"/>
+        <Method name="murmur2"/>
+        <Or>
+            <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
+            <Bug pattern="SF_SWITCH_FALLTHROUGH"/>
+        </Or>
+    </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about locks not being released on all paths.
+             This happens because there is an 'if' statement that checks if we have the lock before
+             releasing it. -->
+        <Class name="org.apache.kafka.clients.producer.internals.BufferPool"/>
+        <Method name="allocate"/>
+        <Bug pattern="UL_UNRELEASED_LOCK"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress warnings about synchronizing on the UnsentRequests
+             ConcurrentHashMap.  This is done deliberately. -->
+        <Package name="org.apache.kafka.clients.consumer.internals"/>
+        <Source name="ConsumerNetworkClient.java"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress inconsistent synchronization warnings about KerberosLogin#login.
+             See KAFKA-4991 for details. -->
+        <Class name="org.apache.kafka.common.security.kerberos.KerberosLogin"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress inconsistent synchronization warnings about
+             AbstractCoordinator#coordinator.  See KAFKA-4992 for details.-->
+        <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
     </Match>
 </FindBugsFilter>
