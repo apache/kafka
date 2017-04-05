@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.test.MockProcessorContext;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -68,9 +69,13 @@ public class CachingKeyValueStoreTest {
         store.init(context, null);
     }
 
+    @After
+    public void after() {
+        context.close();
+    }
+
     @Test
     public void shouldPutGetToFromCache() throws Exception {
-        context.close();
         store.put("key", "value");
         store.put("key2", "value2");
         assertEquals("value", store.get("key"));

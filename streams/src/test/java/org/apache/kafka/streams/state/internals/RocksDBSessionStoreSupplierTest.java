@@ -107,11 +107,14 @@ public class RocksDBSessionStoreSupplierTest {
                                                                       Serdes.String(),
                                                                       collector,
                                                                       cache);
-        context.setTime(1);
-        store.init(context, store);
-        store.put(new Windowed<>("a", new SessionWindow(0, 10)), "b");
-        assertTrue(logged.isEmpty());
-        context.close();
+        try {
+            context.setTime(1);
+            store.init(context, store);
+            store.put(new Windowed<>("a", new SessionWindow(0, 10)), "b");
+            assertTrue(logged.isEmpty());
+        } finally {
+            context.close();
+        }
     }
 
     @Test
