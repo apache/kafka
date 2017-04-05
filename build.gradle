@@ -128,7 +128,7 @@ subprojects {
   apply plugin: 'checkstyle'
   apply plugin: 'findbugs'
 
-  sourceCompatibility = 1.7
+  sourceCompatibility = 1.8
 
   compileJava {
     options.encoding = 'UTF-8'
