@@ -212,6 +212,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     */
   override def assignCachedEpochToLeoIfPresent() = {
     inWriteLock(lock) {
+      if (cachedLatestEpoch == None) error("Attempt to assign log end offset to epoch before epoch has been set. This should never happen.")
       cachedLatestEpoch.foreach { epoch =>
         assign(epoch, leo().messageOffset)
       }
