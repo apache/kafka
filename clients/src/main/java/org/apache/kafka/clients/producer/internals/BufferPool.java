@@ -112,8 +112,9 @@ public class BufferPool {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request
                 freeUp(size);
+                ByteBuffer allocatedBuffer = allocateByteBuffer(size);
                 this.availableMemory -= size;
-                return allocateByteBuffer(size);
+                return allocatedBuffer;
             } else {
                 // we are out of memory and will have to block
                 int accumulated = 0;
