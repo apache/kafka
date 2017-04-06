@@ -18,6 +18,7 @@
 package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
+import java.util
 import java.util.Properties
 
 import kafka.admin.AdminUtils
@@ -33,7 +34,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.test.StubDeserializer
+import org.apache.kafka.common.serialization.Deserializer
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 
@@ -397,5 +398,13 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
       config.setProperty(KafkaConfig.LogMessageFormatVersionProp, KAFKA_0_11_0_IV1.version)
     }
     createServer(fromProps(config))
+  }
+
+  private class StubDeserializer extends Deserializer[Array[Byte]] {
+    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {}
+
+    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = { data }
+
+    override def close(): Unit = {}
   }
 }
