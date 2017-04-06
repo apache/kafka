@@ -75,6 +75,25 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         public int compareTo(final AssignedPartition that) {
             return PARTITION_COMPARATOR.compare(this.partition, that.partition);
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            AssignedPartition that = (AssignedPartition) o;
+
+            if (taskId != null ? !taskId.equals(that.taskId) : that.taskId != null) return false;
+            return partition != null ? partition.equals(that.partition) : that.partition == null;
+
+        }
+
+        @Override
+        public int hashCode() {
+            int result = taskId != null ? taskId.hashCode() : 0;
+            result = 31 * result + (partition != null ? partition.hashCode() : 0);
+            return result;
+        }
     }
 
     private static class ClientMetadata {
