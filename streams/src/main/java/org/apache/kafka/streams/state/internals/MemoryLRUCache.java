@@ -75,7 +75,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (size() > maxCacheSize) {
+                if (super.size() > maxCacheSize) {
                     K key = eldest.getKey();
                     if (listener != null) listener.apply(key, eldest.getValue());
                     return true;
