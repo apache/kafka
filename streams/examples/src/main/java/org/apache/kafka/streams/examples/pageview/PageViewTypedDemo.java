@@ -41,12 +41,13 @@ import java.util.Properties;
  * using specific data types (here: JSON POJO; but can also be Avro specific bindings, etc.) for serdes
  * in Kafka Streams.
  *
- * In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
+ * In this example, we join a stream of pageviews (aka clickstreams) that reads from a topic named "streams-pageview-input"
  * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
  * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
  *
- * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
- * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * Before running this example you must create the input topics and the output topic (e.g. via
+ * bin/kafka-topics.sh --create ...), and write some data to the input topics (e.g. via
+ * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class PageViewTypedDemo {
 
