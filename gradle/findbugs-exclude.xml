@@ -145,4 +145,28 @@
         <Class name="org.apache.kafka.clients.consumer.internals.AbstractCoordinator"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
     </Match>
+
+    <Match>
+        <!-- Suppress warnings about implementing compareTo but not equals. -->
+        <Class name="org.apache.kafka.streams.processor.internals.Stamped"/>
+        <Bug pattern="EQ_COMPARETO_USE_OBJECT_EQUALS"/>
+    </Match>
+
+    <Match>
+        <!-- TODO: fix this (see KAFKA-4996) -->
+        <Class name="org.apache.kafka.streams.state.internals.Segments"/>
+        <Method name="getOrCreateSegment"/>
+        <Bug pattern="AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION"/>
+    </Match>
+
+    <Match>
+        <!-- TODO: fix this (see KAFKA-4996) -->
+        <Or>
+            <Package name="org.apache.kafka.streams.state.internals"/>
+            <Package name="org.apache.kafka.streams.processor.internals"/>
+            <Package name="org.apache.kafka.streams.processor"/>
+            <Package name="org.apache.kafka.streams"/>
+        </Or>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
 </FindBugsFilter>
