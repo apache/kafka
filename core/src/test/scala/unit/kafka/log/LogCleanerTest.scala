@@ -819,9 +819,10 @@ class LogCleanerTest extends JUnitSuite {
 
 
   def record(key: Int, value: Int, pid: Long = RecordBatch.NO_PRODUCER_ID, epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-             sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
+             sequence: Int = RecordBatch.NO_SEQUENCE,
+             partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
     MemoryRecords.withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, pid, epoch, sequence,
-      new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
+      partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
   def record(key: Int, value: Array[Byte]): MemoryRecords =

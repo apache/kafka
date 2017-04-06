@@ -49,10 +49,10 @@ private[kafka] object LogValidator extends Logging {
                                                       sourceCodec: CompressionCodec,
                                                       targetCodec: CompressionCodec,
                                                       compactedTopic: Boolean = false,
-                                                      magic: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+                                                      magic: Byte,
                                                       timestampType: TimestampType,
                                                       timestampDiffMaxMs: Long,
-                                                      partitionLeaderEpoch: Int = RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH): ValidationAndOffsetAssignResult = {
+                                                      partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))

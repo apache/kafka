@@ -100,7 +100,7 @@ public class MemoryRecordsTest {
                     assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
                     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
                     assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
-                    assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
+                    assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                     assertNull(batch.countOrNull());
                     if (magic == RecordBatch.MAGIC_VALUE_V0)
                         assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());

@@ -303,7 +303,7 @@ public class MemoryRecords extends AbstractRecords {
                                                long baseOffset,
                                                long logAppendTime) {
         return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH);
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -327,7 +327,7 @@ public class MemoryRecords extends AbstractRecords {
                                                short producerEpoch,
                                                int baseSequence) {
         return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                producerId, producerEpoch, baseSequence, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH);
+                producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -359,20 +359,20 @@ public class MemoryRecords extends AbstractRecords {
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                             long producerId, short producerEpoch, int baseSequence,
-                                            SimpleRecord... records) {
+                                            int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compressionType, TimestampType.CREATE_TIME, producerId, producerEpoch,
-                baseSequence, records);
+                baseSequence, partitionLeaderEpoch, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                             TimestampType timestampType, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compressionType, timestampType, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, records);
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH, records);
     }
 
     private static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                              TimestampType timestampType, long producerId, short producerEpoch,
-                                             int baseSequence, SimpleRecord ... records) {
+                                             int baseSequence, int partitionLeaderEpoch, SimpleRecord ... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
@@ -381,7 +381,7 @@ public class MemoryRecords extends AbstractRecords {
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
         MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence);
+                logAppendTime, producerId, producerEpoch, baseSequence, partitionLeaderEpoch);
         for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();
