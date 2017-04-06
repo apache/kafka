@@ -25,11 +25,19 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class MockDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
-    public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
-    public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
-    public static final AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
-    public static final ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
-    public static final AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_DESERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
+    public static AtomicInteger INIT_COUNT = new AtomicInteger(0);
+    public static AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
+    public static AtomicReference<ClusterResource> CLUSTER_META = new AtomicReference<>();
+    public static ClusterResource NO_CLUSTER_ID = new ClusterResource("no_cluster_id");
+    public static AtomicReference<ClusterResource> CLUSTER_ID_BEFORE_DESERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
+
+    public static void resetStaticVariables() {
+        INIT_COUNT = new AtomicInteger(0);
+        CLOSE_COUNT = new AtomicInteger(0);
+        CLUSTER_META = new AtomicReference<>();
+        new ClusterResource("no_cluster_id");
+        CLUSTER_ID_BEFORE_DESERIALIZE = new AtomicReference<>(NO_CLUSTER_ID);
+    }
 
     public MockDeserializer() {
         INIT_COUNT.incrementAndGet();

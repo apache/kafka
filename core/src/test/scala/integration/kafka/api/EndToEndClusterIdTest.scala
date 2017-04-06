@@ -112,6 +112,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp
+    MockDeserializer.resetStaticVariables
     // create the consumer offset topic
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
   }
