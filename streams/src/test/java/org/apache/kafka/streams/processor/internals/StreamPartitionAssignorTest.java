@@ -799,25 +799,25 @@ public class StreamPartitionAssignorTest {
 
     @Test
     public void shouldCreateAllTasksAndInternalTopicIfAllInputTopicsAreKnown() {
-        runMetadataTest("topic1", true, "topic3", true);
+        assertThatPartitionsAreAssignedAndInternalTopicsAreCreated("topic1", true, "topic3", true);
     }
 
     @Test
     public void shouldNotLoopInfinitelyOnPartlyMissingMetadataAndShouldNotCreateRelatedTasks1() {
-        runMetadataTest("topic1", true, "unknownTopic", false);
+        assertThatPartitionsAreAssignedAndInternalTopicsAreCreated("topic1", true, "unknownTopic", false);
     }
 
     @Test
     public void shouldNotLoopInfinitelyOnPartlyMissingMetadataAndShouldNotCreateRelatedTasks2() {
-        runMetadataTest("unknownTopic", false, "topic3", true);
+        assertThatPartitionsAreAssignedAndInternalTopicsAreCreated("unknownTopic", false, "topic3", true);
     }
 
     @Test
     public void shouldNotLoopInfinitelyOnMissingMetadataForAllInputTopicsAndShouldNotCreateRelatedTasks() {
-        runMetadataTest("unknownTopic1", false, "unknownTopic2", false);
+        assertThatPartitionsAreAssignedAndInternalTopicsAreCreated("unknownTopic1", false, "unknownTopic2", false);
     }
 
-    private void runMetadataTest(
+    private void assertThatPartitionsAreAssignedAndInternalTopicsAreCreated(
         final String sourceTopic1,
         final boolean src1Known,
         final String sourceTopic2,

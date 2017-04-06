@@ -337,6 +337,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                         }
                                     }
 
+                                    // assign NOT_AVAILABLE to avoid infinite loop and to propagate this information downstream
                                     if (numPartitionsCandidate == NOT_AVAILABLE || numPartitionsCandidate > numPartitions) {
                                         numPartitions = numPartitionsCandidate;
                                     }
@@ -345,16 +346,17 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         }
                         // if we still have not find the right number of partitions,
                         // another iteration is needed
-                        if (numPartitions == UNKNOWN)
+                        if (numPartitions == UNKNOWN) {
                             numPartitionsNeeded = true;
-                        else
+                        } else {
                             repartitionTopicMetadata.get(topicName).numPartitions = numPartitions;
+                        }
                     }
                 }
             }
         } while (numPartitionsNeeded);
 
-        // ensure the co-partitioning topics within the group have the same number of partitions,
+        // ensure the co-partitioning of topics within the group so that they have the same number of partitions,
         // and enforce the number of partitions for those repartition topics to be the same if they
         // are co-partitioned as well.
         ensureCopartitioning(streamThread.builder.copartitionGroups(), repartitionTopicMetadata, metadata);
