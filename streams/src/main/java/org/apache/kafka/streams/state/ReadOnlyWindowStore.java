@@ -49,8 +49,8 @@ public interface ReadOnlyWindowStore<K, V> {
      * |   A   |     25     |    35    |
      * +--------------------------------
      * </pre>
-     * And we called {@code store.fetch("A", 10, 20)} then the results will contain the first
-     * three windows from the table above, i.e., all those were start time >= 10 and <= 20.
+     * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
+     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
      * 
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
