@@ -145,9 +145,9 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         return new OffsetsForLeaderEpochResponse(errorResponse);
     }
 
-    private class PartitionLeaderEpoch {
-        int partitionId;
-        int epoch;
+    private static class PartitionLeaderEpoch {
+        final int partitionId;
+        final int epoch;
 
         public PartitionLeaderEpoch(int partitionId, int epoch) {
             this.partitionId = partitionId;
