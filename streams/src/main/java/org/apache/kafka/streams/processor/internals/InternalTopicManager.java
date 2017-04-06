@@ -119,8 +119,8 @@ public class InternalTopicManager {
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
                 if (!existingTopicNamesPartitions.get(topic.name()).equals(topicsPartitionsMap.get(topic))) {
                     throw new StreamsException("Existing internal topic " + topic.name() + " has invalid partitions." +
-                        " Expected: " + topicsPartitionsMap.get(topic) + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
-                        ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
+                            " Expected: " + topicsPartitionsMap.get(topic) + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
+                            ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             } else {
                 topicsToBeCreated.put(topic, topicsPartitionsMap.get(topic));
