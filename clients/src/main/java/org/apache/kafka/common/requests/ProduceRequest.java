@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -77,7 +78,13 @@ public class ProduceRequest extends AbstractRequest {
 
     private final short acks;
     private final int timeout;
-    private final Map<TopicPartition, MemoryRecords> partitionRecords;
+
+    private final Map<TopicPartition, Integer> partitionSizes;
+
+    // This is set to null by `clearPartitionRecords` to prevent unnecessary memory retention when a produce request is
+    // put in the purgatory (due to client throttling, it can take a while before the response is sent).
+    // Care should be taken in methods that use this field.
+    private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.PRODUCE.id, version)), version);
@@ -103,6 +110,14 @@ public class ProduceRequest extends AbstractRequest {
         this.acks = acks;
         this.timeout = timeout;
         this.partitionRecords = partitionRecords;
+        this.partitionSizes = createPartitionSizes(partitionRecords);
+    }
+
+    private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
+        Map<TopicPartition, Integer> result = new HashMap<>(partitionRecords.size());
+        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
+            result.put(entry.getKey(), entry.getValue().sizeInBytes());
+        return result;
     }
 
     public ProduceRequest(Struct struct, short version) {
@@ -118,8 +133,21 @@ public class ProduceRequest extends AbstractRequest {
                 partitionRecords.put(new TopicPartition(topic, partition), records);
             }
         }
+        partitionSizes = createPartitionSizes(partitionRecords);
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
+    }
+
+    @Override
+    public String toString() {
+        // Use the same format as `Struct.toString()`
+        StringBuilder bld = new StringBuilder();
+        bld.append("{acks=").append(acks)
+                .append(",timeout=").append(timeout)
+                .append(",partitionSizes=")
+                .append(Utils.mkString(partitionSizes, "[", "]", "=", ","))
+                .append("}");
+        return bld.toString();
     }
 
     @Override
@@ -131,8 +159,8 @@ public class ProduceRequest extends AbstractRequest {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
         ProduceResponse.PartitionResponse partitionResponse = new ProduceResponse.PartitionResponse(Errors.forException(e));
 
-        for (Map.Entry<TopicPartition, MemoryRecords> entry : partitionRecords.entrySet())
-            responseMap.put(entry.getKey(), partitionResponse);
+        for (TopicPartition tp : partitions())
+            responseMap.put(tp, partitionResponse);
 
         short versionId = version();
         switch (versionId) {
@@ -147,6 +175,10 @@ public class ProduceRequest extends AbstractRequest {
         }
     }
 
+    private Collection<TopicPartition> partitions() {
+        return partitionSizes.keySet();
+    }
+
     public short acks() {
         return acks;
     }
@@ -155,13 +187,23 @@ public class ProduceRequest extends AbstractRequest {
         return timeout;
     }
 
-    public Map<TopicPartition, MemoryRecords> partitionRecords() {
+    /**
+     * Returns the partition records or throws IllegalStateException if clearPartitionRecords() has been invoked.
+     */
+    public Map<TopicPartition, MemoryRecords> partitionRecordsOrFail() {
+        // Store it in a local variable to protect against concurrent updates
+        Map<TopicPartition, MemoryRecords> partitionRecords = this.partitionRecords;
+        if (partitionRecords == null)
+            throw new IllegalStateException("The partition records are no longer available because " +
+                    "clearPartitionRecords() has been invoked.");
         return partitionRecords;
     }
 
     public void clearPartitionRecords() {
+        partitionRecords = null;
+        // It would be better to make this null, but the change is too large for 0.10.2. In trunk, the struct field
+        // was removed
         struct.clear();
-        partitionRecords.clear();
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
