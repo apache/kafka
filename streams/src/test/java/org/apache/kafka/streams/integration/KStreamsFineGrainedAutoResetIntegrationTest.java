@@ -58,13 +58,21 @@ import static org.junit.Assert.assertThat;
 public class KStreamsFineGrainedAutoResetIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
-    private static final String DEFAULT_OUTPUT_TOPIC_1 = "outputTopic";
-    private static final String DEFAULT_OUTPUT_TOPIC_2 = "outputTopic_2";
+    private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
+    private static final String OUTPUT_TOPIC_0 = "outputTopic_0";
+    private static final String OUTPUT_TOPIC_1 = "outputTopic_1";
+    private static final String OUTPUT_TOPIC_2 = "outputTopic_2";
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
     private final MockTime mockTime = CLUSTER.time;
 
+    private static final String TOPIC_1_0 = "topic-1_0";
+    private static final String TOPIC_2_0 = "topic-2_0";
+    private static final String TOPIC_A_0 = "topic-A_0";
+    private static final String TOPIC_C_0 = "topic-C_0";
+    private static final String TOPIC_Y_0 = "topic-Y_0";
+    private static final String TOPIC_Z_0 = "topic-Z_0";
     private static final String TOPIC_1_1 = "topic-1_1";
     private static final String TOPIC_2_1 = "topic-2_1";
     private static final String TOPIC_A_1 = "topic-A_1";
@@ -83,9 +91,22 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
 
+    private final String topic1TestMessage = "topic-1 test";
+    private final String topic2TestMessage = "topic-2 test";
+    private final String topicATestMessage = "topic-A test";
+    private final String topicCTestMessage = "topic-C test";
+    private final String topicYTestMessage = "topic-Y test";
+    private final String topicZTestMessage = "topic-Z test";
+
 
     @BeforeClass
     public static void startKafkaCluster() throws Exception {
+        CLUSTER.createTopic(TOPIC_1_0);
+        CLUSTER.createTopic(TOPIC_2_0);
+        CLUSTER.createTopic(TOPIC_A_0);
+        CLUSTER.createTopic(TOPIC_C_0);
+        CLUSTER.createTopic(TOPIC_Y_0);
+        CLUSTER.createTopic(TOPIC_Z_0);
         CLUSTER.createTopic(TOPIC_1_1);
         CLUSTER.createTopic(TOPIC_2_1);
         CLUSTER.createTopic(TOPIC_A_1);
@@ -99,8 +120,10 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         CLUSTER.createTopic(TOPIC_Y_2);
         CLUSTER.createTopic(TOPIC_Z_2);
         CLUSTER.createTopic(NOOP);
-        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC_1);
-        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC_2);
+        CLUSTER.createTopic(DEFAULT_OUTPUT_TOPIC);
+        CLUSTER.createTopic(OUTPUT_TOPIC_0);
+        CLUSTER.createTopic(OUTPUT_TOPIC_1);
+        CLUSTER.createTopic(OUTPUT_TOPIC_2);
     }
 
     @Before
@@ -121,90 +144,64 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsets() throws  Exception {
-        final KStreamBuilder builder = new KStreamBuilder();
+    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsetsWithGlobalAutoOffsetResetLatest() throws  Exception {
+        streamsConfiguration.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
 
-        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d_1"));
-        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]_1"));
-        final KStream<String, String> namedTopicsStream = builder.stream(TOPIC_Y_1, TOPIC_Z_1);
+        final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage);
+        shouldOnlyReadForEarliest("_0", TOPIC_1_0, TOPIC_2_0, TOPIC_A_0, TOPIC_C_0, TOPIC_Y_0, TOPIC_Z_0, OUTPUT_TOPIC_0, expectedReceivedValues);
+    }
 
-        pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_1);
-        pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_1);
-        namedTopicsStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_1);
-
-        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
-
-        final String topic1TestMessage = "topic-1 test";
-        final String topic2TestMessage = "topic-2 test";
-        final String topicATestMessage = "topic-A test";
-        final String topicCTestMessage = "topic-C test";
-        final String topicYTestMessage = "topic-Y test";
-        final String topicZTestMessage = "topic-Z test";
-
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1_1, Collections.singletonList(topic1TestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_2_1, Collections.singletonList(topic2TestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_A_1, Collections.singletonList(topicATestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_C_1, Collections.singletonList(topicCTestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Y_1, Collections.singletonList(topicYTestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Z_1, Collections.singletonList(topicZTestMessage), producerConfig, mockTime);
-
-        final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
-
-        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
-        streams.start();
-
+    @Test
+    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsetsWithDefaultGlobalAutoOffsetResetEarliest() throws  Exception {
         final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topicYTestMessage, topicZTestMessage);
-        final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC_1, 4);
-        final List<String> actualValues = new ArrayList<>(4);
-
-        for (final KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
-            actualValues.add(receivedKeyValue.value);
-        }
-
-        streams.close();
-        Collections.sort(actualValues);
-        Collections.sort(expectedReceivedValues);
-        assertThat(actualValues, equalTo(expectedReceivedValues));
+        shouldOnlyReadForEarliest("_1", TOPIC_1_1, TOPIC_2_1, TOPIC_A_1, TOPIC_C_1, TOPIC_Y_1, TOPIC_Z_1, OUTPUT_TOPIC_1, expectedReceivedValues);
     }
 
     @Test
     public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithInvalidCommittedOffsets() throws  Exception {
         commitInvalidOffsets();
 
+        final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topicYTestMessage, topicZTestMessage);
+        shouldOnlyReadForEarliest("_2", TOPIC_1_2, TOPIC_2_2, TOPIC_A_2, TOPIC_C_2, TOPIC_Y_2, TOPIC_Z_2, OUTPUT_TOPIC_2, expectedReceivedValues);
+    }
+
+    private void shouldOnlyReadForEarliest(
+        final String topicSuffix,
+        final String topic1,
+        final String topic2,
+        final String topicA,
+        final String topicC,
+        final String topicY,
+        final String topicZ,
+        final String outputTopic,
+        final List<String> expectedReceivedValues) throws Exception {
+
         final KStreamBuilder builder = new KStreamBuilder();
 
-        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d_2"));
-        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]_2"));
-        final KStream<String, String> namedTopicsStream = builder.stream(TOPIC_Y_2, TOPIC_Z_2);
+        final KStream<String, String> pattern1Stream = builder.stream(KStreamBuilder.AutoOffsetReset.EARLIEST, Pattern.compile("topic-\\d" + topicSuffix));
+        final KStream<String, String> pattern2Stream = builder.stream(KStreamBuilder.AutoOffsetReset.LATEST, Pattern.compile("topic-[A-D]" + topicSuffix));
+        final KStream<String, String> namedTopicsStream = builder.stream(topicY, topicZ);
 
-        pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_2);
-        pattern2Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_2);
-        namedTopicsStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_2);
+        pattern1Stream.to(stringSerde, stringSerde, outputTopic);
+        pattern2Stream.to(stringSerde, stringSerde, outputTopic);
+        namedTopicsStream.to(stringSerde, stringSerde, outputTopic);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
-        final String topic1TestMessage = "topic-1 test";
-        final String topic2TestMessage = "topic-2 test";
-        final String topicATestMessage = "topic-A test";
-        final String topicCTestMessage = "topic-C test";
-        final String topicYTestMessage = "topic-Y test";
-        final String topicZTestMessage = "topic-Z test";
-
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1_2, Collections.singletonList(topic1TestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_2_2, Collections.singletonList(topic2TestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_A_2, Collections.singletonList(topicATestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_C_2, Collections.singletonList(topicCTestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Y_2, Collections.singletonList(topicYTestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Z_2, Collections.singletonList(topicZTestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(topic1, Collections.singletonList(topic1TestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(topic2, Collections.singletonList(topic2TestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(topicA, Collections.singletonList(topicATestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(topicC, Collections.singletonList(topicCTestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(topicY, Collections.singletonList(topicYTestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(topicZ, Collections.singletonList(topicZTestMessage), producerConfig, mockTime);
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
         streams.start();
 
-        final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topicYTestMessage, topicZTestMessage);
-        final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC_2, 4);
-        final List<String> actualValues = new ArrayList<>(4);
+        final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, expectedReceivedValues.size());
+        final List<String> actualValues = new ArrayList<>(expectedReceivedValues.size());
 
         for (final KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
             actualValues.add(receivedKeyValue.value);
@@ -273,7 +270,7 @@ public class KStreamsFineGrainedAutoResetIntegrationTest {
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<String, String> exceptionStream = builder.stream(NOOP);
 
-        exceptionStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC_1);
+        exceptionStream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
         KafkaStreams streams = new KafkaStreams(builder, localConfig);
 
