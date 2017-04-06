@@ -67,8 +67,7 @@ object ApiVersion {
     "0.11.0-IV0" -> KAFKA_0_11_0_IV0,
     // introduced DeleteRecordsRequest v0 and FetchRequest v4 in KIP-107
     "0.11.0-IV1" -> KAFKA_0_11_0_IV1,
-    "0.11.0" -> KAFKA_0_11_0_IV1,
-    // Introduce leader epoch fetches to the replica fetcher via KIP-101
+    // Introduced leader epoch fetches to the replica fetcher via KIP-101
     "0.11.0-IV2" -> KAFKA_0_11_0_IV2,
     "0.11.0" -> KAFKA_0_11_0_IV2
   )
