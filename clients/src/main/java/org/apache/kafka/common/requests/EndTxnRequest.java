@@ -24,8 +24,8 @@ import java.nio.ByteBuffer;
 
 public class EndTxnRequest extends AbstractRequest {
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
@@ -66,7 +66,7 @@ public class EndTxnRequest extends AbstractRequest {
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
         this.pid = struct.getLong(PID_KEY_NAME);
         this.epoch = struct.getShort(EPOCH_KEY_NAME);
-        this.result = TransactionResult.forId(struct.getByte(TRANSACTION_RESULT_KEY_NAME));
+        this.result = TransactionResult.forId(struct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
     }
 
     public String transactionalId() {

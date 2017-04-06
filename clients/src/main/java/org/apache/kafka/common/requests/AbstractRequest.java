@@ -186,7 +186,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 request = new EndTxnRequest(struct, version);
                 break;
             case WRITE_TXN_MARKER:
-                request = new WriteTxnMarkerRequest(struct, version);
+                request = new WriteTxnMarkersRequest(struct, version);
                 break;
             case TXN_OFFSET_COMMIT:
                 request = new TxnOffsetCommitRequest(struct, version);

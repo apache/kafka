@@ -26,11 +26,11 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class WriteTxnMarkerResponse extends AbstractResponse {
+public class WriteTxnMarkersResponse extends AbstractResponse {
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
 
-    private static final String PID_KEY_NAME = "pid";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_KEY_NAME = "partition";
@@ -49,11 +49,11 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
 
     private final Map<Long, Map<TopicPartition, Errors>> errors;
 
-    public WriteTxnMarkerResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
+    public WriteTxnMarkersResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
         this.errors = errors;
     }
 
-    public WriteTxnMarkerResponse(Struct struct) {
+    public WriteTxnMarkersResponse(Struct struct) {
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
 
         Object[] responseArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
@@ -123,8 +123,8 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
         return errors.get(pid);
     }
 
-    public static WriteTxnMarkerResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkerResponse(ApiKeys.WRITE_TXN_MARKER.parseResponse(version, buffer));
+    public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
+        return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKER.parseResponse(version, buffer));
     }
 
 }

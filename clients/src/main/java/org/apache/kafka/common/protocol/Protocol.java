@@ -1291,13 +1291,7 @@ public class Protocol {
     public static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
             new Field("error_code",
                     INT16,
-                    "An integer error code."),
-            new Field("coordinator",
-                    new ArrayOf(new Schema(
-                            new Field("node_id", INT32, "The broker id."),
-                            new Field("host", STRING, "The hostname of the broker."),
-                            new Field("port", INT32, "The port on which the broker accepts requests."))),
-                    "The coordinator for this ongoing transaction.")
+                    "An integer error code.")
     );
 
     public static final Schema[] ADD_OFFSETS_TO_TXN_REQUEST = new Schema[] {ADD_OFFSETS_TO_TXN_REQUEST_V0};
@@ -1315,7 +1309,7 @@ public class Protocol {
                     "Current epoch associated with the producer id."),
             new Field("transaction_result",
                     BOOLEAN,
-                    "The result of the transaction (0 = COMMIT, 1 = ABORT)")
+                    "The result of the transaction (0 = ABORT, 1 = COMMIT)")
     );
 
     public static final Schema END_TXN_RESPONSE_V0 = new Schema(
@@ -1335,8 +1329,8 @@ public class Protocol {
                     INT16,
                     "Current epoch associated with the producer id."),
             new Field("transaction_result",
-                    INT8,
-                    "The result of the transaction to write to the partitions (0 = COMMIT, 1 = ABORT)."),
+                    BOOLEAN,
+                    "The result of the transaction to write to the partitions (false = ABORT, true = COMMIT)."),
             new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),

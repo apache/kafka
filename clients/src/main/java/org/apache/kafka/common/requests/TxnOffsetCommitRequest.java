@@ -28,10 +28,10 @@ import java.util.Map;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
     private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
-    private static final String PID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String RETENTION_TIME_KEY_NAME = "retention_time";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String PARTITION_KEY_NAME = "partition";

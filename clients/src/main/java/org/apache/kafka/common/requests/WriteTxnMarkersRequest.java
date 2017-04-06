@@ -28,14 +28,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class WriteTxnMarkerRequest extends AbstractRequest {
+public class WriteTxnMarkersRequest extends AbstractRequest {
     private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
 
-    private static final String PID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
@@ -69,7 +69,7 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
         }
     }
 
-    public static class Builder extends AbstractRequest.Builder<WriteTxnMarkerRequest> {
+    public static class Builder extends AbstractRequest.Builder<WriteTxnMarkersRequest> {
         private final int coordinatorEpoch;
         private final List<TxnMarkerEntry> markers;
 
@@ -81,22 +81,22 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
         }
 
         @Override
-        public WriteTxnMarkerRequest build(short version) {
-            return new WriteTxnMarkerRequest(version, coordinatorEpoch, markers);
+        public WriteTxnMarkersRequest build(short version) {
+            return new WriteTxnMarkersRequest(version, coordinatorEpoch, markers);
         }
     }
 
     private final int coordinatorEpoch;
     private final List<TxnMarkerEntry> markers;
 
-    private WriteTxnMarkerRequest(short version, int coordinatorEpoch, List<TxnMarkerEntry> markers) {
+    private WriteTxnMarkersRequest(short version, int coordinatorEpoch, List<TxnMarkerEntry> markers) {
         super(version);
 
         this.markers = markers;
         this.coordinatorEpoch = coordinatorEpoch;
     }
 
-    public WriteTxnMarkerRequest(Struct struct, short version) {
+    public WriteTxnMarkersRequest(Struct struct, short version) {
         super(version);
         this.coordinatorEpoch = struct.getInt(COORDINATOR_EPOCH_KEY_NAME);
 
@@ -107,7 +107,7 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
 
             long pid = markerStruct.getLong(PID_KEY_NAME);
             short epoch = markerStruct.getShort(EPOCH_KEY_NAME);
-            TransactionResult result = TransactionResult.forId(markerStruct.getByte(TRANSACTION_RESULT_KEY_NAME));
+            TransactionResult result = TransactionResult.forId(markerStruct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
 
             List<TopicPartition> partitions = new ArrayList<>();
             Object[] topicPartitionsArray = markerStruct.getArray(TOPIC_PARTITIONS_KEY_NAME);
@@ -127,6 +127,10 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
 
     public int coordinatorEpoch() {
         return coordinatorEpoch;
+    }
+
+    public List<TxnMarkerEntry> markers() {
+        return markers;
     }
 
     @Override
@@ -160,7 +164,7 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
     }
 
     @Override
-    public WriteTxnMarkerResponse getErrorResponse(Throwable e) {
+    public WriteTxnMarkersResponse getErrorResponse(Throwable e) {
         Errors error = Errors.forException(e);
 
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>(markers.size());
@@ -172,11 +176,11 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
             errors.put(entry.pid, errorsPerPartition);
         }
 
-        return new WriteTxnMarkerResponse(errors);
+        return new WriteTxnMarkersResponse(errors);
     }
 
-    public static WriteTxnMarkerRequest parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkerRequest(ApiKeys.WRITE_TXN_MARKER.parseRequest(version, buffer), version);
+    public static WriteTxnMarkersRequest parse(ByteBuffer buffer, short version) {
+        return new WriteTxnMarkersRequest(ApiKeys.WRITE_TXN_MARKER.parseRequest(version, buffer), version);
     }
 
 }

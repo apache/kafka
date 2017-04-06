@@ -40,7 +40,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords, TimestampType}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -1328,27 +1328,25 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTxnRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException("Not implemented yet.")
-  }
-
-  def handleAbortTxnRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException("Not implemented yet.")
+    requestChannel.sendResponse(new RequestChannel.Response(request, new EndTxnResponse(Errors.UNSUPPORTED_VERSION)))
   }
 
   def handleAddPartitionToTxnRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException("Not implemented yet.")
+    requestChannel.sendResponse(new RequestChannel.Response(request, new AddPartitionsToTxnResponse(Errors.UNSUPPORTED_VERSION)))
   }
 
   def handleAddOffsetsToTxnRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException("Not implemented yet.")
+    requestChannel.sendResponse(new RequestChannel.Response(request, new AddOffsetsToTxnResponse(Errors.UNSUPPORTED_VERSION)))
   }
 
   def handleWriteTxnMarkerRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException("Not implemented yet.")
+    val emptyResponse = new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
+    requestChannel.sendResponse(new RequestChannel.Response(request, new WriteTxnMarkersResponse(emptyResponse)))
   }
 
   def handleTxnOffsetCommitRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException("Not implemented yet.")
+    val emptyResponse = new java.util.HashMap[TopicPartition, Errors]()
+    requestChannel.sendResponse(new RequestChannel.Response(request, new TxnOffsetCommitResponse(emptyResponse)))
   }
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
