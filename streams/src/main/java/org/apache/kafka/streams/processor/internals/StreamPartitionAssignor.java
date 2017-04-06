@@ -333,11 +333,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                                     } else {
                                         numPartitionsCandidate = metadata.partitionCountForTopic(sourceTopicName);
                                         if (numPartitionsCandidate == null) {
-                                            repartitionTopicMetadata.get(topicName).numPartitions = NOT_AVAILABLE;
+                                            numPartitionsCandidate = NOT_AVAILABLE;
                                         }
                                     }
 
-                                    if (numPartitionsCandidate != null && numPartitionsCandidate > numPartitions) {
+                                    if (numPartitionsCandidate == NOT_AVAILABLE || numPartitionsCandidate > numPartitions) {
                                         numPartitions = numPartitionsCandidate;
                                     }
                                 }
@@ -354,6 +354,11 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
             }
         } while (numPartitionsNeeded);
 
+        // ensure the co-partitioning topics within the group have the same number of partitions,
+        // and enforce the number of partitions for those repartition topics to be the same if they
+        // are co-partitioned as well.
+        ensureCopartitioning(streamThread.builder.copartitionGroups(), repartitionTopicMetadata, metadata);
+
         // augment the metadata with the newly computed number of partitions for all the
         // repartition source topics
         Map<TopicPartition, PartitionInfo> allRepartitionTopicPartitions = new HashMap<>();
@@ -366,11 +371,6 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                         new PartitionInfo(topic, partition, null, new Node[0], new Node[0]));
             }
         }
-
-        // ensure the co-partitioning topics within the group have the same number of partitions,
-        // and enforce the number of partitions for those repartition topics to be the same if they
-        // are co-partitioned as well.
-        ensureCopartitioning(streamThread.builder.copartitionGroups(), repartitionTopicMetadata, metadata);
 
         // make sure the repartition source topics exist with the right number of partitions,
         // create these topics if necessary

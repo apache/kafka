@@ -798,7 +798,31 @@ public class StreamPartitionAssignorTest {
     }
 
     @Test
-    public void shouldNotLoopInfinitelyOnMissingMetadataAndShouldNotCreateRelatedTasks() {
+    public void shouldCreateAllTasksAndInternalTopicIfAllInputTopicsAreKnown() {
+        runMetadataTest("topic1", true, "topic3", true);
+    }
+
+    @Test
+    public void shouldNotLoopInfinitelyOnPartlyMissingMetadataAndShouldNotCreateRelatedTasks1() {
+        runMetadataTest("topic1", true, "unknownTopic", false);
+    }
+
+    @Test
+    public void shouldNotLoopInfinitelyOnPartlyMissingMetadataAndShouldNotCreateRelatedTasks2() {
+        runMetadataTest("unknownTopic", false, "topic3", true);
+    }
+
+    @Test
+    public void shouldNotLoopInfinitelyOnMissingMetadataForAllInputTopicsAndShouldNotCreateRelatedTasks() {
+        runMetadataTest("unknownTopic1", false, "unknownTopic2", false);
+    }
+
+    private void runMetadataTest(
+        final String sourceTopic1,
+        final boolean src1Known,
+        final String sourceTopic2,
+        final boolean src2Known) {
+
         final String applicationId = "application-id";
 
         final KStreamBuilder builder = new KStreamBuilder();
@@ -806,9 +830,11 @@ public class StreamPartitionAssignorTest {
 
         KStream<Object, Object> stream1 = builder
 
-            // Task 1 (should get created):
-            .stream("topic1")
+            // Task 1 (should get created if `sourceTopic1` is known)
+            .stream(sourceTopic1)
+
             // force repartitioning for aggregation
+            // -> should create internal repartitioning topic only if `sourceTopic1` is known
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
                 @Override
                 public Object apply(Object key, Object value) {
@@ -817,12 +843,13 @@ public class StreamPartitionAssignorTest {
             })
             .groupByKey()
 
-            // Task 2 (should get created):
-            // create repartioning and changelog topic as task 1 exists
+            // Task 2 (should only get created if `sourceTopic1` is known):
+            // -> create repartioning and changelog topic if task2 is created
             .count("count")
 
-            // force repartitioning for join, but second join input topic unknown
-            // -> internal repartitioning topic should not get created
+            // force repartitioning for join
+            // -> internal repartitioning topic should only be create if `sourceTopic1` and sourceTopic2` are both known
+            // (cf. Task4 below)
             .toStream()
             .map(new KeyValueMapper<Object, Long, KeyValue<Object, Object>>() {
                 @Override
@@ -832,11 +859,11 @@ public class StreamPartitionAssignorTest {
             });
 
         builder
-            // Task 3 (should not get created because input topic unknown)
-            .stream("unknownTopic")
+            // Task 3 (should get created if `sourceTopic2` is known)
+            .stream(sourceTopic2)
 
-            // force repartitioning for join, but input topic unknown
-            // -> thus should not create internal repartitioning topic
+            // force repartitioning for join
+            // -> should create internal repartitioning topic only if `sourceTopic2` is known
             .selectKey(new KeyValueMapper<Object, Object, Object>() {
                 @Override
                 public Object apply(Object key, Object value) {
@@ -844,8 +871,8 @@ public class StreamPartitionAssignorTest {
                 }
             })
 
-            // Task 4 (should not get created because input topics unknown)
-            // should not create any of both input repartition topics or any of both changelog topics
+            // Task 4 (should only get created if `sourceTopic1` and `sourceTopic2` are both known)
+            // -> should create of both input repartition topics if task4 is created
             .join(
                 stream1,
                 new ValueJoiner() {
@@ -877,20 +904,51 @@ public class StreamPartitionAssignorTest {
         );
         final Map<String, PartitionAssignor.Assignment> assignment = partitionAssignor.assign(metadata, subscriptions);
 
+        final HashSet<TopicPartition> expectedAssignment = new HashSet<>();
         final Map<String, Integer> expectedCreatedInternalTopics = new HashMap<>();
-        expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
-        expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
-        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
+        if (src1Known) {
+            expectedAssignment.add(new TopicPartition(sourceTopic1, 0));
+            expectedAssignment.add(new TopicPartition(sourceTopic1, 1));
+            expectedAssignment.add(new TopicPartition(sourceTopic1, 2));
 
-        final List<TopicPartition> expectedAssignment = Arrays.asList(
-            new TopicPartition("topic1", 0),
-            new TopicPartition("topic1", 1),
-            new TopicPartition("topic1", 2),
-            new TopicPartition(applicationId + "-count-repartition", 0),
-            new TopicPartition(applicationId + "-count-repartition", 1),
-            new TopicPartition(applicationId + "-count-repartition", 2)
-        );
-        assertThat(new HashSet(assignment.get(client).partitions()), equalTo(new HashSet(expectedAssignment)));
+            // force repartitioning for aggregation (selectKey() on `sourceTopic1`)
+            expectedAssignment.add(new TopicPartition(applicationId + "-count-repartition", 0));
+            expectedAssignment.add(new TopicPartition(applicationId + "-count-repartition", 1));
+            expectedAssignment.add(new TopicPartition(applicationId + "-count-repartition", 2));
+            expectedCreatedInternalTopics.put(applicationId + "-count-repartition", 3);
+
+            // changelog topic for groupBy-count on `sourceTopic1`
+            expectedCreatedInternalTopics.put(applicationId + "-count-changelog", 3);
+        }
+        if (src2Known) {
+            expectedAssignment.add(new TopicPartition(sourceTopic2, 0));
+            expectedAssignment.add(new TopicPartition(sourceTopic2, 1));
+            expectedAssignment.add(new TopicPartition(sourceTopic2, 2));
+            expectedAssignment.add(new TopicPartition(sourceTopic2, 3));
+        }
+        if (src1Known && src2Known) {
+            // force repartitioning for join (map() after groupBY-count on `sourceTopic1`)
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-MAP-0000000007-repartition", 0));
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-MAP-0000000007-repartition", 1));
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-MAP-0000000007-repartition", 2));
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-MAP-0000000007-repartition", 3));
+            expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-MAP-0000000007-repartition", 4);
+
+            // force repartitioning for join (selectKey() on `sourceTopic2`)
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-KEY-SELECT-0000000009-repartition", 0));
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-KEY-SELECT-0000000009-repartition", 1));
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-KEY-SELECT-0000000009-repartition", 2));
+            expectedAssignment.add(new TopicPartition(applicationId + "-KSTREAM-KEY-SELECT-0000000009-repartition", 3));
+            expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-KEY-SELECT-0000000009-repartition", 4);
+
+            // both join changelog topics
+            expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-JOINTHIS-0000000018-store-changelog", 4);
+            expectedCreatedInternalTopics.put(applicationId + "-KSTREAM-JOINOTHER-0000000019-store-changelog", 4);
+        }
+
+        assertThat(new HashSet<>(assignment.get(client).partitions()),
+                   equalTo(expectedAssignment));
+        assertThat(mockInternalTopicManager.readyTopics, equalTo(expectedCreatedInternalTopics));
     }
 
     @Test
