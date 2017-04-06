@@ -21,8 +21,6 @@ import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 public class StubDeserializer implements ClusterResourceListener, Deserializer<byte[]> {
 
