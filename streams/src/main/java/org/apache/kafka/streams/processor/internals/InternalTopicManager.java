@@ -1,10 +1,10 @@
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements. See the NOTICE file distributed with
+ * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License. You may obtain a copy of the License at
+ * the License.  You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -114,17 +115,15 @@ public class InternalTopicManager {
     private Map<InternalTopicConfig, Integer> validateTopicPartitions(final Map<InternalTopicConfig, Integer> topicsPartitionsMap,
                                                                       final Map<String, Integer> existingTopicNamesPartitions) {
         final Map<InternalTopicConfig, Integer> topicsToBeCreated = new HashMap<>();
-        for (Map.Entry<InternalTopicConfig, Integer> entry : topicsPartitionsMap.entrySet()) {
-            InternalTopicConfig topic = entry.getKey();
-            Integer partition = entry.getValue();
+        for (InternalTopicConfig topic: topicsPartitionsMap.keySet()) {
             if (existingTopicNamesPartitions.containsKey(topic.name())) {
-                if (!existingTopicNamesPartitions.get(topic.name()).equals(partition)) {
+                if (!existingTopicNamesPartitions.get(topic.name()).equals(topicsPartitionsMap.get(topic))) {
                     throw new StreamsException("Existing internal topic " + topic.name() + " has invalid partitions." +
-                            " Expected: " + partition + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
-                            ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
+                        " Expected: " + topicsPartitionsMap.get(topic) + " Actual: " + existingTopicNamesPartitions.get(topic.name()) +
+                        ". Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.");
                 }
             } else {
-                topicsToBeCreated.put(topic, partition);
+                topicsToBeCreated.put(topic, topicsPartitionsMap.get(topic));
             }
         }
 
