@@ -37,6 +37,12 @@ import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Seq, mutable}
+import com.yammer.metrics.core.Gauge
+import org.apache.kafka.common.utils.{Time, Utils}
+import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
+import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
+import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
+import org.apache.kafka.common.TopicPartition
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
@@ -136,13 +142,19 @@ class Log(@volatile var dir: File,
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
+  val leaderEpochCache: LeaderEpochCache = new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
+    new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
+
   locally {
     val startMs = time.milliseconds
 
     loadSegments()
+
     /* Calculate the offset of the next message */
     nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset,
       activeSegment.size.toInt)
+
+    leaderEpochCache.clearLatest(nextOffsetMetadata.messageOffset)
 
     logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
     buildAndRecoverPidMap(logEndOffset)
@@ -352,7 +364,7 @@ class Log(@volatile var dir: File,
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
         warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
-        unflushed.foreach(deleteSegment)
+        unflushed.foreach(deleteSegment(_, deleteCorrespondingLeaderEpochs = false))
       }
     }
   }
@@ -427,11 +439,11 @@ class Log(@volatile var dir: File,
    *
    * @param records The log records to append
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+   * @param epochCache Optional Cache of Leader Epoch Offsets.
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  def append(records: MemoryRecords, assignOffsets: Boolean = true): LogAppendInfo = {
-
+  def append(records: MemoryRecords, assignOffsets: Boolean = true, epochCache: LeaderEpochCache = leaderEpochCache): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -459,7 +471,8 @@ class Log(@volatile var dir: File,
                                                           config.compact,
                                                           config.messageFormatVersion.messageFormatVersion,
                                                           config.messageTimestampType,
-                                                          config.messageTimestampDifferenceMaxMs)
+                                                          config.messageTimestampDifferenceMaxMs,
+                                                          epochCache.latestEpoch())
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
@@ -485,6 +498,12 @@ class Log(@volatile var dir: File,
             }
           }
         } else {
+          //Update the epoch cache with the epoch stamped by the leader
+          records.batches().asScala.map { batch =>
+            if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+              epochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+          }
+
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
@@ -809,7 +828,7 @@ class Log(@volatile var dir: File,
       if (segments.size == numToDelete)
         roll()
       // remove the segments for lookups
-      deletable.foreach(deleteSegment)
+      deletable.foreach(deleteSegment(_))
       logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
     }
     numToDelete
@@ -1017,6 +1036,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       logSegments.foreach(_.delete())
       segments.clear()
+      leaderEpochCache.clear()
       Utils.delete(dir)
     }
   }
@@ -1027,19 +1047,19 @@ class Log(@volatile var dir: File,
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    */
   private[log] def truncateTo(targetOffset: Long) {
-    info("Truncating log %s to offset %d.".format(name, targetOffset))
     if(targetOffset < 0)
       throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
-    if(targetOffset > logEndOffset) {
+    if(targetOffset >= logEndOffset) {
       info("Truncating %s to %d has no effect as the largest offset in the log is %d.".format(name, targetOffset, logEndOffset-1))
       return
     }
+    info("Truncating log %s to offset %d.".format(name, targetOffset))
     lock synchronized {
       if(segments.firstEntry.getValue.baseOffset > targetOffset) {
         truncateFullyAndStartAt(targetOffset)
       } else {
         val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-        deletable.foreach(deleteSegment)
+        deletable.foreach(deleteSegment(_, false))
         activeSegment.truncateTo(targetOffset)
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
@@ -1047,6 +1067,7 @@ class Log(@volatile var dir: File,
       }
       buildAndRecoverPidMap(targetOffset)
     }
+    leaderEpochCache.clearLatest(targetOffset) //TODO hmm... might be clearer to clear the epoch cache with each segment
   }
 
   /**
@@ -1058,7 +1079,7 @@ class Log(@volatile var dir: File,
     debug("Truncate and start log '" + name + "' to " + newOffset)
     lock synchronized {
       val segmentsToDelete = logSegments.toList
-      segmentsToDelete.foreach(deleteSegment)
+      segmentsToDelete.foreach(deleteSegment(_, false))
       addSegment(new LogSegment(dir,
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval,
@@ -1069,6 +1090,7 @@ class Log(@volatile var dir: File,
                                 initFileSize = initFileSize,
                                 preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
+      leaderEpochCache.clear()
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       this.logStartOffset = newOffset
     }
@@ -1116,10 +1138,13 @@ class Log(@volatile var dir: File,
    * deleting a file while it is being read from.
    *
    * @param segment The log segment to schedule for deletion
+   * @param deleteCorrespondingLeaderEpochs Optionally clear the epoch cache
    */
-  private def deleteSegment(segment: LogSegment) {
+  private def deleteSegment(segment: LogSegment, deleteCorrespondingLeaderEpochs: Boolean = true) {
     info("Scheduling log segment %d for log %s for deletion.".format(segment.baseOffset, name))
     lock synchronized {
+      if(deleteCorrespondingLeaderEpochs)
+        leaderEpochCache.clearEarliest(segment.nextOffset())
       segments.remove(segment.baseOffset)
       asyncDeleteSegment(segment)
     }
