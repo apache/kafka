@@ -45,7 +45,7 @@ class AdminManager(val config: KafkaConfig,
   private val createTopicPolicy =
     Option(config.getConfiguredInstance(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
 
-  def hasDelayedTopicOperations = topicPurgatory.delayed() != 0
+  def hasDelayedTopicOperations = topicPurgatory.delayed != 0
 
   /**
     * Try to complete delayed topic operations with the request key

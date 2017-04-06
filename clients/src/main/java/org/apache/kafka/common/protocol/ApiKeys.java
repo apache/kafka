@@ -35,7 +35,7 @@ public enum ApiKeys {
     CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
     OFFSET_COMMIT(8, "OffsetCommit"),
     OFFSET_FETCH(9, "OffsetFetch"),
-    GROUP_COORDINATOR(10, "GroupCoordinator"),
+    FIND_COORDINATOR(10, "FindCoordinator"),
     JOIN_GROUP(11, "JoinGroup"),
     HEARTBEAT(12, "Heartbeat"),
     LEAVE_GROUP(13, "LeaveGroup"),
@@ -47,7 +47,12 @@ public enum ApiKeys {
     CREATE_TOPICS(19, "CreateTopics"),
     DELETE_TOPICS(20, "DeleteTopics"),
     DELETE_RECORDS(21, "DeleteRecords"),
-    INIT_PRODUCER_ID(22, "InitProducerId");
+    INIT_PRODUCER_ID(22, "InitProducerId"),
+    ADD_PARTITIONS_TO_TXN(23, "AddPartitionsToTxn"),
+    ADD_OFFSETS_TO_TXN(24, "AddOffsetsToTxn"),
+    END_TXN(25, "EndTxn"),
+    WRITE_TXN_MARKER(26, "WriteTxnMarker"),
+    TXN_OFFSET_COMMIT(27, "TxnOffsetCommit");
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

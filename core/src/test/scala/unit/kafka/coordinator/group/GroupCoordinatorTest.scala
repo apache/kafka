@@ -15,12 +15,12 @@
   * limitations under the License.
   */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.junit.Test
 import org.junit.Assert._
+import org.junit.Test
 
 class GroupCoordinatorTest {
 

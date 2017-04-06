@@ -16,28 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
-/**
- * The broker returns this error code for any coordinator request if it is still loading the metadata (after a leader change
- * for that offsets topic partition) for this group.
- */
-public class GroupLoadInProgressException extends RetriableException {
-
+public class InvalidTxnTimeoutException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public GroupLoadInProgressException() {
-        super();
-    }
-
-    public GroupLoadInProgressException(String message) {
-        super(message);
-    }
-
-    public GroupLoadInProgressException(String message, Throwable cause) {
+    public InvalidTxnTimeoutException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public GroupLoadInProgressException(Throwable cause) {
-        super(cause);
+    public InvalidTxnTimeoutException(String message) {
+        super(message);
     }
-
 }

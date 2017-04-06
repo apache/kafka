@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,10 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package kafka.coordinator
-
-import collection.{Seq, mutable, immutable}
+package kafka.coordinator.group
 
 import java.util.UUID
 
@@ -25,7 +22,9 @@ import kafka.common.OffsetAndMetadata
 import kafka.utils.nonthreadsafe
 import org.apache.kafka.common.TopicPartition
 
-private[coordinator] sealed trait GroupState { def state: Byte }
+import scala.collection.{Seq, immutable, mutable}
+
+private[group] sealed trait GroupState { def state: Byte }
 
 /**
  * Group is preparing to rebalance
@@ -40,7 +39,7 @@ private[coordinator] sealed trait GroupState { def state: Byte }
  *             all members have left the group => Empty
  *             group is removed by partition emigration => Dead
  */
-private[coordinator] case object PreparingRebalance extends GroupState { val state: Byte = 1 }
+private[group] case object PreparingRebalance extends GroupState { val state: Byte = 1 }
 
 /**
  * Group is awaiting state assignment from the leader
@@ -55,7 +54,7 @@ private[coordinator] case object PreparingRebalance extends GroupState { val sta
  *             member failure detected => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[coordinator] case object AwaitingSync extends GroupState { val state: Byte = 5}
+private[group] case object AwaitingSync extends GroupState { val state: Byte = 5}
 
 /**
  * Group is stable
@@ -71,7 +70,7 @@ private[coordinator] case object AwaitingSync extends GroupState { val state: By
  *             follower join-group with new metadata => PreparingRebalance
  *             group is removed by partition emigration => Dead
  */
-private[coordinator] case object Stable extends GroupState { val state: Byte = 3 }
+private[group] case object Stable extends GroupState { val state: Byte = 3 }
 
 /**
  * Group has no more members and its metadata is being removed
@@ -84,7 +83,7 @@ private[coordinator] case object Stable extends GroupState { val state: Byte = 3
  *         allow offset fetch requests
  * transition: Dead is a final state before group metadata is cleaned up, so there are no transitions
  */
-private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
+private[group] case object Dead extends GroupState { val state: Byte = 4 }
 
 /**
   * Group has no more members, but lingers until all offsets have expired. This state
@@ -101,7 +100,7 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
   *             group is removed by partition emigration => Dead
   *             group is removed by expiration => Dead
   */
-private[coordinator] case object Empty extends GroupState { val state: Byte = 5 }
+private[group] case object Empty extends GroupState { val state: Byte = 5 }
 
 
 private object GroupMetadata {
@@ -141,7 +140,7 @@ case class GroupSummary(state: String,
  *  3. leader id
  */
 @nonthreadsafe
-private[coordinator] class GroupMetadata(val groupId: String, initialState: GroupState = Empty) {
+private[group] class GroupMetadata(val groupId: String, initialState: GroupState = Empty) {
 
   private var state: GroupState = initialState
   private val members = new mutable.HashMap[String, MemberMetadata]
@@ -320,7 +319,7 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
         .format(groupId, GroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))
   }
 
-  override def toString = {
+  override def toString: String = {
     "[%s,%s,%s,%s]".format(groupId, protocolType, currentState.toString, members)
   }
 }

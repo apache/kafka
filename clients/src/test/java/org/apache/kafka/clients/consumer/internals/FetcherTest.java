@@ -48,6 +48,8 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -59,7 +61,6 @@ import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -69,13 +70,16 @@ import org.junit.Test;
 
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertArrayEquals;
@@ -1028,6 +1032,256 @@ public class FetcherTest {
         testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 100L, 10L, 100L);
     }
 
+    @Test
+    public void testSkippingAbortedTransactions() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int currentOffset = 0;
+
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+
+        buffer.flip();
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp1));
+
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertFalse(fetchedRecords.containsKey(tp1));
+    }
+
+    @Test
+    public void testReturnCommittedTransactions() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int currentOffset = 0;
+
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+        currentOffset += commitTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        buffer.flip();
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp1));
+
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertTrue(fetchedRecords.containsKey(tp1));
+        assertEquals(fetchedRecords.get(tp1).size(), 2);
+    }
+
+    @Test
+    public void testWithCommittedAndAbortedTransactions() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+
+        int currOffset = 0;
+        // Appends for producer 1 (evetually committed)
+        currOffset += appendTransactionalRecords(buffer, 1L, currOffset,
+                new SimpleRecord(time.milliseconds(), "commit1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "commit1-2".getBytes(), "value".getBytes()));
+
+        // Appends for producer 2 (eventually aborted)
+        currOffset += appendTransactionalRecords(buffer, 2L, currOffset,
+                new SimpleRecord(time.milliseconds(), "abort2-1".getBytes(), "value".getBytes()));
+
+        // commit producer 1
+        currOffset += commitTransaction(buffer, 1L, currOffset, time.milliseconds());
+        // append more for producer 2 (eventually aborted)
+        currOffset += appendTransactionalRecords(buffer, 2L, currOffset,
+                new SimpleRecord(time.milliseconds(), "abort2-2".getBytes(), "value".getBytes()));
+
+        // abort producer 2
+        currOffset += abortTransaction(buffer, 2L, currOffset, time.milliseconds());
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(2, 2));
+
+        // New transaction for producer 1 (eventually aborted)
+        currOffset += appendTransactionalRecords(buffer, 1L, currOffset,
+                new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()));
+
+        // New transaction for producer 2 (eventually committed)
+        currOffset += appendTransactionalRecords(buffer, 2L, currOffset,
+                new SimpleRecord(time.milliseconds(), "commit2-1".getBytes(), "value".getBytes()));
+
+        // Add messages for producer 1 (eventually aborted)
+        currOffset += appendTransactionalRecords(buffer, 1L, currOffset,
+                new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
+
+        // abort producer 1
+        currOffset += abortTransaction(buffer, 1L, currOffset, time.milliseconds());
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 6));
+
+        // commit producer 2
+        currOffset += commitTransaction(buffer, 2L, currOffset, time.milliseconds());
+
+        buffer.flip();
+
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp1));
+
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertTrue(fetchedRecords.containsKey(tp1));
+        // There are only 3 committed records
+        List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp1);
+        Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2", "commit2-1"));
+        Set<String> actuallyCommittedKeys = new HashSet<>();
+        for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
+            actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
+        }
+        assertTrue(actuallyCommittedKeys.equals(committedKeys));
+    }
+
+    @Test
+    public void testMultipleAbortMarkers() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int currentOffset = 0;
+
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
+
+        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        // Duplicate abort -- should be ignored.
+        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        // Now commit a transaction.
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "commit1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "commit1-2".getBytes(), "value".getBytes()));
+        currentOffset += commitTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        buffer.flip();
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp1));
+
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertTrue(fetchedRecords.containsKey(tp1));
+        assertEquals(fetchedRecords.get(tp1).size(), 2);
+        List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp1);
+        Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2"));
+        Set<String> actuallyCommittedKeys = new HashSet<>();
+        for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
+            actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
+        }
+        assertTrue(actuallyCommittedKeys.equals(committedKeys));
+    }
+
+    @Test
+    public void testReturnAbortedTransactionsinUncommittedMode() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        int currentOffset = 0;
+
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+
+        buffer.flip();
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp1));
+
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertTrue(fetchedRecords.containsKey(tp1));
+    }
+
+    private int appendTransactionalRecords(ByteBuffer buffer, long pid, int baseOffset, SimpleRecord... records) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true);
+
+        for (SimpleRecord record : records) {
+            builder.append(record);
+        }
+        builder.build();
+        return records.length;
+    }
+
+    private int commitTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true);
+        builder.appendControlRecord(timestamp, ControlRecordType.COMMIT, null);
+        builder.build();
+        return 1;
+    }
+
+    private int abortTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true);
+        builder.appendControlRecord(timestamp, ControlRecordType.ABORT, null);
+        builder.build();
+        return 1;
+    }
+
     private void testGetOffsetsForTimesWithError(Errors errorForTp0,
                                                  Errors errorForTp1,
                                                  long offsetForTp0,
@@ -1090,6 +1344,15 @@ public class FetcherTest {
         return new ListOffsetResponse(allPartitionData);
     }
 
+    private FetchResponse fetchResponseWithAbortedTransactions(MemoryRecords records,
+                                                               List<FetchResponse.AbortedTransaction> abortedTransactions,
+                                                               Errors error,
+                                                               long lastStableOffset, long hw, int throttleTime) {
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp1,
+                new FetchResponse.PartitionData(error, hw, lastStableOffset, 0L, abortedTransactions, records));
+        return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
+    }
+
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {
         Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp1,
                 new FetchResponse.PartitionData(error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
@@ -1116,7 +1379,8 @@ public class FetcherTest {
     private Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions,
                                                   Metrics metrics,
                                                   int maxPollRecords) {
-        return createFetcher(subscriptions, metrics, new ByteArrayDeserializer(), new ByteArrayDeserializer(), maxPollRecords);
+        return createFetcher(subscriptions, metrics, new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                maxPollRecords, IsolationLevel.READ_UNCOMMITTED);
     }
 
     private Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions, Metrics metrics) {
@@ -1127,14 +1391,16 @@ public class FetcherTest {
                                                Metrics metrics,
                                                Deserializer<K> keyDeserializer,
                                                Deserializer<V> valueDeserializer) {
-        return createFetcher(subscriptions, metrics, keyDeserializer, valueDeserializer, Integer.MAX_VALUE);
+        return createFetcher(subscriptions, metrics, keyDeserializer, valueDeserializer, Integer.MAX_VALUE,
+                IsolationLevel.READ_UNCOMMITTED);
     }
 
     private <K, V> Fetcher<K, V> createFetcher(SubscriptionState subscriptions,
                                                Metrics metrics,
                                                Deserializer<K> keyDeserializer,
                                                Deserializer<V> valueDeserializer,
-                                               int maxPollRecords) {
+                                               int maxPollRecords,
+                                               IsolationLevel isolationLevel) {
         return new Fetcher<>(consumerClient,
                 minBytes,
                 maxBytes,
@@ -1149,7 +1415,8 @@ public class FetcherTest {
                 metrics,
                 "consumer" + groupId,
                 time,
-                retryBackoffMs);
+                retryBackoffMs,
+                isolationLevel);
     }
 
 }

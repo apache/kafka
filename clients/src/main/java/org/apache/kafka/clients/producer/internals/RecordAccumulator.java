@@ -542,6 +542,17 @@ public final class RecordAccumulator {
         }
     }
 
+    public boolean hasUnflushedBatches() {
+        boolean hasUnflushed = false;
+        for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches().entrySet()) {
+            if (0 < entry.getValue().size()) {
+                hasUnflushed = true;
+                break;
+            }
+        }
+        return 0 < this.incomplete.incomplete.size() || hasUnflushed;
+    }
+
     /**
      * This function is only called when sender is closed forcefully. It will fail all the
      * incomplete batches and return.

@@ -123,8 +123,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case OFFSET_FETCH:
                 request = new OffsetFetchRequest(struct, version);
                 break;
-            case GROUP_COORDINATOR:
-                request = new GroupCoordinatorRequest(struct, version);
+            case FIND_COORDINATOR:
+                request = new FindCoordinatorRequest(struct, version);
                 break;
             case JOIN_GROUP:
                 request = new JoinGroupRequest(struct, version);
@@ -173,6 +173,15 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case INIT_PRODUCER_ID:
                 request = new InitPidRequest(struct, version);
+                break;
+            case ADD_PARTITIONS_TO_TXN:
+                request = new AddPartitionsToTxnRequest(struct, version);
+                break;
+            case ADD_OFFSETS_TO_TXN:
+                request = new AddOffsetsToTxnRequest(struct, version);
+                break;
+            case END_TXN:
+                request = new EndTxnRequest(struct, version);
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +

@@ -774,23 +774,36 @@ public class Protocol {
     public static final Schema[] DESCRIBE_GROUPS_REQUEST = new Schema[] {DESCRIBE_GROUPS_REQUEST_V0};
     public static final Schema[] DESCRIBE_GROUPS_RESPONSE = new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0};
 
-    /* Group coordinator api */
-    public static final Schema GROUP_COORDINATOR_REQUEST_V0 = new Schema(new Field("group_id",
-                                                                                   STRING,
-                                                                                   "The unique group id."));
+    /* Find coordinator api */
+    public static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(
+            new Field("group_id",
+                    STRING,
+                    "The unique group id."));
 
-    public static final Schema GROUP_COORDINATOR_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
-                                                                        new Field("host", STRING, "The hostname of the broker."),
-                                                                        new Field("port", INT32,
-                                                                            "The port on which the broker accepts requests."));
+    public static final Schema FIND_COORDINATOR_REQUEST_V1 = new Schema(
+            new Field("coordinator_key",
+                    STRING,
+                    "Id to use for finding the coordinator (for consumer groups, this is the groupId, " +
+                            "for transactional producers, this is the transactional id)"),
+            new Field("coordinator_type",
+                    INT8,
+                    "The type of coordinator to find (0 = consumer, 1 = transaction)"));
 
-    public static final Schema GROUP_COORDINATOR_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
-                                                                          new Field("coordinator",
-                                                                                    GROUP_COORDINATOR_BROKER_V0,
-                                                                                    "Host and port information for the coordinator for a consumer group."));
+    public static final Schema FIND_COORDINATOR_BROKER_V0 = new Schema(
+            new Field("node_id", INT32, "The broker id."),
+            new Field("host", STRING, "The hostname of the broker."),
+            new Field("port", INT32,
+                    "The port on which the broker accepts requests."));
 
-    public static final Schema[] GROUP_COORDINATOR_REQUEST = new Schema[] {GROUP_COORDINATOR_REQUEST_V0};
-    public static final Schema[] GROUP_COORDINATOR_RESPONSE = new Schema[] {GROUP_COORDINATOR_RESPONSE_V0};
+    public static final Schema FIND_COORDINATOR_RESPONSE_V0 = new Schema(
+            new Field("error_code", INT16),
+            new Field("coordinator",
+                    FIND_COORDINATOR_BROKER_V0,
+                    "Host and port information for the coordinator for a consumer group."));
+    public static final Schema FIND_COORDINATOR_RESPONSE_V1 = FIND_COORDINATOR_RESPONSE_V0;
+
+    public static final Schema[] FIND_COORDINATOR_REQUEST = new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
+    public static final Schema[] FIND_COORDINATOR_RESPONSE = new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
 
     /* Controlled shutdown api */
     public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = new Schema(new Field("broker_id",
@@ -1180,7 +1193,10 @@ public class Protocol {
     public static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
             new Field("transactional_id",
                     NULLABLE_STRING,
-                    "The transactional id whose pid we want to retrieve or generate.")
+                    "The transactional id whose pid we want to retrieve or generate."),
+            new Field("transaction_timeout_ms",
+                    INT32,
+                    "The time in ms to wait for any idle transaction sent by this producer before proactively being aborted")
     );
 
     public static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
@@ -1196,8 +1212,156 @@ public class Protocol {
     );
 
     public static final Schema[] INIT_PRODUCER_ID_REQUEST = new Schema[] {INIT_PRODUCER_ID_REQUEST_V0};
-
     public static final Schema[] INIT_PRODUCER_ID_RESPONSE = new Schema[] {INIT_PRODUCER_ID_RESPONSE_V0};
+
+    public static final Schema ADD_PARTITIONS_TO_TXN_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
+            new Field("pid",
+                    INT64,
+                    "Current PID in use by the transactional id"),
+            new Field("epoch",
+                    INT16,
+                    "Current epoch associated with the PID"),
+            new Field("topic_partitions",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(INT32)))),
+                    "The partitions to add to the transaction")
+    );
+    public static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code.")
+    );
+
+    public static final Schema[] ADD_PARTITIONS_TO_TXN_REQUEST = new Schema[] {ADD_PARTITIONS_TO_TXN_REQUEST_V0};
+    public static final Schema[] ADD_PARTITIONS_TO_TXN_RESPONSE = new Schema[] {ADD_PARTITIONS_TO_TXN_RESPONSE_V0};
+
+    public static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
+            new Field("pid",
+                    INT64,
+                    "Current PID in use by the transactional id"),
+            new Field("epoch",
+                    INT16,
+                    "Current epoch associated with the PID"),
+            new Field("consumer_group_id",
+                    STRING,
+                    "Consumer group id whose offsets should be included in the transaction")
+    );
+    public static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code.")
+    );
+
+    public static final Schema[] ADD_OFFSETS_TO_TXN_REQUEST = new Schema[] {ADD_OFFSETS_TO_TXN_REQUEST_V0};
+    public static final Schema[] ADD_OFFSETS_TO_TXN_RESPONSE = new Schema[] {ADD_OFFSETS_TO_TXN_RESPONSE_V0};
+
+    public static final Schema END_TXN_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
+            new Field("pid",
+                    INT64,
+                    "Current PID in use by the transactional id"),
+            new Field("epoch",
+                    INT16,
+                    "Current epoch associated with the PID"),
+            new Field("transaction_result",
+                    INT8,
+                    "The result of the transaction (0 = COMMIT, 1 = ABORT)")
+    );
+    public static final Schema END_TXN_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code.")
+    );
+
+    public static final Schema[] END_TXN_REQUEST = new Schema[] {END_TXN_REQUEST_V0};
+    public static final Schema[] END_TXN_RESPONSE = new Schema[] {END_TXN_RESPONSE_V0};
+
+    public static final Schema WRITE_TXN_MARKER_REQUEST_V0 = new Schema(
+            new Field("pid",
+                    INT64,
+                    "Current PID in use by the transactional id"),
+            new Field("epoch",
+                    INT16,
+                    "Current epoch associated with the PID"),
+            new Field("coordinator_epoch",
+                    INT32,
+                    "Epoch associated with the transaction state partition associated with this transaction"),
+            new Field("transaction_result",
+                    INT8,
+                    "The result of the transaction to write to the partitions (0 = COMMIT, 1 = ABORT)"),
+            new Field("topic_partitions",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(INT32)))),
+                    "The partitions to write markers for")
+    );
+
+    public static final Schema WRITE_TXN_MARKER_PARTITION_ERROR_RESPONSE_V0 = new Schema(
+            new Field("partition", INT32),
+            new Field("error_code", INT16)
+    );
+
+    public static final Schema WRITE_TXN_MARKER_RESPONSE_V0 = new Schema(
+            new Field("topic_partitions",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(WRITE_TXN_MARKER_PARTITION_ERROR_RESPONSE_V0)))),
+                    "Errors per partition from writing markers")
+    );
+
+    public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKER_REQUEST_V0};
+    public static final Schema[] WRITE_TXN_RESPONSE = new Schema[] {WRITE_TXN_MARKER_RESPONSE_V0};
+
+    public static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
+            new Field("partition", INT32),
+            new Field("offset", INT64),
+            new Field("metadata", NULLABLE_STRING)
+    );
+
+    public static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
+            new Field("consumer_group_id",
+                    STRING,
+                    "Id of the associated consumer group to commit offsets for"),
+            new Field("pid",
+                    INT64,
+                    "Current PID in use by the transactional id"),
+            new Field("epoch",
+                    INT16,
+                    "Current epoch associated with the PID"),
+            new Field("retention_time",
+                    INT64,
+                    "The time in ms to retain the offset"),
+            new Field("topic_partitions",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
+                    "The partitions to write markers for")
+    );
+
+    public static final Schema TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0 = new Schema(
+            new Field("partition", INT32),
+            new Field("error_code", INT16)
+    );
+
+    public static final Schema TXN_OFFSET_COMMIT_RESPONSE_V0 = new Schema(
+            new Field("topic_partitions",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0)))),
+                    "Errors per partition from writing markers")
+    );
+
+    public static final Schema[] TXN_OFFSET_COMMIT_REQUEST = new Schema[] {TXN_OFFSET_COMMIT_REQUEST_V0};
+    public static final Schema[] TXN_OFFSET_COMMIT_RESPONSE = new Schema[] {TXN_OFFSET_COMMIT_RESPONSE_V0};
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
@@ -1219,7 +1383,7 @@ public class Protocol {
         REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_REQUEST;
         REQUESTS[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_REQUEST;
         REQUESTS[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_REQUEST;
-        REQUESTS[ApiKeys.GROUP_COORDINATOR.id] = GROUP_COORDINATOR_REQUEST;
+        REQUESTS[ApiKeys.FIND_COORDINATOR.id] = FIND_COORDINATOR_REQUEST;
         REQUESTS[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_REQUEST;
         REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
         REQUESTS[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_REQUEST;
@@ -1232,6 +1396,11 @@ public class Protocol {
         REQUESTS[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_REQUEST;
         REQUESTS[ApiKeys.DELETE_RECORDS.id] = DELETE_RECORDS_REQUEST;
         REQUESTS[ApiKeys.INIT_PRODUCER_ID.id] = INIT_PRODUCER_ID_REQUEST;
+        REQUESTS[ApiKeys.ADD_PARTITIONS_TO_TXN.id] = ADD_PARTITIONS_TO_TXN_REQUEST;
+        REQUESTS[ApiKeys.ADD_OFFSETS_TO_TXN.id] = ADD_OFFSETS_TO_TXN_REQUEST;
+        REQUESTS[ApiKeys.END_TXN.id] = END_TXN_REQUEST;
+        REQUESTS[ApiKeys.WRITE_TXN_MARKER.id] = WRITE_TXN_REQUEST;
+        REQUESTS[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1243,7 +1412,7 @@ public class Protocol {
         RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_RESPONSE;
-        RESPONSES[ApiKeys.GROUP_COORDINATOR.id] = GROUP_COORDINATOR_RESPONSE;
+        RESPONSES[ApiKeys.FIND_COORDINATOR.id] = FIND_COORDINATOR_RESPONSE;
         RESPONSES[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_RESPONSE;
         RESPONSES[ApiKeys.HEARTBEAT.id] = HEARTBEAT_RESPONSE;
         RESPONSES[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_RESPONSE;
@@ -1256,6 +1425,11 @@ public class Protocol {
         RESPONSES[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_RESPONSE;
         RESPONSES[ApiKeys.DELETE_RECORDS.id] = DELETE_RECORDS_RESPONSE;
         RESPONSES[ApiKeys.INIT_PRODUCER_ID.id] = INIT_PRODUCER_ID_RESPONSE;
+        RESPONSES[ApiKeys.ADD_PARTITIONS_TO_TXN.id] = ADD_PARTITIONS_TO_TXN_RESPONSE;
+        RESPONSES[ApiKeys.ADD_OFFSETS_TO_TXN.id] = ADD_OFFSETS_TO_TXN_RESPONSE;
+        RESPONSES[ApiKeys.END_TXN.id] = END_TXN_RESPONSE;
+        RESPONSES[ApiKeys.WRITE_TXN_MARKER.id] = WRITE_TXN_RESPONSE;
+        RESPONSES[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

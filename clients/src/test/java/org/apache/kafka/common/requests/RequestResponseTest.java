@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -30,10 +30,10 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -44,6 +44,7 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,9 +64,11 @@ public class RequestResponseTest {
 
     @Test
     public void testSerialization() throws Exception {
-        checkRequest(createGroupCoordinatorRequest());
-        checkErrorResponse(createGroupCoordinatorRequest(), new UnknownServerException());
-        checkResponse(createGroupCoordinatorResponse(), 0);
+        checkRequest(createFindCoordinatorRequest(0));
+        checkRequest(createFindCoordinatorRequest(1));
+        checkErrorResponse(createFindCoordinatorRequest(0), new UnknownServerException());
+        checkErrorResponse(createFindCoordinatorRequest(1), new UnknownServerException());
+        checkResponse(createFindCoordinatorResponse(), 0);
         checkRequest(createControlledShutdownRequest());
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
@@ -100,7 +103,7 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 0);
         checkRequest(OffsetFetchRequest.forAllPartitions("group1"));
-        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorForGroupException());
+        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException());
         checkRequest(createOffsetFetchRequest(0));
         checkRequest(createOffsetFetchRequest(1));
         checkRequest(createOffsetFetchRequest(2));
@@ -163,6 +166,21 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(0));
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException());
         checkResponse(createListOffsetResponse(0), 0);
+        checkRequest(createAddPartitionsToTxnRequest());
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException());
+        checkResponse(createAddPartitionsToTxnResponse(), 0);
+        checkRequest(createAddOffsetsToTxnRequest());
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException());
+        checkResponse(createAddOffsetsToTxnResponse(), 0);
+        checkRequest(createEndTxnRequest());
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException());
+        checkResponse(createEndTxnResponse(), 0);
+        checkRequest(createWriteTxnMarkerRequest());
+        checkErrorResponse(createWriteTxnMarkerRequest(), new UnknownServerException());
+        checkResponse(createWriteTxnMarkerResponse(), 0);
+        checkRequest(createTxnOffsetCommitRequest());
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
+        checkResponse(createTxnOffsetCommitResponse(), 0);
     }
 
     @Test
@@ -224,6 +242,12 @@ public class RequestResponseTest {
         struct.writeTo(buffer);
         buffer.rewind();
         return buffer;
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.TRANSACTION, "foobar");
+        builder.build((short) 0);
     }
 
     @Test
@@ -459,12 +483,70 @@ public class RequestResponseTest {
         return new ResponseHeader(10);
     }
 
-    private GroupCoordinatorRequest createGroupCoordinatorRequest() {
-        return new GroupCoordinatorRequest.Builder("test-group").build();
+    private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest() {
+        return new AddOffsetsToTxnRequest.Builder("transactionalId", 23437L, (short) 99, "consumerGroupId").build();
     }
 
-    private GroupCoordinatorResponse createGroupCoordinatorResponse() {
-        return new GroupCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
+    private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest() {
+        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
+                new TopicPartition("foo", 2));
+        return new AddPartitionsToTxnRequest.Builder("id", 23437L, (short) 99, partitions).build();
+    }
+
+    private EndTxnRequest createEndTxnRequest() {
+        return new EndTxnRequest.Builder("transactionalId", 23437L, (short) 99, TransactionResult.ABORT).build();
+    }
+
+    private WriteTxnMarkerRequest createWriteTxnMarkerRequest() {
+        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
+                new TopicPartition("foo", 2));
+        return new WriteTxnMarkerRequest.Builder(23437L, (short) 99, 437, TransactionResult.COMMIT, partitions).build();
+    }
+
+    private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
+        Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("foo", 0), new TxnOffsetCommitRequest.CommittedOffset(15L, null));
+        offsets.put(new TopicPartition("bar", 5), new TxnOffsetCommitRequest.CommittedOffset(29L, "metadata"));
+        offsets.put(new TopicPartition("foo", 3), new TxnOffsetCommitRequest.CommittedOffset(23L, null));
+        return new TxnOffsetCommitRequest.Builder("consumerGroup", 23437L, (short) 99,
+                OffsetCommitRequest.DEFAULT_RETENTION_TIME, offsets).build();
+    }
+
+    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
+        return new AddPartitionsToTxnResponse(Errors.NONE);
+    }
+
+    private AddOffsetsToTxnResponse createAddOffsetsToTxnResponse() {
+        return new AddOffsetsToTxnResponse(Errors.NONE);
+    }
+
+    private EndTxnResponse createEndTxnResponse() {
+        return new EndTxnResponse(Errors.NONE);
+    }
+
+    private WriteTxnMarkerResponse createWriteTxnMarkerResponse() {
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(new TopicPartition("foo", 2), Errors.NONE);
+        errors.put(new TopicPartition("bar", 1), Errors.DUPLICATE_SEQUENCE_NUMBER);
+        errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
+        return new WriteTxnMarkerResponse(errors);
+    }
+
+    private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(new TopicPartition("foo", 2), Errors.NONE);
+        errors.put(new TopicPartition("bar", 1), Errors.NOT_COORDINATOR);
+        errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
+        return new TxnOffsetCommitResponse(errors);
+    }
+
+    private FindCoordinatorRequest createFindCoordinatorRequest(int version) {
+        return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
+                .build((short) version);
+    }
+
+    private FindCoordinatorResponse createFindCoordinatorResponse() {
+        return new FindCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
     }
 
     private FetchRequest createFetchRequest(int version) {
@@ -791,7 +873,7 @@ public class RequestResponseTest {
     }
 
     private InitPidRequest createInitPidRequest() {
-        return new InitPidRequest.Builder(null).build();
+        return new InitPidRequest.Builder(null, 100).build();
     }
 
     private InitPidResponse createInitPidResponse() {
