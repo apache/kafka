@@ -63,7 +63,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   override def assign(epoch: Int, offset: Long): Unit = {
     inWriteLock(lock) {
       if (epoch >= 0 && epoch > latestUsedEpoch && offset >= latestOffset) {
-        info(s"Updated PartitionLeaderEpoch ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
+        info(s"Updated PartitionLeaderEpoch. ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
       } else {
@@ -178,11 +178,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"NewEpoch->Offset{epoch:$epoch, offset:$offset}, ExistingEpoch->Offset:{epoch:$latestUsedEpoch, offset$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Latest: {epoch:$latestUsedEpoch, offset$latestOffset} for Partition: $topicPartition"
 
   def maybeWarn(epoch: Int, offset: Long) = {
     if (epoch < latestUsedEpoch())
-      warn(s"Received a PartitionLeaderEpoch Assignment for an epoch < latestEpoch. " +
+      warn(s"Received a PartitionLeaderEpoch assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
     else if (epoch < 0)
       warn(s"Received an PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
@@ -193,7 +193,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
 
   /**
     * Registers a PartitionLeaderEpoch (typically in response to a leadership change).
-    * This will be cached until {@link #assignCachedEpochToLeoIfPresent()} is called.
+    * This will be cached until {@link #maybeAssignLatestCachedEpochToLeo} is called.
     *
     * This allows us to register an epoch in response to a leadership change, but not persist
     * that epoch until a message arrives and is stamped. This asigns the aassignment of leadership

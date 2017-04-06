@@ -75,7 +75,7 @@ class ReplicaFetcherThread(name: String,
   private val shouldSendLeaderEpochRequest: Boolean = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
 
   private def epochCache(tp: TopicPartition): LeaderEpochCache =  replicaMgr.getReplica(tp).get.epochs.get
-  private def clientId = name
+  private def clientId = s"broker-$replicaId-fetcher-$fetcherId"
 
   override def shutdown(): Unit = {
     super.shutdown()
@@ -262,7 +262,7 @@ class ReplicaFetcherThread(name: String,
       val replica = replicaMgr.getReplica(tp).get
 
       if (epochOffset.hasError) {
-        info(s"Retrying OffsetsForLeaderEpoch fetch for epoch: $epochOffset on partition ${replica.topicPartition} as the leader reported an error: ${epochOffset.error}")
+        info(s"Retrying leaderEpoch request for partition ${replica.topicPartition} as the leader reported an error: ${epochOffset.error}")
         partitionsWithError += tp
       } else {
         val truncationOffset =
@@ -285,9 +285,13 @@ class ReplicaFetcherThread(name: String,
   }
 
   override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = {
-    allPartitions
+    val result = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
       .map { case (tp, _) => tp -> epochCache(tp).latestUsedEpoch }.toMap
+
+    debug(s"Build leaderEpoch request $result for broker $sourceBroker")
+
+    result
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
@@ -298,6 +302,7 @@ class ReplicaFetcherThread(name: String,
       try {
         val response = leaderEndpoint.sendRequest(epochRequest)
         result = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
+        debug(s"Receive leaderEpoch response $result from broker $sourceBroker")
       } catch {
         case t: Throwable =>
           warn(s"Error when sending leader epoch request for $partitions", t)
@@ -318,12 +323,13 @@ class ReplicaFetcherThread(name: String,
   }
 
   private def logEndOffset(replica: Replica, epochOffset: EpochEndOffset): Long = {
-    info(s"Leader replied with PartitionLeaderEpoch for offset less the current LEO. Truncating partition: ${replica.topicPartition} to the LEO for response: " + epochOffset)
-    replica.logEndOffset.messageOffset
+    val logEndOffset = replica.logEndOffset.messageOffset
+    info(s"Based on follower's leader epoch, leader replied with an offset ${epochOffset.endOffset()} >= the follower's log end offset $logEndOffset in ${replica.topicPartition}. No truncation needed.")
+    logEndOffset
   }
 
   private def highWatermark(replica: Replica, epochOffset: EpochEndOffset): Long = {
-    warn(s"Leader replied with PartitionLeaderEpoch of Undefined/Error ${epochOffset.error()}. High watermark will be used for partition: ${replica.topicPartition}")
+    warn(s"Based on follower's leader epoch, leader replied with an unknown offset in ${replica.topicPartition}. High watermark ${replica.highWatermark.messageOffset} will be used for truncation.")
     replica.highWatermark.messageOffset
   }
 

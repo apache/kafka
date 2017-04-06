@@ -1101,7 +1101,7 @@ class ReplicaManager(val config: KafkaConfig,
 
 object OffsetsForLeaderEpoch extends Logging {
   def getResponseFor(replicaManager: ReplicaManager, requestedEpochInfo: JMap[TopicPartition, Integer]): JMap[TopicPartition, EpochEndOffset] = {
-    info(s"Processing OffsetForEpochRequest: $requestedEpochInfo")
+    debug(s"Processing OffsetForEpochRequest: $requestedEpochInfo")
     requestedEpochInfo.asScala.map { case (tp, epoch) =>
       val offset = try {
         new EpochEndOffset(NONE, replicaManager.getLeaderReplicaIfLocal(tp).epochs.get.endOffsetFor(epoch))
