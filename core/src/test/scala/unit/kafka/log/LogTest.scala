@@ -28,10 +28,14 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
-import org.apache.kafka.common.record._
+import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
+import org.apache.kafka.common.record.{RecordBatch, _}
 import org.apache.kafka.common.utils.Utils
+import org.easymock.EasyMock
+import org.easymock.EasyMock._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 
 class LogTest extends JUnitSuite {
 
@@ -1235,7 +1239,7 @@ class LogTest extends JUnitSuite {
     val config = LogConfig(logProps)
     val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val recoveryPoint = 50L
-    for (_ <- 0 until 50) {
+    for (_ <- 0 until 10) {
       // create a log and write some messages to it
       logDir.mkdirs()
       var log = new Log(logDir,
@@ -1441,9 +1445,14 @@ class LogTest extends JUnitSuite {
     for (_ <- 0 until 100)
       log.append(set)
 
+    log.leaderEpochCache.assign(0, 40)
+    log.leaderEpochCache.assign(1, 90)
+
     // expire all segments
     log.deleteOldSegments()
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
+    assertEquals("Epoch entries should have gone.", 1, epochCache(log).epochEntries().size)
+    assertEquals("Epoch entry should be the latest epoch and the leo.", new EpochEntry(1, 100), epochCache(log).epochEntries().head)
 
     // append some messages to create some segments
     for (_ <- 0 until 100)
@@ -1452,6 +1461,8 @@ class LogTest extends JUnitSuite {
     log.delete()
     assertEquals("The number of segments should be 0", 0, log.numberOfSegments)
     assertEquals("The number of deleted segments should be zero.", 0, log.deleteOldSegments())
+    assertEquals("Epoch entries should have gone.", 0, epochCache(log).epochEntries().size)
+
   }
 
   @Test
@@ -1478,6 +1489,10 @@ class LogTest extends JUnitSuite {
     log.deleteOldSegments()
     assertEquals("should have 1 segments", 1, log.numberOfSegments)
     assertEquals(log.logStartOffset, 15)
+  }
+
+  def epochCache(log: Log): LeaderEpochFileCache = {
+    log.leaderEpochCache.asInstanceOf[LeaderEpochFileCache]
   }
 
   @Test
@@ -1566,6 +1581,205 @@ class LogTest extends JUnitSuite {
     assertEquals("There should be 1 segment remaining", 1, log.numberOfSegments)
   }
 
+  @Test
+  def shouldApplyEpochToMessageOnAppendIfLeader() {
+    val messageIds = (0 until 50).toArray
+    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
+
+    //Given this partition is on leader epoch 72
+    val epoch = 72
+    val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+
+    //When appending messages as a leader (i.e. assignOffsets = true)
+    for (i <- records.indices)
+      log.append(
+        MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i)),
+        leaderEpochCache = mockCache(epoch),
+        assignOffsets = true
+      )
+
+    //Then leader epoch should be set on messages
+    for (i <- records.indices) {
+      val read = log.read(i, 100, Some(i+1)).records.batches().iterator.next()
+      assertEquals("Should have set leader epoch", 72, read.partitionLeaderEpoch())
+    }
+  }
+
+  @Test
+  def followerShouldSaveEpochInformationFromReplicatedMessagesToTheEpochCache() {
+    val messageIds = (0 until 50).toArray
+    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
+
+    val cache = createMock(classOf[LeaderEpochCache])
+
+    //Given each message has an offset & epoch, as msgs from leader would
+    def recordsForEpoch(i: Int): MemoryRecords = {
+      val recs = MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i))
+      recs.batches().asScala.foreach{record =>
+        record.setPartitionLeaderEpoch(42)
+        record.setLastOffset(i)
+      }
+      recs
+    }
+
+    //Verify we save the epoch to the cache.
+    expect(cache.assign(EasyMock.eq(42), anyInt())).times(records.size)
+    replay(cache)
+
+    val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+
+    //When appending as follower (assignOffsets = false)
+    for (i <- records.indices)
+      log.append(recordsForEpoch(i), assignOffsets = false, leaderEpochCache = cache)
+
+    verify(cache)
+  }
+
+  @Test
+  def shouldTruncateLeaderEpochsWhenDeletingSegments() {
+    val set = TestUtils.singletonRecords("test".getBytes)
+    val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+    val cache = epochCache(log)
+
+    // Given three segments of 5 messages each
+    for (e <- 0 until 15) {
+      log.append(set)
+    }
+
+    //Given epochs
+    cache.assign(0, 0)
+    cache.assign(1, 5)
+    cache.assign(2, 10)
+
+    //When first segment is removed
+    log.deleteOldSegments
+
+    //The oldest epoch entry should have been removed
+    assertEquals(ListBuffer(EpochEntry(1, 5), EpochEntry(2, 10)), cache.epochEntries)
+  }
+
+  @Test
+  def shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments() {
+    val set = TestUtils.singletonRecords("test".getBytes)
+    val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+    val cache = epochCache(log)
+
+    // Given three segments of 5 messages each
+    for (e <- 0 until 15) {
+      log.append(set)
+    }
+
+    //Given epochs
+    cache.assign(0, 0)
+    cache.assign(1, 7)
+    cache.assign(2, 10)
+
+    //When first segment removed (up to offset 5)
+    log.deleteOldSegments
+
+    //The the first entry should have gone from (0,0) => (0,5)
+    assertEquals(ListBuffer(EpochEntry(0, 5), EpochEntry(1, 7), EpochEntry(2, 10)), cache.epochEntries)
+  }
+
+  @Test
+  def shouldTruncateLeaderEpochFileWhenTruncatingLog() {
+    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
+    val logProps = CoreUtils.propsWith(LogConfig.SegmentBytesProp, (10 * set.sizeInBytes).toString)
+    val log = new Log(logDir, LogConfig( logProps), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    val cache = epochCache(log)
+
+    //Given 2 segments, 10 messages per segment
+    for (epoch <- 1 to 20)
+      log.append(set)
+
+    //Simulate some leader changes at specific offsets
+    cache.assign(0, 0)
+    cache.assign(1, 10)
+    cache.assign(2, 16)
+
+    assertEquals(2, log.numberOfSegments)
+    assertEquals(20, log.logEndOffset)
+
+    //When truncate to LEO (no op)
+    log.truncateTo(log.logEndOffset)
+
+    //Then no change
+    assertEquals(3, cache.epochEntries().size)
+
+    //When truncate
+    log.truncateTo(11)
+
+    //Then no change
+    assertEquals(2, cache.epochEntries().size)
+
+    //When truncate
+    log.truncateTo(10)
+
+    //Then
+    assertEquals(1, cache.epochEntries().size)
+
+    //When truncate all
+    log.truncateTo(0)
+
+    //Then
+    assertEquals(0, cache.epochEntries().size)
+  }
+
+  /**
+    * Append a bunch of messages to a log and then re-open it with recovery and check that the leader epochs are recovered properly.
+    */
+  @Test
+  def testLogRecoversForLeaderEpoch() {
+    val log = new Log(logDir, LogConfig(new Properties()), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    val leaderEpochCache = epochCache(log)
+    val firstBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
+    log.append(records = firstBatch, assignOffsets = false)
+
+    val secondBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 2, offset = 1)
+    log.append(records = secondBatch, assignOffsets = false)
+
+    val thirdBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 2, offset = 2)
+    log.append(records = thirdBatch, assignOffsets = false)
+
+    val fourthBatch = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 3, offset = 3)
+    log.append(records = fourthBatch, assignOffsets = false)
+
+    assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+
+    // deliberately remove some of the epoch entries
+    leaderEpochCache.clearLatest(2)
+    assertNotEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), leaderEpochCache.epochEntries)
+    log.close()
+
+    // reopen the log and recover from the beginning
+    val recoveredLog = new Log(logDir, LogConfig(new Properties()), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    val recoveredLeaderEpochCache = epochCache(recoveredLog)
+
+    // epoch entries should be recovered
+    assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
+    recoveredLog.close()
+  }
+
+  /**
+    * Wrap a single record log buffer with leader epoch.
+    */
+  private def singletonRecordsWithLeaderEpoch(value: Array[Byte],
+                                      key: Array[Byte] = null,
+                                      leaderEpoch: Int,
+                                      offset: Long,
+                                      codec: CompressionType = CompressionType.NONE,
+                                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                      magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+    val records = Seq(new SimpleRecord(timestamp, key, value))
+
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, offset,
+      System.currentTimeMillis, leaderEpoch)
+    records.foreach(builder.append)
+    builder.build()
+  }
+
+
   def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
                 retentionBytes: Int = -1, cleanupPolicy: String = "delete"): Log = {
     val logProps = new Properties()
@@ -1582,5 +1796,12 @@ class LogTest extends JUnitSuite {
       scheduler = time.scheduler,
       time = time)
     log
+  }
+
+  private def mockCache(epoch: Int) = {
+    val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
+    EasyMock.expect(cache.latestUsedEpoch()).andReturn(epoch).anyTimes()
+    EasyMock.replay(cache)
+    cache
   }
 }
