@@ -726,8 +726,10 @@ public class StreamThread extends Thread {
                 if (!standbyRecords.isEmpty()) {
                     Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();
 
-                    for (TopicPartition partition : standbyRecords.keySet()) {
-                        List<ConsumerRecord<byte[], byte[]>> remaining = standbyRecords.get(partition);
+                    for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> entry :
+                            standbyRecords.entrySet()) {
+                        TopicPartition partition = entry.getKey();
+                        List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
                         if (remaining != null) {
                             StandbyTask task = standbyTasksByPartition.get(partition);
                             remaining = task.update(partition, remaining);
@@ -1151,8 +1153,8 @@ public class StreamThread extends Thread {
         // iterate and print active tasks
         if (activeTasks != null) {
             sb.append(indent).append("\tActive tasks:\n");
-            for (TaskId tId : activeTasks.keySet()) {
-                StreamTask task = activeTasks.get(tId);
+            for (final Map.Entry<TaskId, StreamTask> entry : activeTasks.entrySet()) {
+                StreamTask task = entry.getValue();
                 sb.append(indent).append(task.toString(indent + "\t\t"));
             }
         }
@@ -1160,8 +1162,7 @@ public class StreamThread extends Thread {
         // iterate and print standby tasks
         if (standbyTasks != null) {
             sb.append(indent).append("\tStandby tasks:\n");
-            for (TaskId tId : standbyTasks.keySet()) {
-                StandbyTask task = standbyTasks.get(tId);
+            for (StandbyTask task : standbyTasks.values()) {
                 sb.append(indent).append(task.toString(indent + "\t\t"));
             }
             sb.append("\n");
