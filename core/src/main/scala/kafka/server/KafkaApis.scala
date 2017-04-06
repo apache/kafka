@@ -109,7 +109,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.END_TXN => handleEndTransactionRequest(request)
         case ApiKeys.WRITE_TXN_MARKER => handleWriteTxnMarkerRequest(request)
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-        case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1328,28 +1327,28 @@ class KafkaApis(val requestChannel: RequestChannel,
     txnCoordinator.handleInitPid(initPidRequest.transactionalId, sendResponseCallback)
   }
 
-  def handleEndTransactionRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException
+  def handleEndTxnRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException("Not implemented yet.")
   }
 
-  def handleAbortTransactionRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException
+  def handleAbortTxnRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException("Not implemented yet.")
   }
 
-  def handleAddPartitionToTransactionRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException
+  def handleAddPartitionToTxnRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException("Not implemented yet.")
   }
 
-  def handleAddOffsetsToTransactionRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException
+  def handleAddOffsetsToTxnRequest(request: Request): Unit = {
+    throw new UnsupportedOperationException("Not implemented yet.")
   }
 
   def handleWriteTxnMarkerRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException
+    throw new UnsupportedOperationException("Not implemented yet.")
   }
 
   def handleTxnOffsetCommitRequest(request: Request): Unit = {
-    throw new UnsupportedOperationException
+    throw new UnsupportedOperationException("Not implemented yet.")
   }
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {

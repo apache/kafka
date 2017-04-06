@@ -1259,7 +1259,7 @@ public class Protocol {
             new Field("producer_epoch",
                     INT16,
                     "Current epoch associated with the producer id."),
-            new Field("topic_partitions",
+            new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(INT32)))),
@@ -1291,7 +1291,13 @@ public class Protocol {
     public static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
             new Field("error_code",
                     INT16,
-                    "An integer error code.")
+                    "An integer error code."),
+            new Field("coordinator",
+                    new ArrayOf(new Schema(
+                            new Field("node_id", INT32, "The broker id."),
+                            new Field("host", STRING, "The hostname of the broker."),
+                            new Field("port", INT32, "The port on which the broker accepts requests."))),
+                    "The coordinator for this ongoing transaction.")
     );
 
     public static final Schema[] ADD_OFFSETS_TO_TXN_REQUEST = new Schema[] {ADD_OFFSETS_TO_TXN_REQUEST_V0};
@@ -1308,7 +1314,7 @@ public class Protocol {
                     INT16,
                     "Current epoch associated with the producer id."),
             new Field("transaction_result",
-                    INT8,
+                    BOOLEAN,
                     "The result of the transaction (0 = COMMIT, 1 = ABORT)")
     );
 
@@ -1331,14 +1337,14 @@ public class Protocol {
             new Field("transaction_result",
                     INT8,
                     "The result of the transaction to write to the partitions (0 = COMMIT, 1 = ABORT)."),
-            new Field("topic_partitions",
+            new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(INT32)))),
                     "The partitions to write markers for.")
     );
 
-    public static final Schema WRITE_TXN_MARKER_REQUEST_V0 = new Schema(
+    public static final Schema WRITE_TXN_MARKERS_REQUEST_V0 = new Schema(
             new Field("coordinator_epoch",
                     INT32,
                     "Epoch associated with the transaction state partition hosted by this transaction coordinator."),
@@ -1356,19 +1362,19 @@ public class Protocol {
             new Field("producer_id",
                     INT64,
                     "Current producer id in use by the transactional id."),
-            new Field("topic_partitions",
+            new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(WRITE_TXN_MARKER_PARTITION_ERROR_RESPONSE_V0)))),
                     "Errors per partition from writing markers.")
     );
 
-    public static final Schema WRITE_TXN_MARKER_RESPONSE_V0 = new Schema(
+    public static final Schema WRITE_TXN_MARKERS_RESPONSE_V0 = new Schema(
             new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKER_ENTRY_RESPONSE_V0), "Errors per partition from writing markers.")
     );
 
-    public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKER_REQUEST_V0};
-    public static final Schema[] WRITE_TXN_RESPONSE = new Schema[] {WRITE_TXN_MARKER_RESPONSE_V0};
+    public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKERS_REQUEST_V0};
+    public static final Schema[] WRITE_TXN_RESPONSE = new Schema[] {WRITE_TXN_MARKERS_RESPONSE_V0};
 
     public static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
             new Field("partition", INT32),
@@ -1389,7 +1395,7 @@ public class Protocol {
             new Field("retention_time",
                     INT64,
                     "The time in ms to retain the offset."),
-            new Field("topic_partitions",
+            new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
@@ -1402,7 +1408,7 @@ public class Protocol {
     );
 
     public static final Schema TXN_OFFSET_COMMIT_RESPONSE_V0 = new Schema(
-            new Field("topic_partitions",
+            new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0)))),

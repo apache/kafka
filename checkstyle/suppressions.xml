@@ -13,6 +13,10 @@
               files=".*/protocol/Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
               files=".*/common/utils/Utils.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files=".*/requests/AbstractRequest.java"/>
+    <suppress checks="ClassFanOutComplexity"
+              files=".*/requests/AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
               files="KerberosLogin.java"/>

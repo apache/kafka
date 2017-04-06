@@ -138,7 +138,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             Map<Integer, CommittedOffset> partitionOffsets = topicAndPartitions.getValue();
             Object[] partitionOffsetsArray = new Object[partitionOffsets.size()];
             int j = 0;
-            for (Map.Entry<Integer, CommittedOffset> partitionOffset: partitionOffsets.entrySet()) {
+            for (Map.Entry<Integer, CommittedOffset> partitionOffset : partitionOffsets.entrySet()) {
                 Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
                 partitionOffsetStruct.set(PARTITION_KEY_NAME, partitionOffset.getKey());
                 CommittedOffset committedOffset = partitionOffset.getValue();
@@ -180,8 +180,15 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         public String toString() {
             return "CommittedOffset(" +
                     "offset=" + offset +
-                    ", metadata='" + metadata + '\'' +
-                    ')';
+                    ", metadata='" + metadata + "')";
+        }
+
+        public long offset() {
+            return offset;
+        }
+
+        public String metadata() {
+            return metadata;
         }
     }
 
