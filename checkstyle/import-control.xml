@@ -101,6 +101,10 @@
       <allow pkg="org.apache.kafka.common.errors" />
     </subpackage>
 
+    <subpackage name="header">
+      <allow pkg="org.apache.kafka.common.record" />
+    </subpackage>
+
     <subpackage name="requests">
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.network" />

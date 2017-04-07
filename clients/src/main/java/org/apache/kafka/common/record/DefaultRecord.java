@@ -407,12 +407,14 @@ public class DefaultRecord implements Record {
             String headerKey = Utils.utf8(buffer, headerKeySize);
             buffer.position(buffer.position() + headerKeySize);
 
-            byte[] headerValue = null;
+            ByteBuffer headerValue = null;
             int headerValueSize = ByteUtils.readVarint(buffer);
             if (headerValueSize >= 0) {
-                headerValue = Utils.toArray(buffer, headerValueSize);
+                headerValue = buffer.slice();
+                headerValue.limit(headerValueSize);
                 buffer.position(buffer.position() + headerValueSize);
             }
+
             headers[i] = new RecordHeader(headerKey, headerValue);
         }
 

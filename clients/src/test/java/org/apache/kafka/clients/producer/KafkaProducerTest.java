@@ -28,7 +28,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.header.RecordHeader;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.ExtendedSerializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -356,8 +356,8 @@ public class KafkaProducerTest {
     public void testHeaders() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        ExtendedSerializer keySerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
-        ExtendedSerializer valueSerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
+        Serializer keySerializer = PowerMock.createNiceMock(Serializer.class);
+        Serializer valueSerializer = PowerMock.createNiceMock(Serializer.class);
 
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, keySerializer, valueSerializer);
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);

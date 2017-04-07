@@ -24,11 +24,11 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.AbstractIterator;
 
 public class RecordHeaders implements Headers, Closeable {
     
-    private static final Header[] EMPTY_HEADERS = new Header[0];
     private final List<Header> headers;
     private volatile boolean isClosed = false;
 
@@ -119,18 +119,18 @@ public class RecordHeaders implements Headers, Closeable {
     }
 
     public Header[] toArray() {
-        return headers.isEmpty() ? EMPTY_HEADERS : headers.toArray(new Header[headers.size()]);
+        return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[headers.size()]);
     }
     
     private void checkKey(String key) {
         if (key == null) {
-            throw new IllegalArgumentException("key cannot be null");
+            throw new IllegalArgumentException("key cannot be null.");
         }
     }
     
     private void checkClosed() {
         if (isClosed) {
-            throw new IllegalStateException("RecordHeaders isClosed");
+            throw new IllegalStateException("RecordHeaders has been closed.");
         }
     }
 

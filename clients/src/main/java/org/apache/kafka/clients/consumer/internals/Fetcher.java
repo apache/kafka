@@ -60,8 +60,6 @@ import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.ExtendedDeserializer;
-import org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -108,8 +106,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
 
-    private final ExtendedDeserializer<K> keyDeserializer;
-    private final ExtendedDeserializer<V> valueDeserializer;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
     private final IsolationLevel isolationLevel;
 
     private PartitionRecords nextInLineRecords = null;
@@ -141,8 +139,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.fetchSize = fetchSize;
         this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
-        this.keyDeserializer = ensureExtended(keyDeserializer);
-        this.valueDeserializer = ensureExtended(valueDeserializer);
+        this.keyDeserializer = keyDeserializer;
+        this.valueDeserializer = valueDeserializer;
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
@@ -151,10 +149,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         subscriptions.addListener(this);
     }
 
-    private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
-        return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new Wrapper<>(deserializer);
-    }
-    
     /**
      * Represents data about an offset returned by a broker.
      */
