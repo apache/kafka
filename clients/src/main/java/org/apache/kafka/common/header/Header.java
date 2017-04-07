@@ -17,10 +17,6 @@
 package org.apache.kafka.common.header;
 
 public interface Header {
-    
-    static Header create(String key, byte[] value) {
-        return new RecordHeader(key, value);
-    }
    
     String key();
 

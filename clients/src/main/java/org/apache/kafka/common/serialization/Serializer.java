@@ -19,8 +19,6 @@ package org.apache.kafka.common.serialization;
 import java.io.Closeable;
 import java.util.Map;
 
-import org.apache.kafka.common.header.Headers;
-
 /**
  *
  * @param <T> Type to be serialized from.
@@ -43,17 +41,7 @@ public interface Serializer<T> extends Closeable {
      * @param data typed data
      * @return serialized bytes
      */
-    public default byte[] serialize(String topic, Headers headers, T data) {
-        return serialize(topic, data);
-    }
-    
-    /**
-     * @param topic topic associated with data
-     * @param data typed data
-     * @return serialized bytes
-     */
     public byte[] serialize(String topic, T data);
-
 
     /**
      * Close this serializer.
