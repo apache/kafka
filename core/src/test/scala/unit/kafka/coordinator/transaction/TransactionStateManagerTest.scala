@@ -256,7 +256,7 @@ class TransactionStateManagerTest {
     transactionManager.addTransaction(txnId1, txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
-    expectedError = Errors.PRODUCER_FENCED
+    expectedError = Errors.INVALID_PRODUCER_EPOCH
 
     val newMetadata = txnMetadata1.copy()
     newMetadata.state = Ongoing
@@ -277,7 +277,7 @@ class TransactionStateManagerTest {
     transactionManager.addTransaction(txnId1, txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
-    expectedError = Errors.PRODUCER_FENCED
+    expectedError = Errors.INVALID_PRODUCER_EPOCH
 
     val newMetadata = txnMetadata1.copy()
     newMetadata.state = Ongoing

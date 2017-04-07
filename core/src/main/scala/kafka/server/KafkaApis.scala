@@ -1380,8 +1380,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-      addPartitionsToTxnRequest.pid,
-      addPartitionsToTxnRequest.epoch,
+      addPartitionsToTxnRequest.producerId(),
+      addPartitionsToTxnRequest.producerEpoch(),
       partitionsToAdd.asScala.toSet,
       sendResponseCallback)
   }
@@ -1400,13 +1400,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-      addOffsetsToTxnRequest.pid,
-      addOffsetsToTxnRequest.epoch,
+      addOffsetsToTxnRequest.producerId(),
+      addOffsetsToTxnRequest.producerEpoch(),
       Set[TopicPartition](offsetTopicPartition),
       sendResponseCallback)
   }
 
-  def handleTxnOffsetCommitRequest(request: Request): Unit = {
+  def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
     val emptyResponse = new java.util.HashMap[TopicPartition, Errors]()
     requestChannel.sendResponse(new RequestChannel.Response(request, new TxnOffsetCommitResponse(emptyResponse)))
   }

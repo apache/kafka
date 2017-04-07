@@ -132,7 +132,7 @@ class TransactionCoordinatorTest {
     assertEquals(InitPidResult(2L, 1, Errors.NONE), result)
 
     coordinator.handleInitPid("b", transactionTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(-1L, -1, Errors.NOT_COORDINATOR_FOR_GROUP), result)
+    assertEquals(InitPidResult(-1L, -1, Errors.NOT_COORDINATOR), result)
   }
 
   @Test
@@ -167,7 +167,7 @@ class TransactionCoordinatorTest {
     assertEquals(Errors.INVALID_PID_MAPPING, error)
 
     coordinator.handleAddPartitionsToTransaction("a", 0L, 0, Set[TopicPartition](new TopicPartition("topic1", 0)), addPartitionsMockCallback)
-    assertEquals(Errors.PRODUCER_FENCED, error)
+    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
 
     capturedTxn.getValue.state = PrepareCommit
     coordinator.handleAddPartitionsToTransaction("a", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), addPartitionsMockCallback)
