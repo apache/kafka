@@ -31,7 +31,7 @@ import kafka.controller.KafkaController
 import kafka.coordinator.{GroupCoordinator, InitPidResult, JoinGroupResult, TransactionCoordinator}
 import kafka.log._
 import kafka.network._
-import kafka.network.RequestChannel.{Response, Session}
+import kafka.network.RequestChannel.{Request, Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
@@ -40,7 +40,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords, TimestampType}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -104,7 +104,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitPidRequest(request)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case requestId => throw new KafkaException("Unknown api code " + requestId)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+        case ApiKeys.END_TXN => handleEndTxnRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1321,6 +1325,28 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
     txnCoordinator.handleInitPid(initPidRequest.transactionalId, sendResponseCallback)
+  }
+
+  def handleEndTxnRequest(request: Request): Unit = {
+    requestChannel.sendResponse(new RequestChannel.Response(request, new EndTxnResponse(Errors.UNSUPPORTED_VERSION)))
+  }
+
+  def handleAddPartitionToTxnRequest(request: Request): Unit = {
+    requestChannel.sendResponse(new RequestChannel.Response(request, new AddPartitionsToTxnResponse(Errors.UNSUPPORTED_VERSION)))
+  }
+
+  def handleAddOffsetsToTxnRequest(request: Request): Unit = {
+    requestChannel.sendResponse(new RequestChannel.Response(request, new AddOffsetsToTxnResponse(Errors.UNSUPPORTED_VERSION)))
+  }
+
+  def handleWriteTxnMarkersRequest(request: Request): Unit = {
+    val emptyResponse = new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
+    requestChannel.sendResponse(new RequestChannel.Response(request, new WriteTxnMarkersResponse(emptyResponse)))
+  }
+
+  def handleTxnOffsetCommitRequest(request: Request): Unit = {
+    val emptyResponse = new java.util.HashMap[TopicPartition, Errors]()
+    requestChannel.sendResponse(new RequestChannel.Response(request, new TxnOffsetCommitResponse(emptyResponse)))
   }
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {

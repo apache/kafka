@@ -56,7 +56,7 @@ public class FetchResponse extends AbstractResponse {
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     // aborted transaction field names
-    private static final String PID_KEY_NAME = "pid";
+    private static final String PID_KEY_NAME = "producer_id";
     private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
 
     private static final int DEFAULT_THROTTLE_TIME = 0;
@@ -78,11 +78,11 @@ public class FetchResponse extends AbstractResponse {
     private final int throttleTimeMs;
 
     public static final class AbortedTransaction {
-        public final long pid;
+        public final long producerId;
         public final long firstOffset;
 
-        public AbortedTransaction(long pid, long firstOffset) {
-            this.pid = pid;
+        public AbortedTransaction(long producerId, long firstOffset) {
+            this.producerId = producerId;
             this.firstOffset = firstOffset;
         }
 
@@ -95,19 +95,19 @@ public class FetchResponse extends AbstractResponse {
 
             AbortedTransaction that = (AbortedTransaction) o;
 
-            return pid == that.pid && firstOffset == that.firstOffset;
+            return producerId == that.producerId && firstOffset == that.firstOffset;
         }
 
         @Override
         public int hashCode() {
-            int result = (int) (pid ^ (pid >>> 32));
+            int result = (int) (producerId ^ (producerId >>> 32));
             result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
             return result;
         }
 
         @Override
         public String toString() {
-            return "(pid=" + pid + ", firstOffset=" + firstOffset + ")";
+            return "(producerId=" + producerId + ", firstOffset=" + firstOffset + ")";
         }
     }
 
@@ -211,9 +211,9 @@ public class FetchResponse extends AbstractResponse {
                         abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
                         for (Object abortedTransactionObj : abortedTransactionsArray) {
                             Struct abortedTransactionStruct = (Struct) abortedTransactionObj;
-                            long pid = abortedTransactionStruct.getLong(PID_KEY_NAME);
+                            long producerId = abortedTransactionStruct.getLong(PID_KEY_NAME);
                             long firstOffset = abortedTransactionStruct.getLong(FIRST_OFFSET_KEY_NAME);
-                            abortedTransactions.add(new AbortedTransaction(pid, firstOffset));
+                            abortedTransactions.add(new AbortedTransaction(producerId, firstOffset));
                         }
                     }
                 }
@@ -339,7 +339,7 @@ public class FetchResponse extends AbstractResponse {
                         List<Struct> abortedTransactionStructs = new ArrayList<>(fetchPartitionData.abortedTransactions.size());
                         for (AbortedTransaction abortedTransaction : fetchPartitionData.abortedTransactions) {
                             Struct abortedTransactionStruct = partitionDataHeader.instance(ABORTED_TRANSACTIONS_KEY_NAME);
-                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.pid);
+                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.producerId);
                             abortedTransactionStruct.set(FIRST_OFFSET_KEY_NAME, abortedTransaction.firstOffset);
                             abortedTransactionStructs.add(abortedTransactionStruct);
                         }

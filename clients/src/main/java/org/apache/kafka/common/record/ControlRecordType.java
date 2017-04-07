@@ -40,8 +40,8 @@ import java.nio.ByteBuffer;
  * The schema for the value field is left to the control record type to specify.
  */
 public enum ControlRecordType {
-    COMMIT((short) 0),
-    ABORT((short) 1),
+    ABORT((short) 0),
+    COMMIT((short) 1),
 
     // UNKNOWN is used to indicate a control type which the client is not aware of and should be ignored
     UNKNOWN((short) -1);
@@ -77,9 +77,9 @@ public enum ControlRecordType {
         short type = key.getShort(2);
         switch (type) {
             case 0:
-                return COMMIT;
-            case 1:
                 return ABORT;
+            case 1:
+                return COMMIT;
             default:
                 return UNKNOWN;
         }
