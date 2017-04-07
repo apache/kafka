@@ -17,6 +17,8 @@
 package kafka.log
 
 import java.io.{File, IOException}
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
 import kafka.common._
@@ -468,9 +470,10 @@ class LogSegment(val log: FileRecords,
    * Change the last modified time for this log segment
    */
   def lastModified_=(ms: Long) = {
-    log.file.setLastModified(ms)
-    index.file.setLastModified(ms)
-    timeIndex.file.setLastModified(ms)
+    val fileTime = FileTime.fromMillis(ms)
+    Files.setLastModifiedTime(log.file.toPath, fileTime)
+    Files.setLastModifiedTime(index.file.toPath, fileTime)
+    Files.setLastModifiedTime(timeIndex.file.toPath, fileTime)
   }
 }
 

@@ -104,6 +104,9 @@ private[kafka] object TopicCount extends Logging {
   def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkUtils: ZkUtils, excludeInternalTopics: Boolean) =
     new WildcardTopicCount(zkUtils, consumerIdString, filter, numStreams, excludeInternalTopics)
 
+  override def equals(o: Any): Boolean = {
+    throw new KafkaException("can't use equals here")
+  }
 }
 
 private[kafka] class StaticTopicCount(val consumerIdString: String,
@@ -111,14 +114,6 @@ private[kafka] class StaticTopicCount(val consumerIdString: String,
                                 extends TopicCount {
 
   def getConsumerThreadIdsPerTopic = TopicCount.makeConsumerThreadIdsPerTopic(consumerIdString, topicCountMap)
-
-  override def equals(obj: Any): Boolean = {
-    obj match {
-      case null => false
-      case n: StaticTopicCount => consumerIdString == n.consumerIdString && topicCountMap == n.topicCountMap
-      case _ => false
-    }
-  }
 
   def getTopicCountMap = topicCountMap
 
