@@ -127,7 +127,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
 
   private def setAcl(path: String, setPromise: Promise[String]) = {
     info("Setting ACL for path %s".format(path))
-    zkUtils.zkConnection.getZookeeper.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, setPromise)
+    zkUtils.zkConnection.getZookeeper.setACL(path, zkUtils.defaultAcls(path), -1, SetACLCallback, setPromise)
   }
 
   private def getChildren(path: String, childrenPromise: Promise[String]) = {
@@ -201,7 +201,7 @@ class ZkSecurityMigrator(zkUtils: ZkUtils) extends Logging {
           info("Successfully set ACLs for %s".format(path))
           promise success "done"
         case Code.CONNECTIONLOSS =>
-            zkHandle.setACL(path, ZkUtils.DefaultAcls(zkUtils.isSecure), -1, SetACLCallback, ctx)
+            zkHandle.setACL(path, zkUtils.defaultAcls(path), -1, SetACLCallback, ctx)
         case Code.NONODE =>
           warn("Znode is gone, it could be have been legitimately deleted: %s".format(path))
           promise success "done"
