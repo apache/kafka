@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -84,11 +85,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(version);
         epochsByPartition = new HashMap<>();
-        for (Object t : struct.getArray(TOPICS)) {
-            Struct topicAndEpochs = (Struct) t;
+        for (Object topicAndEpochsObj : struct.getArray(TOPICS)) {
+            Struct topicAndEpochs = (Struct) topicAndEpochsObj;
             String topic = topicAndEpochs.getString(TOPIC);
-            for (Object e : topicAndEpochs.getArray(PARTITIONS)) {
-                Struct partitionAndEpoch = (Struct) e;
+            for (Object partitionAndEpochObj : topicAndEpochs.getArray(PARTITIONS)) {
+                Struct partitionAndEpoch = (Struct) partitionAndEpochObj;
                 int partitionId = partitionAndEpoch.getInt(PARTITION_ID);
                 int epoch = partitionAndEpoch.getInt(LEADER_EPOCH);
                 TopicPartition tp = new TopicPartition(topic, partitionId);
@@ -103,36 +104,26 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
+        Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
 
-        //Group by topic
-        Map<String, List<PartitionLeaderEpoch>> topicsToPartitionEpochs = new HashMap<>();
-        for (TopicPartition tp : epochsByPartition.keySet()) {
-            List<PartitionLeaderEpoch> partitionEndOffsets = topicsToPartitionEpochs.get(tp.topic());
-            if (partitionEndOffsets == null)
-                partitionEndOffsets = new ArrayList<>();
-            partitionEndOffsets.add(new PartitionLeaderEpoch(tp.partition(), epochsByPartition.get(tp)));
-            topicsToPartitionEpochs.put(tp.topic(), partitionEndOffsets);
-        }
+        Map<String, Map<Integer, Integer>> topicsToPartitionEpochs = CollectionUtils.groupDataByTopic(epochsByPartition);
 
         List<Struct> topics = new ArrayList<>();
-        for (Map.Entry<String, List<PartitionLeaderEpoch>> topicEpochs : topicsToPartitionEpochs.entrySet()) {
-            Struct partition = struct.instance(TOPICS);
-            String topic = topicEpochs.getKey();
-            partition.set(TOPIC, topic);
-            List<PartitionLeaderEpoch> partitionLeaderEpoches = topicEpochs.getValue();
-            List<Struct> partitions = new ArrayList<>(partitionLeaderEpoches.size());
-            for (PartitionLeaderEpoch partitionLeaderEpoch : partitionLeaderEpoches) {
-                Struct partitionRow = partition.instance(PARTITIONS);
-                partitionRow.set(PARTITION_ID, partitionLeaderEpoch.partitionId);
-                partitionRow.set(LEADER_EPOCH, partitionLeaderEpoch.epoch);
-                partitions.add(partitionRow);
+        for (Map.Entry<String, Map<Integer, Integer>> topicToEpochs : topicsToPartitionEpochs.entrySet()) {
+            Struct topicsStruct = requestStruct.instance(TOPICS);
+            topicsStruct.set(TOPIC, topicToEpochs.getKey());
+            List<Struct> partitions = new ArrayList<>();
+            for (Map.Entry<Integer, Integer> partitionEpoch : topicToEpochs.getValue().entrySet()) {
+                Struct partitionStruct = topicsStruct.instance(PARTITIONS);
+                partitionStruct.set(PARTITION_ID, partitionEpoch.getKey());
+                partitionStruct.set(LEADER_EPOCH, partitionEpoch.getValue());
+                partitions.add(partitionStruct);
             }
-            partition.set(PARTITIONS, partitions.toArray());
-            topics.add(partition);
+            topicsStruct.set(PARTITIONS, partitions.toArray());
+            topics.add(topicsStruct);
         }
-        struct.set(TOPICS, topics.toArray());
-        return struct;
+        requestStruct.set(TOPICS, topics.toArray());
+        return requestStruct;
     }
 
     @Override
@@ -143,33 +134,5 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             errorResponse.put(tp, new EpochEndOffset(error, EpochEndOffset.UNDEFINED_EPOCH_OFFSET));
         }
         return new OffsetsForLeaderEpochResponse(errorResponse);
-    }
-
-    private static class PartitionLeaderEpoch {
-        final int partitionId;
-        final int epoch;
-
-        public PartitionLeaderEpoch(int partitionId, int epoch) {
-            this.partitionId = partitionId;
-            this.epoch = epoch;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            PartitionLeaderEpoch other = (PartitionLeaderEpoch) o;
-
-            if (partitionId != other.partitionId) return false;
-            return epoch == other.epoch;
-        }
-
-        @Override
-        public int hashCode() {
-            int result = partitionId;
-            result = 31 * result + epoch;
-            return result;
-        }
     }
 }
