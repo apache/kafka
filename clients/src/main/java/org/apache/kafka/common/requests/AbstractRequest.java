@@ -176,6 +176,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case OFFSET_FOR_LEADER_EPOCH:
                 request = new OffsetsForLeaderEpochRequest(struct, version);
+                break;
             case ADD_PARTITIONS_TO_TXN:
                 request = new AddPartitionsToTxnRequest(struct, version);
                 break;
