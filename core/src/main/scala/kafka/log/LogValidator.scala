@@ -48,7 +48,7 @@ private[kafka] object LogValidator extends Logging {
                                                       now: Long,
                                                       sourceCodec: CompressionCodec,
                                                       targetCodec: CompressionCodec,
-                                                      compactedTopic: Boolean = false,
+                                                      compactedTopic: Boolean,
                                                       magic: Byte,
                                                       timestampType: TimestampType,
                                                       timestampDiffMaxMs: Long,
@@ -195,8 +195,8 @@ private[kafka] object LogValidator extends Logging {
                                                  now: Long,
                                                  sourceCodec: CompressionCodec,
                                                  targetCodec: CompressionCodec,
-                                                 compactedTopic: Boolean = false,
-                                                 magic: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+                                                 compactedTopic: Boolean,
+                                                 magic: Byte,
                                                  timestampType: TimestampType,
                                                  timestampDiffMaxMs: Long,
                                                  partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
@@ -238,7 +238,7 @@ private[kafka] object LogValidator extends Logging {
         val (pid, epoch, sequence) = {
           // note that we only reassign offsets for requests coming straight from a producer. For records with magic V2,
           // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
-          // with older magic versions, this will never be a producer id, etc.
+          // with older magic versions, there will never be a producer id, etc.
           val first = records.batches.asScala.head
           (first.producerId, first.producerEpoch, first.baseSequence)
         }

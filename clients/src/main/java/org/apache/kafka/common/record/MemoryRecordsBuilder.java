@@ -189,8 +189,14 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Get the max timestamp and its offset. If the log append time is used, then the offset will
-     * be either the first offset in the set if no compression is used or the last offset otherwise.
+     * Get the max timestamp and its offset. The details of the offset returned are a bit subtle.
+     *
+     * If the log append time is used, the offset will be the last offset unless no compression is used and
+     * the message format version is 0 or 1, in which case, it will be the first offset.
+     *
+     * If create time is used, the offset will be the last offset unless no compression is used and the message
+     * format version is 0 or 1, in which case, it will be the offset of the record with the max timestamp.
+     *
      * @return The max timestamp and its offset
      */
     public RecordsInfo info() {
