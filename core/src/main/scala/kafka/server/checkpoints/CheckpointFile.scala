@@ -83,6 +83,8 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
         if (line == null)
           return Seq.empty
         line.toInt match {
+          // Backticks are required to match against the value of the version field instead of introducing a new
+          // variable called version
           case `version` =>
             line = reader.readLine()
             if (line == null)
