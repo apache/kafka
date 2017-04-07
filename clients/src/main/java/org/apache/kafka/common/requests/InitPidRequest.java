@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class InitPidRequest extends AbstractRequest {
-    public static final int NO_TRANSACTION_TIMEOUT_MS = -1;
+    public static final int NO_TRANSACTION_TIMEOUT_MS = Integer.MAX_VALUE;
 
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
     private static final String TRANSACTION_TIMEOUT_KEY_NAME = "transaction_timeout_ms";
