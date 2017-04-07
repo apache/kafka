@@ -106,18 +106,18 @@ object ZkUtils {
     (zkClient, zkConnection)
   }
 
-  def SensitivePath(path: String): Boolean = {
-    path == null || !SensitiveZkRootPaths.forall(!path.startsWith(_))
+  def sensitivePath(path: String): Boolean = {
+    path != null && !SensitiveZkRootPaths.forall(!path.startsWith(_))
   }
 
-  @deprecated("This is deprecated, use DefaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.11.0.0")
+  @deprecated("This is deprecated, use DefaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.10.2.1")
   def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = DefaultAcls(isSecure, "")
 
   def DefaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = {
     if (isSecure) {
       val list = new java.util.ArrayList[ACL]
       list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
-      if (!SensitivePath(path)) {
+      if (!sensitivePath(path)) {
         list.addAll(ZooDefs.Ids.READ_ACL_UNSAFE)
       }
       list
@@ -235,7 +235,7 @@ class ZkUtils(val zkClient: ZkClient,
                               IsrChangeNotificationPath,
                               PidBlockPath)
 
-  @deprecated("This is deprecated, use defaultAcls(path) which doesn't make sensitive data world readable", since = "0.11.0.0")
+  @deprecated("This is deprecated, use defaultAcls(path) which doesn't make sensitive data world readable", since = "0.10.2.1")
   val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure, "")
 
   private val useDefaultAcl  = Collections.emptyList[ACL]

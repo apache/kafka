@@ -207,7 +207,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     ZkSecurityMigrator.run(Array(s"--zookeeper.acl=$secureOpt", s"--zookeeper.connect=$zkUrl"))
     info("Done with migration")
     for (path <- ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths) {
-      val sensitive = ZkUtils.SensitivePath(path)
+      val sensitive = ZkUtils.sensitivePath(path)
       val listParent = secondZk.zkConnection.getAcl(path).getKey
       assertTrue(path, isAclCorrect(listParent, secondZk.isSecure, sensitive))
 
@@ -224,7 +224,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    * Verifies that the path has the appropriate secure ACL.
    */
   private def verify(path: String): Boolean = {
-    val sensitive = ZkUtils.SensitivePath(path)
+    val sensitive = ZkUtils.sensitivePath(path)
     val list = zkUtils.zkConnection.getAcl(path).getKey
     list.asScala.forall(isAclSecure(_, sensitive))
   }
