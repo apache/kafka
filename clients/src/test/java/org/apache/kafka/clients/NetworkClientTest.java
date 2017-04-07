@@ -156,7 +156,7 @@ public class NetworkClientTest {
                 node.idString(), builder, time.milliseconds(), true, handler1);
         client.send(request1, time.milliseconds());
         client.poll(1, time.milliseconds());
-        assertEquals("There should be 1 in-flight request after 1 send",1, client.inFlightRequestCount());
+        assertEquals("There should be 1 in-flight request after 1 send", 1, client.inFlightRequestCount());
 
         // Send request 2
         builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
@@ -166,7 +166,7 @@ public class NetworkClientTest {
                 node.idString(), builder, time.milliseconds(), true, handler2);
         client.send(request2, time.milliseconds());
         client.poll(1, time.milliseconds());
-        assertEquals("There should be 2 in-flight request after 2 sends",2, client.inFlightRequestCount());
+        assertEquals("There should be 2 in-flight request after 2 sends", 2, client.inFlightRequestCount());
 
         // Complete request 1
         ResponseHeader respHeader = new ResponseHeader(request1.correlationId());
@@ -186,7 +186,7 @@ public class NetworkClientTest {
         assertTrue("Should have a response body.", handler1.response.hasResponse());
         assertEquals("Should be correlated to the original request",
                 request1.correlationId(), handler1.response.requestHeader().correlationId());
-        assertEquals("There should be 1 in-flight request after 1 send completed",1, client.inFlightRequestCount());
+        assertEquals("There should be 1 in-flight request after 1 send completed", 1, client.inFlightRequestCount());
 
         // Complete request 2
         respHeader = new ResponseHeader(request2.correlationId());
@@ -205,7 +205,7 @@ public class NetworkClientTest {
         assertTrue("Should have a response body.", handler2.response.hasResponse());
         assertEquals("Should be correlated to the original request",
                 request2.correlationId(), handler2.response.requestHeader().correlationId());
-        assertEquals("There should be no in-flight requests after 2 sends completed",0, client.inFlightRequestCount());
+        assertEquals("There should be no in-flight requests after 2 sends completed", 0, client.inFlightRequestCount());
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
