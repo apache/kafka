@@ -18,7 +18,7 @@ package kafka.server.checkpoints
 
 import java.io._
 import java.nio.charset.StandardCharsets
-import java.nio.file.{FileSystems, Paths}
+import java.nio.file.{FileAlreadyExistsException, FileSystems, Files, Paths}
 import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.Utils
 import scala.collection.{Seq, mutable}
@@ -33,7 +33,9 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
   private val path = file.toPath.toAbsolutePath
   private val tempPath = Paths.get(path.toString + ".tmp")
   private val lock = new Object()
-  file.createNewFile()
+  
+  try Files.createFile(file.toPath) // create the file if it doesn't exist
+  catch { case _: FileAlreadyExistsException => }
 
   def write(entries: Seq[T]) {
     lock synchronized {

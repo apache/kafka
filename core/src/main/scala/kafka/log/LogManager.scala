@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.nio.file.Files
 import java.util.concurrent._
 
 import kafka.admin.AdminUtils
@@ -295,7 +296,7 @@ class LogManager(val logDirs: Array[File],
 
         // mark that the shutdown was clean by creating marker file
         debug("Writing clean shutdown marker at " + dir)
-        CoreUtils.swallow(new File(dir, Log.CleanShutdownFile).createNewFile())
+        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath))
       }
     } catch {
       case e: ExecutionException => {
@@ -408,7 +409,7 @@ class LogManager(val logDirs: Array[File],
       getLog(topicPartition).getOrElse {
         val dataDir = nextLogDir()
         val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
-        dir.mkdirs()
+        Files.createDirectories(dir.toPath)
 
         val log = new Log(
           dir = dir,
