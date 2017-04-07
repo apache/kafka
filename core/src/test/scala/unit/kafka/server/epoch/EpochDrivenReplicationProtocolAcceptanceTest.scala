@@ -18,7 +18,6 @@
 package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
-import java.util
 import java.util.Properties
 
 import kafka.admin.AdminUtils
