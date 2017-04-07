@@ -833,7 +833,6 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
             <li> parameter <code>zookeeper.connect</code> was deprecated; a Kafka Streams application does no longer interact with Zookeeper for topic management but uses the new broker admin protocol
                 (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-4+-+Command+line+and+centralized+administrative+operations#KIP-4-Commandlineandcentralizedadministrativeoperations-TopicAdminSchema.1">KIP-4, Section "Topic Admin Schema"</a>) </li>
             <li> added many new parameters for metrics, security, and client configurations </li>
-            <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code></li>
         </ul>
 
         <p> Changes in <code>StreamsMetrics</code> interface: </p>
