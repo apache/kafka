@@ -17,26 +17,26 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
+ * The broker returns this error code for any coordinator request if it is still loading the metadata (after a leader change
+ * for that offsets topic partition) for this group.
  */
-public class NotCoordinatorForGroupException extends RetriableException {
+public class CoordinatorLoadingInProgressException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForGroupException() {
+    public CoordinatorLoadingInProgressException() {
         super();
     }
 
-    public NotCoordinatorForGroupException(String message) {
+    public CoordinatorLoadingInProgressException(String message) {
         super(message);
     }
 
-    public NotCoordinatorForGroupException(String message, Throwable cause) {
+    public CoordinatorLoadingInProgressException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForGroupException(Throwable cause) {
+    public CoordinatorLoadingInProgressException(Throwable cause) {
         super(cause);
     }
 

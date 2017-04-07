@@ -85,7 +85,7 @@ class TransactionCoordinatorTest {
 
     coordinator.handleInitPid(null, initPidMockCallback)
     assertEquals(InitPidResult(2L, 0, Errors.NONE), result)
-  }
+ }
 
   def initPidMockCallback(ret: InitPidResult): Unit = {
     result = ret

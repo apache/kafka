@@ -35,7 +35,7 @@ import kafka.network.RequestChannel.{Request, Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -90,7 +90,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CONTROLLED_SHUTDOWN_KEY => handleControlledShutdownRequest(request)
         case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
         case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
-        case ApiKeys.GROUP_COORDINATOR => handleGroupCoordinatorRequest(request)
+        case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
         case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
         case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
         case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
@@ -796,7 +796,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         s"'${config.offsetsTopicReplicationFactor}' for the offsets topic (configured via " +
         s"'${KafkaConfig.OffsetsTopicReplicationFactorProp}'). This error can be ignored if the cluster is starting up " +
         s"and not all brokers are up yet.")
-      new MetadataResponse.TopicMetadata(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Topic.GroupMetadataTopicName, true,
+      new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, Topic.GroupMetadataTopicName, true,
         java.util.Collections.emptyList())
     } else {
       createTopic(Topic.GroupMetadataTopicName, config.offsetsTopicPartitions,
@@ -818,7 +818,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
         if (topic == Topic.GroupMetadataTopicName) {
           val topicMetadata = createGroupMetadataTopic()
-          if (topicMetadata.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE) {
+          if (topicMetadata.error == Errors.COORDINATOR_NOT_AVAILABLE) {
             new MetadataResponse.TopicMetadata(Errors.INVALID_REPLICATION_FACTOR, topic, Topic.isInternal(topic),
               java.util.Collections.emptyList())
           } else topicMetadata
@@ -981,34 +981,44 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new Response(request, offsetFetchResponse))
   }
 
-  def handleGroupCoordinatorRequest(request: RequestChannel.Request) {
-    val groupCoordinatorRequest = request.body[GroupCoordinatorRequest]
+  def handleFindCoordinatorRequest(request: RequestChannel.Request) {
+    val findCoordinatorRequest = request.body[FindCoordinatorRequest]
 
-    if (!authorize(request.session, Describe, new Resource(Group, groupCoordinatorRequest.groupId))) {
-      val responseBody = new GroupCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode)
+    if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.GROUP &&
+      !authorize(request.session, Describe, new Resource(Group, findCoordinatorRequest.coordinatorKey))) {
+
+      val responseBody = new FindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode)
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     } else {
-      val partition = groupCoordinator.partitionFor(groupCoordinatorRequest.groupId)
+      // TODO: Authorize by transactional id if coordinator type is TRANSACTION
 
       // get metadata (and create the topic if necessary)
-      val offsetsTopicMetadata = getOrCreateGroupMetadataTopic(request.listenerName)
+      val (partition, topicMetadata) = findCoordinatorRequest.coordinatorType match {
+        case FindCoordinatorRequest.CoordinatorType.GROUP =>
+          val partition = groupCoordinator.partitionFor(findCoordinatorRequest.coordinatorKey)
+          val metadata = getOrCreateGroupMetadataTopic(request.listenerName)
+          (partition, metadata)
 
-      val responseBody = if (offsetsTopicMetadata.error != Errors.NONE) {
-        new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Node.noNode)
+        case _ =>
+          throw new InvalidRequestException("Unknown coordinator type in FindCoordinator request")
+      }
+
+      val responseBody = if (topicMetadata.error != Errors.NONE) {
+        new FindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
       } else {
-        val coordinatorEndpoint = offsetsTopicMetadata.partitionMetadata().asScala
+        val coordinatorEndpoint = topicMetadata.partitionMetadata.asScala
           .find(_.partition == partition)
           .map(_.leader())
 
         coordinatorEndpoint match {
           case Some(endpoint) if !endpoint.isEmpty =>
-            new GroupCoordinatorResponse(Errors.NONE, endpoint)
+            new FindCoordinatorResponse(Errors.NONE, endpoint)
           case _ =>
-            new GroupCoordinatorResponse(Errors.GROUP_COORDINATOR_NOT_AVAILABLE, Node.noNode)
+            new FindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
         }
       }
 
-      trace("Sending consumer metadata %s for correlation id %d to client %s."
+      trace("Sending FindCoordinator response %s for correlation id %d to client %s."
         .format(responseBody, request.header.correlationId, request.header.clientId))
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
