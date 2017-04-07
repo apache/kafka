@@ -14,8 +14,10 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package unit.kafka.server.checkpoints
-import kafka.server.checkpoints.{OffsetCheckpointFile}
+package kafka.server.checkpoints
+
+import java.io.IOException
+
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
@@ -86,4 +88,13 @@ class OffsetCheckpointFileTest extends JUnitSuite with Logging {
     //Then
     assertEquals(Map(), checkpoint.read())
   }
+
+  @Test(expected = classOf[IOException])
+  def shouldThrowIfVersionIsNotRecognised(): Unit = {
+    val checkpointFile = new CheckpointFile(TestUtils.tempFile(), OffsetCheckpointFile.CurrentVersion + 1,
+      OffsetCheckpointFile.Formatter)
+    checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
+    new OffsetCheckpointFile(checkpointFile.file).read()
+  }
+
 }
