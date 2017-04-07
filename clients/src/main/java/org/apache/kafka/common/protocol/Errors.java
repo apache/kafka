@@ -177,7 +177,7 @@ public enum Errors {
         new OutOfOrderSequenceException("The broker received an out of order sequence number")),
     DUPLICATE_SEQUENCE_NUMBER(46,
         new DuplicateSequenceNumberException("The broker received a duplicate sequence number")),
-    PRODUCER_FENCED(47,
+    INVALID_PRODUCER_EPOCH(47,
         new ProducerFencedException("Producer attempted an operation with an old epoch")),
     INVALID_TXN_STATE(48,
         new InvalidTxnStateException("The producer attempted a transactional operation in an invalid state")),
