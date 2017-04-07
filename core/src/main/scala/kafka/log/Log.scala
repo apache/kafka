@@ -18,22 +18,19 @@
 package kafka.log
 
 import java.io.{File, IOException}
+import java.nio.file.Files
 import java.text.NumberFormat
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 
-import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common._
-import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetRequest
-import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Seq, mutable}
@@ -210,7 +207,7 @@ class Log(@volatile var dir: File,
 
   private def initializeLeaderEpochCache(): LeaderEpochCache = {
     // create the log directory if it doesn't exist
-    dir.mkdirs()
+    Files.createDirectories(dir.toPath)
     new LeaderEpochFileCache(topicPartition, () => logEndOffsetMetadata,
       new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
   }
@@ -227,18 +224,18 @@ class Log(@volatile var dir: File,
       val filename = file.getName
       if(filename.endsWith(DeletedFileSuffix) || filename.endsWith(CleanedFileSuffix)) {
         // if the file ends in .deleted or .cleaned, delete it
-        file.delete()
+        Files.deleteIfExists(file.toPath)
       } else if(filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the .index file, complete the swap operation later
         // if an index just delete it, it will be rebuilt
         val baseName = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if(baseName.getPath.endsWith(IndexFileSuffix)) {
-          file.delete()
+          Files.deleteIfExists(file.toPath)
         } else if(baseName.getPath.endsWith(LogFileSuffix)){
           // delete the index
           val index = new File(CoreUtils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
-          index.delete()
+          Files.deleteIfExists(index.toPath())
           swapFiles += file
         }
       }
@@ -257,7 +254,7 @@ class Log(@volatile var dir: File,
 
         if(!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
-          file.delete()
+          Files.deleteIfExists(file.toPath)
         }
       } else if(filename.endsWith(LogFileSuffix)) {
         // if its a log file, load the corresponding log segment
@@ -286,8 +283,8 @@ class Log(@volatile var dir: File,
             case e: java.lang.IllegalArgumentException =>
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
                 s"${indexFile.getAbsolutePath} and rebuilding index...")
-              indexFile.delete()
-              timeIndexFile.delete()
+              Files.deleteIfExists(timeIndexFile.toPath)
+              Files.delete(indexFile.toPath)
               segment.recover(config.maxMessageSize)
           }
         } else {
