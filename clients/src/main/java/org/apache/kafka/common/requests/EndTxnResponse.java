@@ -19,62 +19,41 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 
-public class InitPidResponse extends AbstractResponse {
-    /**
-     * Possible Error codes:
-     * OK
-     *
-     */
-    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
+public class EndTxnResponse extends AbstractResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+
+    // Possible error codes:
+    //   NotCoordinator
+    //   CoordinatorNotAvailable
+    //   CoordinatorLoadInProgress
+    //   InvalidTxnState
+    //   InvalidPidMapping
+
     private final Errors error;
-    private final long producerId;
-    private final short epoch;
 
-    public InitPidResponse(Errors error, long producerId, short epoch) {
+    public EndTxnResponse(Errors error) {
         this.error = error;
-        this.producerId = producerId;
-        this.epoch = epoch;
     }
 
-    public InitPidResponse(Struct struct) {
+    public EndTxnResponse(Struct struct) {
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
-        this.epoch = struct.getShort(EPOCH_KEY_NAME);
-    }
-
-    public InitPidResponse(Errors errors) {
-        this(errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
-    }
-
-    public long producerId() {
-        return producerId;
     }
 
     public Errors error() {
         return error;
     }
 
-    public short epoch() {
-        return epoch;
-    }
-
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.responseSchema(version));
-        struct.set(PRODUCER_ID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, epoch);
+        Struct struct = new Struct(ApiKeys.END_TXN.responseSchema(version));
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         return struct;
     }
 
-    public static InitPidResponse parse(ByteBuffer buffer, short version) {
-        return new InitPidResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
+    public static EndTxnResponse parse(ByteBuffer buffer, short version) {
+        return new EndTxnResponse(ApiKeys.END_TXN.parseResponse(version, buffer));
     }
-
 }
