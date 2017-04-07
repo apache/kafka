@@ -603,6 +603,10 @@ class Log(@volatile var dir: File,
     val producerAppendInfos = mutable.Map[Long, ProducerAppendInfo]()
 
     for (batch <- records.batches.asScala) {
+      // we only validate V2 and higher to avoid potential compatibility issues with older clients
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.baseOffset != 0)
+        throw new InvalidRecordException(s"The baseOffset of the record batch should be 0, but it is ${batch.baseOffset}")
+
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
       // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
       // For magic version 2, we can get the first offset directly from the batch header.
@@ -621,8 +625,8 @@ class Log(@volatile var dir: File,
       if (batchSize > config.maxMessageSize) {
         BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
         BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
-        throw new RecordTooLargeException(s"Message size is $batchSize bytes which exceeds the maximum configured " +
-          s"message size of ${config.maxMessageSize}.")
+        throw new RecordTooLargeException(s"The record batch size is $batchSize bytes which exceeds the maximum configured " +
+          s"value of ${config.maxMessageSize}.")
       }
 
       // check the validity of the message by checking CRC
@@ -654,7 +658,8 @@ class Log(@volatile var dir: File,
               firstOffset = lastEntry.firstOffset
               lastOffset = lastEntry.lastOffset
               maxTimestamp = lastEntry.timestamp
-              info(s"Detected a duplicate at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). Ignoring the incoming record.")
+              info(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). " +
+                "Ignoring the incoming record.")
             } else {
               val producerAppendInfo = new ProducerAppendInfo(pid, lastEntry)
               producerAppendInfos.put(pid, producerAppendInfo)

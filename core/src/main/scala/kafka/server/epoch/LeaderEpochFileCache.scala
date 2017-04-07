@@ -24,7 +24,6 @@ import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFIN
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.EpochEndOffset
 
 import scala.collection.mutable.ListBuffer
 
@@ -50,7 +49,7 @@ trait LeaderEpochCache {
   */
 class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetMetadata, checkpoint: LeaderEpochCheckpoint) extends LeaderEpochCache with Logging {
   private val lock = new ReentrantReadWriteLock()
-  private var epochs: ListBuffer[EpochEntry] = lock synchronized { ListBuffer(checkpoint.read(): _*) }
+  private var epochs: ListBuffer[EpochEntry] = lock.synchronized { ListBuffer(checkpoint.read(): _*) }
   private var cachedLatestEpoch: Option[Int] = None //epoch which has yet to be assigned to a message.
 
   /**
