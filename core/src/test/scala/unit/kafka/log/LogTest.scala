@@ -1582,25 +1582,24 @@ class LogTest {
 
   @Test
   def shouldApplyEpochToMessageOnAppendIfLeader() {
-    val messageIds = (0 until 50).toArray
-    val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
+    val records = (0 until 50).toArray.map(id => new SimpleRecord(id.toString.getBytes))
 
     //Given this partition is on leader epoch 72
     val epoch = 72
     val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
     //When appending messages as a leader (i.e. assignOffsets = true)
-    for (i <- records.indices)
+    for (record <- records)
       log.append(
-        MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i)),
+        MemoryRecords.withRecords(CompressionType.NONE, record),
         leaderEpochCache = mockCache(epoch),
         assignOffsets = true
       )
 
     //Then leader epoch should be set on messages
     for (i <- records.indices) {
-      val read = log.read(i, 100, Some(i+1)).records.batches().iterator.next()
-      assertEquals("Should have set leader epoch", 72, read.partitionLeaderEpoch())
+      val read = log.read(i, 100, Some(i+1)).records.batches.iterator.next()
+      assertEquals("Should have set leader epoch", 72, read.partitionLeaderEpoch)
     }
   }
 
@@ -1614,7 +1613,7 @@ class LogTest {
     //Given each message has an offset & epoch, as msgs from leader would
     def recordsForEpoch(i: Int): MemoryRecords = {
       val recs = MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i))
-      recs.batches().asScala.foreach{record =>
+      recs.batches.asScala.foreach{record =>
         record.setPartitionLeaderEpoch(42)
         record.setLastOffset(i)
       }
@@ -1622,7 +1621,7 @@ class LogTest {
     }
 
     //Verify we save the epoch to the cache.
-    expect(cache.assign(EasyMock.eq(42), anyInt())).times(records.size)
+    expect(cache.assign(EasyMock.eq(42), anyInt)).times(records.size)
     replay(cache)
 
     val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
@@ -1636,13 +1635,13 @@ class LogTest {
 
   @Test
   def shouldTruncateLeaderEpochsWhenDeletingSegments() {
-    val set = TestUtils.singletonRecords("test".getBytes)
-    val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val log = createLog(createRecords.sizeInBytes, retentionBytes = createRecords.sizeInBytes * 10)
     val cache = epochCache(log)
 
     // Given three segments of 5 messages each
     for (e <- 0 until 15) {
-      log.append(set)
+      log.append(createRecords)
     }
 
     //Given epochs
@@ -1659,13 +1658,13 @@ class LogTest {
 
   @Test
   def shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments() {
-    val set = TestUtils.singletonRecords("test".getBytes)
-    val log = createLog(set.sizeInBytes, retentionBytes = set.sizeInBytes * 10)
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val log = createLog(createRecords.sizeInBytes, retentionBytes = createRecords.sizeInBytes * 10)
     val cache = epochCache(log)
 
     // Given three segments of 5 messages each
     for (e <- 0 until 15) {
-      log.append(set)
+      log.append(createRecords)
     }
 
     //Given epochs
@@ -1682,14 +1681,14 @@ class LogTest {
 
   @Test
   def shouldTruncateLeaderEpochFileWhenTruncatingLog() {
-    val set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
-    val logProps = CoreUtils.propsWith(LogConfig.SegmentBytesProp, (10 * set.sizeInBytes).toString)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
+    val logProps = CoreUtils.propsWith(LogConfig.SegmentBytesProp, (10 * createRecords.sizeInBytes).toString)
     val log = new Log(logDir, LogConfig( logProps), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
     val cache = epochCache(log)
 
     //Given 2 segments, 10 messages per segment
     for (epoch <- 1 to 20)
-      log.append(set)
+      log.append(createRecords)
 
     //Simulate some leader changes at specific offsets
     cache.assign(0, 0)
@@ -1703,25 +1702,25 @@ class LogTest {
     log.truncateTo(log.logEndOffset)
 
     //Then no change
-    assertEquals(3, cache.epochEntries().size)
+    assertEquals(3, cache.epochEntries.size)
 
     //When truncate
     log.truncateTo(11)
 
     //Then no change
-    assertEquals(2, cache.epochEntries().size)
+    assertEquals(2, cache.epochEntries.size)
 
     //When truncate
     log.truncateTo(10)
 
     //Then
-    assertEquals(1, cache.epochEntries().size)
+    assertEquals(1, cache.epochEntries.size)
 
     //When truncate all
     log.truncateTo(0)
 
     //Then
-    assertEquals(0, cache.epochEntries().size)
+    assertEquals(0, cache.epochEntries.size)
   }
 
   /**
@@ -1799,7 +1798,7 @@ class LogTest {
 
   private def mockCache(epoch: Int) = {
     val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
-    EasyMock.expect(cache.latestUsedEpoch()).andReturn(epoch).anyTimes()
+    EasyMock.expect(cache.latestUsedEpoch).andReturn(epoch).anyTimes
     EasyMock.replay(cache)
     cache
   }
