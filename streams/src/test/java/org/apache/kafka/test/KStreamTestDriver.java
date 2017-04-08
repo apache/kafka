@@ -107,9 +107,9 @@ public class KStreamTestDriver {
         return context;
     }
 
-    public void process(String topicName, Object key, Object value) {
+    public void process(final String topicName, final Object key, final Object value) {
         final ProcessorNode prevNode = context.currentNode();
-        ProcessorNode currNode = nodeByTopicName(topicName);
+        final ProcessorNode currNode = nodeByTopicName(topicName);
 
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
@@ -125,7 +125,7 @@ public class KStreamTestDriver {
         }
     }
 
-    private ProcessorNode nodeByTopicName(String topicName) {
+    private ProcessorNode nodeByTopicName(final String topicName) {
         ProcessorNode topicNode = topology.source(topicName);
         if (topicNode == null && globalTopology != null) {
             topicNode = globalTopology.source(topicName);
@@ -173,9 +173,9 @@ public class KStreamTestDriver {
     }
 
     public Set<String> allProcessorNames() {
-        Set<String> names = new HashSet<>();
+        final Set<String> names = new HashSet<>();
 
-        List<ProcessorNode> nodes = topology.processors();
+        final List<ProcessorNode> nodes = topology.processors();
 
         for (ProcessorNode node: nodes) {
             names.add(node.name());
@@ -185,7 +185,7 @@ public class KStreamTestDriver {
     }
 
     public ProcessorNode processor(String name) {
-        List<ProcessorNode> nodes = topology.processors();
+        final List<ProcessorNode> nodes = topology.processors();
 
         for (ProcessorNode node: nodes) {
             if (node.name().equals(name))

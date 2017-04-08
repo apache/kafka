@@ -77,7 +77,7 @@ public class KStreamBuilderTest {
         assertEquals("Y-0000000001", builder.newName("Y-"));
         assertEquals("Z-0000000002", builder.newName("Z-"));
 
-        KStreamBuilder newBuilder = new KStreamBuilder();
+        final KStreamBuilder newBuilder = new KStreamBuilder();
 
         assertEquals("X-0000000000", newBuilder.newName("X-"));
         assertEquals("Y-0000000001", newBuilder.newName("Y-"));
@@ -87,10 +87,10 @@ public class KStreamBuilderTest {
 
     @Test
     public void shouldHaveSinkTopicForStreamTo() {
-        KStream<String, String> source = builder.stream("topic-source");
+        final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
-        MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
 
         source.process(processorSupplier);
 
@@ -104,14 +104,14 @@ public class KStreamBuilderTest {
 
     @Test
     public void testMerge() {
-        String topic1 = "topic-1";
-        String topic2 = "topic-2";
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
 
-        KStream<String, String> source1 = builder.stream(topic1);
-        KStream<String, String> source2 = builder.stream(topic2);
-        KStream<String, String> merged = builder.merge(source1, source2);
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> merged = builder.merge(source1, source2);
 
-        MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
         driver = new KStreamTestDriver(builder);
