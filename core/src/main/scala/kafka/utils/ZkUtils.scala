@@ -41,7 +41,7 @@ import scala.collection.JavaConverters._
 
 object ZkUtils {
 
-  private val UseDefaultAcls = new util.ArrayList[ACL]
+  private val UseDefaultAcls = new java.util.ArrayList[ACL]
 
   // Important: it is necessary to add any new top level Zookeeper path here
   val AdminPath = "/admin"
