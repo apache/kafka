@@ -19,7 +19,6 @@ package kafka.server.checkpoints
 import java.io._
 import java.util.regex.Pattern
 
-import kafka.server.checkpoints.LeaderEpochCheckpointConstants.{CurrentVersion, WhiteSpacesPattern}
 import kafka.server.epoch.EpochEntry
 
 import scala.collection._
@@ -31,37 +30,37 @@ trait LeaderEpochCheckpoint {
 
 object LeaderEpochFile {
   private val LeaderEpochCheckpointFilename = "leader-epoch-checkpoint"
-  def newFile(dir: File) = {new File(dir, LeaderEpochCheckpointFilename)}
+  def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
 }
 
-private object LeaderEpochCheckpointConstants {
-  val WhiteSpacesPattern = Pattern.compile("\\s+")
-  val CurrentVersion = 0
+object LeaderEpochCheckpointFile {
+  private val WhiteSpacesPattern = Pattern.compile("\\s+")
+  private val CurrentVersion = 0
+
+  object Formatter extends CheckpointFileFormatter[EpochEntry] {
+
+    override def toLine(entry: EpochEntry): String = s"${entry.epoch} ${entry.startOffset}"
+
+    override def fromLine(line: String): Option[EpochEntry] = {
+      WhiteSpacesPattern.split(line) match {
+        case Array(epoch, offset) =>
+          Some(EpochEntry(epoch.toInt, offset.toLong))
+        case _ => None
+      }
+    }
+
+  }
 }
 
 /**
   * This class persists a map of (LeaderEpoch => Offsets) to a file (for a certain replica)
   */
-class LeaderEpochCheckpointFile(val file: File) extends CheckpointFileFormatter[EpochEntry] with LeaderEpochCheckpoint {
-  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, this)
+class LeaderEpochCheckpointFile(val file: File) extends LeaderEpochCheckpoint {
+  import LeaderEpochCheckpointFile._
 
-  override def toLine(entry: EpochEntry): String = {
-    s"${entry.epoch} ${entry.startOffset}"
-  }
+  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter)
 
-  override def fromLine(line: String): Option[EpochEntry] = {
-    WhiteSpacesPattern.split(line) match {
-      case Array(epoch, offset) =>
-        Some(EpochEntry(epoch.toInt, offset.toLong))
-      case _ => None
-    }
-  }
+  def write(epochs: Seq[EpochEntry]): Unit = checkpoint.write(epochs)
 
-  def write(epochs: Seq[EpochEntry]) = {
-    checkpoint.write(epochs)
-  }
-
-  def read(): Seq[EpochEntry] = {
-    checkpoint.read()
-  }
+  def read(): Seq[EpochEntry] = checkpoint.read()
 }

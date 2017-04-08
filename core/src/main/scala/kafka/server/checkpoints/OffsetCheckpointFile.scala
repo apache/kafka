@@ -18,13 +18,29 @@ package kafka.server.checkpoints
 
 import java.io._
 import java.util.regex.Pattern
+
 import kafka.server.epoch.EpochEntry
 import org.apache.kafka.common.TopicPartition
+
 import scala.collection._
 
-private object OffsetCheckpointConstants {
-  val WhiteSpacesPattern = Pattern.compile("\\s+")
-  val CurrentVersion = 0
+object OffsetCheckpointFile {
+  private val WhiteSpacesPattern = Pattern.compile("\\s+")
+  private[checkpoints] val CurrentVersion = 0
+
+  object Formatter extends CheckpointFileFormatter[(TopicPartition, Long)] {
+    override def toLine(entry: (TopicPartition, Long)): String = {
+      s"${entry._1.topic} ${entry._1.partition} ${entry._2}"
+    }
+
+    override def fromLine(line: String): Option[(TopicPartition, Long)] = {
+      WhiteSpacesPattern.split(line) match {
+        case Array(topic, partition, offset) =>
+          Some(new TopicPartition(topic, partition.toInt), offset.toLong)
+        case _ => None
+      }
+    }
+  }
 }
 
 trait OffsetCheckpoint {
@@ -35,26 +51,12 @@ trait OffsetCheckpoint {
 /**
   * This class persists a map of (Partition => Offsets) to a file (for a certain replica)
   */
-class OffsetCheckpointFile(val f: File) extends CheckpointFileFormatter[(TopicPartition, Long)] {
-  val checkpoint = new CheckpointFile[(TopicPartition, Long)](f, OffsetCheckpointConstants.CurrentVersion, this)
+class OffsetCheckpointFile(val f: File) {
+  val checkpoint = new CheckpointFile[(TopicPartition, Long)](f, OffsetCheckpointFile.CurrentVersion,
+    OffsetCheckpointFile.Formatter)
 
-  override def toLine(entry: (TopicPartition, Long)): String = {
-    s"${entry._1.topic} ${entry._1.partition} ${entry._2}"
-  }
+  def write(offsets: Map[TopicPartition, Long]): Unit = checkpoint.write(offsets.toSeq)
 
-  override def fromLine(line: String): Option[(TopicPartition, Long)] = {
-    OffsetCheckpointConstants.WhiteSpacesPattern.split(line) match {
-      case Array(topic, partition, offset) =>
-        Some(new TopicPartition(topic, partition.toInt), offset.toLong)
-      case _ => None
-    }
-  }
+  def read(): Map[TopicPartition, Long] = checkpoint.read().toMap
 
-  def write(offsets: Map[TopicPartition, Long]) = {
-    checkpoint.write(offsets.toSeq)
-  }
-
-  def read(): Map[TopicPartition, Long] = {
-    checkpoint.read().toMap
-  }
 }

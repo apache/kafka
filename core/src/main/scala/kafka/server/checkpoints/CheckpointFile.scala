@@ -59,7 +59,7 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
       } catch {
         case e: FileNotFoundException =>
           if (FileSystems.getDefault.isReadOnly) {
-            fatal("Halting writes to offset checkpoint file because the underlying file system is inaccessible : ", e)
+            fatal(s"Halting writes to checkpoint file (${file.getAbsolutePath}) because the underlying file system is inaccessible: ", e)
             Exit.halt(1)
           }
           throw e
@@ -73,7 +73,7 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
 
   def read(): Seq[T] = {
     def malformedLineException(line: String) =
-      new IOException(s"Malformed line in offset checkpoint file: $line'")
+      new IOException(s"Malformed line in checkpoint file (${file.getAbsolutePath}): $line'")
 
     lock synchronized {
       val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))
@@ -82,9 +82,8 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
         line = reader.readLine()
         if (line == null)
           return Seq.empty
-        val version = line.toInt
-        version match {
-          case version =>
+        line.toInt match {
+          case fileVersion if fileVersion == version =>
             line = reader.readLine()
             if (line == null)
               return Seq.empty
@@ -101,10 +100,10 @@ class CheckpointFile[T](val file: File, version: Int, formatter: CheckpointFileF
               }
             }
             if (entries.size != expectedSize)
-              throw new IOException(s"Expected $expectedSize entries but found only ${entries.size}")
+              throw new IOException(s"Expected $expectedSize entries in checkpoint file (${file.getAbsolutePath}), but found only ${entries.size}")
             entries
           case _ =>
-            throw new IOException("Unrecognized version of the highwatermark checkpoint file: " + version)
+            throw new IOException(s"Unrecognized version of the checkpoint file (${file.getAbsolutePath}): " + version)
         }
       } catch {
         case _: NumberFormatException => throw malformedLineException(line)
