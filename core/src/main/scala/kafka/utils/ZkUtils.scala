@@ -107,7 +107,7 @@ object ZkUtils {
   }
 
   def sensitivePath(path: String): Boolean = {
-    path != null && !SensitiveZkRootPaths.forall(!path.startsWith(_))
+    path != null && SensitiveZkRootPaths.exists(path.startsWith(_))
   }
 
   @deprecated("This is deprecated, use defaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.10.2.1")
