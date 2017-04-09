@@ -16,18 +16,6 @@
  */
 package org.apache.kafka.connect.file;
 
-import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -35,16 +23,38 @@ import org.apache.kafka.connect.source.SourceTask;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
+
 /**
  * FileStreamSourceTask reads from stdin or a file.
  */
 public class FileStreamSourceTask extends SourceTask {
-    private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
     public static final String FILENAME_FIELD = "filename";
-    public  static final String POSITION_FIELD = "position";
+    public static final String FILE_CREATE_TIME_FIELD = "createTime";
+    public static final String FILE_KEY_HASH_FIELD = "fileKeyHashCode";
+    public static final String POSITION_FIELD = "position";
+    private static final Logger log = LoggerFactory.getLogger(FileStreamSourceTask.class);
     private static final Schema VALUE_SCHEMA = Schema.STRING_SCHEMA;
+    private static final long WAIT_TIME_MS = 1000;
 
     private String filename;
+    private File file;
+    private Map<String, Object> fileAttrs;
     private InputStream stream;
     private BufferedReader reader = null;
     private char[] buffer = new char[1024];
@@ -62,7 +72,9 @@ public class FileStreamSourceTask extends SourceTask {
     public void start(Map<String, String> props) {
         filename = props.get(FileStreamSourceConnector.FILE_CONFIG);
         if (filename == null || filename.isEmpty()) {
+            file = null;
             stream = System.in;
+            fileAttrs = Collections.emptyMap();
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
             reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
@@ -75,9 +87,24 @@ public class FileStreamSourceTask extends SourceTask {
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
         if (stream == null) {
+            file = new File(filename);
             try {
-                stream = new FileInputStream(filename);
-                Map<String, Object> offset = context.offsetStorageReader().offset(Collections.singletonMap(FILENAME_FIELD, filename));
+                stream = new FileInputStream(file);
+            } catch (FileNotFoundException e) {
+                log.warn(
+                    "Couldn't find file {} for FileStreamSourceTask, sleeping to wait for it to be "
+                        + "created",
+                    logFilename()
+                );
+                synchronized (this) {
+                    this.wait(WAIT_TIME_MS);
+                }
+                return null;
+            }
+
+            try {
+                fileAttrs = getFileAttributes(file);
+                Map<String, Object> offset = context.offsetStorageReader().offset(offsetKey(file));
                 if (offset != null) {
                     Object lastRecordedOffset = offset.get(POSITION_FIELD);
                     if (lastRecordedOffset != null && !(lastRecordedOffset instanceof Long))
@@ -86,13 +113,8 @@ public class FileStreamSourceTask extends SourceTask {
                         log.debug("Found previous offset, trying to skip to file offset {}", lastRecordedOffset);
                         long skipLeft = (Long) lastRecordedOffset;
                         while (skipLeft > 0) {
-                            try {
-                                long skipped = stream.skip(skipLeft);
-                                skipLeft -= skipped;
-                            } catch (IOException e) {
-                                log.error("Error while trying to seek to previous offset in file: ", e);
-                                throw new ConnectException(e);
-                            }
+                            long skipped = stream.skip(skipLeft);
+                            skipLeft -= skipped;
                         }
                         log.debug("Skipped to offset {}", lastRecordedOffset);
                     }
@@ -102,12 +124,9 @@ public class FileStreamSourceTask extends SourceTask {
                 }
                 reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
                 log.debug("Opened {} for reading", logFilename());
-            } catch (FileNotFoundException e) {
-                log.warn("Couldn't find file {} for FileStreamSourceTask, sleeping to wait for it to be created", logFilename());
-                synchronized (this) {
-                    this.wait(1000);
-                }
-                return null;
+            } catch (IOException e) {
+                log.error("Error while trying to seek to previous offset in file: ", e);
+                throw new ConnectException(e);
             }
         }
 
@@ -144,17 +163,25 @@ public class FileStreamSourceTask extends SourceTask {
                             log.trace("Read a line from {}", logFilename());
                             if (records == null)
                                 records = new ArrayList<>();
-                            records.add(new SourceRecord(offsetKey(filename), offsetValue(streamOffset), topic, null,
+                            records.add(new SourceRecord(offsetKey(file), offsetValue(streamOffset), topic, null,
                                     null, null, VALUE_SCHEMA, line, System.currentTimeMillis()));
                         }
                     } while (line != null);
                 }
             }
 
-            if (nread <= 0)
-                synchronized (this) {
-                    this.wait(1000);
+            if (nread <= 0) {
+                // Path object for ``file`` corresponds to the initial path because it gets cached.
+                if (!fileAttrs.equals(getFileAttributes(file))) {
+                    stream.close();
+                    stream = null;
+                    log.info("File {} rotated or removed. Resetting file stream.", logFilename());
+                } else {
+                    synchronized (this) {
+                        this.wait(WAIT_TIME_MS);
+                    }
                 }
+            }
 
             return records;
         } catch (IOException e) {
@@ -210,8 +237,22 @@ public class FileStreamSourceTask extends SourceTask {
         }
     }
 
-    private Map<String, String> offsetKey(String filename) {
-        return Collections.singletonMap(FILENAME_FIELD, filename);
+    // Package-private access for testing.
+    static Map<String, Object> getFileAttributes(File file) throws IOException {
+        if (file == null) {
+            // stdin
+            return Collections.emptyMap();
+        }
+        BasicFileAttributes attrs = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
+        Map<String, Object> fileAttrs = new TreeMap<>();
+        fileAttrs.put(FILENAME_FIELD, file.getPath());
+        fileAttrs.put(FILE_CREATE_TIME_FIELD, attrs.creationTime().toMillis());
+        fileAttrs.put(FILE_KEY_HASH_FIELD, Objects.hashCode(attrs.fileKey()));
+        return fileAttrs;
+    }
+
+    private Map<String, Object> offsetKey(File file) throws IOException {
+        return getFileAttributes(file);
     }
 
     private Map<String, Long> offsetValue(Long pos) {
