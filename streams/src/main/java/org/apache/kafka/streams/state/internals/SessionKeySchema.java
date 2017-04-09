@@ -27,17 +27,23 @@ import java.util.List;
 
 
 class SessionKeySchema implements SegmentedBytesStore.KeySchema {
+    private String topic;
+
+    @Override
+    public void init(final String topic) {
+        this.topic = topic;
+    }
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
     }
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer());
+        return SessionKeySerde.toBinary(sessionKey, Serdes.Bytes().serializer(), topic);
     }
 
     @Override

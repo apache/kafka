@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -149,7 +148,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 append(", memberId=").append(memberId).
                 append(", generationId=").append(generationId).
                 append(", retentionTime=").append(retentionTime).
-                append(", offsetData=").append(Utils.mkString(offsetData)).
+                append(", offsetData=").append(offsetData).
                 append(")");
             return bld.toString();
         }

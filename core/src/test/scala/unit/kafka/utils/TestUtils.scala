@@ -37,6 +37,7 @@ import kafka.producer._
 import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.server._
+import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
@@ -312,10 +313,28 @@ object TestUtils extends Logging {
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
-                       timestamp: Long = Record.NO_TIMESTAMP,
-                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE) = {
-    val record = Record.create(magicValue, timestamp, key, value)
-    MemoryRecords.withRecords(codec, record)
+                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+    records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
+  }
+
+  def recordsWithValues(magicValue: Byte,
+                        codec: CompressionType,
+                        values: Array[Byte]*): MemoryRecords = {
+    records(values.map(value => new SimpleRecord(value)), magicValue, codec)
+  }
+
+  def records(records: Iterable[SimpleRecord],
+              magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+              codec: CompressionType = CompressionType.NONE,
+              pid: Long = RecordBatch.NO_PRODUCER_ID,
+              epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+              sequence: Int = RecordBatch.NO_SEQUENCE): MemoryRecords = {
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L,
+      System.currentTimeMillis, pid, epoch, sequence)
+    records.foreach(builder.append)
+    builder.build()
   }
 
   /**
@@ -916,11 +935,13 @@ object TestUtils extends Logging {
                    cleanerConfig = cleanerConfig,
                    ioThreads = 4,
                    flushCheckMs = 1000L,
-                   flushCheckpointMs = 10000L,
+                   flushRecoveryOffsetCheckpointMs = 10000L,
+                   flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
+                   maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = new BrokerState())
+                   brokerState = BrokerState())
   }
 
   @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
@@ -1022,7 +1043,7 @@ object TestUtils extends Logging {
           var i = 0
           while ((shouldGetAllMessages && iterator.hasNext()) || (i < nMessagesPerThread)) {
             assertTrue(iterator.hasNext)
-            val message = iterator.next.message // will throw a timeout exception if the message isn't there
+            val message = iterator.next().message // will throw a timeout exception if the message isn't there
             messages ::= message
             debug("received message: " + message)
             i += 1
@@ -1059,7 +1080,7 @@ object TestUtils extends Logging {
     // ensure that topic is removed from all cleaner offsets
     TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
       val checkpoints = server.getLogManager().logDirs.map { logDir =>
-        new OffsetCheckpoint(new File(logDir, "cleaner-offset-checkpoint")).read()
+        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
     }), "Cleaner offset for deleted partition should have been removed")

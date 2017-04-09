@@ -112,6 +112,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   @Before
   override def setUp() {
     super.setUp
+    MockDeserializer.resetStaticVariables
     // create the consumer offset topic
     TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
   }
@@ -163,10 +164,10 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     isValidClusterId(MockConsumerInterceptor.CLUSTER_META.get.clusterId)
     assertEquals(MockConsumerInterceptor.CLUSTER_ID_BEFORE_ON_CONSUME.get.clusterId, MockConsumerInterceptor.CLUSTER_META.get.clusterId)
 
-    assertNotEquals(MockDeserializer.CLUSTER_ID_BEFORE_DESERIALIZE, MockDeserializer.NO_CLUSTER_ID)
-    assertNotNull(MockDeserializer.CLUSTER_META)
-    isValidClusterId(MockDeserializer.CLUSTER_META.get.clusterId)
-    assertEquals(MockDeserializer.CLUSTER_ID_BEFORE_DESERIALIZE.get.clusterId, MockDeserializer.CLUSTER_META.get.clusterId)
+    assertNotEquals(MockDeserializer.clusterIdBeforeDeserialize, MockDeserializer.noClusterId)
+    assertNotNull(MockDeserializer.clusterMeta)
+    isValidClusterId(MockDeserializer.clusterMeta.get.clusterId)
+    assertEquals(MockDeserializer.clusterIdBeforeDeserialize.get.clusterId, MockDeserializer.clusterMeta.get.clusterId)
 
     assertNotNull(MockConsumerMetricsReporter.CLUSTER_META)
     isValidClusterId(MockConsumerMetricsReporter.CLUSTER_META.get.clusterId)
@@ -175,7 +176,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockSerializer.CLUSTER_META.get.clusterId)
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockProducerMetricsReporter.CLUSTER_META.get.clusterId)
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockConsumerInterceptor.CLUSTER_META.get.clusterId)
-    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockDeserializer.CLUSTER_META.get.clusterId)
+    assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockDeserializer.clusterMeta.get.clusterId)
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockConsumerMetricsReporter.CLUSTER_META.get.clusterId)
     assertEquals(MockProducerInterceptor.CLUSTER_META.get.clusterId, MockBrokerMetricsReporter.CLUSTER_META.get.clusterId)
 

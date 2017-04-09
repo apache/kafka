@@ -115,11 +115,6 @@ abstract public class Shell {
 
         try {
             parseExecResult(inReader); // parse the output
-            // clear the input stream buffer
-            String line = null;
-            while (line != null) {
-                line = inReader.readLine();
-            }
             // wait for the process to finish and check the exit code
             exitCode = process.waitFor();
             try {

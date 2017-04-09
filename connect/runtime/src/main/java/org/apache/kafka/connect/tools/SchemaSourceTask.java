@@ -159,9 +159,7 @@ public class SchemaSourceTask extends SourceTask {
             count++;
             return result;
         } else {
-            synchronized (this) {
-                this.wait();
-            }
+            throttler.throttle();
             return new ArrayList<>();
         }
     }

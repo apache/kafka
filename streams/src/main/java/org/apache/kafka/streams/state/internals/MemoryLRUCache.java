@@ -21,6 +21,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -74,7 +75,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (size() > maxCacheSize) {
+                if (super.size() > maxCacheSize) {
                     K key = eldest.getKey();
                     if (listener != null) listener.apply(key, eldest.getValue());
                     return true;
@@ -103,9 +104,10 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     @SuppressWarnings("unchecked")
     public void init(ProcessorContext context, StateStore root) {
         // construct the serde
-        this.serdes = new StateSerdes<>(name,
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        this.serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         // register the store
         context.register(root, true, new StateRestoreCallback() {

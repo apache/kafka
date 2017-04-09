@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.protocol.types;
 
-import java.nio.ByteBuffer;
-
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.Utils;
+
+import java.nio.ByteBuffer;
 
 /**
  * A serializable type
@@ -194,6 +194,36 @@ public abstract class Type {
         }
     };
 
+    public static final Type UNSIGNED_INT32 = new Type() {
+        @Override
+        public void write(ByteBuffer buffer, Object o) {
+            ByteUtils.writeUnsignedInt(buffer, (long) o);
+        }
+
+        @Override
+        public Object read(ByteBuffer buffer) {
+            return ByteUtils.readUnsignedInt(buffer);
+        }
+
+        @Override
+        public int sizeOf(Object o) {
+            return 4;
+        }
+
+        @Override
+        public String toString() {
+            return "UINT32";
+        }
+
+        @Override
+        public Long validate(Object item) {
+            if (item instanceof Long)
+                return (Long) item;
+            else
+                throw new SchemaException(item + " is not a Long.");
+        }
+    };
+
     public static final Type INT64 = new Type() {
         @Override
         public void write(ByteBuffer buffer, Object o) {
@@ -235,16 +265,15 @@ public abstract class Type {
         }
 
         @Override
-        public Object read(ByteBuffer buffer) {
+        public String read(ByteBuffer buffer) {
             short length = buffer.getShort();
             if (length < 0)
                 throw new SchemaException("String length " + length + " cannot be negative");
             if (length > buffer.remaining())
                 throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-
-            byte[] bytes = new byte[length];
-            buffer.get(bytes);
-            return Utils.utf8(bytes);
+            String result = Utils.utf8(buffer, length);
+            buffer.position(buffer.position() + length);
+            return result;
         }
 
         @Override
@@ -287,16 +316,15 @@ public abstract class Type {
         }
 
         @Override
-        public Object read(ByteBuffer buffer) {
+        public String read(ByteBuffer buffer) {
             short length = buffer.getShort();
             if (length < 0)
                 return null;
             if (length > buffer.remaining())
                 throw new SchemaException("Error reading string of length " + length + ", only " + buffer.remaining() + " bytes available");
-
-            byte[] bytes = new byte[length];
-            buffer.get(bytes);
-            return Utils.utf8(bytes);
+            String result = Utils.utf8(buffer, length);
+            buffer.position(buffer.position() + length);
+            return result;
         }
 
         @Override
@@ -443,7 +471,7 @@ public abstract class Type {
         }
 
         @Override
-        public Object read(ByteBuffer buffer) {
+        public Records read(ByteBuffer buffer) {
             ByteBuffer recordsBuffer = (ByteBuffer) NULLABLE_BYTES.read(buffer);
             return MemoryRecords.readableRecords(recordsBuffer);
         }

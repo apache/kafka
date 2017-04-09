@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
 /**
@@ -25,7 +25,7 @@ import org.apache.kafka.common.record.TimestampType;
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
  */
 public class ConsumerRecord<K, V> {
-    public static final long NO_TIMESTAMP = Record.NO_TIMESTAMP;
+    public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
     public static final int NULL_CHECKSUM = -1;
 

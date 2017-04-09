@@ -31,7 +31,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Protocol, SecurityProtocol}
-import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
@@ -46,7 +46,8 @@ object RequestChannel extends Logging {
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   private def shutdownReceive: ByteBuffer = {
-    val emptyProduceRequest = new ProduceRequest.Builder(0, 0, Collections.emptyMap[TopicPartition, MemoryRecords]).build()
+    val emptyProduceRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 0, 0,
+      Collections.emptyMap[TopicPartition, MemoryRecords]).build()
     val emptyRequestHeader = new RequestHeader(ApiKeys.PRODUCE.id, emptyProduceRequest.version, "", 0)
     emptyProduceRequest.serialize(emptyRequestHeader)
   }

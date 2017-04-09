@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 
 /**
  * The metadata for a record that has been acknowledged by the server
@@ -54,7 +54,7 @@ public final class RecordMetadata {
 
     @Deprecated
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
-        this(topicPartition, baseOffset, relativeOffset, Record.NO_TIMESTAMP, -1, -1, -1);
+        this(topicPartition, baseOffset, relativeOffset, RecordBatch.NO_TIMESTAMP, -1, -1, -1);
     }
 
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,

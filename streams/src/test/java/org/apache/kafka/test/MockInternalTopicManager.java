@@ -18,6 +18,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicConfig;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
@@ -29,13 +30,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+
+
 public class MockInternalTopicManager extends InternalTopicManager {
 
     public Map<String, Integer> readyTopics = new HashMap<>();
     private MockConsumer<byte[], byte[]> restoreConsumer;
 
     public MockInternalTopicManager(StreamsConfig streamsConfig, MockConsumer<byte[], byte[]> restoreConsumer) {
-        super(new StreamsKafkaClient(streamsConfig), 0, 0);
+        super(new StreamsKafkaClient(streamsConfig), 0, 0, new MockTime());
 
         this.restoreConsumer = restoreConsumer;
     }
