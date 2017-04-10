@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
+import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -82,6 +83,19 @@ public class KStreamBuilderTest {
         assertEquals("X-0000000000", newBuilder.newName("X-"));
         assertEquals("Y-0000000001", newBuilder.newName("Y-"));
         assertEquals("Z-0000000002", newBuilder.newName("Z-"));
+    }
+
+    @Test
+    public void testNewStoreName() {
+        assertEquals("X-STATE-STORE-0000000000", builder.newStoreName("X-"));
+        assertEquals("Y-STATE-STORE-0000000001", builder.newStoreName("Y-"));
+        assertEquals("Z-STATE-STORE-0000000002", builder.newStoreName("Z-"));
+
+        KStreamBuilder newBuilder = new KStreamBuilder();
+
+        assertEquals("X-STATE-STORE-0000000000", newBuilder.newStoreName("X-"));
+        assertEquals("Y-STATE-STORE-0000000001", newBuilder.newStoreName("Y-"));
+        assertEquals("Z-STATE-STORE-0000000002", newBuilder.newStoreName("Z-"));
     }
 
     @Test
@@ -151,16 +165,20 @@ public class KStreamBuilderTest {
     }
 
     @Test
-    public void shouldNotMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
+    public void shouldStillMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
         builder.table("topic1", "table1");
         builder.table("topic2", null);
 
         final ProcessorTopology topology = builder.build(null);
 
-        assertEquals(1, topology.stateStores().size());
+        assertEquals(2, topology.stateStores().size());
         assertEquals("table1", topology.stateStores().get(0).name());
-        assertEquals(1, topology.storeToChangelogTopic().size());
+
+        final String internalStoreName = topology.stateStores().get(1).name();
+        assertTrue(internalStoreName.contains(KTableImpl.STATE_STORE_NAME));
+        assertEquals(2, topology.storeToChangelogTopic().size());
         assertEquals("topic1", topology.storeToChangelogTopic().get("table1"));
+        assertEquals("topic2", topology.storeToChangelogTopic().get(internalStoreName));
     }
 
     @Test
