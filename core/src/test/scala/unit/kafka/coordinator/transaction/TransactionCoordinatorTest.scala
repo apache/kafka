@@ -482,7 +482,7 @@ class TransactionCoordinatorTest {
         }
       }).once()
 
-    EasyMock.expect(transactionMarkerChannelManager.sendTxnMarkerRequest(
+    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
       EasyMock.anyObject(),
       EasyMock.anyInt(),
       EasyMock.capture(capturedArgument)
