@@ -62,7 +62,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
         epochs += EpochEntry(epoch, offset)
         flush()
       } else {
-        maybeWarn(epoch, offset)
+        validateAndMaybeWarn(epoch, offset)
       }
     }
   }
@@ -175,12 +175,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
 
   def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Latest: {epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
 
-  def maybeWarn(epoch: Int, offset: Long) = {
-    if (epoch < latestEpoch())
+  def validateAndMaybeWarn(epoch: Int, offset: Long) = {
+    assert(epoch >= 0, s"Received an PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
+    if (epoch < latestEpoch() && epoch >= 0)
       warn(s"Received a PartitionLeaderEpoch assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
-    else if (epoch < 0)
-      warn(s"Received an PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
     else if (offset < latestOffset() && epoch >= 0)
       warn(s"Received an PartitionLeaderEpoch assignment for an offset < latest offset for the most recent, stored PartitionLeaderEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")

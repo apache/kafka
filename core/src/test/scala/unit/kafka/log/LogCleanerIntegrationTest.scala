@@ -73,7 +73,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     checkLogAfterAppendingDups(log, startSize, appends)
 
-    val appendInfo = log.append(largeMessageSet, assignOffsets = true)
+    val appendInfo = log.append(largeMessageSet, assignOffsets = true, leaderEpoch = 0)
     val largeMessageOffset = appendInfo.firstOffset
 
     val dups = writeDups(startKey = largeMessageKey + 1, numKeys = 100, numDups = 3, log = log, codec = codec)
@@ -178,7 +178,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     val appends2: Seq[(Int, String, Long)] = {
       val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = codec, magicValue = RecordBatch.MAGIC_VALUE_V0)
-      val appendInfo = log.append(largeMessageSet, assignOffsets = true)
+      val appendInfo = log.append(largeMessageSet, assignOffsets = true, leaderEpoch = 0)
       val largeMessageOffset = appendInfo.firstOffset
 
       // also add some messages with version 1 and version 2 to check that we handle mixed format versions correctly
@@ -265,7 +265,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
       val appendInfo = log.append(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
-        key = key.toString.getBytes, magicValue = magicValue), assignOffsets = true)
+        key = key.toString.getBytes, magicValue = magicValue), assignOffsets = true, leaderEpoch = 0)
       counter += 1
       (key, value, appendInfo.firstOffset)
     }
@@ -283,7 +283,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
       new SimpleRecord(key.toString.getBytes, payload.toString.getBytes)
     }
 
-    val appendInfo = log.append(MemoryRecords.withRecords(magicValue, codec, records: _*), assignOffsets = true)
+    val appendInfo = log.append(MemoryRecords.withRecords(magicValue, codec, records: _*), assignOffsets = true, leaderEpoch = 0)
     val offsets = appendInfo.firstOffset to appendInfo.lastOffset
 
     kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }
