@@ -14,37 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
 
-import java.util.Map;
-import java.nio.channels.SelectionKey;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.clients.KafkaFuture;
+import org.apache.kafka.common.Node;
+
+import java.util.Collection;
 
 /**
- * A ChannelBuilder interface to build Channel based on configs
+ * The results of the describeCluster call.
  */
-public interface ChannelBuilder extends AutoCloseable {
+public class DescribeClusterResults {
+    private final KafkaFuture<Collection<Node>> future;
+
+    DescribeClusterResults(KafkaFuture<Collection<Node>> future) {
+        this.future = future;
+    }
 
     /**
-     * Configure this class with the given key-value pairs
+     * Returns a future which yields a collection of nodes.
      */
-    void configure(Map<String, ?> configs) throws KafkaException;
-
-
-    /**
-     * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id  channel id
-     * @param  key SelectionKey
-     * @param  maxReceiveSize
-     * @return KafkaChannel
-     */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
-
-
-    /**
-     * Closes ChannelBuilder
-     */
-    void close();
-
+    public KafkaFuture<Collection<Node>> nodes() {
+        return future;
+    }
 }

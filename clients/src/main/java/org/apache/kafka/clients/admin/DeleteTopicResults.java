@@ -14,37 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
+
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.clients.KafkaFuture;
 
 import java.util.Map;
-import java.nio.channels.SelectionKey;
-
-import org.apache.kafka.common.KafkaException;
 
 /**
- * A ChannelBuilder interface to build Channel based on configs
+ * The result of the deleteTopics call.
  */
-public interface ChannelBuilder extends AutoCloseable {
+public class DeleteTopicResults {
+    final Map<String, KafkaFuture<Void>> futures;
+
+    DeleteTopicResults(Map<String, KafkaFuture<Void>> futures) {
+        this.futures = futures;
+    }
 
     /**
-     * Configure this class with the given key-value pairs
+     * Return a map from topic names to futures which can be used to check the status of
+     * individual deletions.
      */
-    void configure(Map<String, ?> configs) throws KafkaException;
-
+    public Map<String, KafkaFuture<Void>> results() {
+        return futures;
+    }
 
     /**
-     * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id  channel id
-     * @param  key SelectionKey
-     * @param  maxReceiveSize
-     * @return KafkaChannel
+     * Return a future which succeeds only if all the topic deletions succeed.
      */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
-
-
-    /**
-     * Closes ChannelBuilder
-     */
-    void close();
-
+    public KafkaFuture<Void> all() {
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]));
+    }
 }

@@ -73,6 +73,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -218,6 +219,25 @@ public enum Errors {
      */
     public ApiException exception() {
         return this.exception;
+    }
+
+    /**
+     * Create an instance of the ApiException that contains the given error message.
+     *
+     * @param message    The message string to set.
+     * @return           The exception.
+     */
+    public ApiException exception(String message) {
+        if (this.exception == null)
+            return null;
+        if (message == null)
+            return this.exception;
+        try {
+            return this.exception.getClass().getConstructor(String.class).newInstance(message);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+            log.warn("Error creating a " + this.exception.getClass() + " with a string argument", e);
+            return this.exception;
+        }
     }
 
     /**

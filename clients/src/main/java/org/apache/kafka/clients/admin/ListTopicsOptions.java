@@ -14,37 +14,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
 
-import java.util.Map;
-import java.nio.channels.SelectionKey;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.KafkaException;
+public class ListTopicsOptions {
+    private Integer timeoutMs = null;
+    private boolean listInternal = false;
 
-/**
- * A ChannelBuilder interface to build Channel based on configs
- */
-public interface ChannelBuilder extends AutoCloseable {
+    public ListTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
 
-    /**
-     * Configure this class with the given key-value pairs
-     */
-    void configure(Map<String, ?> configs) throws KafkaException;
-
+    public Integer timeoutMs() {
+        return timeoutMs;
+    }
 
     /**
-     * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id  channel id
-     * @param  key SelectionKey
-     * @param  maxReceiveSize
-     * @return KafkaChannel
+     * Set whether we should list internal topics.
+     *
+     * @param listInternal  Whether we should list internal topics.  null means to use
+     *                      the default.
+     * @return              This ListTopicsOptions object.
      */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
+    public ListTopicsOptions listInternal(boolean listInternal) {
+        this.listInternal = listInternal;
+        return this;
+    }
 
-
-    /**
-     * Closes ChannelBuilder
-     */
-    void close();
-
+    public boolean listInternal() {
+        return listInternal;
+    }
 }

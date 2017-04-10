@@ -14,37 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
 
-import java.util.Map;
-import java.nio.channels.SelectionKey;
-
-import org.apache.kafka.common.KafkaException;
+package org.apache.kafka.clients.admin;
 
 /**
- * A ChannelBuilder interface to build Channel based on configs
+ * Options for deleteTopics.
  */
-public interface ChannelBuilder extends AutoCloseable {
+public class DeleteTopicsOptions {
+    private Integer timeoutMs = null;
 
-    /**
-     * Configure this class with the given key-value pairs
-     */
-    void configure(Map<String, ?> configs) throws KafkaException;
+    public DeleteTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
 
-
-    /**
-     * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id  channel id
-     * @param  key SelectionKey
-     * @param  maxReceiveSize
-     * @return KafkaChannel
-     */
-    KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize) throws KafkaException;
-
-
-    /**
-     * Closes ChannelBuilder
-     */
-    void close();
-
+    public Integer timeoutMs() {
+        return timeoutMs;
+    }
 }
