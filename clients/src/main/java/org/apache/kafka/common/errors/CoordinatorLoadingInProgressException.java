@@ -17,8 +17,12 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code for any coordinator request if it is still loading the metadata (after a leader change
- * for that offsets topic partition) for this group.
+ * In the context of the consumer group coordinator, the broker returns this error code for any coordinator request if
+ * it is still loading the metadata (after a leader change for that offsets topic partition) for this group.
+ *
+ * In the context of the transactional coordinator, this error will be returned if there is a pending transactional
+ * request with the same transactional id, or if the transaction cache is currently being populated from the transaction
+ * log.
  */
 public class CoordinatorLoadingInProgressException extends RetriableException {
 

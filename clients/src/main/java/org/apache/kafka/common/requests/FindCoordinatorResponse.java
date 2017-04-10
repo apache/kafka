@@ -32,6 +32,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
      * Possible error codes:
      *
      * COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR (16)
      * GROUP_AUTHORIZATION_FAILED (30)
      */
 
