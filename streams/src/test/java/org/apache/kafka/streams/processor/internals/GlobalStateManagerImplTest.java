@@ -415,7 +415,7 @@ public class GlobalStateManagerImplTest {
         consumer.assign(Collections.singletonList(t1));
         consumer.updateEndOffsets(endOffsets);
         consumer.updateBeginningOffsets(startOffsets);
-        consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 1, (byte[])null, "null".getBytes()));
+        consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 1, (byte[]) null, "null".getBytes()));
         final byte[] expectedKey = "key".getBytes();
         final byte[] expectedValue = "value".getBytes();
         consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 2, expectedKey, expectedValue));
