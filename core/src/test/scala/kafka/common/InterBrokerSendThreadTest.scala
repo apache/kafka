@@ -34,7 +34,7 @@ class InterBrokerSendThreadTest {
   def shouldNotSendAnythingWhenNoRequests(): Unit = {
     val sendThread = new InterBrokerSendThread("name", networkClient, () => Map(), time)
 
-    // poll is always called but there should be no further inocations on NetworkClient
+    // poll is always called but there should be no further invocations on NetworkClient
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
     .andReturn(Utils.mkList())
 
@@ -78,7 +78,7 @@ class InterBrokerSendThreadTest {
     EasyMock.verify(networkClient)
   }
 
-  
+
   @Test
   def shouldCallCompletionHandlerWithDisconnectedResponseWhenNodeNotReady(): Unit = {
     val request = new StubRequestBuilder

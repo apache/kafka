@@ -49,7 +49,7 @@ object TransactionCoordinator {
 
     val pidManager = new ProducerIdManager(config.brokerId, zkUtils)
     val logManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
-    val transactionMarkerChannelManager = new TransactionMarkerChannelManager(config, metrics, metadataCache, scheduler, time)
+    val transactionMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, time)
 
     new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, time)
   }
