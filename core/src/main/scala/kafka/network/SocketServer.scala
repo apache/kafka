@@ -68,12 +68,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
 
-  private val allMetricNames = (0 until totalProcessorThreads).map { i =>
-    val tags = new util.HashMap[String, String]()
-    tags.put("networkProcessor", i.toString)
-    metrics.metricName("io-wait-ratio", "socket-server-metrics", tags)
-  }
-
   /**
    * Start the socket server
    */
@@ -105,9 +99,13 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
     }
 
+    val allIoWaitRatioMetricNames = processors.map { p =>
+      metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+    }
+
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        def value = allMetricNames.map { metricName =>
+        def value = allIoWaitRatioMetricNames.map { metricName =>
           Option(metrics.metric(metricName)).fold(0.0)(_.value)
         }.sum / totalProcessorThreads
       }
@@ -400,7 +398,16 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val metricTags = Map("networkProcessor" -> id.toString).asJava
+
+  private def buildMetricTagsMap() = { 
+    var metricTagsMap = Map("protocol" -> securityProtocol.name)
+    if (!securityProtocol.name.equals(listenerName.value)) {
+      metricTagsMap ++= Map("listener" -> listenerName.value) 
+    }
+    metricTagsMap ++= Map("networkProcessor" -> id.toString)
+    metricTagsMap.asJava
+  }
+  val metricTags = buildMetricTagsMap
 
   newGauge("IdlePercent",
     new Gauge[Double] {
