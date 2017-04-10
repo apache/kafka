@@ -305,8 +305,21 @@ public class StreamsKafkaClient {
      * @throws StreamsException if brokers have version 0.10.0.x
      */
     public void checkBrokerCompatibility() throws StreamsException {
+        final String broker;
+        try {
+            broker = getAnyReadyBrokerId();
+        } catch (final StreamsException e) {
+            if ("Could not find any available broker.".equals(e.getMessage())) {
+                throw new StreamsException("Could not find any available broker. " +
+                    "Check your StreamsConfig setting '" + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG + "'. " +
+                    "This error might also occur, if you try to connect to pre-0.10 brokers. " +
+                    "Kafka Streams requires broker version 0.10.1.x or higher.", e);
+            }
+            throw e;
+        }
+
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
-            getAnyReadyBrokerId(),
+            broker,
             new ApiVersionsRequest.Builder(),
             Time.SYSTEM.milliseconds(),
             true);
