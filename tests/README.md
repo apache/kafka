@@ -385,7 +385,7 @@ Preparation
 In these steps, we will create an IAM role which has permission to create and destroy EC2 instances,
 set up a keypair used for ssh access to the test driver and worker machines, and create a security group to allow the test driver and workers to all communicate via TCP.
 
-* [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/Using_SettingUpUser.html#Using_CreateUser_console). We'll give this role the ability to launch or kill additional EC2 machines.
+* [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html). We'll give this role the ability to launch or kill additional EC2 machines.
  - Create role "kafkatest-master"
  - Role type: Amazon EC2
  - Attach policy: AmazonEC2FullAccess (this will allow our test-driver to create and destroy EC2 instances)
@@ -393,7 +393,7 @@ set up a keypair used for ssh access to the test driver and worker machines, and
 * If you haven't already, [set up a keypair to use for SSH access](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
 of this quickstart, let's say the keypair name is kafkatest, and you've saved the private key in kafktest.pem
 
-* Next, create a security group called "kafkatest".
+* Next, create a EC2 security group called "kafkatest".
  - After creating the group, inbound rules: allow SSH on port 22 from anywhere; also, allow access on all ports (0-65535) from other machines in the kafkatest group.
 
 Create the Test Driver
@@ -423,7 +423,7 @@ the test driver machine.
 
 * Start by making sure you're up to date, and install git and ducktape:
 
-        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y pip git
+        $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y python-pip git
         $ pip install ducktape
 
 * Get Kafka:

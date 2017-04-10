@@ -19,9 +19,8 @@
 
 # Install dependencies
 sudo apt-get install -y \
-  vagrant \
   maven \
-  openjdk-8-jdk \
+  openjdk-8-jdk-headless \
   build-essential \
   ruby-dev \
   zlib1g-dev \
@@ -30,20 +29,9 @@ sudo apt-get install -y \
 
 base_dir=`dirname $0`/../..
 
-# there is a bug with Vagrant 1.8 and Ruby 2.3
-# thus, we apply the following patch
-# https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=818237#28
-
-vagrant_dir=/user/lib/ruby/vendor_ruby/vagrant
-patch_file=vagrant18-ruby23.patch
-current_dir=`pwd`
-if [ -f ${vagrant_dir}/bundler.rb ] 
-then
-  cp $patch_file $vagrant_dir
-  cd $vagrant_dir
-  patch -p1 <vagrant18-ruby23.patch
-  cd $current_dir
-fi
+wget https://releases.hashicorp.com/vagrant/1.9.3/vagrant_1.9.3_x86_64.deb
+sudo dpkg -i vagrant_1.9.3_x86_64.deb
+rm -f vagrant_1.9.3_x86_64.deb
 
 # Install necessary vagrant plugins
 # Note: Do NOT install vagrant-cachier since it doesn't work on AWS and only
