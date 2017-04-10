@@ -116,7 +116,7 @@ class ReplicaFetcherThreadTest {
     //Stubs
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
-    expect(leaderEpochs.latestUsedEpoch).andReturn(5)
+    expect(leaderEpochs.latestEpoch).andReturn(5)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
 
@@ -174,7 +174,7 @@ class ReplicaFetcherThreadTest {
     expect(logManager.truncateTo(capture(truncateToCapture))).once
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
-    expect(leaderEpochs.latestUsedEpoch).andReturn(5).anyTimes()
+    expect(leaderEpochs.latestEpoch).andReturn(5).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
 
@@ -220,7 +220,7 @@ class ReplicaFetcherThreadTest {
     expect(logManager.truncateTo(capture(truncated))).once
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
-    expect(leaderEpochs.latestUsedEpoch).andReturn(5)
+    expect(leaderEpochs.latestEpoch).andReturn(5)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
     replay(leaderEpochs, replicaManager, logManager, quota, replica)
@@ -263,7 +263,7 @@ class ReplicaFetcherThreadTest {
     expect(logManager.truncateTo(capture(truncated))).anyTimes()
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
-    expect(leaderEpochs.latestUsedEpoch).andReturn(5)
+    expect(leaderEpochs.latestEpoch).andReturn(5)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
     replay(leaderEpochs, replicaManager, logManager, quota, replica)
@@ -312,7 +312,7 @@ class ReplicaFetcherThreadTest {
     //Stub return values
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
-    expect(leaderEpochs.latestUsedEpoch).andReturn(5)
+    expect(leaderEpochs.latestEpoch).andReturn(5)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
 
@@ -358,7 +358,7 @@ class ReplicaFetcherThreadTest {
     expect(logManager.truncateTo(capture(truncateToCapture))).once
     expect(replica.epochs).andReturn(Some(leaderEpochs)).anyTimes()
     expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
-    expect(leaderEpochs.latestUsedEpoch).andReturn(5)
+    expect(leaderEpochs.latestEpoch).andReturn(5)
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stub(replica, replicaManager)
 

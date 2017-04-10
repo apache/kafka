@@ -286,7 +286,7 @@ class ReplicaFetcherThread(name: String,
   override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = {
     val result = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
-      .map { case (tp, _) => tp -> epochCache(tp).latestUsedEpoch }.toMap
+      .map { case (tp, _) => tp -> epochCache(tp).latestEpoch }.toMap
 
     debug(s"Build leaderEpoch request $result for broker $sourceBroker")
 

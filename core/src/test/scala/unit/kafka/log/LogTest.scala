@@ -1587,13 +1587,14 @@ class LogTest {
     //Given this partition is on leader epoch 72
     val epoch = 72
     val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    log.leaderEpochCache.assign(epoch, records.size)
 
     //When appending messages as a leader (i.e. assignOffsets = true)
     for (record <- records)
       log.append(
         MemoryRecords.withRecords(CompressionType.NONE, record),
-        leaderEpochCache = mockCache(epoch),
-        assignOffsets = true
+        assignOffsets = true,
+        leaderEpoch = epoch
       )
 
     //Then leader epoch should be set on messages
@@ -1608,8 +1609,6 @@ class LogTest {
     val messageIds = (0 until 50).toArray
     val records = messageIds.map(id => new SimpleRecord(id.toString.getBytes))
 
-    val cache = createMock(classOf[LeaderEpochCache])
-
     //Given each message has an offset & epoch, as msgs from leader would
     def recordsForEpoch(i: Int): MemoryRecords = {
       val recs = MemoryRecords.withRecords(messageIds(i), CompressionType.NONE, records(i))
@@ -1620,17 +1619,13 @@ class LogTest {
       recs
     }
 
-    //Verify we save the epoch to the cache.
-    expect(cache.assign(EasyMock.eq(42), anyInt)).times(records.size)
-    replay(cache)
-
     val log = new Log(logDir, LogConfig(), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
     //When appending as follower (assignOffsets = false)
     for (i <- records.indices)
-      log.append(recordsForEpoch(i), assignOffsets = false, leaderEpochCache = cache)
+      log.append(recordsForEpoch(i), assignOffsets = false, leaderEpoch = 42)
 
-    verify(cache)
+    assertEquals(42, log.leaderEpochCache.asInstanceOf[LeaderEpochFileCache].latestEpoch())
   }
 
   @Test
@@ -1794,12 +1789,5 @@ class LogTest {
       scheduler = time.scheduler,
       time = time)
     log
-  }
-
-  private def mockCache(epoch: Int) = {
-    val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
-    EasyMock.expect(cache.latestUsedEpoch).andReturn(epoch).anyTimes
-    EasyMock.replay(cache)
-    cache
   }
 }
