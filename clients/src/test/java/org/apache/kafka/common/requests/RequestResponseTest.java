@@ -68,6 +68,7 @@ public class RequestResponseTest {
         checkErrorResponse(createFindCoordinatorRequest(0), new UnknownServerException());
         checkErrorResponse(createFindCoordinatorRequest(1), new UnknownServerException());
         checkResponse(createFindCoordinatorResponse(), 0);
+        checkResponse(createFindCoordinatorResponse(), 1);
         checkRequest(createControlledShutdownRequest());
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());

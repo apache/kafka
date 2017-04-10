@@ -137,7 +137,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
                 case 1:
                     return TRANSACTION;
                 default:
-                    return UNKNOWN;
+                    throw new IllegalArgumentException("Unknown coordinator type received: " + id);
             }
         }
     }

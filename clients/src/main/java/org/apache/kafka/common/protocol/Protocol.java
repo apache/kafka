@@ -795,12 +795,22 @@ public class Protocol {
             new Field("port", INT32,
                     "The port on which the broker accepts requests."));
 
+    public static final Schema FIND_COORDINATOR_ERROR = new Schema(
+            new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING));
+
     public static final Schema FIND_COORDINATOR_RESPONSE_V0 = new Schema(
             new Field("error_code", INT16),
             new Field("coordinator",
                     FIND_COORDINATOR_BROKER_V0,
                     "Host and port information for the coordinator for a consumer group."));
-    public static final Schema FIND_COORDINATOR_RESPONSE_V1 = FIND_COORDINATOR_RESPONSE_V0;
+
+    public static final Schema FIND_COORDINATOR_RESPONSE_V1 = new Schema(
+            new Field("error_with_message", FIND_COORDINATOR_ERROR),
+            new Field("coordinator",
+                    FIND_COORDINATOR_BROKER_V0,
+                    "Host and port information for the coordinator for a consumer group."));
+
 
     public static final Schema[] FIND_COORDINATOR_REQUEST = new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
     public static final Schema[] FIND_COORDINATOR_RESPONSE = new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};

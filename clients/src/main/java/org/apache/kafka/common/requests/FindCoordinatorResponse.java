@@ -25,7 +25,9 @@ import java.nio.ByteBuffer;
 
 public class FindCoordinatorResponse extends AbstractResponse {
 
+    private static final String ERROR_WITH_MESSAGE_KEY_NAME = "error_with_message";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
 
     /**
@@ -41,16 +43,26 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
 
+    private final String error_message;
     private final Errors error;
     private final Node node;
 
     public FindCoordinatorResponse(Errors error, Node node) {
         this.error = error;
         this.node = node;
+        this.error_message = null;
     }
 
     public FindCoordinatorResponse(Struct struct) {
-        error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        if (struct.hasField(ERROR_WITH_MESSAGE_KEY_NAME)) {
+            Struct errorStruct = struct.getStruct(ERROR_WITH_MESSAGE_KEY_NAME);
+            error = Errors.forCode(errorStruct.getShort(ERROR_CODE_KEY_NAME));
+            error_message = errorStruct.getString(ERROR_MESSAGE_KEY_NAME);
+        } else {
+            error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+            error_message = null;
+        }
+
         Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
         int nodeId = broker.getInt(NODE_ID_KEY_NAME);
         String host = broker.getString(HOST_KEY_NAME);
@@ -69,7 +81,15 @@ public class FindCoordinatorResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        if (version < 1) {
+            struct.set(ERROR_CODE_KEY_NAME, error.code());
+        } else {
+            Struct errorsStruct = struct.instance(ERROR_WITH_MESSAGE_KEY_NAME);
+            errorsStruct.set(ERROR_CODE_KEY_NAME, error.code());
+            errorsStruct.set(ERROR_MESSAGE_KEY_NAME, error_message);
+            struct.set(ERROR_WITH_MESSAGE_KEY_NAME, errorsStruct);
+        }
+
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
         coordinator.set(NODE_ID_KEY_NAME, node.id());
         coordinator.set(HOST_KEY_NAME, node.host());
@@ -79,6 +99,6 @@ public class FindCoordinatorResponse extends AbstractResponse {
     }
 
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.parseResponse(version, buffer));
+        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer));
     }
 }
