@@ -61,6 +61,11 @@ public class KGroupedTableImplTest {
         driver = null;
     }
 
+    @Test
+    public void shouldAllowNullStoreNameOnCount()  {
+        groupedTable.count((String) null);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreNameOnAggregate() throws Exception {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, (String) null);

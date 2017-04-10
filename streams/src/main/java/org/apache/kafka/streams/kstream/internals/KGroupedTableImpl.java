@@ -144,10 +144,17 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, Long> count(String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return count(keyValueStore(keySerde, Serdes.Long(), storeName));
+    public KTable<K, Long> count(final String storeName) {
+        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(KTableImpl.SOURCE_NAME);
+        Topic.validate(internalStoreName);
+        return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
+    }
+
+    @Override
+    public KTable<K, Long> count() {
+        final String internalStoreName = topology.newStoreName(KTableImpl.SOURCE_NAME);
+        Topic.validate(internalStoreName);
+        return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
     }
 
     @Override
