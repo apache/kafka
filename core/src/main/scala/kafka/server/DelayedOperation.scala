@@ -127,11 +127,11 @@ object DelayedOperationPurgatory {
 /**
  * A helper purgatory class for bookkeeping delayed operations with a timeout, and expiring timed out operations.
  */
-class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
-                                                       timeoutTimer: Timer,
-                                                       brokerId: Int = 0,
-                                                       purgeInterval: Int = 1000,
-                                                       reaperEnabled: Boolean = true)
+final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
+                                                             timeoutTimer: Timer,
+                                                             brokerId: Int = 0,
+                                                             purgeInterval: Int = 1000,
+                                                             reaperEnabled: Boolean = true)
         extends Logging with KafkaMetricsGroup {
 
   /* a list of operation watching keys */

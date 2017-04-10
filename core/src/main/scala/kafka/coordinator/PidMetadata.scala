@@ -28,4 +28,8 @@ private[coordinator] class PidMetadata(val pid: Long) {
     case other: PidMetadata => pid == other.pid && epoch == other.epoch
     case _ => false
   }
+
+  override def hashCode(): Int = (pid & 0xffffffff).asInstanceOf[Int] ^
+    ((pid >> 32) & 0xffffffff).asInstanceOf[Int] ^
+    (epoch << 16)
 }
