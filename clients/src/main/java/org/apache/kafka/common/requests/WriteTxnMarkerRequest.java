@@ -73,6 +73,17 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
         public int coordinatorEpoch() {
             return coordinatorEpoch;
         }
+
+        @Override
+        public String toString() {
+            return "TxnMarkerEntry{" +
+                    "pid=" + pid +
+                    ", epoch=" + epoch +
+                    ", coordinatorEpoch=" + coordinatorEpoch +
+                    ", result=" + result +
+                    ", partitions=" + partitions +
+                    '}';
+        }
     }
 
     public static class Builder extends AbstractRequest.Builder<WriteTxnMarkerRequest> {
@@ -175,5 +186,9 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
 
     public static WriteTxnMarkerRequest parse(ByteBuffer buffer, short version) {
         return new WriteTxnMarkerRequest(ApiKeys.WRITE_TXN_MARKER.parseRequest(version, buffer), version);
+    }
+
+    public List<TxnMarkerEntry> markers() {
+        return markers;
     }
 }

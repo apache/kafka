@@ -183,6 +183,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case END_TXN:
                 request = new EndTxnRequest(struct, version);
                 break;
+            case WRITE_TXN_MARKER:
+                request = new WriteTxnMarkerRequest(struct, version);
+                break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));

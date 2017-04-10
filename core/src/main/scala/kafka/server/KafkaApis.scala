@@ -1359,7 +1359,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTransactionRequest(request: RequestChannel.Request): Unit = {
-    throw new UnsupportedOperationException
+    val endTxnRequest = request.body[EndTxnRequest]
+
+    def sendResponseCallback(error: Errors) {
+      val responseBody = new EndTxnResponse(error)
+      trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId()}.")
+      requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
+    }
+
+    txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId(),
+      endTxnRequest.pid(),
+      endTxnRequest.epoch(),
+      endTxnRequest.command(),
+      sendResponseCallback)
   }
 
   def handleAddPartitionToTransactionRequest(request: RequestChannel.Request): Unit = {
