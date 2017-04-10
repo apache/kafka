@@ -20,24 +20,27 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent;
     private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
-
+    private final String storeName;
     private boolean sendOldValues = false;
 
-    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<? super K, ? super V> predicate, boolean filterNot) {
+    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<? super K, ? super V> predicate,
+                        boolean filterNot, String storeName) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;
+        this.storeName = storeName;
     }
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KTableFilterProcessor();
+        return storeName != null ? new MaterializedKTableFilterProcessor() : new KTableFilterProcessor();
     }
 
     @Override
@@ -84,6 +87,32 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
                 return; // unnecessary to forward here.
 
             context().forward(key, new Change<>(newValue, oldValue));
+        }
+
+    }
+
+    private class MaterializedKTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
+        private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            super.init(context);
+            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+        }
+
+        @Override
+        public void process(K key, Change<V> change) {
+            V newValue = computeValue(key, change.newValue);
+            V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+
+            if (sendOldValues && oldValue == null && newValue == null)
+                return; // unnecessary to forward here.
+
+            store.put(key, newValue);
+            tupleForwarder.maybeForward(key, newValue, oldValue);
         }
 
     }

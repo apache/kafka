@@ -99,7 +99,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KTable<K, V> filter(Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false);
+        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false, null);
         topology.addProcessor(name, processorSupplier, this.name);
 
         return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
@@ -110,7 +110,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(storeName, "store name can't be null");
         String name = topology.newName(FILTER_NAME);
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false);
+        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false, storeName);
         topology.addProcessor(name, processorSupplier, this.name);
 
         final StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(storeName,
@@ -128,7 +128,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true);
+        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true, null);
 
         topology.addProcessor(name, processorSupplier, this.name);
 
