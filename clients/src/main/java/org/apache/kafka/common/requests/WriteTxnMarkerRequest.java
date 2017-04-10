@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class WriteTxnMarkerRequest extends AbstractRequest {
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
@@ -83,6 +84,23 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
                     ", result=" + result +
                     ", partitions=" + partitions +
                     '}';
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final TxnMarkerEntry that = (TxnMarkerEntry) o;
+            return pid == that.pid &&
+                    epoch == that.epoch &&
+                    coordinatorEpoch == that.coordinatorEpoch &&
+                    result == that.result &&
+                    Objects.equals(partitions, that.partitions);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(pid, epoch, coordinatorEpoch, result, partitions);
         }
     }
 

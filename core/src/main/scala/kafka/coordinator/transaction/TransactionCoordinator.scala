@@ -274,7 +274,7 @@ class TransactionCoordinator(brokerId: Int,
               preparedCommitMetadata.prepareTransitionTo(completedState)
               txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
             }
-            txnMarkerChannelManager.sendTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
+            txnMarkerChannelManager.addTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
           case None =>
             // TODO: What to do here? Is this possible at this point?
             responseCallback(Errors.INVALID_PID_MAPPING)
