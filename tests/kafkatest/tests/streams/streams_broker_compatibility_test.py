@@ -67,7 +67,7 @@ class StreamsBrokerCompatibility(Test):
 
         self.processor.wait()
 
-        wait_until(lambda: self.consumer.total_consumed() == 1, timeout_sec=30, err_msg="Did expect to read exactly one message but got none within 30 seconds")
+        wait_until(lambda: self.consumer.total_consumed() > 0, timeout_sec=30, err_msg="Did expect to read a message but got none within 30 seconds.")
 
         self.consumer.stop()
         self.kafka.stop()
