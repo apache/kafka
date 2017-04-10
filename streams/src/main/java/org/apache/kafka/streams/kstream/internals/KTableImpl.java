@@ -29,12 +29,15 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
 
@@ -91,6 +94,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return this.storeName;
     }
 
+
     @Override
     public KTable<K, V> filter(Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
@@ -99,6 +103,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(name, processorSupplier, this.name);
 
         return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+    }
+
+    @Override
+    public KTable<K, V> filter(Predicate<? super K, ? super V> predicate, final String storeName) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(storeName, "store name can't be null");
+        String name = topology.newName(FILTER_NAME);
+        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false);
+        topology.addProcessor(name, processorSupplier, this.name);
+
+        final StateStoreSupplier storeSupplier = new RocksDBKeyValueStoreSupplier<>(storeName,
+            null,
+            null,
+            true,
+            Collections.<String, String>emptyMap(),
+            true);
+
+        topology.addStateStore(storeSupplier, name);
+        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, storeName);
     }
 
     @Override
