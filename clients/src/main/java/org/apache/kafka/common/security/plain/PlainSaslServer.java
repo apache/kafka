@@ -17,9 +17,13 @@
 package org.apache.kafka.common.security.plain;
 
 import java.io.UnsupportedEncodingException;
+import java.text.MessageFormat;
 import java.util.Arrays;
 import java.util.Map;
+import java.util.Properties;
 
+import javax.naming.Context;
+import javax.naming.directory.InitialDirContext;
 import javax.security.auth.callback.CallbackHandler;
 import javax.security.sasl.Sasl;
 import javax.security.sasl.SaslException;
@@ -46,14 +50,30 @@ public class PlainSaslServer implements SaslServer {
 
     public static final String PLAIN_MECHANISM = "PLAIN";
     private static final String JAAS_USER_PREFIX = "user_";
+    private static final String JAAS_SOURCE = "source";
+    private static final String SOURCE_LDAP = "ldap";
+    private static final String JAAS_LDAP_URL = "ldap_url";
+    private static final String JAAS_LDAP_USER_TEMPLATE = "ldap_user_template";
 
     private final JaasContext jaasContext;
 
     private boolean complete;
     private String authorizationID;
+    private String ldapUrl;
+    private String ldapUserTemplate;
+    private String source;
 
     public PlainSaslServer(JaasContext jaasContext) {
         this.jaasContext = jaasContext;
+        source = jaasContext.configEntryOption(JAAS_SOURCE, PlainLoginModule.class.getName());
+        if (source == null) {
+            source = "config";
+        }
+        if (source.equals(SOURCE_LDAP)) {
+            ldapUrl = jaasContext.configEntryOption(JAAS_LDAP_URL, PlainLoginModule.class.getName());
+            ldapUserTemplate = jaasContext.configEntryOption(JAAS_LDAP_USER_TEMPLATE, PlainLoginModule.class.getName());
+        }
+
     }
 
     @Override
@@ -92,10 +112,25 @@ public class PlainSaslServer implements SaslServer {
         if (authorizationID.isEmpty())
             authorizationID = username;
 
-        String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
+        if (source.equals(SOURCE_LDAP)) {
+            try {
+                Properties props = new Properties();
+                props.put(Context.INITIAL_CONTEXT_FACTORY, "com.sun.jndi.ldap.LdapCtxFactory");
+                props.put(Context.PROVIDER_URL, ldapUrl);
+                props.put(Context.SECURITY_PRINCIPAL, MessageFormat.format(ldapUserTemplate, username));
+                props.put(Context.SECURITY_CREDENTIALS, password);
+            
+                InitialDirContext context = new InitialDirContext(props);
+            } catch (Exception e) {
+                throw new SaslException("Authentication failed: Invalid JAAS configuration", e);
+            }
+
+        } else {
+            String expectedPassword = jaasContext.configEntryOption(JAAS_USER_PREFIX + username,
                 PlainLoginModule.class.getName());
-        if (!password.equals(expectedPassword)) {
-            throw new SaslException("Authentication failed: Invalid username or password");
+            if (!password.equals(expectedPassword)) {
+                throw new SaslException("Authentication failed: Invalid username or password");
+            }
         }
         complete = true;
         return new byte[0];
