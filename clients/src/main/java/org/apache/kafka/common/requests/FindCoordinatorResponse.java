@@ -43,24 +43,24 @@ public class FindCoordinatorResponse extends AbstractResponse {
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
 
-    private final String error_message;
+    private final String errorMessage;
     private final Errors error;
     private final Node node;
 
     public FindCoordinatorResponse(Errors error, Node node) {
         this.error = error;
         this.node = node;
-        this.error_message = null;
+        this.errorMessage = null;
     }
 
     public FindCoordinatorResponse(Struct struct) {
         if (struct.hasField(ERROR_WITH_MESSAGE_KEY_NAME)) {
             Struct errorStruct = struct.getStruct(ERROR_WITH_MESSAGE_KEY_NAME);
             error = Errors.forCode(errorStruct.getShort(ERROR_CODE_KEY_NAME));
-            error_message = errorStruct.getString(ERROR_MESSAGE_KEY_NAME);
+            errorMessage = errorStruct.getString(ERROR_MESSAGE_KEY_NAME);
         } else {
             error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
-            error_message = null;
+            errorMessage = null;
         }
 
         Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
@@ -86,7 +86,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
         } else {
             Struct errorsStruct = struct.instance(ERROR_WITH_MESSAGE_KEY_NAME);
             errorsStruct.set(ERROR_CODE_KEY_NAME, error.code());
-            errorsStruct.set(ERROR_MESSAGE_KEY_NAME, error_message);
+            errorsStruct.set(ERROR_MESSAGE_KEY_NAME, errorMessage);
             struct.set(ERROR_WITH_MESSAGE_KEY_NAME, errorsStruct);
         }
 
