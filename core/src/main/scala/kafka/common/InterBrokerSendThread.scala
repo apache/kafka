@@ -30,21 +30,20 @@ object InterBrokerSendThread {
 }
 
 /**
- *  Abstract class for inter-broker send thread that utilize a non-blocking network client.
+ *  Class for inter-broker send thread that utilize a non-blocking network client.
  */
-abstract class InterBrokerSendThread(name: String,
-                                     networkClient: NetworkClient,
-                                     time: Time)
+class InterBrokerSendThread(name: String,
+                            networkClient: NetworkClient,
+                            requestGenerator: () => immutable.Map[Node, RequestAndCompletionHandler],
+                            time: Time)
   extends ShutdownableThread(name, isInterruptible = false) {
-
-  // generate a request for each required destination broker
-  def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler]
 
   override def doWork() {
     val now = time.milliseconds()
     var pollTimeout = Long.MaxValue
 
-    val requestsToSend: immutable.Map[Node, RequestAndCompletionHandler] = generateRequests()
+    val requestsToSend: immutable.Map[Node, RequestAndCompletionHandler] = requestGenerator()
+
     for ((destNode: Node, requestAndCallback: RequestAndCompletionHandler) <- requestsToSend) {
       val destination = Integer.toString(destNode.id)
       val completionHandler = requestAndCallback.handler
@@ -61,7 +60,7 @@ abstract class InterBrokerSendThread(name: String,
           completionHandler, destination,
           now /* createdTimeMs */, now /* receivedTimeMs */, true /* disconnected */, null /* versionMismatch */, null /* responseBody */)
 
-        // pool timeout would be the minimum of connection delay if there are any dest yet to be reached;
+        // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
         // otherwise it is infinity
         pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(destNode, now))
 

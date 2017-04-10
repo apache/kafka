@@ -80,7 +80,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       new ApiVersions
     )
 
-    new TransactionMarkerSenderThread(threadName, networkClient, time)
+    new InterBrokerSendThread(threadName, networkClient, generateRequests, time)
   }
 
   private case class PendingTxn(transactionMetadata: TransactionMetadata, callback: WriteTxnMarkerCallback)
@@ -170,65 +170,59 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     addRequestToSend(metadataToWrite.pid, metadataToWrite.epoch, result, coordinatorEpoch, metadataToWrite.topicPartitions.toSet)
   }
 
-  private class TransactionMarkerSenderThread(threadName: String,
-                                              networkClient: NetworkClient,
-                                              time: Time)
-    extends InterBrokerSendThread(threadName, networkClient, time) {
+  private def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler] =
+    brokerStateMap.flatMap { case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
+      val markersToSend: java.util.List[TxnMarkerEntry] = new util.ArrayList[TxnMarkerEntry]()
+      destAndMarkerQueue.markersQueue.drainTo(markersToSend)
 
-    override def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler] =
-      brokerStateMap.flatMap { case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
-        val markersToSend: java.util.List[TxnMarkerEntry] = new util.ArrayList[TxnMarkerEntry]()
-        destAndMarkerQueue.markersQueue.drainTo(markersToSend)
+      val requestCompletionHandler = new RequestCompletionHandler {
+        override def onComplete(response: ClientResponse): Unit = {
+          val correlationId = response.requestHeader.correlationId
+          if (response.wasDisconnected) {
+            trace(s"Cancelled request $response due to node ${response.destination} being disconnected")
 
-        val requestCompletionHandler = new RequestCompletionHandler {
-          override def onComplete(response: ClientResponse): Unit = {
-            val correlationId = response.requestHeader.correlationId
-            if (response.wasDisconnected) {
-              trace(s"Cancelled request $response due to node $response.destination being disconnected")
+            // re-enqueue the markers
+            for (txnMarker: TxnMarkerEntry <- markersToSend)
+              addRequestForBroker(brokerId, txnMarker)
+          } else {
+            trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
 
-              // re-enqueue the markers
-              for (txnMarker: TxnMarkerEntry <- markersToSend)
-                addRequestForBroker(brokerId, txnMarker)
-            } else {
-              trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
+            val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkerResponse]
 
-              val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkerResponse]
+            for (txnMarker: TxnMarkerEntry <- markersToSend) {
+              val errors = writeTxnMarkerResponse.errors(txnMarker.pid)
 
-              for (txnMarker: TxnMarkerEntry <- markersToSend) {
-                val errors = writeTxnMarkerResponse.errors(txnMarker.pid)
+              if (errors == null) // TODO: could this ever happen?
+                throw new IllegalStateException("WriteTxnMarkerResponse does not contain expected error map for pid " + txnMarker.pid)
 
-                if (errors == null) // TODO: could this ever happen?
-                  throw new IllegalStateException("WriteTxnMarkerResponse does not contain expected error map for pid " + txnMarker.pid)
+              val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
+              for ((topicPartition: TopicPartition, error: Errors) <- errors) {
+                error match {
+                  case Errors.NONE =>
+                    val metadata = pendingTxnMap.getOrElse(txnMarker.pid, throw new IllegalStateException("Cannot find the pending txn marker in cache; it should not happen")).transactionMetadata
+                    // do not synchronize on this metadata since it will only be accessed by the sender thread
+                    metadata.topicPartitions -= topicPartition
+                  case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
+                       Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+                    retryPartitions += topicPartition
+                  case _ =>
+                    throw new IllegalStateException("Writing txn marker request failed permanently for pid " + txnMarker.pid)
+                }
 
-                val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
-                for ((topicPartition: TopicPartition, error: Errors) <- errors) {
-                  error match {
-                    case Errors.NONE =>
-                      val metadata = pendingTxnMap.getOrElse(txnMarker.pid, throw new IllegalStateException("Cannot find the pending txn marker in cache; it should not happen")).transactionMetadata
-                      // do not synchronize on this metadata since it will only be accessed by the sender thread
-                      metadata.topicPartitions -= topicPartition
-                    case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
-                         Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
-                      retryPartitions += topicPartition
-                    case _ =>
-                      throw new IllegalStateException("Writing txn marker request failed permanently for pid " + txnMarker.pid)
-                  }
-
-                  if (retryPartitions.nonEmpty) {
-                    // re-enqueue with possible new leaders of the partitions
-                    addRequestToSend(txnMarker.pid, txnMarker.epoch, txnMarker.transactionResult, txnMarker.coordinatorEpoch, retryPartitions.toSet, watchInPurgatory = false)
-                  }
+                if (retryPartitions.nonEmpty) {
+                  // re-enqueue with possible new leaders of the partitions
+                  addRequestToSend(txnMarker.pid, txnMarker.epoch, txnMarker.transactionResult, txnMarker.coordinatorEpoch, retryPartitions.toSet, watchInPurgatory = false)
                 }
               }
             }
           }
         }
-        if (markersToSend.isEmpty)
-          None
-        else
-          Some((destAndMarkerQueue.destBrokerNode, RequestAndCompletionHandler(new WriteTxnMarkerRequest.Builder(markersToSend), requestCompletionHandler)))
-      }.toMap
-    }
+      }
+      if (markersToSend.isEmpty)
+        None
+      else
+        Some((destAndMarkerQueue.destBrokerNode, RequestAndCompletionHandler(new WriteTxnMarkerRequest.Builder(markersToSend), requestCompletionHandler)))
+    }.toMap
 }
 
 case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[WriteTxnMarkerRequest.TxnMarkerEntry])
