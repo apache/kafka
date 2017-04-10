@@ -391,7 +391,7 @@ public class KStreamAggregationIntegrationTest {
         groupedStream.count("count-by-key")
             .to(Serdes.String(), Serdes.Long(), outputTopic);
 
-       shouldCountHelper();
+        shouldCountHelper();
     }
 
     @Test
