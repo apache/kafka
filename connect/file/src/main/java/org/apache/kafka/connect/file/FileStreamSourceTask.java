@@ -246,8 +246,16 @@ public class FileStreamSourceTask extends SourceTask {
         BasicFileAttributes attrs = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
         Map<String, Object> fileAttrs = new TreeMap<>();
         fileAttrs.put(FILENAME_FIELD, file.getPath());
-        fileAttrs.put(FILE_CREATE_TIME_FIELD, attrs.creationTime().toMillis());
         fileAttrs.put(FILE_KEY_HASH_FIELD, Objects.hashCode(attrs.fileKey()));
+        if (attrs.fileKey() != null) {
+            // Several Linux filesystems do not support creation timestamps and return modified
+            // timestamp instead. Thus, if ``fileKey`` is available we'll use just that.
+            fileAttrs.put(FILE_CREATE_TIME_FIELD, 0);
+        } else {
+            // If ``fileKey`` is not available, we'll try and use creation timestamp
+            // (supported in Windows)
+            fileAttrs.put(FILE_CREATE_TIME_FIELD, attrs.creationTime().toMillis());
+        }
         return fileAttrs;
     }
 
