@@ -432,7 +432,7 @@ public class KTableFilterTest {
             }).groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
-       doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
+        doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
     }
 
     @Test
