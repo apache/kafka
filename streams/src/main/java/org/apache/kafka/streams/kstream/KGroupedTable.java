@@ -77,7 +77,7 @@ public interface KGroupedTable<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param storeName     the name of the underlying {@link KTable} state store; valid characters are ASCII
-     *                      alphanumerics, '.', '_' and '-'. If {@code null} an internal store name will be automatically given.
+     *                      alphanumerics, '.', '_' and '-'. If {@code null} an internal store name will be automatically created.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */

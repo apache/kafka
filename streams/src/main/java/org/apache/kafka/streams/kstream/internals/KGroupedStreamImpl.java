@@ -151,7 +151,16 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public KTable<K, Long> count(final String storeName) {
-        return count(keyValueStore(keySerde, Serdes.Long(), storeName));
+        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
+    }
+
+    @Override
+    public KTable<K, Long> count() {
+        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
     }
 
     @Override
