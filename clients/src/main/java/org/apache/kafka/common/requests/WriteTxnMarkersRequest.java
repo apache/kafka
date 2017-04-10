@@ -67,6 +67,17 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         public List<TopicPartition> partitions() {
             return partitions;
         }
+
+        @Override
+        public String toString() {
+            return "TxnMarkerEntry{" +
+                    "pid=" + pid +
+                    ", epoch=" + epoch +
+                    ", coordinatorEpoch=" + coordinatorEpoch +
+                    ", result=" + result +
+                    ", partitions=" + partitions +
+                    '}';
+        }
     }
 
     public static class Builder extends AbstractRequest.Builder<WriteTxnMarkersRequest> {

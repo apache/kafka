@@ -124,6 +124,10 @@ class TransactionStateManager(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
+  def coordinatorEpochFor(transactionId: String): Option[Int] = inLock (partitionLock) {
+    ownedPartitions.get(partitionFor(transactionId))
+  }
+
   def isCoordinatorFor(transactionalId: String): Boolean = inLock(partitionLock) {
     val partitionId = partitionFor(transactionalId)
 
@@ -305,7 +309,8 @@ class TransactionStateManager(brokerId: Int,
 
   def appendTransactionToLog(transactionalId: String,
                              txnMetadata: TransactionMetadata,
-                             responseCallback: Errors => Unit) {
+                             responseCallback: Errors => Unit,
+                             acks:Short = TransactionLog.EnforcedRequiredAcks) {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -403,7 +408,7 @@ class TransactionStateManager(brokerId: Int,
 
     replicaManager.appendRecords(
       txnMetadata.txnTimeoutMs.toLong,     // use the txn timeout value as the timeout for append
-      TransactionLog.EnforcedRequiredAcks,
+      acks,
       internalTopicsAllowed = true,        // allow appending to internal offset topic
       recordsPerPartition,
       updateCacheCallback)

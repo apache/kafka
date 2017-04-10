@@ -34,7 +34,6 @@ object InterBrokerSendThread {
  */
 abstract class InterBrokerSendThread(name: String,
                                      networkClient: NetworkClient,
-                                     interBrokerListenerName: ListenerName,
                                      time: Time)
   extends ShutdownableThread(name, isInterruptible = false) {
 
@@ -43,10 +42,9 @@ abstract class InterBrokerSendThread(name: String,
 
   override def doWork() {
     val now = time.milliseconds()
-    var poolTimeout = Long.MaxValue
+    var pollTimeout = Long.MaxValue
 
     val requestsToSend: immutable.Map[Node, RequestAndCompletionHandler] = generateRequests()
-
     for ((destNode: Node, requestAndCallback: RequestAndCompletionHandler) <- requestsToSend) {
       val destination = Integer.toString(destNode.id)
       val completionHandler = requestAndCallback.handler
@@ -65,13 +63,12 @@ abstract class InterBrokerSendThread(name: String,
 
         // pool timeout would be the minimum of connection delay if there are any dest yet to be reached;
         // otherwise it is infinity
-        poolTimeout = Math.min(poolTimeout, networkClient.connectionDelay(destNode, now))
+        pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(destNode, now))
 
         completionHandler.onComplete(disConnectedResponse)
       }
     }
-
-    networkClient.poll(poolTimeout, now)
+    networkClient.poll(pollTimeout, now)
   }
 }
 
