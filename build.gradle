@@ -321,8 +321,9 @@ subprojects {
   findbugs {
     toolVersion = "3.0.1"
     excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
-    ignoreFailures = true
+    ignoreFailures = false
   }
+  test.dependsOn('findbugsMain')
 
   tasks.withType(FindBugs) {
     reports {
@@ -350,6 +351,12 @@ subprojects {
   def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
   task reportCoverage(dependsOn: [coverageGen])
 
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+  taskGraph.getAllTasks().findAll { it.name.contains('findbugsScoverage') || it.name.contains('findbugsTest') }.each { task ->
+    task.enabled = false
+  }
 }
 
 def fineTuneEclipseClasspathFile(eclipse, project) {

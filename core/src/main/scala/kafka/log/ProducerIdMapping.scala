@@ -221,7 +221,7 @@ class ProducerIdMapping(val config: LogConfig,
   import ProducerIdMapping._
 
   val snapDir: File = new File(snapParentDir, DirnamePrefix)
-  snapDir.mkdir()
+  Files.createDirectories(snapDir.toPath)
 
   private val pidMap = mutable.Map[Long, ProducerIdEntry]()
   private var lastMapOffset = 0L
@@ -255,13 +255,16 @@ class ProducerIdMapping(val config: LogConfig,
             loaded = true
           } catch {
             case e: CorruptSnapshotException =>
-              error(s"Snapshot file at ${file} is corrupt: ${e.getMessage}")
-              file.delete()
+              error(s"Snapshot file at $file is corrupt: ${e.getMessage}")
+              try Files.delete(file.toPath)
+              catch {
+                case e: IOException => error(s"Failed to delete corrupt snapshot file $file", e)
+              }
           }
         case None =>
           lastSnapOffset = 0L
           lastMapOffset = 0L
-          snapDir.mkdir()
+          Files.createDirectories(snapDir.toPath)
           loaded = true
       }
     }
@@ -350,7 +353,7 @@ class ProducerIdMapping(val config: LogConfig,
       // Get file with the smallest offset
       val toDelete = list.minBy(offsetFromFile)
       // Delete the last
-      toDelete.delete()
+      Files.deleteIfExists(toDelete.toPath)
     }
   }
 

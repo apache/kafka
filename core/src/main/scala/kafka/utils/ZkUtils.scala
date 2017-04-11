@@ -660,13 +660,9 @@ class ZkUtils(val zkClient: ZkClient,
     val stat = new Stat()
     try {
       val data: String = zkClient.readData(path, stat)
-      if (data == null.asInstanceOf[String])
-        (None, stat.getVersion)
-      else
-      (Some(data), stat.getVersion)
+      (Option(data), stat.getVersion)
     } catch {
-      case _: ZkNoNodeException =>
-        (None, stat.getVersion)
+      case _: ZkNoNodeException => (None, stat.getVersion)
     }
   }
 

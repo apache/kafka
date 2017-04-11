@@ -49,7 +49,7 @@ trait LeaderEpochCache {
   */
 class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetMetadata, checkpoint: LeaderEpochCheckpoint) extends LeaderEpochCache with Logging {
   private val lock = new ReentrantReadWriteLock()
-  private var epochs: ListBuffer[EpochEntry] = lock.synchronized { ListBuffer(checkpoint.read(): _*) }
+  private var epochs: ListBuffer[EpochEntry] = inWriteLock(lock) { ListBuffer(checkpoint.read(): _*) }
   private var cachedLatestEpoch: Option[Int] = None //epoch which has yet to be assigned to a message.
 
   /**
