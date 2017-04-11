@@ -192,11 +192,7 @@ public class KStreamBuilderTest {
         assertEquals("globalTable", stateStores.get(0).name());
     }
 
-    @Test
-    public void shouldBuildGlobalTopologyWithAllGlobalTables() throws Exception {
-        builder.globalTable("table", "globalTable");
-        builder.globalTable("table2", "globalTable2");
-
+    private void doBuildGlobalTopologyWithAllGlobalTables() throws Exception {
         final ProcessorTopology topology = builder.buildGlobalStateTopology();
 
         final List<StateStore> stateStores = topology.globalStateStores();
@@ -204,6 +200,22 @@ public class KStreamBuilderTest {
 
         assertEquals(Utils.mkSet("table", "table2"), sourceTopics);
         assertEquals(2, stateStores.size());
+    }
+
+    @Test
+    public void shouldBuildGlobalTopologyWithAllGlobalTables() throws Exception {
+        builder.globalTable("table", "globalTable");
+        builder.globalTable("table2", "globalTable2");
+
+        doBuildGlobalTopologyWithAllGlobalTables();
+    }
+
+    @Test
+    public void shouldBuildGlobalTopologyWithAllGlobalTablesWithInternalStoreName() throws Exception {
+        builder.globalTable("table");
+        builder.globalTable("table2");
+
+        doBuildGlobalTopologyWithAllGlobalTables();
     }
 
     @Test

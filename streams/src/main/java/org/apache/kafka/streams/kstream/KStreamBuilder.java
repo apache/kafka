@@ -259,7 +259,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param topic     the topic name; cannot be {@code null}
-     * @param storeName the state store name; cannot be {@code null}
+     * @param storeName the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final String topic,
@@ -495,12 +495,32 @@ public class KStreamBuilder extends TopologyBuilder {
      * regardless of the specified value in {@link StreamsConfig}.
      *
      * @param topic     the topic name; cannot be {@code null}
-     * @param storeName the state store name; cannot be {@code null}
+     * @param storeName the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link GlobalKTable} for the specified topic
      */
     public <K, V> GlobalKTable<K, V> globalTable(final String topic,
                                                  final String storeName) {
         return globalTable(null, null, topic, storeName);
+    }
+
+    /**
+     * Create a {@link GlobalKTable} for the specified topic.
+     * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
+     * <p>
+     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
+     * {@code storeName}.
+     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * <p>
+     * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
+     * regardless of the specified value in {@link StreamsConfig}.
+     *
+     * @param topic     the topic name; cannot be {@code null}
+     * @return a {@link GlobalKTable} for the specified topic
+     */
+    public <K, V> GlobalKTable<K, V> globalTable(final String topic) {
+        return globalTable(null, null, topic, null);
     }
 
     /**
@@ -537,15 +557,16 @@ public class KStreamBuilder extends TopologyBuilder {
                                                  final Serde<V> valSerde,
                                                  final String topic,
                                                  final String storeName) {
+        final String internalStoreName = storeName != null ? storeName : newStoreName(KTableImpl.SOURCE_NAME);
         final String sourceName = newName(KStreamImpl.SOURCE_NAME);
         final String processorName = newName(KTableImpl.SOURCE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeName);
+        final KTableSource<K, V> tableSource = new KTableSource<>(internalStoreName);
 
 
         final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        final StateStore store = new RocksDBKeyValueStoreSupplier<>(storeName,
+        final StateStore store = new RocksDBKeyValueStoreSupplier<>(internalStoreName,
                                                                     keySerde,
                                                                     valSerde,
                                                                     false,
@@ -553,7 +574,35 @@ public class KStreamBuilder extends TopologyBuilder {
                                                                     true).get();
 
         addGlobalStore(store, sourceName, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
-        return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeName));
+        return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(internalStoreName));
+    }
+
+    /**
+     * Create a {@link GlobalKTable} for the specified topic.
+     * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
+     * Input {@link KeyValue records} with {@code null} key will be dropped.
+     * <p>
+     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
+     * {@code storeName}.
+     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * <p>
+     * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
+     * regardless of the specified value in {@link StreamsConfig}.
+     *
+     * @param keySerde  key serde used to send key-value pairs,
+     *                  if not specified the default key serde defined in the configuration will be used
+     * @param valSerde  value serde used to send key-value pairs,
+     *                  if not specified the default value serde defined in the configuration will be used
+     * @param topic     the topic name; cannot be {@code null}
+     * @return a {@link GlobalKTable} for the specified topic
+     */
+    @SuppressWarnings("unchecked")
+    public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
+                                                 final Serde<V> valSerde,
+                                                 final String topic) {
+
+        return globalTable(keySerde, valSerde, topic, null);
     }
 
     /**
