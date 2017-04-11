@@ -17,29 +17,30 @@
 package org.apache.kafka.common.errors;
 
 /**
- * @deprecated As of Kafka 0.11, this has been replaced by {@link NotCoordinatorException}
+ * In the context of the consumer group coordinator, the broker returns this error code for consumer metadata requests
+ * or offset commit requests if the offsets topic has not yet been created.
  *
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
+ * In the context of the transactional coordinator, this error will be returned if the underlying transactional log
+ * is under replicated on if an append to the log timed out.
  */
-@Deprecated
-public class NotCoordinatorForGroupException extends RetriableException {
+public class CoordinatorNotAvailableException extends RetriableException {
+    public static final CoordinatorNotAvailableException INSTANCE = new CoordinatorNotAvailableException();
 
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForGroupException() {
+    public CoordinatorNotAvailableException() {
         super();
     }
 
-    public NotCoordinatorForGroupException(String message) {
+    public CoordinatorNotAvailableException(String message) {
         super(message);
     }
 
-    public NotCoordinatorForGroupException(String message, Throwable cause) {
+    public CoordinatorNotAvailableException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForGroupException(Throwable cause) {
+    public CoordinatorNotAvailableException(Throwable cause) {
         super(cause);
     }
 

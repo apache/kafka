@@ -17,29 +17,30 @@
 package org.apache.kafka.common.errors;
 
 /**
- * @deprecated As of Kafka 0.11, this has been replaced by {@link NotCoordinatorException}
+ * In the context of the consumer group coordinator, the broker returns this error code for any coordinator request if
+ * it is still loading the metadata (after a leader change for that offsets topic partition) for this group.
  *
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
+ * In the context of the transactional coordinator, this error will be returned if there is a pending transactional
+ * request with the same transactional id, or if the transaction cache is currently being populated from the transaction
+ * log.
  */
-@Deprecated
-public class NotCoordinatorForGroupException extends RetriableException {
+public class CoordinatorLoadingInProgressException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForGroupException() {
+    public CoordinatorLoadingInProgressException() {
         super();
     }
 
-    public NotCoordinatorForGroupException(String message) {
+    public CoordinatorLoadingInProgressException(String message) {
         super(message);
     }
 
-    public NotCoordinatorForGroupException(String message, Throwable cause) {
+    public CoordinatorLoadingInProgressException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForGroupException(Throwable cause) {
+    public CoordinatorLoadingInProgressException(Throwable cause) {
         super(cause);
     }
 

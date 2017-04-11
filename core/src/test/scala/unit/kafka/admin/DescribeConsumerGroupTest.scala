@@ -26,7 +26,6 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
-
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
 import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService
 import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
@@ -37,9 +36,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.errors.{CoordinatorNotAvailableException, WakeupException}
 import org.apache.kafka.common.serialization.StringDeserializer
 
 
@@ -203,7 +201,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-      }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe group results.")
+    }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe group results.")
 
     consumerGroupCommand.close()
   }
@@ -218,9 +216,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-        val (state, _) = consumerGroupCommand.describeGroup()
-        state == Some("Stable")
-      }, "Expected the group to initially become stable.")
+      val (state, _) = consumerGroupCommand.describeGroup()
+      state == Some("Stable")
+    }, "Expected the group to initially become stable.")
 
     // stop the consumer so the group has no active member anymore
     executor.shutdown()
@@ -233,7 +231,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
         assignments.get.filter(_.group == group).head.clientId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.host.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-      }, "Expected no active member in describe group results.")
+    }, "Expected no active member in describe group results.")
 
     consumerGroupCommand.close()
   }
@@ -254,7 +252,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.count(_.group == group) == 2 &&
         assignments.get.count{ x => x.group == group && x.partition.isDefined} == 1 &&
         assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 1
-      }, "Expected rows for consumers with no assigned partitions in describe group results.")
+    }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     consumerGroupCommand.close()
   }
@@ -272,13 +270,13 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-          val (state, assignments) = consumerGroupCommand.describeGroup()
-          state == Some("Stable") &&
-          assignments.isDefined &&
-          assignments.get.count(_.group == group) == 2 &&
-          assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
-          assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 0
-      }, "Expected two rows (one row per consumer) in describe group results.")
+      val (state, assignments) = consumerGroupCommand.describeGroup()
+      state == Some("Stable") &&
+      assignments.isDefined &&
+      assignments.get.count(_.group == group) == 2 &&
+      assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
+      assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 0
+    }, "Expected two rows (one row per consumer) in describe group results.")
 
     consumerGroupCommand.close()
   }

@@ -51,9 +51,9 @@ public class DescribeGroupsResponse extends AbstractResponse {
     /**
      * Possible per-group error codes:
      *
-     * GROUP_LOAD_IN_PROGRESS (14)
-     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_GROUP (16)
+     * COORDINATOR_LOAD_IN_PROGRESS (14)
+     * COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR (16)
      * AUTHORIZATION_FAILED (29)
      */
 

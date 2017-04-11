@@ -16,31 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
-/**
- * @deprecated As of Kafka 0.11, this has been replaced by {@link NotCoordinatorException}
- *
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
- */
-@Deprecated
-public class NotCoordinatorForGroupException extends RetriableException {
-
+public class InvalidTxnTimeoutException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForGroupException() {
-        super();
-    }
-
-    public NotCoordinatorForGroupException(String message) {
-        super(message);
-    }
-
-    public NotCoordinatorForGroupException(String message, Throwable cause) {
+    public InvalidTxnTimeoutException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForGroupException(Throwable cause) {
-        super(cause);
+    public InvalidTxnTimeoutException(String message) {
+        super(message);
     }
-
 }

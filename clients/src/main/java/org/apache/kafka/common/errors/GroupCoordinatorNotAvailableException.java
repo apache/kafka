@@ -17,9 +17,12 @@
 package org.apache.kafka.common.errors;
 
 /**
+ * @deprecated As of Kafka 0.11, this has been replaced by {@link CoordinatorNotAvailableException}
+ *
  * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
  * not yet been created.
  */
+@Deprecated
 public class GroupCoordinatorNotAvailableException extends RetriableException {
     public static final GroupCoordinatorNotAvailableException INSTANCE = new GroupCoordinatorNotAvailableException();
 

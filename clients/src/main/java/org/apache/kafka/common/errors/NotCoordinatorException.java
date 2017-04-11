@@ -17,29 +17,29 @@
 package org.apache.kafka.common.errors;
 
 /**
- * @deprecated As of Kafka 0.11, this has been replaced by {@link NotCoordinatorException}
+ * In the context of consumer group coordinator, the broker returns this error code if it receives an offset fetch
+ * or commit request for a consumer group that it is not a coordinator for the group.
  *
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
+ * In the context of the transactional coordinator, the coordinator returns this error when it receives a transactional
+ * request with a transactionalId the coordinator doesn't own.
  */
-@Deprecated
-public class NotCoordinatorForGroupException extends RetriableException {
+public class NotCoordinatorException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public NotCoordinatorForGroupException() {
+    public NotCoordinatorException() {
         super();
     }
 
-    public NotCoordinatorForGroupException(String message) {
+    public NotCoordinatorException(String message) {
         super(message);
     }
 
-    public NotCoordinatorForGroupException(String message, Throwable cause) {
+    public NotCoordinatorException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotCoordinatorForGroupException(Throwable cause) {
+    public NotCoordinatorException(Throwable cause) {
         super(cause);
     }
 
