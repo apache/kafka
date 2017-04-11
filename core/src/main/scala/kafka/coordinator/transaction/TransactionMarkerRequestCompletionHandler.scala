@@ -46,7 +46,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
       for (txnMarker: TxnMarkerEntry <- markers) {
         val errors = writeTxnMarkerResponse.errors(txnMarker.pid)
 
-        if (errors == null) // TODO: could this ever happen?
+        if (errors == null)
           throw new IllegalStateException("WriteTxnMarkerResponse does not contain expected error map for pid " + txnMarker.pid)
 
         val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
