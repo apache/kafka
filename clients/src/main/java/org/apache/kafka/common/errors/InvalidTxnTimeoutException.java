@@ -17,31 +17,17 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
- * not yet been created.
- *
- * @deprecated As of Kafka 0.11, this has been replaced by {@link CoordinatorNotAvailableException}
+ * The transaction coordinator returns this error code if the timeout received via the InitPidRequest is larger than
+ * the `max.transaction.timeout.ms` config value.
  */
-@Deprecated
-public class GroupCoordinatorNotAvailableException extends RetriableException {
-    public static final GroupCoordinatorNotAvailableException INSTANCE = new GroupCoordinatorNotAvailableException();
-
+public class InvalidTxnTimeoutException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public GroupCoordinatorNotAvailableException() {
-        super();
-    }
-
-    public GroupCoordinatorNotAvailableException(String message) {
-        super(message);
-    }
-
-    public GroupCoordinatorNotAvailableException(String message, Throwable cause) {
+    public InvalidTxnTimeoutException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public GroupCoordinatorNotAvailableException(Throwable cause) {
-        super(cause);
+    public InvalidTxnTimeoutException(String message) {
+        super(message);
     }
-
 }

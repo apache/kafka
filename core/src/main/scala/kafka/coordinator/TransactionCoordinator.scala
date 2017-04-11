@@ -59,7 +59,7 @@ class TransactionCoordinator(val brokerId: Int,
       responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
     } else {
       // check if it is the assigned coordinator for the transactional id
-      responseCallback(initPidError(Errors.NOT_COORDINATOR_FOR_GROUP))
+      responseCallback(initPidError(Errors.NOT_COORDINATOR))
     }
   }
 

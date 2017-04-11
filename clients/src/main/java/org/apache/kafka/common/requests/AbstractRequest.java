@@ -123,8 +123,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case OFFSET_FETCH:
                 request = new OffsetFetchRequest(struct, version);
                 break;
-            case GROUP_COORDINATOR:
-                request = new GroupCoordinatorRequest(struct, version);
+            case FIND_COORDINATOR:
+                request = new FindCoordinatorRequest(struct, version);
                 break;
             case JOIN_GROUP:
                 request = new JoinGroupRequest(struct, version);
