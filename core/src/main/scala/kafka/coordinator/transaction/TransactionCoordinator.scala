@@ -257,7 +257,6 @@ class TransactionCoordinator(brokerId: Int,
 
     def logAppendCallback(errors: Errors): Unit = {
       if (errors != Errors.NONE)
-      // TODO: What do we do in this case?
         responseCallback(errors)
       else {
         txnManager.coordinatorEpochFor(transactionalId) match {
@@ -276,8 +275,7 @@ class TransactionCoordinator(brokerId: Int,
             }
             txnMarkerChannelManager.addTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
           case None =>
-            // TODO: What to do here? Is this possible at this point?
-            responseCallback(Errors.INVALID_PID_MAPPING)
+            responseCallback(Errors.NOT_COORDINATOR)
         }
       }
     }

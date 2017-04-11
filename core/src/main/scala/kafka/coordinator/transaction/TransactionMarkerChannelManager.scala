@@ -118,7 +118,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   type WriteTxnMarkerCallback = Errors => Unit
 
-  // TODO: Config for how often this runs?
+  // TODO: Config for how often this runs.
   private val CommitCompleteScheduleMs = 10
 
 
