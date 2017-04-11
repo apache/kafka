@@ -24,8 +24,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.test.MockRestoreCallback;
+import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -34,7 +37,6 @@ import java.util.Map;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.fail;
 
 public class StoreChangelogReaderTest {
@@ -248,9 +250,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
         changelogReader.restore();
 
-        assertThat(callback.restored.size(), equalTo(2));
-        assertArrayEquals(callback.restored.get(0).key, bytes);
-        assertArrayEquals(callback.restored.get(1).key, bytes);
+        assertThat(callback.restored, CoreMatchers.equalTo(Utils.mkList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
     }
 
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {

@@ -51,7 +51,6 @@ import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -423,10 +422,8 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize(context);
         final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
         stateManager.register(store1, false, stateRestoreCallback);
-        assertEquals(1, stateRestoreCallback.restored.size());
         final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
-        assertArrayEquals(expectedKey, restoredKv.key);
-        assertArrayEquals(expectedValue, restoredKv.value);
+        assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
     }
 
 
