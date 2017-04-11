@@ -17,22 +17,18 @@
 package org.apache.kafka.common.requests;
 
 public enum TransactionResult {
-    COMMIT((byte) 0), ABORT((byte) 1), UNKNOWN((byte) -1);
+    ABORT(false), COMMIT(true);
 
-    public final byte id;
+    public final boolean id;
 
-    TransactionResult(byte id) {
+    TransactionResult(boolean id) {
         this.id = id;
     }
 
-    public static TransactionResult forId(byte id) {
-        switch (id) {
-            case 0:
-                return COMMIT;
-            case 1:
-                return ABORT;
-            default:
-                return UNKNOWN;
+    public static TransactionResult forId(boolean id) {
+        if (id) {
+            return TransactionResult.COMMIT;
         }
+        return TransactionResult.ABORT;
     }
 }

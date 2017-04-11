@@ -112,7 +112,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTransactionRequest(request)
         case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTransactionRequest(request)
         case ApiKeys.END_TXN => handleEndTransactionRequest(request)
-        case ApiKeys.WRITE_TXN_MARKER => handleWriteTxnMarkerRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkerRequest(request)
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }

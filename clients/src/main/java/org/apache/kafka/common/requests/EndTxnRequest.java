@@ -66,7 +66,7 @@ public class EndTxnRequest extends AbstractRequest {
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
         this.pid = struct.getLong(PID_KEY_NAME);
         this.epoch = struct.getShort(EPOCH_KEY_NAME);
-        this.result = TransactionResult.forId(struct.getByte(TRANSACTION_RESULT_KEY_NAME));
+        this.result = TransactionResult.forId(struct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
     }
 
     public String transactionalId() {

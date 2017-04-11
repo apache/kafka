@@ -26,11 +26,11 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class WriteTxnMarkerResponse extends AbstractResponse {
+public class WriteTxnMarkersResponse extends AbstractResponse {
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
 
-    private static final String PID_KEY_NAME = "pid";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_KEY_NAME = "partition";
@@ -49,18 +49,18 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
 
     private final Map<Long, Map<TopicPartition, Errors>> errors;
 
-    public WriteTxnMarkerResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
+    public WriteTxnMarkersResponse(Map<Long, Map<TopicPartition, Errors>> errors) {
         this.errors = errors;
     }
 
-    public WriteTxnMarkerResponse(Struct struct) {
+    public WriteTxnMarkersResponse(Struct struct) {
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>();
 
         Object[] responseArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
         for (Object responseObj : responseArray) {
             Struct responseStruct = (Struct) responseObj;
 
-            long pid = responseStruct.getLong(PID_KEY_NAME);
+            long producerId = responseStruct.getLong(PID_KEY_NAME);
 
             Map<TopicPartition, Errors> errorPerPartition = new HashMap<>();
             Object[] topicPartitionsArray = responseStruct.getArray(TOPIC_PARTITIONS_KEY_NAME);
@@ -74,7 +74,7 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
                     errorPerPartition.put(new TopicPartition(topic, partition), error);
                 }
             }
-            errors.put(pid, errorPerPartition);
+            errors.put(producerId, errorPerPartition);
         }
 
         this.errors = errors;
@@ -82,7 +82,7 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKER.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKERS.responseSchema(version));
 
         Object[] responsesArray = new Object[errors.size()];
         int k = 0;
@@ -119,12 +119,12 @@ public class WriteTxnMarkerResponse extends AbstractResponse {
         return struct;
     }
 
-    public Map<TopicPartition, Errors> errors(long pid) {
-        return errors.get(pid);
+    public Map<TopicPartition, Errors> errors(long producerId) {
+        return errors.get(producerId);
     }
 
-    public static WriteTxnMarkerResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkerResponse(ApiKeys.WRITE_TXN_MARKER.parseResponse(version, buffer));
+    public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
+        return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer));
     }
 
 }

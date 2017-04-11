@@ -175,9 +175,9 @@ public class RequestResponseTest {
         checkRequest(createEndTxnRequest());
         checkErrorResponse(createEndTxnRequest(), new UnknownServerException());
         checkResponse(createEndTxnResponse(), 0);
-        checkRequest(createWriteTxnMarkerRequest());
-        checkErrorResponse(createWriteTxnMarkerRequest(), new UnknownServerException());
-        checkResponse(createWriteTxnMarkerResponse(), 0);
+        checkRequest(createWriteTxnMarkersRequest());
+        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException());
+        checkResponse(createWriteTxnMarkersResponse(), 0);
         checkRequest(createTxnOffsetCommitRequest());
         checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
         checkResponse(createTxnOffsetCommitResponse(), 0);
@@ -497,15 +497,6 @@ public class RequestResponseTest {
         return new EndTxnRequest.Builder("transactionalId", 23437L, (short) 99, TransactionResult.ABORT).build();
     }
 
-    private WriteTxnMarkerRequest createWriteTxnMarkerRequest() {
-        List<TopicPartition> partitions = Arrays.asList(new TopicPartition("foo", 0), new TopicPartition("bar", 1),
-                new TopicPartition("foo", 2));
-
-        List<WriteTxnMarkerRequest.TxnMarkerEntry> entries = Collections.singletonList(new WriteTxnMarkerRequest.TxnMarkerEntry(23437L, (short) 99, 437, TransactionResult.COMMIT, partitions));
-
-        return new WriteTxnMarkerRequest.Builder(entries).build();
-    }
-
     private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
         Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
         offsets.put(new TopicPartition("foo", 0), new TxnOffsetCommitRequest.CommittedOffset(15L, null));
@@ -525,15 +516,6 @@ public class RequestResponseTest {
 
     private EndTxnResponse createEndTxnResponse() {
         return new EndTxnResponse(Errors.NONE);
-    }
-
-    private WriteTxnMarkerResponse createWriteTxnMarkerResponse() {
-        Map<TopicPartition, Errors> errors = new HashMap<>();
-        errors.put(new TopicPartition("foo", 2), Errors.NONE);
-        errors.put(new TopicPartition("bar", 1), Errors.DUPLICATE_SEQUENCE_NUMBER);
-        errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
-        Map<Long, Map<TopicPartition, Errors>> responses = Collections.singletonMap(23437L, errors);
-        return new WriteTxnMarkerResponse(responses);
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
@@ -882,6 +864,20 @@ public class RequestResponseTest {
 
     private InitPidResponse createInitPidResponse() {
         return new InitPidResponse(Errors.NONE, 3332, (short) 3);
+    }
+
+    private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
+        return new WriteTxnMarkersRequest.Builder(73,
+                                                  Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, TransactionResult.ABORT,
+                                                                                                                      Collections.singletonList(new TopicPartition("topic", 73))))).build();
+    }
+
+    private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
+        final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
+        errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
+        final Map<Long, Map<TopicPartition, Errors>> response = new HashMap<>();
+        response.put(21L, errorPerPartitions);
+        return new WriteTxnMarkersResponse(response);
     }
 
     private static class ByteBufferChannel implements GatheringByteChannel {

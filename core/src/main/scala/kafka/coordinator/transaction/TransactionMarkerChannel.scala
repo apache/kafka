@@ -22,8 +22,9 @@ import kafka.server.MetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.requests.WriteTxnMarkerRequest.TxnMarkerEntry
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.{concurrent, immutable, mutable}
@@ -35,15 +36,15 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
   private val pendingTxnMap: concurrent.Map[Long, PendingTxn] = concurrent.TrieMap.empty[Long, PendingTxn]
 
   def addNewBroker(broker: Node) {
-    val markersQueue = new LinkedBlockingQueue[TxnMarkerEntry]()
+    val markersQueue = new LinkedBlockingQueue[CoordinatorEpochAndMarkers]()
     brokerStateMap.put(broker.id, DestinationBrokerAndQueuedMarkers(broker, markersQueue))
     trace(s"Added destination broker ${broker.id}: $broker")
   }
 
-  private[transaction] def addRequestForBroker(brokerId: Int, txnMarker: TxnMarkerEntry) {
+  private[transaction] def addRequestForBroker(brokerId: Int, txnMarkerRequest: CoordinatorEpochAndMarkers) {
     val markersQueue = brokerStateMap(brokerId).markersQueue
-    markersQueue.add(txnMarker)
-    trace(s"Added markers $txnMarker for broker $brokerId")
+    markersQueue.add(txnMarkerRequest)
+    trace(s"Added markers $txnMarkerRequest for broker $brokerId")
   }
 
   def addRequestToSend(pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
@@ -65,8 +66,8 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
     }
 
     for ((brokerId: Int, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
-      val txnMarker = new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
-      addRequestForBroker(brokerId, txnMarker)
+      val txnMarker = new TxnMarkerEntry(pid, epoch, result, topicPartitions.toList.asJava)
+      addRequestForBroker(brokerId, CoordinatorEpochAndMarkers(coordinatorEpoch, Utils.mkList(txnMarker)))
     }
   }
 

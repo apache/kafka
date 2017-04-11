@@ -23,7 +23,7 @@ import kafka.server.MetadataCache
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkerRequest}
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit.Test
@@ -50,9 +50,9 @@ class TransactionMarkerChannelTest {
   def shouldQueueRequestsByBrokerId(): Unit = {
     channel.addNewBroker(new Node(1, "host", 10))
     channel.addNewBroker(new Node(2, "otherhost", 10))
-    channel.addRequestForBroker(1, new WriteTxnMarkerRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList()))
-    channel.addRequestForBroker(1, new WriteTxnMarkerRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList()))
-    channel.addRequestForBroker(2, new WriteTxnMarkerRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList()))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(2, CoordinatorEpochAndMarkers(0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
 
     assertEquals(2, channel.brokerStateMap(1).markersQueue.size())
     assertEquals(1, channel.brokerStateMap(2).markersQueue.size())

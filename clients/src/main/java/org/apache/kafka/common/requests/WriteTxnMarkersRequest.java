@@ -29,38 +29,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-public class WriteTxnMarkerRequest extends AbstractRequest {
+public class WriteTxnMarkersRequest extends AbstractRequest {
+    private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
 
-    private static final String PID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
-    private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
 
     public static class TxnMarkerEntry {
-        private final long pid;
-        private final short epoch;
-        private final int coordinatorEpoch;
+        private final long producerId;
+        private final short producerEpoch;
         private final TransactionResult result;
         private final List<TopicPartition> partitions;
 
-        public TxnMarkerEntry(long pid, short epoch, int coordinatorEpoch, TransactionResult result, List<TopicPartition> partitions) {
-            this.pid = pid;
-            this.epoch = epoch;
+        public TxnMarkerEntry(long producerId, short producerEpoch, TransactionResult result, List<TopicPartition> partitions) {
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
             this.result = result;
             this.partitions = partitions;
-            this.coordinatorEpoch = coordinatorEpoch;
         }
 
-        public long pid() {
-            return pid;
+        public long producerId() {
+            return producerId;
         }
 
-        public short epoch() {
-            return epoch;
+        public short producerEpoch() {
+            return producerEpoch;
         }
 
         public TransactionResult transactionResult() {
@@ -71,74 +69,62 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
             return partitions;
         }
 
-        public int coordinatorEpoch() {
-            return coordinatorEpoch;
-        }
-
-        @Override
-        public String toString() {
-            return "TxnMarkerEntry{" +
-                    "pid=" + pid +
-                    ", epoch=" + epoch +
-                    ", coordinatorEpoch=" + coordinatorEpoch +
-                    ", result=" + result +
-                    ", partitions=" + partitions +
-                    '}';
-        }
-
         @Override
         public boolean equals(final Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             final TxnMarkerEntry that = (TxnMarkerEntry) o;
-            return pid == that.pid &&
-                    epoch == that.epoch &&
-                    coordinatorEpoch == that.coordinatorEpoch &&
+            return producerId == that.producerId &&
+                    producerEpoch == that.producerEpoch &&
                     result == that.result &&
                     Objects.equals(partitions, that.partitions);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(pid, epoch, coordinatorEpoch, result, partitions);
+            return Objects.hash(producerId, producerEpoch, result, partitions);
         }
     }
 
-    public static class Builder extends AbstractRequest.Builder<WriteTxnMarkerRequest> {
+    public static class Builder extends AbstractRequest.Builder<WriteTxnMarkersRequest> {
+        private final int coordinatorEpoch;
         private final List<TxnMarkerEntry> markers;
 
-        public Builder(List<TxnMarkerEntry> markers) {
-            super(ApiKeys.WRITE_TXN_MARKER);
+        public Builder(int coordinatorEpoch, List<TxnMarkerEntry> markers) {
+            super(ApiKeys.WRITE_TXN_MARKERS);
 
             this.markers = markers;
+            this.coordinatorEpoch = coordinatorEpoch;
         }
 
         @Override
-        public WriteTxnMarkerRequest build(short version) {
-            return new WriteTxnMarkerRequest(version, markers);
+        public WriteTxnMarkersRequest build(short version) {
+            return new WriteTxnMarkersRequest(version, coordinatorEpoch, markers);
         }
     }
 
+    private final int coordinatorEpoch;
     private final List<TxnMarkerEntry> markers;
 
-    private WriteTxnMarkerRequest(short version, List<TxnMarkerEntry> markers) {
+    private WriteTxnMarkersRequest(short version, int coordinatorEpoch, List<TxnMarkerEntry> markers) {
         super(version);
 
         this.markers = markers;
+        this.coordinatorEpoch = coordinatorEpoch;
     }
 
-    public WriteTxnMarkerRequest(Struct struct, short version) {
+    public WriteTxnMarkersRequest(Struct struct, short version) {
         super(version);
+        this.coordinatorEpoch = struct.getInt(COORDINATOR_EPOCH_KEY_NAME);
 
         List<TxnMarkerEntry> markers = new ArrayList<>();
         Object[] markersArray = struct.getArray(TXN_MARKER_ENTRY_KEY_NAME);
         for (Object markerObj : markersArray) {
             Struct markerStruct = (Struct) markerObj;
 
-            long pid = markerStruct.getLong(PID_KEY_NAME);
-            short epoch = markerStruct.getShort(EPOCH_KEY_NAME);
-            int coordinatorEpoch = markerStruct.getInt(COORDINATOR_EPOCH_KEY_NAME);
-            TransactionResult result = TransactionResult.forId(markerStruct.getByte(TRANSACTION_RESULT_KEY_NAME));
+            long producerId = markerStruct.getLong(PID_KEY_NAME);
+            short producerEpoch = markerStruct.getShort(EPOCH_KEY_NAME);
+            TransactionResult result = TransactionResult.forId(markerStruct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
 
             List<TopicPartition> partitions = new ArrayList<>();
             Object[] topicPartitionsArray = markerStruct.getArray(TOPIC_PARTITIONS_KEY_NAME);
@@ -150,23 +136,31 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
                 }
             }
 
-            markers.add(new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, partitions));
+            markers.add(new TxnMarkerEntry(producerId, producerEpoch, result, partitions));
         }
 
         this.markers = markers;
     }
 
+    public int coordinatorEpoch() {
+        return coordinatorEpoch;
+    }
+
+    public List<TxnMarkerEntry> markers() {
+        return markers;
+    }
+
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKER.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKERS.requestSchema(version()));
+        struct.set(COORDINATOR_EPOCH_KEY_NAME, coordinatorEpoch);
 
         Object[] markersArray = new Object[markers.size()];
         int i = 0;
         for (TxnMarkerEntry entry : markers) {
             Struct markerStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
-            markerStruct.set(PID_KEY_NAME, entry.pid);
-            markerStruct.set(EPOCH_KEY_NAME, entry.epoch);
-            markerStruct.set(COORDINATOR_EPOCH_KEY_NAME, entry.coordinatorEpoch);
+            markerStruct.set(PID_KEY_NAME, entry.producerId);
+            markerStruct.set(EPOCH_KEY_NAME, entry.producerEpoch);
             markerStruct.set(TRANSACTION_RESULT_KEY_NAME, entry.result.id);
 
             Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(entry.partitions);
@@ -187,7 +181,7 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
     }
 
     @Override
-    public WriteTxnMarkerResponse getErrorResponse(Throwable e) {
+    public WriteTxnMarkersResponse getErrorResponse(Throwable e) {
         Errors error = Errors.forException(e);
 
         Map<Long, Map<TopicPartition, Errors>> errors = new HashMap<>(markers.size());
@@ -196,17 +190,27 @@ public class WriteTxnMarkerRequest extends AbstractRequest {
             for (TopicPartition partition : entry.partitions)
                 errorsPerPartition.put(partition, error);
 
-            errors.put(entry.pid, errorsPerPartition);
+            errors.put(entry.producerId, errorsPerPartition);
         }
 
-        return new WriteTxnMarkerResponse(errors);
+        return new WriteTxnMarkersResponse(errors);
     }
 
-    public static WriteTxnMarkerRequest parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkerRequest(ApiKeys.WRITE_TXN_MARKER.parseRequest(version, buffer), version);
+    public static WriteTxnMarkersRequest parse(ByteBuffer buffer, short version) {
+        return new WriteTxnMarkersRequest(ApiKeys.WRITE_TXN_MARKERS.parseRequest(version, buffer), version);
     }
 
-    public List<TxnMarkerEntry> markers() {
-        return markers;
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final WriteTxnMarkersRequest that = (WriteTxnMarkersRequest) o;
+        return coordinatorEpoch == that.coordinatorEpoch &&
+                Objects.equals(markers, that.markers);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(coordinatorEpoch, markers);
     }
 }
