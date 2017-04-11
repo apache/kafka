@@ -596,6 +596,7 @@ public class TransactionState {
                 switch (type) {
                     case GROUP:
                         consumerGroupCoordinator = node;
+                        break;
                     case TRANSACTION:
                         transactionCoordinator = node;
                 }
