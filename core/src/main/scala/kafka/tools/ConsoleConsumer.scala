@@ -414,6 +414,7 @@ object ConsoleConsumer extends Logging {
 
 class DefaultMessageFormatter extends MessageFormatter {
   var printKey = false
+  var printValue = true
   var printTimestamp = false
   var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
   var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
@@ -426,6 +427,8 @@ class DefaultMessageFormatter extends MessageFormatter {
       printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
     if (props.containsKey("print.key"))
       printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
+    if (props.containsKey("print.value"))
+      printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
     if (props.containsKey("key.separator"))
       keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
     if (props.containsKey("line.separator"))
@@ -440,12 +443,23 @@ class DefaultMessageFormatter extends MessageFormatter {
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Array[Byte]) {
+    def outputSeparator = (predicate: Boolean, separator: Array[Byte], endSeparator: Array[Byte]) => {
+      if (predicate) {
+        output.write(separator)
+      } else {
+        output.write(endSeparator)
+      }
+    }
+
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], separator: Option[Array[Byte]] = None) {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
       val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
-      output.write(separator)
+      separator match {
+        case Some(sep) => output.write(sep)
+        case None =>
+      }
     }
 
     import consumerRecord._
@@ -455,11 +469,17 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(s"$timestampType:$timestamp".getBytes(StandardCharsets.UTF_8))
       else
         output.write(s"NO_TIMESTAMP".getBytes(StandardCharsets.UTF_8))
-      output.write(keySeparator)
+      outputSeparator(printKey || printValue, keySeparator, lineSeparator)
     }
 
-    if (printKey) write(keyDeserializer, key, keySeparator)
-    write(valueDeserializer, value, lineSeparator)
+    if (printKey) {
+      write(keyDeserializer, key)
+      outputSeparator(printValue, keySeparator, lineSeparator)
+    }
+
+    if (printValue) {
+      write(valueDeserializer, value, Some(lineSeparator))
+    }
   }
 }
 
