@@ -302,7 +302,7 @@ class TransactionStateManagerTest {
     assertEquals(coordinatorEpoch, epoch)
   }
 
-
+  @Test
   def shouldReturnNoneIfTransactionIdPartitionNotOwned(): Unit = {
     assertEquals(None, transactionManager.coordinatorEpochFor(txnId1))
   }
