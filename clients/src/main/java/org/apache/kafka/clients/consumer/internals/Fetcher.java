@@ -1046,10 +1046,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             if (isolationLevel == IsolationLevel.READ_COMMITTED) {
                 FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
                 if (abortedPids.contains(batch.producerId())
-                        || (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset())) {
+                        || (nextAbortedTransaction != null && nextAbortedTransaction.producerId == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset())) {
                     if (abortedPids.contains(batch.producerId()) && containsAbortMarker(batch)) {
                         abortedPids.remove(batch.producerId());
-                    } else if (nextAbortedTransaction != null && nextAbortedTransaction.pid == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
+                    } else if (nextAbortedTransaction != null && nextAbortedTransaction.producerId == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
                         abortedPids.add(batch.producerId());
                         abortedTransactions.remove(nextAbortedTransaction);
                     }

@@ -124,6 +124,7 @@
     </subpackage>
 
     <subpackage name="producer">
+      <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.clients.producer" />
     </subpackage>
   </subpackage>

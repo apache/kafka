@@ -187,8 +187,16 @@ public class Sender implements Runnable {
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
-        Cluster cluster = metadata.fetch();
+        long pollTimeout = 0;
+        if (!maybeSendTransactionalRequest(now))
+            pollTimeout = sendProducerData(now);
 
+        this.client.poll(pollTimeout, now);
+    }
+
+
+    private long sendProducerData(long now) {
+        Cluster cluster = metadata.fetch();
         maybeWaitForPid();
 
         // get the list of partitions with data ready to send
@@ -241,7 +249,7 @@ public class Sender implements Runnable {
 
         if (needsTransactionStateReset) {
             transactionState.resetProducerId();
-            return;
+            return 0;
         }
 
         sensors.updateProduceRequestMetrics(batches);
@@ -253,15 +261,77 @@ public class Sender implements Runnable {
         long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
         if (!result.readyNodes.isEmpty()) {
             log.trace("Nodes with data ready to send: {}", result.readyNodes);
+            // if some partitions are already ready to be sent, the select time would be 0;
+            // otherwise if some partition already has some data accumulated but not ready yet,
+            // the select time will be the time difference between now and its linger expiry time;
+            // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
         sendProduceRequests(batches, now);
 
-        // if some partitions are already ready to be sent, the select time would be 0;
-        // otherwise if some partition already has some data accumulated but not ready yet,
-        // the select time will be the time difference between now and its linger expiry time;
-        // otherwise the select time will be the time difference between now and the metadata expiry time;
-        this.client.poll(pollTimeout, now);
+        return pollTimeout;
+
+    }
+
+    private boolean maybeSendTransactionalRequest(long now) {
+        if (transactionState != null && transactionState.hasInflightTransactionalRequest())
+            return true;
+
+        if (transactionState == null || !transactionState.hasPendingTransactionalRequests())
+            return false;
+
+        TransactionState.TransactionalRequest nextRequest = transactionState.nextTransactionalRequest();
+
+        if (nextRequest.isEndTxnRequest() && transactionState.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+            if (!accumulator.flushInProgress())
+                accumulator.beginFlush();
+            transactionState.didNotSend(nextRequest);
+            return false;
+        }
+
+        Node targetNode = null;
+        long expiryTime = now + requestTimeout;
+        long nextIterationTime = now;
+
+        while (targetNode == null && nextIterationTime < expiryTime) {
+            try {
+                long timeRemaining = expiryTime - nextIterationTime;
+                if (nextRequest.needsCoordinator()) {
+                    targetNode = transactionState.coordinator(nextRequest.coordinatorType());
+                    if (targetNode == null) {
+                        transactionState.needsCoordinator(nextRequest.coordinatorType());
+                        break;
+                    }
+                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, timeRemaining)) {
+                        transactionState.needsCoordinator(nextRequest.coordinatorType());
+                        targetNode = null;
+                        break;
+                    }
+                } else {
+                    targetNode = awaitLeastLoadedNodeReady(timeRemaining);
+                }
+                if (targetNode != null) {
+                    if (nextRequest.isRetry()) {
+                        time.sleep(retryBackoffMs);
+                    }
+                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequest.requestBuilder(),
+                            now, true, nextRequest.responseHandler());
+                    transactionState.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    client.send(clientRequest, now);
+                    return true;
+                }
+            } catch (IOException e) {
+                log.warn("Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", e);
+            }
+            time.sleep(retryBackoffMs);
+            metadata.requestUpdate();
+            nextIterationTime = time.milliseconds();
+        }
+
+        if (targetNode == null)
+            transactionState.needsRetry(nextRequest);
+
+        return true;
     }
 
     /**
@@ -299,7 +369,9 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForPid() {
-        if (transactionState == null)
+        // If this is a transactional producer, the PID will be received when recovering transactions in the
+        // initTransactions() method of the producer.
+        if (transactionState == null || transactionState.isTransactional())
             return;
 
         while (!transactionState.hasPid()) {
@@ -500,8 +572,12 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
 
+        String transactionalId = null;
+        if (transactionState != null && transactionState.isTransactional()) {
+            transactionalId = transactionState.transactionalId();
+        }
         ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(minUsedMagic, acks, timeout,
-                produceRecordsByPartition);
+                produceRecordsByPartition, transactionalId);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());

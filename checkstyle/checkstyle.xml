@@ -102,7 +102,7 @@
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="15"/>
+      <property name="max" value="22"/>
     </module>
     <module name="BooleanExpressionComplexity">
       <!-- default is 3 -->
@@ -115,7 +115,7 @@
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->
-      <property name="max" value="16"/>
+      <property name="max" value="17"/>
     </module>
     <module name="JavaNCSS">
       <!-- default is 50 -->

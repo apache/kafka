@@ -233,7 +233,10 @@ public final class RecordAccumulator {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                     "support the required message format (v2). The broker must be version 0.11 or later.");
         }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+        boolean isTransactional = false;
+        if (transactionState != null)
+            isTransactional = transactionState.isInTransaction();
+        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L, isTransactional);
     }
 
     /**
@@ -540,6 +543,17 @@ public final class RecordAccumulator {
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
+    }
+
+    public boolean hasUnflushedBatches() {
+        boolean hasUnflushed = false;
+        for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches().entrySet()) {
+            if (0 < entry.getValue().size()) {
+                hasUnflushed = true;
+                break;
+            }
+        }
+        return 0 < this.incomplete.incomplete.size() || hasUnflushed;
     }
 
     /**

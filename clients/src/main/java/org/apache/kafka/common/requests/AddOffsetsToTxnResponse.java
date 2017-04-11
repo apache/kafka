@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -32,19 +33,31 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     //   InvalidPidMapping
     //   InvalidTxnState
     //   GroupAuthorizationFailed
+    //   InvalidProducerEpoch
 
     private final Errors error;
+    private final Node consumerGroupCoordinator;
+
+    public AddOffsetsToTxnResponse(Errors error, Node consumerGroupCoordinator) {
+        this.error = error;
+        this.consumerGroupCoordinator = consumerGroupCoordinator;
+    }
 
     public AddOffsetsToTxnResponse(Errors error) {
-        this.error = error;
+        this(error, null);
     }
 
     public AddOffsetsToTxnResponse(Struct struct) {
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        this.consumerGroupCoordinator = null;
     }
 
     public Errors error() {
         return error;
+    }
+
+    public Node consumerGroupCoordinator() {
+        return consumerGroupCoordinator;
     }
 
     @Override
