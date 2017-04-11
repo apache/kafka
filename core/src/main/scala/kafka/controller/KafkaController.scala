@@ -1086,7 +1086,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
             val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
               newLeaderAndIsr, epoch, leaderAndIsr.zkVersion)
 
-            val leaderWithNewVersion = newLeaderAndIsr.newZkVersion(newVersion)
+            val leaderWithNewVersion = newLeaderAndIsr.withZkVersion(newVersion)
             finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderWithNewVersion, epoch))
             controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
             if (updateSucceeded) {
@@ -1138,7 +1138,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
           val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic,
             partition, newLeaderAndIsr, epoch, leaderAndIsr.zkVersion)
 
-          val leaderWithNewVersion = newLeaderAndIsr.newZkVersion(newVersion)
+          val leaderWithNewVersion = newLeaderAndIsr.withZkVersion(newVersion)
           finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderWithNewVersion, epoch))
           if (updateSucceeded) {
             info(s"Updated leader epoch for partition $topicAndPartition to ${leaderWithNewVersion.leaderEpoch}")

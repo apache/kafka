@@ -704,18 +704,18 @@ object TestUtils extends Logging {
                              leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
                              controllerEpoch: Int) {
     leaderPerPartitionMap.foreach { case (partition, leader) =>
-        try {
-          val newLeaderAndIsr = zkUtils.getLeaderAndIsrForPartition(topic, partition)
-            .map(_.newLeader(leader))
-            .getOrElse(LeaderAndIsr(leader, List(leader)))
+      try {
+        val newLeaderAndIsr = zkUtils.getLeaderAndIsrForPartition(topic, partition)
+          .map(_.newLeader(leader))
+          .getOrElse(LeaderAndIsr(leader, List(leader)))
 
-          zkUtils.updatePersistentPath(
-            getTopicPartitionLeaderAndIsrPath(topic, partition),
-            zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
-          )
-        } catch {
-          case oe: Throwable => error(s"Error while electing leader for partition [$topic,$partition]", oe)
-        }
+        zkUtils.updatePersistentPath(
+          getTopicPartitionLeaderAndIsrPath(topic, partition),
+          zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+        )
+      } catch {
+        case oe: Throwable => error(s"Error while electing leader for partition [$topic,$partition]", oe)
+      }
     }
   }
 

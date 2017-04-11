@@ -46,12 +46,12 @@ trait PartitionLeaderSelector {
  * Replicas to receive LeaderAndIsr request = live assigned replicas
  * Once the leader is successfully registered in zookeeper, it updates the allLeaders cache
  */
-class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, config: KafkaConfig) extends PartitionLeaderSelector with Logging {
+class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, config: KafkaConfig)
+  extends PartitionLeaderSelector with Logging {
 
   logIdent = "[OfflinePartitionLeaderSelector]: "
 
-  def selectLeader(topicAndPartition: TopicAndPartition,
-                   currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
+  def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     controllerContext.partitionReplicaAssignment.get(topicAndPartition) match {
       case Some(assignedReplicas) =>
         val liveAssignedReplicas = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
@@ -63,7 +63,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
             if (!LogConfig.fromProps(config.originals, AdminUtils.fetchEntityConfig(controllerContext.zkUtils,
               ConfigType.Topic, topicAndPartition.topic)).uncleanLeaderElectionEnable) {
               throw new NoReplicaOnlineException(
-                s"No broker in ISR for partition $topicAndPartition is alive. Live brokers are: [${controllerContext.liveBrokerIds}]. " +
+                s"No broker in ISR for partition $topicAndPartition is alive. Live brokers are: [${controllerContext.liveBrokerIds}], " +
                   s"ISR brokers are: [${currentLeaderAndIsr.isr.mkString(",")}]"
               )
             }
@@ -83,8 +83,8 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
           } else {
             val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
             val newLeader = liveReplicasInIsr.head
-            debug(s"Some broker in ISR is alive for $topicAndPartition. Select $newLeader " +
-              s"from ISR ${liveBrokersInIsr.mkString(",")} to be the leader.")
+            debug(s"Some broker in ISR is alive for $topicAndPartition. Select $newLeader from ISR " +
+              s"${liveBrokersInIsr.mkString(",")} to be the leader.")
             currentLeaderAndIsr.newLeaderAndIsr(newLeader, liveBrokersInIsr)
           }
         info(s"Selected new leader and ISR $newLeaderAndIsr for offline partition $topicAndPartition")
@@ -110,20 +110,20 @@ class ReassignedPartitionLeaderSelector(controllerContext: ControllerContext) ex
   def selectLeader(topicAndPartition: TopicAndPartition,
                    currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
     val reassignedInSyncReplicas = controllerContext.partitionsBeingReassigned(topicAndPartition).newReplicas
-    val newLeaderOpt = reassignedInSyncReplicas.find(
-      r => controllerContext.liveBrokerIds.contains(r) && currentLeaderAndIsr.isr.contains(r)
-    )
+    val newLeaderOpt = reassignedInSyncReplicas.find { r =>
+      controllerContext.liveBrokerIds.contains(r) && currentLeaderAndIsr.isr.contains(r)
+    }
     newLeaderOpt match {
       case Some(newLeader) => (currentLeaderAndIsr.newLeader(newLeader), reassignedInSyncReplicas)
       case None =>
-        val msg = if (reassignedInSyncReplicas.isEmpty) {
-          s"List of reassigned replicas for partition $topicAndPartition is empty. Current leader " +
-            s"and ISR: [$currentLeaderAndIsr]"
+        val errorMessage = if (reassignedInSyncReplicas.isEmpty) {
+          s"List of reassigned replicas for partition $topicAndPartition is empty. Current leader and ISR: " +
+            s"[$currentLeaderAndIsr]"
         } else {
           s"None of the reassigned replicas for partition $topicAndPartition are in-sync with the leader. " +
             s"Current leader and ISR: [$currentLeaderAndIsr]"
         }
-        throw new NoReplicaOnlineException(msg)
+        throw new NoReplicaOnlineException(errorMessage)
     }
   }
 }

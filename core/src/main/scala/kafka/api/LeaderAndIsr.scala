@@ -37,13 +37,13 @@ case class LeaderAndIsr(leader: Int,
                         leaderEpoch: Int,
                         isr: List[Int],
                         zkVersion: Int) {
-  def newZkVersion(zkVersion: Int) = this.copy(zkVersion = zkVersion)
+  def withZkVersion(zkVersion: Int) = copy(zkVersion = zkVersion)
 
-  def newLeader(leader: Int) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
+  def newLeader(leader: Int) = newLeaderAndIsr(leader, isr)
 
   def newLeaderAndIsr(leader: Int, isr: List[Int]) = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
 
-  def newEpochAndZkVersion = LeaderAndIsr(leader, leaderEpoch + 1, isr, zkVersion + 1)
+  def newEpochAndZkVersion = newLeaderAndIsr(leader, isr)
 
   override def toString: String = {
     Json.encode(Map("leader" -> leader, "leader_epoch" -> leaderEpoch, "isr" -> isr))

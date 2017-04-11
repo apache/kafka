@@ -268,22 +268,23 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    */
   private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) = {
     val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition).toList
-    val liveAssignedReplicas = replicaAssignment.filter(r => controllerContext.liveBrokerIds.contains(r))
+    val liveAssignedReplicas = replicaAssignment.filter(controllerContext.liveBrokerIds.contains)
     liveAssignedReplicas.headOption match {
       case None =>
-        val failMsg = s"encountered error during state change of partition $topicAndPartition from New to Online," +
-          s"assigned replicas are [${replicaAssignment.mkString(",")}], live brokers are " +
-          s"[${controllerContext.liveBrokerIds}]. No assigned replica is alive."
+        val failMsg = s"Controller $controllerId epoch ${controller.epoch} encountered error during state change of " +
+          s"partition $topicAndPartition from New to Online, assigned replicas are " +
+          s"[${replicaAssignment.mkString(",")}], live brokers are [${controllerContext.liveBrokerIds}]. No assigned " +
+          "replica is alive."
 
-        stateChangeLogger.error(s"Controller $controllerId epoch ${controller.epoch}.\n $failMsg")
+        stateChangeLogger.error(failMsg)
         throw new StateChangeFailedException(failMsg)
 
       // leader is the first replica in the list of assigned replicas
-      case Some(head) =>
+      case Some(leader) =>
         debug(s"Live assigned replicas for partition $topicAndPartition are: [$liveAssignedReplicas]")
-        val leaderAndIsr = LeaderAndIsr(head, liveAssignedReplicas)
+        val leaderAndIsr = LeaderAndIsr(leader, liveAssignedReplicas)
         val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controller.epoch)
-        debug(s"Initializing leader and isr for partition $topicAndPartition to $leaderAndIsr")
+        debug(s"Initializing leader and isr for partition $topicAndPartition to $leaderIsrAndControllerEpoch")
 
         try {
           zkUtils.createPersistentPath(
@@ -307,11 +308,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topicAndPartition.topic,
               topicAndPartition.partition).get
 
-            val failMsg = s"encountered error while changing partition $topicAndPartition's state from New to Online " +
-              s"since LeaderAndIsr path already exists with value ${leaderIsrAndEpoch.leaderAndIsr} and controller " +
-              s"epoch ${leaderIsrAndEpoch.controllerEpoch}"
-
-            stateChangeLogger.error(s"Controller $controllerId epoch ${controller.epoch}.\n $failMsg")
+            val failMsg = s"Controller $controllerId epoch ${controller.epoch} encountered error while changing " +
+              s"partition $topicAndPartition's state from New to Online since LeaderAndIsr path already exists with " +
+              s"value ${leaderIsrAndEpoch.leaderAndIsr} and controller epoch ${leaderIsrAndEpoch.controllerEpoch}"
+            stateChangeLogger.error(failMsg)
             throw new StateChangeFailedException(failMsg)
         }
     }
@@ -349,7 +349,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
         val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
           leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion)
-        newLeaderAndIsr = leaderAndIsr.newZkVersion(newVersion)
+        newLeaderAndIsr = leaderAndIsr.withZkVersion(newVersion)
         zookeeperPathUpdateSucceeded = updateSucceeded
         replicasForThisPartition = replicas
       }
