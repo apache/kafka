@@ -24,6 +24,8 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -66,8 +68,8 @@ public class KGroupedTableImplTest {
         groupedTable.count((String) null);
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreNameOnAggregate() throws Exception {
+    @Test
+    public void shouldAllowNullStoreNameOnAggregate() throws Exception {
         groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, (String) null);
     }
 
@@ -101,8 +103,8 @@ public class KGroupedTableImplTest {
         groupedTable.reduce(MockReducer.STRING_ADDER, null, "store");
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreNameOnReduce() throws Exception {
+    @Test
+    public void shouldAllowNullStoreNameOnReduce() throws Exception {
         groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (String) null);
     }
 
@@ -113,24 +115,10 @@ public class KGroupedTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierOnReduce() throws Exception {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (String) null);
+        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
-    @Test
-    public void shouldReduce() throws Exception {
-        final String topic = "input";
-        final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
-            new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
-                @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
-                    return KeyValue.pair(key, value.intValue());
-                }
-            };
-
-        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Double(), topic, "store")
-            .groupBy(intProjection)
-            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, "reduced");
-
+    private void doShouldReduce(final KTable<String, Integer> reduced, final String topic) throws Exception {
         final Map<String, Integer> results = new HashMap<>();
         reduced.foreach(new ForeachAction<String, Integer>() {
             @Override
@@ -156,5 +144,41 @@ public class KGroupedTableImplTest {
 
         assertEquals(Integer.valueOf(5), results.get("A"));
         assertEquals(Integer.valueOf(6), results.get("B"));
+    }
+
+    @Test
+    public void shouldReduce() throws Exception {
+        final String topic = "input";
+        final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
+            new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
+                @Override
+                public KeyValue<String, Integer> apply(String key, Number value) {
+                    return KeyValue.pair(key, value.intValue());
+                }
+            };
+
+        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Double(), topic, "store")
+            .groupBy(intProjection)
+            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, "reduced");
+
+        doShouldReduce(reduced, topic);
+    }
+
+    @Test
+    public void shouldReduceWithInternalStoreName() throws Exception {
+        final String topic = "input";
+        final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
+            new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
+                @Override
+                public KeyValue<String, Integer> apply(String key, Number value) {
+                    return KeyValue.pair(key, value.intValue());
+                }
+            };
+
+        final KTable<String, Integer> reduced = builder.table(Serdes.String(), Serdes.Double(), topic, "store")
+            .groupBy(intProjection)
+            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
+
+        doShouldReduce(reduced, topic);
     }
 }

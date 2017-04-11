@@ -49,40 +49,61 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     protected final Serde<? extends K> keySerde;
     protected final Serde<? extends V> valSerde;
 
-    public KGroupedTableImpl(KStreamBuilder topology,
-                             String name,
-                             String sourceName,
-                             Serde<? extends K> keySerde,
-                             Serde<? extends V> valSerde) {
+    public KGroupedTableImpl(final KStreamBuilder topology,
+                             final String name,
+                             final String sourceName,
+                             final Serde<? extends K> keySerde,
+                             final Serde<? extends V> valSerde) {
         super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<? super K, ? super V, T> adder,
-                                      Aggregator<? super K, ? super V, T> subtractor,
-                                      Serde<T> aggValueSerde,
-                                      String storeName) {
-        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, storeName));
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor,
+                                      final Serde<T> aggValueSerde,
+                                      final String storeName) {
+        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, internalStoreName));
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<? super K, ? super V, T> adder,
-                                      Aggregator<? super K, ? super V, T> subtractor,
-                                      String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return aggregate(initializer, adder, subtractor, null, storeName);
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor,
+                                      final Serde<T> aggValueSerde) {
+        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, internalStoreName));
     }
 
     @Override
-    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
-                                      Aggregator<? super K, ? super V, T> adder,
-                                      Aggregator<? super K, ? super V, T> subtractor,
-                                      StateStoreSupplier<KeyValueStore> storeSupplier) {
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor,
+                                      final String storeName) {
+        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return aggregate(initializer, adder, subtractor, null, internalStoreName);
+    }
+
+    @Override
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor) {
+        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return aggregate(initializer, adder, subtractor, null, internalStoreName);
+    }
+
+    @Override
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> adder,
+                                      final Aggregator<? super K, ? super V, T> subtractor,
+                                      final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
@@ -91,9 +112,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         return doAggregate(aggregateSupplier, AGGREGATE_NAME, storeSupplier);
     }
 
-    private <T> KTable<K, T> doAggregate(ProcessorSupplier<K, Change<V>> aggregateSupplier,
-                                         String functionName,
-                                         StateStoreSupplier<KeyValueStore> storeSupplier) {
+    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
+                                         final String functionName,
+                                         final StateStoreSupplier<KeyValueStore> storeSupplier) {
         String sinkName = topology.newName(KStreamImpl.SINK_NAME);
         String sourceName = topology.newName(KStreamImpl.SOURCE_NAME);
         String funcName = topology.newName(functionName);
@@ -124,18 +145,26 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, V> reduce(Reducer<V> adder,
-                               Reducer<V> subtractor,
-                               String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
-        Topic.validate(storeName);
-        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, storeName));
+    public KTable<K, V> reduce(final Reducer<V> adder,
+                               final Reducer<V> subtractor,
+                               final String storeName) {
+        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, internalStoreName));
     }
 
     @Override
-    public KTable<K, V> reduce(Reducer<V> adder,
-                               Reducer<V> subtractor,
-                               StateStoreSupplier<KeyValueStore> storeSupplier) {
+    public KTable<K, V> reduce(final Reducer<V> adder,
+                               final Reducer<V> subtractor) {
+        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
+        Topic.validate(internalStoreName);
+        return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, internalStoreName));
+    }
+
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> adder,
+                               final Reducer<V> subtractor,
+                               final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
@@ -158,7 +187,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, Long> count(StateStoreSupplier<KeyValueStore> storeSupplier) {
+    public KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier) {
         return this.aggregate(
                 new Initializer<Long>() {
                     @Override

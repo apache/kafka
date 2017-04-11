@@ -229,6 +229,62 @@ public interface KGroupedTable<K, V> {
      * Combining implies that the type of the aggregate result is the same as the type of the input value
      * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator, Serde, String)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
+     * that can be queried using the provided {@code storeName}.
+     * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
+     * <p>
+     * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
+     * The specified {@link Reducer adder} is applied for each update record and computes a new aggregate using the
+     * current aggregate and the record's value by adding the new record to the aggregate.
+     * The specified {@link Reducer substractor} is applied for each "replaced" record of the original {@link KTable}
+     * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
+     * record from the aggregate.
+     * If there is no current aggregate the {@link Reducer} is not applied and the new aggregate will be the record's
+     * value as-is.
+     * Thus, {@code reduce(Reducer, Reducer, String)} can be used to compute aggregate functions like sum.
+     * For sum, the adder and substractor would work as follows:
+     * <pre>{@code
+     * public class SumAdder implements Reducer<Integer> {
+     *   public Integer apply(Integer currentAgg, Integer newValue) {
+     *     return currentAgg + newValue;
+     *   }
+     * }
+     *
+     * public class SumSubtractor implements Reducer<Integer> {
+     *   public Integer apply(Integer currentAgg, Integer oldValue) {
+     *     return currentAgg - oldValue;
+     *   }
+     * }
+     * }</pre>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
+     * and "-changelog" is a fixed suffix.
+     * Note that the internal store name may not be queriable through Interactive Queries.
+     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * @param adder      a {@link Reducer} that adds a new value to the aggregate result
+     * @param subtractor a {@link Reducer} that removed an old value from the aggregate result
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
+     */
+    KTable<K, V> reduce(final Reducer<V> adder,
+                        final Reducer<V> subtractor);
+
+    /**
+     * Combine the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
+     * mapped} to the same key into a new instance of {@link KTable}.
+     * Records with {@code null} key are ignored.
+     * Combining implies that the type of the aggregate result is the same as the type of the input value
+     * (c.f. {@link #aggregate(Initializer, Aggregator, Aggregator, Serde, String)}).
+     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given {@code storeSupplier}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
      * <p>
@@ -380,6 +436,77 @@ public interface KGroupedTable<K, V> {
      * Records with {@code null} key are ignored.
      * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, String) combining via reduce(...)} as it,
      * for example, allows the result to have a different type than the input values.
+     * If the result value type does not match the {@link StreamsConfig#VALUE_SERDE_CLASS_CONFIG default value
+     * serde} you should use {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator, Serde, String)
+     * aggregate(Initializer, Aggregator, Aggregator, Serde, String)}.
+     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
+     * provided by the given {@code storeSupplier}.
+     * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
+     * <p>
+     * The specified {@link Initializer} is applied once directly before the first input record is processed to
+     * provide an initial intermediate aggregation result that is used to process the first record.
+     * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
+     * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
+     * current aggregate (or for the very first record using the intermediate aggregation result provided via the
+     * {@link Initializer}) and the record's value by adding the new record to the aggregate.
+     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
+     * record from the aggregate.
+     * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
+     * like sum.
+     * For sum, the initializer, adder, and substractor would work as follows:
+     * <pre>{@code
+     * // in this example, LongSerde.class must be set as default value serde in StreamsConfig
+     * public class SumInitializer implements Initializer<Long> {
+     *   public Long apply() {
+     *     return 0L;
+     *   }
+     * }
+     *
+     * public class SumAdder implements Aggregator<String, Integer, Long> {
+     *   public Long apply(String key, Integer newValue, Long aggregate) {
+     *     return aggregate + newValue;
+     *   }
+     * }
+     *
+     * public class SumSubstractor implements Aggregator<String, Integer, Long> {
+     *   public Long apply(String key, Integer oldValue, Long aggregate) {
+     *     return aggregate - oldValue;
+     *   }
+     * }
+     * }</pre>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
+     * and "-changelog" is a fixed suffix.
+     * Note that the internal store name may not be queriable through Interactive Queries.
+     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * @param initializer a {@link Initializer} that provides an initial aggregate result value
+     * @param adder       a {@link Aggregator} that adds a new record to the aggregate result
+     * @param subtractor  a {@link Aggregator} that removed an old record from the aggregate result
+     * @param <VR>        the value type of the aggregated {@link KTable}
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
+     */
+    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                 final Aggregator<? super K, ? super V, VR> adder,
+                                 final Aggregator<? super K, ? super V, VR> subtractor);
+
+
+    /**
+     * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
+     * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
+     * Records with {@code null} key are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, String) combining via reduce(...)} as it,
+     * for example, allows the result to have a different type than the input values.
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * that can be queried using the provided {@code storeName}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -458,6 +585,77 @@ public interface KGroupedTable<K, V> {
                                  final Aggregator<? super K, ? super V, VR> subtractor,
                                  final Serde<VR> aggValueSerde,
                                  final String storeName);
+
+    /**
+     * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
+     * mapped} to the same key into a new instance of {@link KTable} using default serializers and deserializers.
+     * Records with {@code null} key are ignored.
+     * Aggregating is a generalization of {@link #reduce(Reducer, Reducer, String) combining via reduce(...)} as it,
+     * for example, allows the result to have a different type than the input values.
+     * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
+     * that can be queried using the provided {@code storeName}.
+     * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
+     * <p>
+     * The specified {@link Initializer} is applied once directly before the first input record is processed to
+     * provide an initial intermediate aggregation result that is used to process the first record.
+     * Each update to the original {@link KTable} results in a two step update of the result {@link KTable}.
+     * The specified {@link Aggregator adder} is applied for each update record and computes a new aggregate using the
+     * current aggregate (or for the very first record using the intermediate aggregation result provided via the
+     * {@link Initializer}) and the record's value by adding the new record to the aggregate.
+     * The specified {@link Aggregator substractor} is applied for each "replaced" record of the original {@link KTable}
+     * and computes a new aggregate using the current aggregate and the record's value by "removing" the "replaced"
+     * record from the aggregate.
+     * Thus, {@code aggregate(Initializer, Aggregator, Aggregator, String)} can be used to compute aggregate functions
+     * like sum.
+     * For sum, the initializer, adder, and substractor would work as follows:
+     * <pre>{@code
+     * public class SumInitializer implements Initializer<Long> {
+     *   public Long apply() {
+     *     return 0L;
+     *   }
+     * }
+     *
+     * public class SumAdder implements Aggregator<String, Integer, Long> {
+     *   public Long apply(String key, Integer newValue, Long aggregate) {
+     *     return aggregate + newValue;
+     *   }
+     * }
+     *
+     * public class SumSubstractor implements Aggregator<String, Integer, Long> {
+     *   public Long apply(String key, Integer oldValue, Long aggregate) {
+     *     return aggregate - oldValue;
+     *   }
+     * }
+     * }</pre>
+     * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
+     * the same key.
+     * The rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
+     * parallel running Kafka Streams instances, and the {@link StreamsConfig configuration} parameters for
+     * {@link StreamsConfig#CACHE_MAX_BYTES_BUFFERING_CONFIG cache size}, and
+     * {@link StreamsConfig#COMMIT_INTERVAL_MS_CONFIG commit intervall}.
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * The changelog topic will be named "${applicationId}-${internalStoreName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "internalStoreName" is an internal name
+     * and "-changelog" is a fixed suffix.
+     * Note that the internal store name may not be queriable through Interactive Queries.
+     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     *
+     * @param initializer   a {@link Initializer} that provides an initial aggregate result value
+     * @param adder         a {@link Aggregator} that adds a new record to the aggregate result
+     * @param subtractor    a {@link Aggregator} that removed an old record from the aggregate result
+     * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
+     *                      if not specified the default serdes defined in the configs will be used
+     * @param <VR>          the value type of the aggregated {@link KTable}
+     * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
+     * latest (rolling) aggregate for each key
+     */
+    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                 final Aggregator<? super K, ? super V, VR> adder,
+                                 final Aggregator<? super K, ? super V, VR> subtractor,
+                                 final Serde<VR> aggValueSerde);
+
 
     /**
      * Aggregate the value of records of the original {@link KTable} that got {@link KTable#groupBy(KeyValueMapper)
