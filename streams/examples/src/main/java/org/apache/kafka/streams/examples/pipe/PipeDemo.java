@@ -31,8 +31,9 @@ import java.util.Properties;
  * In this example, we implement a simple "pipe" program that reads from a source topic "streams-file-input"
  * and writes the data as-is (i.e. unmodified) into a sink topic "streams-pipe-output".
  *
- * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
- * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * Before running this example you must create the input topic and the output topic (e.g. via
+ * bin/kafka-topics.sh --create ...), and write some data to the input topic (e.g. via
+ * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class PipeDemo {
 

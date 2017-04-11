@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -221,6 +222,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         public Iterator<Record> iterator() {
             loadUnderlyingRecordBatch();
             return underlying.iterator();
+        }
+
+        @Override
+        public CloseableIterator<Record> streamingIterator() {
+            loadUnderlyingRecordBatch();
+            return underlying.streamingIterator();
         }
 
         @Override

@@ -51,16 +51,18 @@ public class FetchResponse extends AbstractResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
     private static final String LAST_STABLE_OFFSET_KEY_NAME = "last_stable_offset";
+    private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
     private static final String ABORTED_TRANSACTIONS_KEY_NAME = "aborted_transactions";
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     // aborted transaction field names
-    private static final String PID_KEY_NAME = "pid";
+    private static final String PID_KEY_NAME = "producer_id";
     private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
 
     private static final int DEFAULT_THROTTLE_TIME = 0;
     public static final long INVALID_HIGHWATERMARK = -1L;
-    public static final long INVALID_LSO = -1L;
+    public static final long INVALID_LAST_STABLE_OFFSET = -1L;
+    public static final long INVALID_LOG_START_OFFSET = -1L;
 
     /**
      * Possible error codes:
@@ -76,11 +78,11 @@ public class FetchResponse extends AbstractResponse {
     private final int throttleTimeMs;
 
     public static final class AbortedTransaction {
-        public final long pid;
+        public final long producerId;
         public final long firstOffset;
 
-        public AbortedTransaction(long pid, long firstOffset) {
-            this.pid = pid;
+        public AbortedTransaction(long producerId, long firstOffset) {
+            this.producerId = producerId;
             this.firstOffset = firstOffset;
         }
 
@@ -93,37 +95,40 @@ public class FetchResponse extends AbstractResponse {
 
             AbortedTransaction that = (AbortedTransaction) o;
 
-            return pid == that.pid && firstOffset == that.firstOffset;
+            return producerId == that.producerId && firstOffset == that.firstOffset;
         }
 
         @Override
         public int hashCode() {
-            int result = (int) (pid ^ (pid >>> 32));
+            int result = (int) (producerId ^ (producerId >>> 32));
             result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
             return result;
         }
 
         @Override
         public String toString() {
-            return "(pid=" + pid + ", firstOffset=" + firstOffset + ")";
+            return "(producerId=" + producerId + ", firstOffset=" + firstOffset + ")";
         }
     }
 
     public static final class PartitionData {
         public final Errors error;
-        public final long lastStableOffset;
         public final long highWatermark;
+        public final long lastStableOffset;
+        public final long logStartOffset;
         public final List<AbortedTransaction> abortedTransactions;
         public final Records records;
 
         public PartitionData(Errors error,
                              long highWatermark,
                              long lastStableOffset,
+                             long logStartOffset,
                              List<AbortedTransaction> abortedTransactions,
                              Records records) {
             this.error = error;
             this.highWatermark = highWatermark;
             this.lastStableOffset = lastStableOffset;
+            this.logStartOffset = logStartOffset;
             this.abortedTransactions = abortedTransactions;
             this.records = records;
         }
@@ -140,6 +145,7 @@ public class FetchResponse extends AbstractResponse {
             return error == that.error &&
                     highWatermark == that.highWatermark &&
                     lastStableOffset == that.lastStableOffset &&
+                    logStartOffset == that.logStartOffset &&
                     (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
                     (records == null ? that.records == null : records.equals(that.records));
         }
@@ -147,8 +153,9 @@ public class FetchResponse extends AbstractResponse {
         @Override
         public int hashCode() {
             int result = error != null ? error.hashCode() : 0;
-            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
             result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
+            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
+            result = 31 * result + (int) (logStartOffset ^ (logStartOffset >>> 32));
             result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
             result = 31 * result + (records != null ? records.hashCode() : 0);
             return result;
@@ -157,15 +164,16 @@ public class FetchResponse extends AbstractResponse {
         @Override
         public String toString() {
             return "(error=" + error + ", highWaterMark=" + highWatermark +
-                    ", lastStableOffset = " + lastStableOffset + ", " +
-                    "abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
+                    ", lastStableOffset = " + lastStableOffset +
+                    ", logStartOffset = " + logStartOffset +
+                    ", abortedTransactions = " + abortedTransactions + ", records=" + records + ")";
         }
     }
 
     /**
      * Constructor for all versions.
      *
-     * From version 3, the entries in `responseData` should be in the same order as the entries in
+     * From version 3 or later, the entries in `responseData` should be in the same order as the entries in
      * `FetchRequest.fetchData`.
      *
      * @param responseData fetched data grouped by topic-partition
@@ -187,10 +195,13 @@ public class FetchResponse extends AbstractResponse {
                 int partition = partitionResponseHeader.getInt(PARTITION_KEY_NAME);
                 Errors error = Errors.forCode(partitionResponseHeader.getShort(ERROR_CODE_KEY_NAME));
                 long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
-                long lastStableOffset = INVALID_LSO;
+                long lastStableOffset = INVALID_LAST_STABLE_OFFSET;
                 if (partitionResponseHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME))
                     lastStableOffset = partitionResponseHeader.getLong(LAST_STABLE_OFFSET_KEY_NAME);
-
+                long logStartOffset = INVALID_LOG_START_OFFSET;
+                if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
+                    logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
+                
                 Records records = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
 
                 List<AbortedTransaction> abortedTransactions = null;
@@ -200,14 +211,14 @@ public class FetchResponse extends AbstractResponse {
                         abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
                         for (Object abortedTransactionObj : abortedTransactionsArray) {
                             Struct abortedTransactionStruct = (Struct) abortedTransactionObj;
-                            long pid = abortedTransactionStruct.getLong(PID_KEY_NAME);
+                            long producerId = abortedTransactionStruct.getLong(PID_KEY_NAME);
                             long firstOffset = abortedTransactionStruct.getLong(FIRST_OFFSET_KEY_NAME);
-                            abortedTransactions.add(new AbortedTransaction(pid, firstOffset));
+                            abortedTransactions.add(new AbortedTransaction(producerId, firstOffset));
                         }
                     }
                 }
 
-                PartitionData partitionData = new PartitionData(error, highWatermark, lastStableOffset,
+                PartitionData partitionData = new PartitionData(error, highWatermark, lastStableOffset, logStartOffset,
                         abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
@@ -319,7 +330,7 @@ public class FetchResponse extends AbstractResponse {
                 partitionDataHeader.set(ERROR_CODE_KEY_NAME, fetchPartitionData.error.code());
                 partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
 
-                if (version >= 4) {
+                if (partitionDataHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME)) {
                     partitionDataHeader.set(LAST_STABLE_OFFSET_KEY_NAME, fetchPartitionData.lastStableOffset);
 
                     if (fetchPartitionData.abortedTransactions == null) {
@@ -328,13 +339,15 @@ public class FetchResponse extends AbstractResponse {
                         List<Struct> abortedTransactionStructs = new ArrayList<>(fetchPartitionData.abortedTransactions.size());
                         for (AbortedTransaction abortedTransaction : fetchPartitionData.abortedTransactions) {
                             Struct abortedTransactionStruct = partitionDataHeader.instance(ABORTED_TRANSACTIONS_KEY_NAME);
-                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.pid);
+                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.producerId);
                             abortedTransactionStruct.set(FIRST_OFFSET_KEY_NAME, abortedTransaction.firstOffset);
                             abortedTransactionStructs.add(abortedTransactionStruct);
                         }
                         partitionDataHeader.set(ABORTED_TRANSACTIONS_KEY_NAME, abortedTransactionStructs.toArray());
                     }
                 }
+                if (partitionDataHeader.hasField(LOG_START_OFFSET_KEY_NAME))
+                    partitionDataHeader.set(LOG_START_OFFSET_KEY_NAME, fetchPartitionData.logStartOffset);
 
                 partitionData.set(PARTITION_HEADER_KEY_NAME, partitionDataHeader);
                 partitionData.set(RECORD_SET_KEY_NAME, fetchPartitionData.records);
@@ -345,7 +358,7 @@ public class FetchResponse extends AbstractResponse {
         }
         struct.set(RESPONSES_KEY_NAME, topicArray.toArray());
 
-        if (version >= 1)
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTime);
 
         return struct;

@@ -282,7 +282,7 @@ public class KafkaStreamsTest {
         try {
             streams.cleanUp();
         } catch (final IllegalStateException e) {
-            Assert.assertEquals("Cannot clean up while running.", e.getMessage());
+            assertEquals("Cannot clean up while running.", e.getMessage());
             throw e;
         } finally {
             streams.close();

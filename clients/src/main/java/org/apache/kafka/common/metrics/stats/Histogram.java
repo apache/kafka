@@ -126,7 +126,8 @@ public class Histogram {
         public LinearBinScheme(int numBins, double max) {
             this.bins = numBins;
             this.max = max;
-            this.scale = max / (numBins * (numBins - 1) / 2);
+            int denom = numBins * (numBins - 1) / 2;
+            this.scale = max / denom;
         }
 
         public int bins() {

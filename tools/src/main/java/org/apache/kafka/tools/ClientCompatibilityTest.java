@@ -39,7 +39,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -208,7 +207,7 @@ public class ClientCompatibilityTest {
 
         @Override
         public String toString() {
-            return Utils.mkString(result);
+            return result.toString();
         }
     }
 

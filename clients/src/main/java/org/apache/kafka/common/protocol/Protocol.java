@@ -492,9 +492,29 @@ public class Protocol {
                                                                                  INT32,
                                                                                  "Maximum bytes to fetch."));
 
+    // FETCH_REQUEST_PARTITION_V1 added log_start_offset field - the earliest available offset of partition data that can be consumed.
+    public static final Schema FETCH_REQUEST_PARTITION_V5 = new Schema(new Field("partition",
+                                                                                 INT32,
+                                                                                 "Topic partition id."),
+                                                                       new Field("fetch_offset",
+                                                                                 INT64,
+                                                                                 "Message offset."),
+                                                                       new Field("log_start_offset",
+                                                                                 INT64,
+                                                                                 "Earliest available offset of the follower replica. " +
+                                                                                 "The field is only used when request is sent by follower. "),
+                                                                       new Field("max_bytes",
+                                                                                 INT32,
+                                                                                 "Maximum bytes to fetch."));
+
     public static final Schema FETCH_REQUEST_TOPIC_V0 = new Schema(new Field("topic", STRING, "Topic to fetch."),
                                                                    new Field("partitions",
                                                                              new ArrayOf(FETCH_REQUEST_PARTITION_V0),
+                                                                             "Partitions to fetch."));
+
+    public static final Schema FETCH_REQUEST_TOPIC_V5 = new Schema(new Field("topic", STRING, "Topic to fetch."),
+                                                                   new Field("partitions",
+                                                                             new ArrayOf(FETCH_REQUEST_PARTITION_V5),
                                                                              "Partitions to fetch."));
 
     public static final Schema FETCH_REQUEST_V0 = new Schema(new Field("replica_id",
@@ -565,6 +585,34 @@ public class Protocol {
                     new ArrayOf(FETCH_REQUEST_TOPIC_V0),
                     "Topics to fetch in the order provided."));
 
+    // FETCH_REQUEST_V5 added a per-partition log_start_offset field - the earliest available offset of partition data that can be consumed.
+    public static final Schema FETCH_REQUEST_V5 = new Schema(
+            new Field("replica_id",
+                    INT32,
+                    "Broker id of the follower. For normal consumers, use -1."),
+            new Field("max_wait_time",
+                    INT32,
+                    "Maximum time in ms to wait for the response."),
+            new Field("min_bytes",
+                    INT32,
+                    "Minimum bytes to accumulate in the response."),
+            new Field("max_bytes",
+                    INT32,
+                    "Maximum bytes to accumulate in the response. Note that this is not an absolute maximum, " +
+                    "if the first message in the first non-empty partition of the fetch is larger than this " +
+                    "value, the message will still be returned to ensure that progress can be made."),
+            new Field("isolation_level",
+                    INT8,
+                    "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
+                    "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
+                     "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
+                     "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
+                     "and enables the inclusion of the list of aborted transactions in the result, which allows " +
+                     "consumers to discard ABORTED transactional records"),
+            new Field("topics",
+                    new ArrayOf(FETCH_REQUEST_TOPIC_V5),
+                    "Topics to fetch in the order provided."));
+
     public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(new Field("partition",
                                                                                          INT32,
                                                                                          "Topic partition id."),
@@ -599,8 +647,10 @@ public class Protocol {
     // The v4 Fetch Response adds features for transactional consumption (the aborted transaction list and the
     // last stable offset). It also exposes messages with magic v2 (along with older formats).
     private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V4 = new Schema(
-            new Field("pid", INT64, "The producer ID (PID) associated with the aborted transactions"),
+            new Field("producer_id", INT64, "The producer id associated with the aborted transactions"),
             new Field("first_offset", INT64, "The first offset in the aborted transaction"));
+
+    public static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V5 = FETCH_RESPONSE_ABORTED_TRANSACTION_V4;
 
     public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V4 = new Schema(
             new Field("partition",
@@ -617,13 +667,40 @@ public class Protocol {
             new Field("aborted_transactions",
                     ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
 
+    // FETCH_RESPONSE_PARTITION_HEADER_V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
+    public static final Schema FETCH_RESPONSE_PARTITION_HEADER_V5 = new Schema(
+            new Field("partition",
+                    INT32,
+                    "Topic partition id."),
+            new Field("error_code", INT16),
+            new Field("high_watermark",
+                    INT64,
+                    "Last committed offset."),
+            new Field("last_stable_offset",
+                    INT64,
+                    "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
+                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
+            new Field("log_start_offset",
+                    INT64,
+                    "Earliest available offset."),
+            new Field("aborted_transactions",
+                    ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V5)));
+
     public static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
             new Field("partition_header", FETCH_RESPONSE_PARTITION_HEADER_V4),
+            new Field("record_set", RECORDS));
+
+    public static final Schema FETCH_RESPONSE_PARTITION_V5 = new Schema(
+            new Field("partition_header", FETCH_RESPONSE_PARTITION_HEADER_V5),
             new Field("record_set", RECORDS));
 
     public static final Schema FETCH_RESPONSE_TOPIC_V4 = new Schema(
             new Field("topic", STRING),
             new Field("partition_responses", new ArrayOf(FETCH_RESPONSE_PARTITION_V4)));
+
+    public static final Schema FETCH_RESPONSE_TOPIC_V5 = new Schema(
+            new Field("topic", STRING),
+            new Field("partition_responses", new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
 
     public static final Schema FETCH_RESPONSE_V4 = new Schema(
             new Field("throttle_time_ms",
@@ -633,8 +710,16 @@ public class Protocol {
                     0),
             new Field("responses", new ArrayOf(FETCH_RESPONSE_TOPIC_V4)));
 
-    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4};
-    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3, FETCH_RESPONSE_V4};
+    public static final Schema FETCH_RESPONSE_V5 = new Schema(
+            new Field("throttle_time_ms",
+                    INT32,
+                    "Duration in milliseconds for which the request was throttled " +
+                    "due to quota violation (zero if the request did not violate any quota).",
+                    0),
+            new Field("responses", new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
+
+    public static final Schema[] FETCH_REQUEST = new Schema[] {FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4, FETCH_REQUEST_V5};
+    public static final Schema[] FETCH_RESPONSE = new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2, FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5};
 
     /* List groups api */
     public static final Schema LIST_GROUPS_REQUEST_V0 = new Schema();
@@ -1070,6 +1155,263 @@ public class Protocol {
     public static final Schema[] DELETE_TOPICS_REQUEST = new Schema[] {DELETE_TOPICS_REQUEST_V0};
     public static final Schema[] DELETE_TOPICS_RESPONSE = new Schema[] {DELETE_TOPICS_RESPONSE_V0};
 
+    public static final Schema DELETE_RECORDS_REQUEST_PARTITION_V0 = new Schema(new Field("partition", INT32, "Topic partition id."),
+                                                                                new Field("offset", INT64, "The offset before which the messages will be deleted."));
+
+    public static final Schema DELETE_RECORDS_REQUEST_TOPIC_V0 = new Schema(new Field("topic", STRING, "Topic name."),
+                                                                            new Field("partitions", new ArrayOf(DELETE_RECORDS_REQUEST_PARTITION_V0)));
+
+    public static final Schema DELETE_RECORDS_REQUEST_V0 = new Schema(new Field("topics", new ArrayOf(DELETE_RECORDS_REQUEST_TOPIC_V0)),
+                                                                      new Field("timeout", INT32, "The maximum time to await a response in ms."));
+
+    public static final Schema DELETE_RECORDS_RESPONSE_PARTITION_V0 = new Schema(new Field("partition", INT32, "Topic partition id."),
+                                                                                 new Field("low_watermark", INT64, "Smallest available offset of all live replicas"),
+                                                                                 new Field("error_code", INT16, "The error code for the given partition."));
+
+    public static final Schema DELETE_RECORDS_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING, "Topic name."),
+                                                                             new Field("partitions", new ArrayOf(DELETE_RECORDS_RESPONSE_PARTITION_V0)));
+
+    public static final Schema DELETE_RECORDS_RESPONSE_V0 = new Schema(new Field("topics", new ArrayOf(DELETE_RECORDS_RESPONSE_TOPIC_V0)));
+
+    public static final Schema[] DELETE_RECORDS_REQUEST = new Schema[] {DELETE_RECORDS_REQUEST_V0};
+    public static final Schema[] DELETE_RECORDS_RESPONSE = new Schema[] {DELETE_RECORDS_RESPONSE_V0};
+
+    /* Transactions API */
+    public static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    NULLABLE_STRING,
+                    "The transactional id whose producer id we want to retrieve or generate.")
+    );
+
+    public static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code."),
+            new Field("producer_id",
+                    INT64,
+                    "The producer id for the input transactional id. If the input id was empty, then this is used only for ensuring idempotence of messages."),
+            new Field("producer_epoch",
+                    INT16,
+                    "The epoch for the producer id. Will always be 0 if no transactional id was specified in the request.")
+    );
+
+    public static final Schema[] INIT_PRODUCER_ID_REQUEST = new Schema[] {INIT_PRODUCER_ID_REQUEST_V0};
+
+    public static final Schema[] INIT_PRODUCER_ID_RESPONSE = new Schema[] {INIT_PRODUCER_ID_RESPONSE_V0};
+
+    /* Offsets for Leader Epoch api */
+    public static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0 = new Schema(
+            new Field("partition_id",
+                    INT32,
+                    "The partition_id"),
+            new Field("leader_epoch",
+                    INT32,
+                    "The epoch")
+    );
+    public static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_TOPIC_V0 = new Schema(
+            new Field("topic",
+                    STRING,
+                    "The topic"),
+            new Field("partitions",
+                    new ArrayOf(OFFSET_FOR_LEADER_EPOCH_REQUEST_PARTITION_V0),
+                    "The partition")
+            );
+    public static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V0 = new Schema(
+            new Field("topics",
+                    new ArrayOf(OFFSET_FOR_LEADER_EPOCH_REQUEST_TOPIC_V0),
+                    "An array of topics to get epochs for"));
+
+
+    public static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "The error code"),
+            new Field("partition_id",
+                    INT32,
+                    "The partition id"),
+            new Field("end_offset",
+                    INT64,
+                    "The end offset")
+    );
+    public static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0 = new Schema(
+            new Field("topic",
+                     STRING,
+                    "The topic"),
+            new Field("partitions",
+                    new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_PARTITION_V0),
+                    "The partition")
+            );
+    public static final Schema OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0 = new Schema(
+            new Field("topics",
+                    new ArrayOf(OFFSET_FOR_LEADER_EPOCH_RESPONSE_TOPIC_V0),
+                    "An array of topics for which we have leader offsets for some requested Partition Leader Epoch"));
+
+    public static final Schema[] OFFSET_FOR_LEADER_EPOCH_REQUEST = new Schema[] {OFFSET_FOR_LEADER_EPOCH_REQUEST_V0};
+    public static final Schema[] OFFSET_FOR_LEADER_EPOCH_RESPONSE = new Schema[] {OFFSET_FOR_LEADER_EPOCH_RESPONSE_V0};
+
+    public static final Schema ADD_PARTITIONS_TO_TXN_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
+            new Field("producer_id",
+                    INT64,
+                    "Current producer id in use by the transactional id."),
+            new Field("producer_epoch",
+                    INT16,
+                    "Current epoch associated with the producer id."),
+            new Field("topics",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(INT32)))),
+                    "The partitions to add to the transaction.")
+    );
+    public static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code.")
+    );
+
+    public static final Schema[] ADD_PARTITIONS_TO_TXN_REQUEST = new Schema[] {ADD_PARTITIONS_TO_TXN_REQUEST_V0};
+    public static final Schema[] ADD_PARTITIONS_TO_TXN_RESPONSE = new Schema[] {ADD_PARTITIONS_TO_TXN_RESPONSE_V0};
+
+    public static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
+            new Field("producer_id",
+                    INT64,
+                    "Current producer id in use by the transactional id."),
+            new Field("producer_epoch",
+                    INT16,
+                    "Current epoch associated with the producer id."),
+            new Field("consumer_group_id",
+                    STRING,
+                    "Consumer group id whose offsets should be included in the transaction.")
+    );
+    public static final Schema ADD_OFFSETS_TO_TXN_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code.")
+    );
+
+    public static final Schema[] ADD_OFFSETS_TO_TXN_REQUEST = new Schema[] {ADD_OFFSETS_TO_TXN_REQUEST_V0};
+    public static final Schema[] ADD_OFFSETS_TO_TXN_RESPONSE = new Schema[] {ADD_OFFSETS_TO_TXN_RESPONSE_V0};
+
+    public static final Schema END_TXN_REQUEST_V0 = new Schema(
+            new Field("transactional_id",
+                    STRING,
+                    "The transactional id corresponding to the transaction."),
+            new Field("producer_id",
+                    INT64,
+                    "Current producer id in use by the transactional id."),
+            new Field("producer_epoch",
+                    INT16,
+                    "Current epoch associated with the producer id."),
+            new Field("transaction_result",
+                    BOOLEAN,
+                    "The result of the transaction (0 = ABORT, 1 = COMMIT)")
+    );
+
+    public static final Schema END_TXN_RESPONSE_V0 = new Schema(
+            new Field("error_code",
+                    INT16,
+                    "An integer error code.")
+    );
+
+    public static final Schema[] END_TXN_REQUEST = new Schema[] {END_TXN_REQUEST_V0};
+    public static final Schema[] END_TXN_RESPONSE = new Schema[] {END_TXN_RESPONSE_V0};
+
+    public static final Schema WRITE_TXN_MARKERS_ENTRY_V0 = new Schema(
+            new Field("producer_id",
+                    INT64,
+                    "Current producer id in use by the transactional id."),
+            new Field("producer_epoch",
+                    INT16,
+                    "Current epoch associated with the producer id."),
+            new Field("transaction_result",
+                    BOOLEAN,
+                    "The result of the transaction to write to the partitions (false = ABORT, true = COMMIT)."),
+            new Field("topics",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(INT32)))),
+                    "The partitions to write markers for.")
+    );
+
+    public static final Schema WRITE_TXN_MARKERS_REQUEST_V0 = new Schema(
+            new Field("coordinator_epoch",
+                    INT32,
+                    "Epoch associated with the transaction state partition hosted by this transaction coordinator."),
+            new Field("transaction_markers",
+                    new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0),
+                    "The transaction markers to be written.")
+    );
+
+    public static final Schema WRITE_TXN_MARKERS_PARTITION_ERROR_RESPONSE_V0 = new Schema(
+            new Field("partition", INT32),
+            new Field("error_code", INT16)
+    );
+
+    public static final Schema WRITE_TXN_MARKERS_ENTRY_RESPONSE_V0 = new Schema(
+            new Field("producer_id",
+                    INT64,
+                    "Current producer id in use by the transactional id."),
+            new Field("topics",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(WRITE_TXN_MARKERS_PARTITION_ERROR_RESPONSE_V0)))),
+                    "Errors per partition from writing markers.")
+    );
+
+    public static final Schema WRITE_TXN_MARKERS_RESPONSE_V0 = new Schema(
+            new Field("transaction_markers", new ArrayOf(WRITE_TXN_MARKERS_ENTRY_RESPONSE_V0), "Errors per partition from writing markers.")
+    );
+
+    public static final Schema[] WRITE_TXN_REQUEST = new Schema[] {WRITE_TXN_MARKERS_REQUEST_V0};
+    public static final Schema[] WRITE_TXN_RESPONSE = new Schema[] {WRITE_TXN_MARKERS_RESPONSE_V0};
+
+    public static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
+            new Field("partition", INT32),
+            new Field("offset", INT64),
+            new Field("metadata", NULLABLE_STRING)
+    );
+
+    public static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
+            new Field("consumer_group_id",
+                    STRING,
+                    "Id of the associated consumer group to commit offsets for."),
+            new Field("producer_id",
+                    INT64,
+                    "Current producer id in use by the transactional id."),
+            new Field("producer_epoch",
+                    INT16,
+                    "Current epoch associated with the producer id."),
+            new Field("retention_time",
+                    INT64,
+                    "The time in ms to retain the offset."),
+            new Field("topics",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
+                    "The partitions to write markers for.")
+    );
+
+    public static final Schema TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0 = new Schema(
+            new Field("partition", INT32),
+            new Field("error_code", INT16)
+    );
+
+    public static final Schema TXN_OFFSET_COMMIT_RESPONSE_V0 = new Schema(
+            new Field("topics",
+                    new ArrayOf(new Schema(
+                            new Field("topic", STRING),
+                            new Field("partitions", new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_ERROR_RESPONSE_V0)))),
+                    "Errors per partition from writing markers.")
+    );
+
+    public static final Schema[] TXN_OFFSET_COMMIT_REQUEST = new Schema[] {TXN_OFFSET_COMMIT_REQUEST_V0};
+    public static final Schema[] TXN_OFFSET_COMMIT_RESPONSE = new Schema[] {TXN_OFFSET_COMMIT_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -1101,6 +1443,14 @@ public class Protocol {
         REQUESTS[ApiKeys.API_VERSIONS.id] = API_VERSIONS_REQUEST;
         REQUESTS[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_REQUEST;
         REQUESTS[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_REQUEST;
+        REQUESTS[ApiKeys.DELETE_RECORDS.id] = DELETE_RECORDS_REQUEST;
+        REQUESTS[ApiKeys.INIT_PRODUCER_ID.id] = INIT_PRODUCER_ID_REQUEST;
+        REQUESTS[ApiKeys.OFFSET_FOR_LEADER_EPOCH.id] = OFFSET_FOR_LEADER_EPOCH_REQUEST;
+        REQUESTS[ApiKeys.ADD_PARTITIONS_TO_TXN.id] = ADD_PARTITIONS_TO_TXN_REQUEST;
+        REQUESTS[ApiKeys.ADD_OFFSETS_TO_TXN.id] = ADD_OFFSETS_TO_TXN_REQUEST;
+        REQUESTS[ApiKeys.END_TXN.id] = END_TXN_REQUEST;
+        REQUESTS[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_REQUEST;
+        REQUESTS[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1123,6 +1473,14 @@ public class Protocol {
         RESPONSES[ApiKeys.API_VERSIONS.id] = API_VERSIONS_RESPONSE;
         RESPONSES[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_RESPONSE;
         RESPONSES[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_RESPONSE;
+        RESPONSES[ApiKeys.DELETE_RECORDS.id] = DELETE_RECORDS_RESPONSE;
+        RESPONSES[ApiKeys.INIT_PRODUCER_ID.id] = INIT_PRODUCER_ID_RESPONSE;
+        RESPONSES[ApiKeys.OFFSET_FOR_LEADER_EPOCH.id] = OFFSET_FOR_LEADER_EPOCH_RESPONSE;
+        RESPONSES[ApiKeys.ADD_PARTITIONS_TO_TXN.id] = ADD_PARTITIONS_TO_TXN_RESPONSE;
+        RESPONSES[ApiKeys.ADD_OFFSETS_TO_TXN.id] = ADD_OFFSETS_TO_TXN_RESPONSE;
+        RESPONSES[ApiKeys.END_TXN.id] = END_TXN_RESPONSE;
+        RESPONSES[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_RESPONSE;
+        RESPONSES[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

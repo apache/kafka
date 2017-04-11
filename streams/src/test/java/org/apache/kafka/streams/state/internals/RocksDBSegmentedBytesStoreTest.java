@@ -54,11 +54,12 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Before
     public void before() {
-
+        final SessionKeySchema schema = new SessionKeySchema();
+        schema.init("topic");
         bytesStore = new RocksDBSegmentedBytesStore(storeName,
                                                     retention,
                                                     numSegments,
-                                                    new SessionKeySchema());
+                                                    schema);
 
         stateDir = TestUtils.tempDirectory();
         final MockProcessorContext context = new MockProcessorContext(stateDir,
@@ -154,7 +155,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     private Bytes serializeKey(final Windowed<String> key) {
-        return SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        return SessionKeySerde.toBinary(key, Serdes.String().serializer(), "dummy");
     }
 
     private List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Bytes, byte[]> iterator) {
@@ -162,7 +163,7 @@ public class RocksDBSegmentedBytesStoreTest {
         while (iterator.hasNext()) {
             final KeyValue<Bytes, byte[]> next = iterator.next();
             final KeyValue<Windowed<String>, Long> deserialized
-                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()), Serdes.Long().deserializer().deserialize("", next.value));
+                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "dummy"), Serdes.Long().deserializer().deserialize("", next.value));
             results.add(deserialized);
         }
         return results;

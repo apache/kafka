@@ -61,7 +61,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     private KeyValueStore<String, String> newStoreInstance() {
-        return StateStoreTestUtils.newKeyValueStore(storeName, String.class, String.class);
+        return StateStoreTestUtils.newKeyValueStore(storeName, "app-id", String.class, String.class);
     }
 
     @Test

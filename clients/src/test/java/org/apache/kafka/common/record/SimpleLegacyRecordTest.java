@@ -40,7 +40,7 @@ public class SimpleLegacyRecordTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (Record record : records.records())
+        if (records.records().iterator().hasNext())
             fail("Iteration should have caused invalid record error");
     }
 
@@ -61,7 +61,7 @@ public class SimpleLegacyRecordTest {
         buffer.flip();
 
         MemoryRecords records = MemoryRecords.readableRecords(buffer);
-        for (Record record : records.records())
+        if (records.records().iterator().hasNext())
             fail("Iteration should have caused invalid record error");
     }
 

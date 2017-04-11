@@ -273,10 +273,11 @@ public class ProcessorStateManager implements StateManager {
     @Override
     public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
         checkpointedOffsets.putAll(changelogReader.restoredOffsets());
-        for (String storeName : stores.keySet()) {
+        for (final Map.Entry<String, StateStore> entry : stores.entrySet()) {
+            String storeName = entry.getKey();
             // only checkpoint the offset to the offsets file if
             // it is persistent AND changelog enabled
-            if (stores.get(storeName).persistent() && storeToChangelogTopic.containsKey(storeName)) {
+            if (entry.getValue().persistent() && storeToChangelogTopic.containsKey(storeName)) {
                 final String changelogTopic = storeToChangelogTopic.get(storeName);
                 final TopicPartition topicPartition = new TopicPartition(changelogTopic, getPartition(storeName));
                 if (ackedOffsets.containsKey(topicPartition)) {

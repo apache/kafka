@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.CloseableIterator;
+
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 
 /**
  * A record batch is a container for records. In old versions of the record format (versions 0 and 1),
@@ -55,7 +58,7 @@ public interface RecordBatch extends Iterable<Record> {
      * Used to indicate an unknown leader epoch, which will be the case when the record set is
      * first created by the producer.
      */
-    int UNKNOWN_PARTITION_LEADER_EPOCH = -1;
+    int NO_PARTITION_LEADER_EPOCH = -1;
 
     /**
      * Check whether the checksum of this batch is correct.
@@ -143,6 +146,11 @@ public interface RecordBatch extends Iterable<Record> {
     short producerEpoch();
 
     /**
+     * Does the batch have a valid producer id set.
+     */
+    boolean hasProducerId();
+
+    /**
      * Get the first sequence number of this record batch.
      * @return The first sequence number or -1 if there is none
      */
@@ -200,4 +208,12 @@ public interface RecordBatch extends Iterable<Record> {
      */
     int partitionLeaderEpoch();
 
+    /**
+     * Return a streaming iterator which basically delays decompression of the record stream until the records
+     * are actually asked for using {@link Iterator#next()}. If the message format does not support streaming
+     * iteration, then the normal iterator is returned. Either way, callers should ensure that the iterator is closed.
+     *
+     * @return The closeable iterator
+     */
+    CloseableIterator<Record> streamingIterator();
 }

@@ -73,10 +73,9 @@ import java.util.Set;
  */
 public class ConfigDef {
     /**
-     * A unique Java object which represents the lack of a default value.<p>
-     * The 'new' here is intentional.
+     * A unique Java object which represents the lack of a default value.
      */
-    public static final Object NO_DEFAULT_VALUE = new String("");
+    public static final Object NO_DEFAULT_VALUE = new Object();
 
     private final Map<String, ConfigKey> configKeys;
     private final List<String> groups;
@@ -457,7 +456,7 @@ public class ConfigDef {
         if (isSet) {
             parsedValue = parseType(key.name, value, key.type);
         // props map doesn't contain setting, the key is required because no default value specified - its an error
-        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+        } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
             throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
         } else {
             // otherwise assign setting its default value
@@ -559,7 +558,7 @@ public class ConfigDef {
             } catch (ConfigException e) {
                 config.addErrorMessage(e.getMessage());
             }
-        } else if (key.defaultValue == NO_DEFAULT_VALUE) {
+        } else if (NO_DEFAULT_VALUE.equals(key.defaultValue)) {
             config.addErrorMessage("Missing required configuration \"" + key.name + "\" which has no default value.");
         } else {
             value = key.defaultValue;
@@ -922,7 +921,7 @@ public class ConfigDef {
                          boolean internalConfig) {
             this.name = name;
             this.type = type;
-            this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+            this.defaultValue = NO_DEFAULT_VALUE.equals(defaultValue) ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
             this.validator = validator;
             this.importance = importance;
             if (this.validator != null && hasDefault())
@@ -938,7 +937,7 @@ public class ConfigDef {
         }
 
         public boolean hasDefault() {
-            return this.defaultValue != NO_DEFAULT_VALUE;
+            return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
     }
 

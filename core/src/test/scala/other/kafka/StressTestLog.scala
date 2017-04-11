@@ -43,6 +43,7 @@ object StressTestLog {
 
     val log = new Log(dir = dir,
                       config = LogConfig(logProperties),
+                      logStartOffset = 0L,
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
                       time = time)

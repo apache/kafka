@@ -35,9 +35,13 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -352,43 +356,39 @@ public class Utils {
     /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
-     * @param seperator The separator
+     * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(T[] strs, String seperator) {
-        return join(Arrays.asList(strs), seperator);
+    public static <T> String join(T[] strs, String separator) {
+        return join(Arrays.asList(strs), separator);
     }
 
     /**
      * Create a string representation of a list joined by the given separator
      * @param list The list of items
-     * @param seperator The separator
+     * @param separator The separator
      * @return The string representation.
      */
-    public static <T> String join(Collection<T> list, String seperator) {
+    public static <T> String join(Collection<T> list, String separator) {
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
             if (iter.hasNext())
-                sb.append(seperator);
+                sb.append(separator);
         }
         return sb.toString();
     }
 
-    public static <K, V> String mkString(Map<K, V> map) {
-        return mkString(map, "{", "}", "=", " ,");
-    }
-
     public static <K, V> String mkString(Map<K, V> map, String begin, String end,
-                                         String keyValueSeparator, String elementSeperator) {
+                                         String keyValueSeparator, String elementSeparator) {
         StringBuilder bld = new StringBuilder();
         bld.append(begin);
         String prefix = "";
         for (Map.Entry<K, V> entry : map.entrySet()) {
             bld.append(prefix).append(entry.getKey()).
                     append(keyValueSeparator).append(entry.getValue());
-            prefix = elementSeperator;
+            prefix = elementSeparator;
         }
         bld.append(end);
         return bld.toString();
@@ -439,7 +439,7 @@ public class Utils {
         thread.setDaemon(daemon);
         thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             public void uncaughtException(Thread t, Throwable e) {
-                log.error("Uncaught exception in thread '" + t.getName() + "':", e);
+                log.error("Uncaught exception in thread '{}':", t.getName(), e);
             }
         });
         return thread;
@@ -544,43 +544,35 @@ public class Utils {
         return Arrays.asList(elems);
     }
 
-    /*
-     * Create a string from a collection
-     * @param coll the collection
-     * @param separator the separator
-     */
-    public static <T> CharSequence mkString(Collection<T> coll, String separator) {
-        StringBuilder sb = new StringBuilder();
-        Iterator<T> iter = coll.iterator();
-        if (iter.hasNext()) {
-            sb.append(iter.next().toString());
-
-            while (iter.hasNext()) {
-                sb.append(separator);
-                sb.append(iter.next().toString());
-            }
-        }
-        return sb;
-    }
-
     /**
      * Recursively delete the given file/directory and any subfiles (if any exist)
      *
      * @param file The root file at which to begin deleting
      */
-    public static void delete(File file) {
-        if (file == null) {
+    public static void delete(final File file) throws IOException {
+        if (file == null)
             return;
-        } else if (file.isDirectory()) {
-            File[] files = file.listFiles();
-            if (files != null) {
-                for (File f : files)
-                    delete(f);
+        Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+            @Override
+            public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
+                // If the root path did not exist, ignore the error; otherwise throw it.
+                if (exc instanceof NoSuchFileException && path.toFile().equals(file))
+                    return FileVisitResult.TERMINATE;
+                throw exc;
             }
-            file.delete();
-        } else {
-            file.delete();
-        }
+
+            @Override
+            public FileVisitResult visitFile(Path path, BasicFileAttributes attrs) throws IOException {
+                Files.delete(path);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult postVisitDirectory(Path path, IOException exc) throws IOException {
+                Files.delete(path);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 
     /**
@@ -624,8 +616,8 @@ public class Utils {
         } catch (IOException outer) {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                log.debug("Non-atomic move of " + source + " to " + target + " succeeded after atomic move failed due to "
-                        + outer.getMessage());
+                log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target, 
+                        outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -663,7 +655,7 @@ public class Utils {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close " + name, t);
+                log.warn("Failed to close {}", name, t);
             }
         }
     }

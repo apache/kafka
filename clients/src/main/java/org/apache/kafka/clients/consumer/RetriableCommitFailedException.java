@@ -27,7 +27,7 @@ public class RetriableCommitFailedException extends RetriableException {
     }
 
     public RetriableCommitFailedException(String message) {
-        super(message);
+        super("Offset commit failed with a retriable exception. You should retry committing offsets. The underlying error was: " + message);
     }
 
     public RetriableCommitFailedException(String message, Throwable t) {
