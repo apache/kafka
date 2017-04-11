@@ -209,7 +209,9 @@ public class StoreChangelogReader implements ChangelogReader {
             if (restorer.hasCompleted(offset, endOffset)) {
                 return offset;
             }
-            restorer.restore(record.key(), record.value());
+            if (record.key() != null) {
+                restorer.restore(record.key(), record.value());
+            }
         }
         return consumer.position(restorer.partition());
     }
