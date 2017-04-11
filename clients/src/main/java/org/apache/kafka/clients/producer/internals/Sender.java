@@ -299,11 +299,11 @@ public class Sender implements Runnable {
                 if (nextRequest.needsCoordinator()) {
                     targetNode = transactionState.coordinator(nextRequest.coordinatorType());
                     if (targetNode == null) {
-                        transactionState.needsCoordinator(nextRequest.coordinatorType());
+                        transactionState.needsCoordinator(nextRequest);
                         break;
                     }
                     if (!NetworkClientUtils.awaitReady(client, targetNode, time, timeRemaining)) {
-                        transactionState.needsCoordinator(nextRequest.coordinatorType());
+                        transactionState.needsCoordinator(nextRequest);
                         targetNode = null;
                         break;
                     }

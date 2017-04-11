@@ -119,6 +119,7 @@ public class TransactionState {
         private final AbstractRequest.Builder<?> requestBuilder;
 
         private final FindCoordinatorRequest.CoordinatorType coordinatorType;
+        private final String coordinatorKey;
         private final RequestCompletionHandler handler;
         // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
         // a pending FindCoordinator request, that must always go first. Next, If we need a Pid, that must go second.
@@ -127,24 +128,26 @@ public class TransactionState {
         private boolean isRetry;
 
         private TransactionalRequest(AbstractRequest.Builder<?> requestBuilder, RequestCompletionHandler handler,
-                                     FindCoordinatorRequest.CoordinatorType coordinatorType, Priority priority, boolean isRetry) {
+                                     FindCoordinatorRequest.CoordinatorType coordinatorType, Priority priority,
+                                     boolean isRetry, String coordinatorKey) {
             this.requestBuilder = requestBuilder;
             this.handler = handler;
             this.coordinatorType = coordinatorType;
             this.priority = priority;
             this.isRetry = isRetry;
+            this.coordinatorKey = coordinatorKey;
         }
 
         public AbstractRequest.Builder<?> requestBuilder() {
             return requestBuilder;
         }
 
-        public FindCoordinatorRequest.CoordinatorType coordinatorType() {
-            return coordinatorType;
-        }
-
         public boolean needsCoordinator() {
             return coordinatorType != null;
+        }
+
+        public FindCoordinatorRequest.CoordinatorType coordinatorType() {
+            return coordinatorType;
         }
 
         public RequestCompletionHandler responseHandler() {
@@ -288,15 +291,21 @@ public class TransactionState {
         }
     }
 
-    public void needsCoordinator(FindCoordinatorRequest.CoordinatorType type) {
+    public void needsCoordinator(TransactionalRequest request) {
+        needsCoordinator(request.coordinatorType, request.coordinatorKey);
+    }
+
+    private void needsCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
+                break;
             case TRANSACTION:
                 transactionCoordinator = null;
         }
-        pendingTransactionalRequests.add(findCoordinatorRequest(type, false));
+        pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, false));
     }
+
 
     public void setInFlightRequestCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
@@ -326,7 +335,7 @@ public class TransactionState {
         }
         isInitializing = true;
         if (transactionCoordinator == null)
-            pendingTransactionalRequests.add(findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType.TRANSACTION, false));
+            pendingTransactionalRequests.add(findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId, false));
 
         TransactionalRequestResult result = new TransactionalRequestResult();
         FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
@@ -412,7 +421,7 @@ public class TransactionState {
     private TransactionalRequest initPidRequest(boolean isRetry, TransactionalRequestResult result) {
         InitPidRequest.Builder builder = new InitPidRequest.Builder(transactionalId, transactionTimeoutMs);
         return new TransactionalRequest(builder, new InitPidCallback(result),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.INIT_PRODUCER_ID, isRetry);
+                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.INIT_PRODUCER_ID, isRetry, transactionalId);
     }
 
     private synchronized TransactionalRequest addPartitionsToTransactionRequest(boolean isRetry) {
@@ -421,20 +430,20 @@ public class TransactionState {
         AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId,
                 pidAndEpoch.producerId, pidAndEpoch.epoch, new ArrayList<>(pendingPartitionsToBeAddedToTransaction));
         return new TransactionalRequest(builder, new AddPartitionsToTransactionCallback(),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry);
+                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry, transactionalId);
     }
 
-    private TransactionalRequest findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType type, boolean isRetry) {
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(type, transactionalId);
-        return new TransactionalRequest(builder, new FindCoordinatorCallback(type),
-                null, TransactionalRequest.Priority.FIND_COORDINATOR, isRetry);
+    private TransactionalRequest findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey, boolean isRetry) {
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(type, coordinatorKey);
+        return new TransactionalRequest(builder, new FindCoordinatorCallback(type, coordinatorKey),
+                null, TransactionalRequest.Priority.FIND_COORDINATOR, isRetry, null);
     }
 
     private TransactionalRequest endTxnRequest(boolean isCommit, boolean isRetry, TransactionalRequestResult result) {
         EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId,
                 pidAndEpoch.producerId, pidAndEpoch.epoch, isCommit ? TransactionResult.COMMIT : TransactionResult.ABORT);
         return new TransactionalRequest(builder, new EndTxnCallback(isCommit, result),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.END_TXN, isRetry);
+                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.END_TXN, isRetry, transactionalId);
     }
 
     private TransactionalRequest addOffsetsToTxnRequest(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -442,7 +451,7 @@ public class TransactionState {
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
                 pidAndEpoch.producerId, pidAndEpoch.epoch, consumerGroupId);
         return new TransactionalRequest(builder, new AddOffsetsToTxnCallback(offsets, consumerGroupId, result),
-                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry);
+                FindCoordinatorRequest.CoordinatorType.TRANSACTION, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry, transactionalId);
     }
 
     private TransactionalRequest txnOffsetCommitRequest(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -459,7 +468,7 @@ public class TransactionState {
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(consumerGroupId,
                 pidAndEpoch.producerId, pidAndEpoch.epoch, OffsetCommitRequest.DEFAULT_RETENTION_TIME, pendingTxnOffsetCommits);
         return new TransactionalRequest(builder, new TxnOffsetCommitCallback(consumerGroupId, result),
-                FindCoordinatorRequest.CoordinatorType.GROUP, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry);
+                FindCoordinatorRequest.CoordinatorType.GROUP, TransactionalRequest.Priority.ADD_PARTITIONS_OR_OFFSETS, isRetry, consumerGroupId);
     }
 
     private abstract class TransactionalRequestCallBack implements RequestCompletionHandler {
@@ -514,7 +523,7 @@ public class TransactionState {
                 setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
                 isInitializing = false;
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION);
+                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
@@ -548,7 +557,7 @@ public class TransactionState {
                 partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
                 pendingPartitionsToBeAddedToTransaction.clear();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION);
+                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
@@ -572,10 +581,12 @@ public class TransactionState {
 
     private class FindCoordinatorCallback extends TransactionalRequestCallBack {
         private final FindCoordinatorRequest.CoordinatorType type;
+        private final String coordinatorKey;
 
-        FindCoordinatorCallback(FindCoordinatorRequest.CoordinatorType type) {
+        FindCoordinatorCallback(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
             super(null);
             this.type = type;
+            this.coordinatorKey = coordinatorKey;
         }
         @Override
         public void handleResponse(AbstractResponse responseBody) {
@@ -599,7 +610,7 @@ public class TransactionState {
 
         @Override
         public void reenqueue() {
-            pendingTransactionalRequests.add(findCoordinatorRequest(type, true));
+            pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, true));
         }
     }
 
@@ -618,7 +629,7 @@ public class TransactionState {
             if (error == Errors.NONE) {
                 completeTransaction();
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION);
+                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
@@ -656,10 +667,9 @@ public class TransactionState {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) responseBody;
             Errors error = addOffsetsToTxnResponse.error();
             if (error == Errors.NONE) {
-                consumerGroupCoordinator = addOffsetsToTxnResponse.consumerGroupCoordinator();
                 pendingTransactionalRequests.add(txnOffsetCommitRequest(offsets, consumerGroupId, false, result));
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION);
+                needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
@@ -704,7 +714,7 @@ public class TransactionState {
                     hadFailure = true;
                     if (!coordinatorReloaded) {
                         coordinatorReloaded = true;
-                        needsCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP);
+                        needsCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
                     }
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                     isFenced = true;

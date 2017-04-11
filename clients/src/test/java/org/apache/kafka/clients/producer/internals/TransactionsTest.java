@@ -126,7 +126,7 @@ public class TransactionsTest {
         final long pid = 13131L;
         final short epoch = 1;
         transactionState.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
@@ -172,7 +172,7 @@ public class TransactionsTest {
                 assertEquals(epoch, addOffsetsToTxnRequest.producerEpoch());
                 return true;
             }
-        }, new AddOffsetsToTxnResponse(Errors.NONE, brokerNode));
+        }, new AddOffsetsToTxnResponse(Errors.NONE));
 
         sender.run(time.milliseconds());  // Send AddOffsetsRequest
         assertTrue(transactionState.hasPendingOffsetCommits());  // We should now have created and queued the offset commit request.
@@ -180,6 +180,9 @@ public class TransactionsTest {
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
+
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -191,8 +194,14 @@ public class TransactionsTest {
             }
         }, new TxnOffsetCommitResponse(txnOffsetCommitResponse));
 
+        assertEquals(null, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
+        sender.run(time.milliseconds());  // send find coordinator for group request
+        assertNotNull(transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        assertTrue(transactionState.hasPendingOffsetCommits());
 
-        sender.run(time.milliseconds());  // send offset commit.
+        sender.run(time.milliseconds());  // send TxnOffsetCommitRequest commit.
+
         assertFalse(transactionState.hasPendingOffsetCommits());
         assertTrue(addOffsetsResult.isDone());  // We should only be done after both RPCs complete.
 
@@ -211,10 +220,10 @@ public class TransactionsTest {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         transactionState.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, true);
+        prepareFindCoordinatorResponse(Errors.NONE, true, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator, connection lost.
 
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
     }
@@ -227,7 +236,7 @@ public class TransactionsTest {
         final long pid = 13131L;
         final short epoch = 1;
         FutureTransactionalResult initPidResult = transactionState.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
@@ -238,7 +247,7 @@ public class TransactionsTest {
         assertFalse(initPidResult.isDone());
         assertFalse(transactionState.hasPid());
 
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isDone());
@@ -259,7 +268,7 @@ public class TransactionsTest {
         final long pid = 13131L;
         final short epoch = 1;
         transactionState.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
@@ -315,7 +324,7 @@ public class TransactionsTest {
         final long pid = 13131L;
         final short epoch = 1;
         transactionState.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
@@ -377,7 +386,7 @@ public class TransactionsTest {
         final long pid = 13131L;
         final short epoch = 1;
         transactionState.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false);
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
         assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
@@ -403,13 +412,15 @@ public class TransactionsTest {
         responseFuture.get();
     }
 
-    private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect) {
+    private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
+                                                final FindCoordinatorRequest.CoordinatorType coordinatorType,
+                                                final String coordinatorKey) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
                 FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-                assertEquals(findCoordinatorRequest.coordinatorType(), FindCoordinatorRequest.CoordinatorType.TRANSACTION);
-                assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
+                assertEquals(findCoordinatorRequest.coordinatorType(), coordinatorType);
+                assertEquals(findCoordinatorRequest.coordinatorKey(), coordinatorKey);
                 return true;
             }
         }, new FindCoordinatorResponse(error, brokerNode), shouldDisconnect);
