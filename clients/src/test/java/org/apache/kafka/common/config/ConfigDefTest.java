@@ -96,6 +96,12 @@ public class ConfigDefTest {
         new ConfigDef().define("a", Type.INT, Importance.HIGH, "docs").parse(new HashMap<String, Object>());
     }
 
+    @Test
+    public void testParsingEmptyDefaultValueForStringFieldShouldSucceed() {
+        new ConfigDef().define("a", Type.STRING, "", ConfigDef.Importance.HIGH, "docs")
+                .parse(new HashMap<String, Object>());
+    }
+
     @Test(expected = ConfigException.class)
     public void testDefinedTwice() {
         new ConfigDef().define("a", Type.STRING, Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs");

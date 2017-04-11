@@ -346,4 +346,29 @@ class LogSegmentTest {
     assertEquals(oldSize, size)
     assertEquals(size, fileSize)
   }
+
+  @Test
+  def shouldTruncateEvenIfOffsetPointsToAGapInTheLog() {
+    val seg = createSegment(40)
+    val offset = 40
+
+    def records(offset: Long, record: String): MemoryRecords =
+      MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, offset, CompressionType.NONE, TimestampType.CREATE_TIME,
+        new SimpleRecord(offset * 1000, record.getBytes))
+
+    //Given two messages with a gap between them (e.g. mid offset compacted away)
+    val ms1 = records(offset, "first message")
+    seg.append(offset, offset, RecordBatch.NO_TIMESTAMP, -1L, ms1)
+    val ms2 = records(offset + 3, "message after gap")
+    seg.append(offset + 3, offset + 3, RecordBatch.NO_TIMESTAMP, -1L, ms2)
+
+    // When we truncate to an offset without a corresponding log entry
+    seg.truncateTo(offset + 1)
+
+    //Then we should still truncate the record that was present (i.e. offset + 3 is gone)
+    val log = seg.read(offset, None, 10000)
+    assertEquals(offset, log.records.batches.iterator.next().baseOffset())
+    assertEquals(1, log.records.batches.asScala.size)
+  }
+
 }

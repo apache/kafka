@@ -51,6 +51,7 @@ import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
 
 public class TopologyBuilderTest {
@@ -697,4 +698,37 @@ public class TopologyBuilderTest {
         assertTrue(topicGroups.get(2).sourceTopics.contains("topic-3"));
 
     }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
+
+        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+                .addSource("ingest", Pattern.compile("topic-\\d+"))
+                .addProcessor("my-processor", new MockProcessorSupplier(), "ingest")
+                .addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
+
+        final StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
+        updatedTopicsField.setAccessible(true);
+
+        final Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+
+        updatedTopics.add("topic-2");
+        updatedTopics.add("topic-3");
+        updatedTopics.add("topic-A");
+
+        topologyBuilder.updateSubscriptions(subscriptionUpdates, "test-thread");
+        topologyBuilder.setApplicationId("test-app");
+
+        Map<String, List<String>> stateStoreAndTopics = topologyBuilder.stateStoreNameToSourceTopics();
+        List<String> topics = stateStoreAndTopics.get("testStateStore");
+
+        assertTrue("Expected to contain two topics", topics.size() == 2);
+
+        assertTrue(topics.contains("topic-2"));
+        assertTrue(topics.contains("topic-3"));
+        assertFalse(topics.contains("topic-A"));
+    }
+
 }

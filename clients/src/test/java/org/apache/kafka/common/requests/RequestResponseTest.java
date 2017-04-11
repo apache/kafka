@@ -30,10 +30,10 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -136,6 +136,27 @@ public class RequestResponseTest {
         checkRequest(createDeleteTopicsRequest());
         checkErrorResponse(createDeleteTopicsRequest(), new UnknownServerException());
         checkResponse(createDeleteTopicsResponse(), 0);
+
+        checkRequest(createInitPidRequest());
+        checkErrorResponse(createInitPidRequest(), new UnknownServerException());
+        checkResponse(createInitPidResponse(), 0);
+
+        checkRequest(createAddPartitionsToTxnRequest());
+        checkResponse(createAddPartitionsToTxnResponse(), 0);
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException());
+        checkRequest(createAddOffsetsToTxnRequest());
+        checkResponse(createAddOffsetsToTxnResponse(), 0);
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException());
+        checkRequest(createEndTxnRequest());
+        checkResponse(createEndTxnResponse(), 0);
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException());
+        checkRequest(createWriteTxnMarkersRequest());
+        checkResponse(createWriteTxnMarkersResponse(), 0);
+        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException());
+        checkRequest(createTxnOffsetCommitRequest());
+        checkResponse(createTxnOffsetCommitResponse(), 0);
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
+
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0);
         checkResponse(createMetadataResponse(), 1);
@@ -160,6 +181,24 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(0));
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException());
         checkResponse(createListOffsetResponse(0), 0);
+        checkRequest(createLeaderEpochRequest());
+        checkResponse(createLeaderEpochResponse(), 0);
+        checkErrorResponse(createLeaderEpochRequest(), new UnknownServerException());
+        checkRequest(createAddPartitionsToTxnRequest());
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException());
+        checkResponse(createAddPartitionsToTxnResponse(), 0);
+        checkRequest(createAddOffsetsToTxnRequest());
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException());
+        checkResponse(createAddOffsetsToTxnResponse(), 0);
+        checkRequest(createEndTxnRequest());
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException());
+        checkResponse(createEndTxnResponse(), 0);
+        checkRequest(createWriteTxnMarkersRequest());
+        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException());
+        checkResponse(createWriteTxnMarkersResponse(), 0);
+        checkRequest(createTxnOffsetCommitRequest());
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
+        checkResponse(createTxnOffsetCommitResponse(), 0);
     }
 
     @Test
@@ -440,6 +479,14 @@ public class RequestResponseTest {
         createCreateTopicRequest(0, true);
     }
 
+    @Test
+    public void testFetchRequestMaxBytesOldVersions() throws Exception {
+        final short version = 1;
+        FetchRequest fr = createFetchRequest(version);
+        FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
+        assertEquals(fr2.maxBytes(), fr.maxBytes());
+    }
+    
     private RequestHeader createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
     }
@@ -777,6 +824,86 @@ public class RequestResponseTest {
         errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
         errors.put("t2", Errors.TOPIC_AUTHORIZATION_FAILED);
         return new DeleteTopicsResponse(errors);
+    }
+
+    private InitPidRequest createInitPidRequest() {
+        return new InitPidRequest.Builder(null).build();
+    }
+
+    private InitPidResponse createInitPidResponse() {
+        return new InitPidResponse(Errors.NONE, 3332, (short) 3);
+    }
+
+    private OffsetsForLeaderEpochRequest createLeaderEpochRequest() {
+        Map<TopicPartition, Integer> epochs = new HashMap<>();
+
+        epochs.put(new TopicPartition("topic1", 0), 1);
+        epochs.put(new TopicPartition("topic1", 1), 1);
+        epochs.put(new TopicPartition("topic2", 2), 3);
+
+        return new OffsetsForLeaderEpochRequest.Builder(epochs).build();
+    }
+
+    private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {
+        Map<TopicPartition, EpochEndOffset> epochs = new HashMap<>();
+
+        epochs.put(new TopicPartition("topic1", 0), new EpochEndOffset(Errors.NONE, 0));
+        epochs.put(new TopicPartition("topic1", 1), new EpochEndOffset(Errors.NONE, 1));
+        epochs.put(new TopicPartition("topic2", 2), new EpochEndOffset(Errors.NONE, 2));
+
+        return new OffsetsForLeaderEpochResponse(epochs);
+    }
+
+    private AddPartitionsToTxnRequest createAddPartitionsToTxnRequest() {
+        return new AddPartitionsToTxnRequest.Builder("tid", 21L, (short) 42,
+            Collections.singletonList(new TopicPartition("topic", 73))).build();
+    }
+
+    private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
+        return new AddPartitionsToTxnResponse(Errors.NONE);
+    }
+
+    private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest() {
+        return new AddOffsetsToTxnRequest.Builder("tid", 21L, (short) 42, "gid").build();
+    }
+
+    private AddOffsetsToTxnResponse createAddOffsetsToTxnResponse() {
+        return new AddOffsetsToTxnResponse(Errors.NONE);
+    }
+
+    private EndTxnRequest createEndTxnRequest() {
+        return new EndTxnRequest.Builder("tid", 21L, (short) 42, TransactionResult.COMMIT).build();
+    }
+
+    private EndTxnResponse createEndTxnResponse() {
+        return new EndTxnResponse(Errors.NONE);
+    }
+
+    private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
+        return new WriteTxnMarkersRequest.Builder(73,
+            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, TransactionResult.ABORT,
+                Collections.singletonList(new TopicPartition("topic", 73))))).build();
+    }
+
+    private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
+        final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
+        errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
+        final Map<Long, Map<TopicPartition, Errors>> response = new HashMap<>();
+        response.put(21L, errorPerPartitions);
+        return new WriteTxnMarkersResponse(response);
+    }
+
+    private TxnOffsetCommitRequest createTxnOffsetCommitRequest() {
+        final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("topic", 73),
+                    new TxnOffsetCommitRequest.CommittedOffset(100, null));
+        return new TxnOffsetCommitRequest.Builder("gid", 21L, (short) 42, 73, offsets).build();
+    }
+
+    private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
+        final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
+        errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
+        return new TxnOffsetCommitResponse(errorPerPartitions);
     }
 
     private static class ByteBufferChannel implements GatheringByteChannel {

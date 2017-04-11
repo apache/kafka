@@ -147,7 +147,7 @@ public class MemoryRecords extends AbstractRecords {
 
                 messagesRead += 1;
 
-                if (filter.shouldRetain(record)) {
+                if (filter.shouldRetain(batch, record)) {
                     // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
                     // the corrupted batch with correct data.
                     if (!record.hasMagic(batchMagic))
@@ -245,7 +245,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public interface RecordFilter {
-        boolean shouldRetain(Record record);
+        boolean shouldRetain(RecordBatch recordBatch, Record record);
     }
 
     public static class FilterResult {
@@ -281,15 +281,6 @@ public class MemoryRecords extends AbstractRecords {
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
                                                CompressionType compressionType,
                                                TimestampType timestampType,
-                                               int writeLimit) {
-        return new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, 0L,
-                System.currentTimeMillis(), RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
-                RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, writeLimit);
-    }
-
-    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
-                                               CompressionType compressionType,
-                                               TimestampType timestampType,
                                                long baseOffset) {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, timestampType, baseOffset);
     }
@@ -299,7 +290,10 @@ public class MemoryRecords extends AbstractRecords {
                                                CompressionType compressionType,
                                                TimestampType timestampType,
                                                long baseOffset) {
-        return builder(buffer, magic, compressionType, timestampType, baseOffset, System.currentTimeMillis());
+        long logAppendTime = RecordBatch.NO_TIMESTAMP;
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            logAppendTime = System.currentTimeMillis();
+        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -309,7 +303,7 @@ public class MemoryRecords extends AbstractRecords {
                                                long baseOffset,
                                                long logAppendTime) {
         return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
-                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE);
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -318,12 +312,37 @@ public class MemoryRecords extends AbstractRecords {
                                                TimestampType timestampType,
                                                long baseOffset,
                                                long logAppendTime,
-                                               long pid,
-                                               short epoch,
+                                               int partitionLeaderEpoch) {
+        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
+                RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch);
+    }
+
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               long logAppendTime,
+                                               long producerId,
+                                               short producerEpoch,
                                                int baseSequence) {
+        return builder(buffer, magic, compressionType, timestampType, baseOffset, logAppendTime,
+                producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+    }
+
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               long logAppendTime,
+                                               long producerId,
+                                               short producerEpoch,
+                                               int baseSequence,
+                                               int partitionLeaderEpoch) {
         return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, pid, epoch, baseSequence, false, RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH,
-                buffer.capacity());
+                logAppendTime, producerId, producerEpoch, baseSequence, false, partitionLeaderEpoch,
+                buffer.remaining());
     }
 
     public static MemoryRecords withRecords(CompressionType compressionType, SimpleRecord... records) {
@@ -339,12 +358,30 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                            long producerId, short producerEpoch, int baseSequence,
+                                            int partitionLeaderEpoch, SimpleRecord... records) {
+        return withRecords(magic, initialOffset, compressionType, TimestampType.CREATE_TIME, producerId, producerEpoch,
+                baseSequence, partitionLeaderEpoch, records);
+    }
+
+    public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                             TimestampType timestampType, SimpleRecord... records) {
+        return withRecords(magic, initialOffset, compressionType, timestampType, RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH, records);
+    }
+
+    private static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                             TimestampType timestampType, long producerId, short producerEpoch,
+                                             int baseSequence, int partitionLeaderEpoch, SimpleRecord ... records) {
         if (records.length == 0)
             return MemoryRecords.EMPTY;
         int sizeEstimate = AbstractRecords.estimateSizeInBytes(magic, compressionType, Arrays.asList(records));
         ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
-        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset);
+        long logAppendTime = RecordBatch.NO_TIMESTAMP;
+        if (timestampType == TimestampType.LOG_APPEND_TIME)
+            logAppendTime = System.currentTimeMillis();
+        MemoryRecordsBuilder builder = builder(buffer, magic, compressionType, timestampType, initialOffset,
+                logAppendTime, producerId, producerEpoch, baseSequence, partitionLeaderEpoch);
         for (SimpleRecord record : records)
             builder.append(record);
         return builder.build();

@@ -17,10 +17,13 @@
 package kafka.log
 
 import java.io.{File, IOException}
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
 import kafka.common._
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -213,10 +216,11 @@ class LogSegment(val log: FileRecords,
    *
    * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
    * is corrupt.
+    * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int): Int = {
+  def recover(maxMessageSize: Int, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
     timeIndex.truncate()
@@ -242,6 +246,13 @@ class LogSegment(val log: FileRecords,
           lastIndexEntry = validBytes
         }
         validBytes += batch.sizeInBytes()
+
+        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+          leaderEpochCache.foreach { cache =>
+            if (batch.partitionLeaderEpoch > cache.latestUsedEpoch()) // this is to avoid unnecessary warning in cache.assign()
+              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+          }
+        }
       }
     } catch {
       case e: CorruptRecordException =>
@@ -459,9 +470,10 @@ class LogSegment(val log: FileRecords,
    * Change the last modified time for this log segment
    */
   def lastModified_=(ms: Long) = {
-    log.file.setLastModified(ms)
-    index.file.setLastModified(ms)
-    timeIndex.file.setLastModified(ms)
+    val fileTime = FileTime.fromMillis(ms)
+    Files.setLastModifiedTime(log.file.toPath, fileTime)
+    Files.setLastModifiedTime(index.file.toPath, fileTime)
+    Files.setLastModifiedTime(timeIndex.file.toPath, fileTime)
   }
 }
 

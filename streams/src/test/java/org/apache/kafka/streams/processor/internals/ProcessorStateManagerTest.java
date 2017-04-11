@@ -85,7 +85,7 @@ public class ProcessorStateManagerTest {
     }
 
     @After
-    public void cleanup() {
+    public void cleanup() throws IOException {
         Utils.delete(baseDir);
     }
 
@@ -156,7 +156,7 @@ public class ProcessorStateManagerTest {
         MockStateStoreSupplier.MockStateStore store2 = new MockStateStoreSupplier.MockStateStore(storeName2, true);
         MockStateStoreSupplier.MockStateStore store3 = new MockStateStoreSupplier.MockStateStore(storeName3, true);
 
-        // if there is an source partition, inherit the partition id
+        // if there is a source partition, inherit the partition id
         Set<TopicPartition> sourcePartitions = Utils.mkSet(new TopicPartition(storeTopicName3, 1));
 
         ProcessorStateManager stateMgr = new ProcessorStateManager(taskId, sourcePartitions, true, stateDirectory, storeToChangelogTopic, changelogReader); // standby
@@ -389,7 +389,7 @@ public class ProcessorStateManagerTest {
         } catch (final IllegalArgumentException e) {
             // pass
         }
-        
+
     }
 
     @Test

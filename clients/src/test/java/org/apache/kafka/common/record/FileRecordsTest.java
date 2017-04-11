@@ -33,6 +33,7 @@ import java.util.List;
 
 import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -370,14 +371,30 @@ public class FileRecordsTest {
         int i = 0;
         for (RecordBatch batch : convertedRecords.batches()) {
             assertTrue("Magic byte should be lower than or equal to " + magicByte, batch.magic() <= magicByte);
+            if (batch.magic() == RecordBatch.MAGIC_VALUE_V0)
+                assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
+            else
+                assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
             assertEquals("Compression type should not be affected by conversion", compressionType, batch.compressionType());
             for (Record record : batch) {
                 assertTrue("Inner record should have magic " + magicByte, record.hasMagic(batch.magic()));
                 assertEquals("Offset should not change", initialOffsets.get(i).longValue(), record.offset());
                 assertEquals("Key should not change", initialRecords.get(i).key(), record.key());
                 assertEquals("Value should not change", initialRecords.get(i).value(), record.value());
-                if (batch.magic() > RecordBatch.MAGIC_VALUE_V0)
+                assertFalse(record.hasTimestampType(TimestampType.LOG_APPEND_TIME));
+                if (batch.magic() == RecordBatch.MAGIC_VALUE_V0) {
+                    assertEquals(RecordBatch.NO_TIMESTAMP, record.timestamp());
+                    assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
+                    assertTrue(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                } else if (batch.magic() == RecordBatch.MAGIC_VALUE_V1) {
                     assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
+                    assertTrue(record.hasTimestampType(TimestampType.CREATE_TIME));
+                    assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                } else {
+                    assertEquals("Timestamp should not change", initialRecords.get(i).timestamp(), record.timestamp());
+                    assertFalse(record.hasTimestampType(TimestampType.CREATE_TIME));
+                    assertFalse(record.hasTimestampType(TimestampType.NO_TIMESTAMP_TYPE));
+                }
                 i += 1;
             }
         }

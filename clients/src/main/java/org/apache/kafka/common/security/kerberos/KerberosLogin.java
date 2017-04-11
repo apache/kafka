@@ -351,8 +351,8 @@ public class KerberosLogin extends AbstractLogin {
         if (!hasSufficientTimeElapsed()) {
             return;
         }
-        log.info("Initiating logout for {}", principal);
         synchronized (KerberosLogin.class) {
+            log.info("Initiating logout for {}", principal);
             // register most recent relogin attempt
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per

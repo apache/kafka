@@ -22,11 +22,13 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -37,8 +39,11 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.requests.InitPidRequest;
+import org.apache.kafka.common.requests.InitPidResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -46,6 +51,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -96,8 +102,14 @@ public class Sender implements Runnable {
     /* the max time to wait for the server to respond to the request*/
     private final int requestTimeout;
 
+    /* The max time to wait before retrying a request which has failed */
+    private final long retryBackoffMs;
+
     /* current request API versions supported by the known brokers */
     private final ApiVersions apiVersions;
+
+    /* all the state related to transactions, in particular the PID, epoch, and sequence numbers */
+    private final TransactionState transactionState;
 
     public Sender(KafkaClient client,
                   Metadata metadata,
@@ -109,6 +121,8 @@ public class Sender implements Runnable {
                   Metrics metrics,
                   Time time,
                   int requestTimeout,
+                  long retryBackoffMs,
+                  TransactionState transactionState,
                   ApiVersions apiVersions) {
         this.client = client;
         this.accumulator = accumulator;
@@ -121,7 +135,9 @@ public class Sender implements Runnable {
         this.time = time;
         this.sensors = new SenderMetrics(metrics);
         this.requestTimeout = requestTimeout;
+        this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
+        this.transactionState = transactionState;
     }
 
     /**
@@ -172,6 +188,9 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         Cluster cluster = metadata.fetch();
+
+        maybeWaitForPid();
+
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -197,10 +216,8 @@ public class Sender implements Runnable {
         }
 
         // create produce requests
-        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster,
-                                                                         result.readyNodes,
-                                                                         this.maxRequestSize,
-                                                                         now);
+        Map<Integer, List<ProducerBatch>> batches = this.accumulator.drain(cluster, result.readyNodes,
+                this.maxRequestSize, now);
         if (guaranteeMessageOrder) {
             // Mute all the partitions drained
             for (List<ProducerBatch> batchList : batches.values()) {
@@ -210,9 +227,22 @@ public class Sender implements Runnable {
         }
 
         List<ProducerBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
-        // update sensors
-        for (ProducerBatch expiredBatch : expiredBatches)
+
+        boolean needsTransactionStateReset = false;
+        // Reset the PID if an expired batch has previously been sent to the broker. Also update the metrics
+        // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
+        // we need to reset the producer id here.
+        for (ProducerBatch expiredBatch : expiredBatches) {
+            if (transactionState != null && expiredBatch.inRetry()) {
+                needsTransactionStateReset = true;
+            }
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
+        }
+
+        if (needsTransactionStateReset) {
+            transactionState.resetProducerId();
+            return;
+        }
 
         sensors.updateProduceRequestMetrics(batches);
 
@@ -251,6 +281,50 @@ public class Sender implements Runnable {
     public void forceClose() {
         this.forceClose = true;
         initiateClose();
+    }
+
+    private ClientResponse sendAndAwaitInitPidRequest(Node node) throws IOException {
+        String nodeId = node.idString();
+        InitPidRequest.Builder builder = new InitPidRequest.Builder(null);
+        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
+        return NetworkClientUtils.sendAndReceive(client, request, time);
+    }
+
+    private Node awaitLeastLoadedNodeReady(long remainingTimeMs) throws IOException {
+        Node node = client.leastLoadedNode(time.milliseconds());
+        if (NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
+            return node;
+        }
+        return null;
+    }
+
+    private void maybeWaitForPid() {
+        if (transactionState == null)
+            return;
+
+        while (!transactionState.hasPid()) {
+            try {
+                Node node = awaitLeastLoadedNodeReady(requestTimeout);
+                if (node != null) {
+                    ClientResponse response = sendAndAwaitInitPidRequest(node);
+                    if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
+                        InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
+                        transactionState.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+                    } else {
+                        log.error("Received an unexpected response type for an InitPidRequest from {}. " +
+                                "We will back off and try again.", node);
+                    }
+                } else {
+                    log.debug("Could not find an available broker to send InitPidRequest to. " +
+                            "We will back off and try again.");
+                }
+            } catch (Exception e) {
+                log.warn("Received an exception while trying to get a pid. Will back off and retry.", e);
+            }
+            log.trace("Retry InitPidRequest in {}ms.", retryBackoffMs);
+            time.sleep(retryBackoffMs);
+            metadata.requestUpdate();
+        }
     }
 
     /**
@@ -300,37 +374,81 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now) {
         Errors error = response.error;
-        if (error != Errors.NONE && canRetry(batch, error)) {
-            // retry
-            log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
-                     correlationId,
-                     batch.topicPartition,
-                     this.retries - batch.attempts() - 1,
-                     error);
-            this.accumulator.reenqueue(batch, now);
-            this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
-        } else {
-            RuntimeException exception;
-            if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
-                exception = new TopicAuthorizationException(batch.topicPartition.topic());
-            else
-                exception = error.exception();
-            // tell the user the result of their request
-            batch.done(response.baseOffset, response.logAppendTime, exception);
-            this.accumulator.deallocate(batch);
-            if (error != Errors.NONE)
+        if (error != Errors.NONE) {
+            if (canRetry(batch, error)) {
+                log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
+                        correlationId,
+                        batch.topicPartition,
+                        this.retries - batch.attempts() - 1,
+                        error);
+                if (transactionState == null) {
+                    reenqueueBatch(batch, now);
+                } else if (transactionState.pidAndEpoch().producerId == batch.producerId()) {
+                    // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
+                    log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
+                            transactionState.sequenceNumber(batch.topicPartition));
+                    reenqueueBatch(batch, now);
+                } else {
+                    failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
+                            "batch but the producer id changed from " + batch.producerId() + " to " +
+                            transactionState.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                    this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
+                }
+            } else {
+                final RuntimeException exception;
+                if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
+                    exception = new TopicAuthorizationException(batch.topicPartition.topic());
+                else
+                    exception = error.exception();
+                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionState.pidAndEpoch().producerId)
+                    log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
+                                    "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
+                            correlationId, batch.topicPartition, response.baseOffset);
+                // tell the user the result of their request
+                failBatch(batch, response, exception);
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
-        }
-        if (error.exception() instanceof InvalidMetadataException) {
-            if (error.exception() instanceof UnknownTopicOrPartitionException)
-                log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
-                        "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
-            metadata.requestUpdate();
+            }
+            if (error.exception() instanceof InvalidMetadataException) {
+                if (error.exception() instanceof UnknownTopicOrPartitionException)
+                    log.warn("Received unknown topic or partition error in produce request on partition {}. The " +
+                            "topic/partition may not exist or the user may not have Describe access to it", batch.topicPartition);
+                metadata.requestUpdate();
+            }
+
+        } else {
+            completeBatch(batch, response);
+
+            if (transactionState != null && transactionState.pidAndEpoch().producerId == batch.producerId()) {
+                transactionState.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+                log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
+                        transactionState.sequenceNumber(batch.topicPartition));
+            }
         }
 
         // Unmute the completed partition.
         if (guaranteeMessageOrder)
             this.accumulator.unmutePartition(batch.topicPartition);
+    }
+
+    private void reenqueueBatch(ProducerBatch batch, long currentTimeMs) {
+        this.accumulator.reenqueue(batch, currentTimeMs);
+        this.sensors.recordRetries(batch.topicPartition.topic(), batch.recordCount);
+    }
+
+    private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
+        batch.done(response.baseOffset, response.logAppendTime, null);
+        this.accumulator.deallocate(batch);
+    }
+
+    private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
+        if (transactionState != null && batch.producerId() == transactionState.pidAndEpoch().producerId) {
+            // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
+            // about the previously committed message. Note that this will discard the producer id and sequence
+            // numbers for all existing partitions.
+            transactionState.resetProducerId();
+        }
+        batch.done(response.baseOffset, response.logAppendTime, exception);
+        this.accumulator.deallocate(batch);
     }
 
     /**

@@ -39,6 +39,7 @@ import javax.ws.rs.core.MediaType;
 @Consumes(MediaType.APPLICATION_JSON)
 public class ConnectorPluginsResource {
 
+    private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
 
     public ConnectorPluginsResource(Herder herder) {
@@ -47,11 +48,18 @@ public class ConnectorPluginsResource {
 
     @PUT
     @Path("/{connectorType}/config/validate")
-    public ConfigInfos validateConfigs(final @PathParam("connectorType") String connType,
-                                       final Map<String, String> connectorConfig) throws Throwable {
+    public ConfigInfos validateConfigs(
+        final @PathParam("connectorType") String connType,
+        final Map<String, String> connectorConfig
+    ) throws Throwable {
         String includedConnType = connectorConfig.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-        if (includedConnType != null && !includedConnType.equals(connType))
-            throw new BadRequestException("Included connector type " + includedConnType + " does not match request type " + connType);
+        if (includedConnType != null
+            && !normalizedPluginName(includedConnType).endsWith(normalizedPluginName(connType))) {
+            throw new BadRequestException(
+                "Included connector type " + includedConnType + " does not match request type "
+                    + connType
+            );
+        }
 
         return herder.validateConnectorConfig(connectorConfig);
     }
@@ -60,5 +68,12 @@ public class ConnectorPluginsResource {
     @Path("/")
     public List<ConnectorPluginInfo> listConnectorPlugins() {
         return PluginDiscovery.connectorPlugins();
+    }
+
+    private String normalizedPluginName(String pluginName) {
+        // Works for both full and simple class names. In the latter case, it generates the alias.
+        return pluginName.endsWith(ALIAS_SUFFIX) && pluginName.length() > ALIAS_SUFFIX.length()
+            ? pluginName.substring(0, pluginName.length() - ALIAS_SUFFIX.length())
+            : pluginName;
     }
 }

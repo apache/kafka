@@ -21,6 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -32,11 +33,14 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
+import org.apache.kafka.common.requests.InitPidRequest;
+import org.apache.kafka.common.requests.InitPidResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -46,6 +50,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -81,24 +86,7 @@ public class SenderTest {
 
     @Before
     public void setup() {
-        Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("client-id", CLIENT_ID);
-        MetricConfig metricConfig = new MetricConfig().tags(metricTags);
-        metrics = new Metrics(metricConfig, time);
-        accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions);
-        sender = new Sender(client,
-                            metadata,
-                            this.accumulator,
-                            true,
-                            MAX_REQUEST_SIZE,
-                            ACKS_ALL,
-                            MAX_RETRIES,
-                            metrics,
-                            time,
-                            REQUEST_TIMEOUT,
-                            apiVersions);
-
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        setupWithTransactionState(null);
     }
 
     @After
@@ -244,16 +232,19 @@ public class SenderTest {
         Metrics m = new Metrics();
         try {
             Sender sender = new Sender(client,
-                                       metadata,
-                                       this.accumulator,
-                                       false,
-                                       MAX_REQUEST_SIZE,
-                                       ACKS_ALL,
-                                       maxRetries,
-                                       m,
-                                       time,
-                                       REQUEST_TIMEOUT,
-                                       apiVersions);
+                    metadata,
+                    this.accumulator,
+                    false,
+                    MAX_REQUEST_SIZE,
+                    ACKS_ALL,
+                    maxRetries,
+                    m,
+                    time,
+                    REQUEST_TIMEOUT,
+                    50,
+                    null,
+                    apiVersions
+            );
             // do a successful retry
             Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // connect
@@ -300,17 +291,19 @@ public class SenderTest {
         Metrics m = new Metrics();
         try {
             Sender sender = new Sender(client,
-                metadata,
-                this.accumulator,
-                true,
-                MAX_REQUEST_SIZE,
-                ACKS_ALL,
-                maxRetries,
-                m,
-                time,
-                REQUEST_TIMEOUT,
-                apiVersions);
-
+                    metadata,
+                    this.accumulator,
+                    true,
+                    MAX_REQUEST_SIZE,
+                    ACKS_ALL,
+                    maxRetries,
+                    m,
+                    time,
+                    REQUEST_TIMEOUT,
+                    50,
+                    null,
+                    apiVersions
+            );
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             Cluster cluster1 = TestUtils.clusterWith(2, "test", 2);
             metadata.update(cluster1, Collections.<String>emptySet(), time.milliseconds());
@@ -381,6 +374,164 @@ public class SenderTest {
         assertTrue("Request should be completed", future.isDone());
     }
 
+    @Test
+    public void testInitPidRequest() throws Exception {
+        final long producerId = 343434L;
+        TransactionState transactionState = new TransactionState(new MockTime());
+        setupWithTransactionState(transactionState);
+        client.setNode(new Node(1, "localhost", 33343));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return body instanceof InitPidRequest;
+            }
+        }, new InitPidResponse(Errors.NONE, producerId, (short) 0));
+        sender.run(time.milliseconds());
+        assertTrue(transactionState.hasPid());
+        assertEquals(producerId, transactionState.pidAndEpoch().producerId);
+        assertEquals((short) 0, transactionState.pidAndEpoch().epoch);
+    }
+
+    @Test
+    public void testSequenceNumberIncrement() throws InterruptedException {
+        final long producerId = 343434L;
+        TransactionState transactionState = new TransactionState(new MockTime());
+        transactionState.setPidAndEpoch(producerId, (short) 0);
+        setupWithTransactionState(transactionState);
+        client.setNode(new Node(1, "localhost", 33343));
+
+        int maxRetries = 10;
+        Metrics m = new Metrics();
+        Sender sender = new Sender(client,
+                metadata,
+                this.accumulator,
+                true,
+                MAX_REQUEST_SIZE,
+                ACKS_ALL,
+                maxRetries,
+                m,
+                time,
+                REQUEST_TIMEOUT,
+                50,
+                transactionState,
+                apiVersions
+        );
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                if (body instanceof ProduceRequest) {
+                    ProduceRequest request = (ProduceRequest) body;
+                    MemoryRecords records = request.partitionRecordsOrFail().get(tp0);
+                    Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
+                    assertTrue(batchIterator.hasNext());
+                    RecordBatch batch = batchIterator.next();
+                    assertFalse(batchIterator.hasNext());
+                    assertEquals(0, batch.baseSequence());
+                    assertEquals(producerId, batch.producerId());
+                    assertEquals(0, batch.producerEpoch());
+                    return true;
+                }
+                return false;
+            }
+        }, produceResponse(tp0, 0, Errors.NONE, 0));
+
+        sender.run(time.milliseconds());  // connect.
+        sender.run(time.milliseconds());  // send.
+
+        sender.run(time.milliseconds());  // receive response
+        assertTrue(responseFuture.isDone());
+        assertEquals((long) transactionState.sequenceNumber(tp0), 1L);
+    }
+
+    @Test
+    public void testAbortRetryWhenPidChanges() throws InterruptedException {
+        final long producerId = 343434L;
+        TransactionState transactionState = new TransactionState(new MockTime());
+        transactionState.setPidAndEpoch(producerId, (short) 0);
+        setupWithTransactionState(transactionState);
+        client.setNode(new Node(1, "localhost", 33343));
+
+        int maxRetries = 10;
+        Metrics m = new Metrics();
+        Sender sender = new Sender(client,
+                metadata,
+                this.accumulator,
+                true,
+                MAX_REQUEST_SIZE,
+                ACKS_ALL,
+                maxRetries,
+                m,
+                time,
+                REQUEST_TIMEOUT,
+                50,
+                transactionState,
+                apiVersions
+        );
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // connect.
+        sender.run(time.milliseconds());  // send.
+        String id = client.requests().peek().destination();
+        Node node = new Node(Integer.valueOf(id), "localhost", 0);
+        assertEquals(1, client.inFlightRequestCount());
+        assertTrue("Client ready status should be true", client.isReady(node, 0L));
+        client.disconnect(id);
+        assertEquals(0, client.inFlightRequestCount());
+        assertFalse("Client ready status should be false", client.isReady(node, 0L));
+
+        transactionState.setPidAndEpoch(producerId + 1, (short) 0);
+        sender.run(time.milliseconds()); // receive error
+        sender.run(time.milliseconds()); // reconnect
+        sender.run(time.milliseconds()); // nothing to do, since the pid has changed. We should check the metrics for errors.
+        assertEquals("Expected requests to be aborted after pid change", 0, client.inFlightRequestCount());
+
+        KafkaMetric recordErrors = m.metrics().get(m.metricName("record-error-rate", METRIC_GROUP, ""));
+        assertTrue("Expected non-zero value for record send errors", recordErrors.value() > 0);
+
+        assertTrue(responseFuture.isDone());
+        assertEquals((long) transactionState.sequenceNumber(tp0), 0L);
+    }
+
+    @Test
+    public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
+        final long producerId = 343434L;
+        TransactionState transactionState = new TransactionState(new MockTime());
+        transactionState.setPidAndEpoch(producerId, (short) 0);
+        setupWithTransactionState(transactionState);
+        client.setNode(new Node(1, "localhost", 33343));
+
+        int maxRetries = 10;
+        Metrics m = new Metrics();
+        Sender sender = new Sender(client,
+                metadata,
+                this.accumulator,
+                true,
+                MAX_REQUEST_SIZE,
+                ACKS_ALL,
+                maxRetries,
+                m,
+                time,
+                REQUEST_TIMEOUT,
+                50,
+                transactionState,
+                apiVersions
+        );
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());  // connect.
+        sender.run(time.milliseconds());  // send.
+
+        assertEquals(1, client.inFlightRequestCount());
+
+        client.respond(produceResponse(tp0, 0, Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, 0));
+
+        sender.run(time.milliseconds());
+        assertTrue(responseFuture.isDone());
+        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionState.hasPid());
+    }
+
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
         assertTrue("Request should be completed", future.isDone());
         try {
@@ -397,4 +548,25 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
+    private void setupWithTransactionState(TransactionState transactionState) {
+        Map<String, String> metricTags = new LinkedHashMap<>();
+        metricTags.put("client-id", CLIENT_ID);
+        MetricConfig metricConfig = new MetricConfig().tags(metricTags);
+        this.metrics = new Metrics(metricConfig, time);
+        this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionState);
+        this.sender = new Sender(this.client,
+                this.metadata,
+                this.accumulator,
+                true,
+                MAX_REQUEST_SIZE,
+                ACKS_ALL,
+                MAX_RETRIES,
+                this.metrics,
+                this.time,
+                REQUEST_TIMEOUT,
+                50,
+                transactionState,
+                apiVersions);
+        this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
+    }
 }
