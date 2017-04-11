@@ -25,6 +25,8 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 
+import scala.collection.mutable
+
 class InterBrokerSendThreadTest {
   private val time = new MockTime()
   private val networkClient = EasyMock.createMock(classOf[NetworkClient])
@@ -32,7 +34,7 @@ class InterBrokerSendThreadTest {
 
   @Test
   def shouldNotSendAnythingWhenNoRequests(): Unit = {
-    val sendThread = new InterBrokerSendThread("name", networkClient, () => Map(), time)
+    val sendThread = new InterBrokerSendThread("name", networkClient, () => mutable.Iterable.empty, time)
 
     // poll is always called but there should be no further invocations on NetworkClient
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
@@ -48,10 +50,10 @@ class InterBrokerSendThreadTest {
   @Test
   def shouldCreateClientRequestAndSendWhenNodeIsReady(): Unit = {
     val request = new StubRequestBuilder()
-    val handler = RequestAndCompletionHandler(request, completionHandler)
     val node = new Node(1, "", 8080)
+    val handler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, () => {
-      Map[Node, RequestAndCompletionHandler](node -> handler)
+      List[RequestAndCompletionHandler](handler)
     }, time)
 
     val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, handler.handler)
@@ -82,19 +84,19 @@ class InterBrokerSendThreadTest {
   @Test
   def shouldCallCompletionHandlerWithDisconnectedResponseWhenNodeNotReady(): Unit = {
     val request = new StubRequestBuilder
-    val handler = RequestAndCompletionHandler(request, completionHandler)
     val node = new Node(1, "", 8080)
+    val requestAndCompletionHandler = RequestAndCompletionHandler(node, request, completionHandler)
     val sendThread = new InterBrokerSendThread("name", networkClient, () => {
-      Map[Node, RequestAndCompletionHandler](node -> handler)
+      List[RequestAndCompletionHandler](requestAndCompletionHandler)
     }, time)
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, handler.handler)
+    val clientRequest = new ClientRequest("dest", request, 0, "1", 0, true, requestAndCompletionHandler.handler)
 
     EasyMock.expect(networkClient.newClientRequest(EasyMock.eq("1"),
-      EasyMock.same(handler.request),
+      EasyMock.same(requestAndCompletionHandler.request),
       EasyMock.anyLong(),
       EasyMock.eq(true),
-      EasyMock.same(handler.handler)))
+      EasyMock.same(requestAndCompletionHandler.handler)))
       .andReturn(clientRequest)
 
     EasyMock.expect(networkClient.ready(node, time.milliseconds()))

@@ -24,7 +24,7 @@ import kafka.utils.{Scheduler, TestUtils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
-import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkerRequest}
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -68,14 +68,60 @@ class TransactionMarkerChannelManagerTest {
     channel.addNewBroker(broker2)
     channel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
-    val requests = requestGenerator()
-    val broker1Markers = requests(broker1).request.asInstanceOf[WriteTxnMarkerRequest.Builder].build().markers()
-    val broker2Markers = requests(broker2).request.asInstanceOf[WriteTxnMarkerRequest.Builder].build().markers()
+
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(0,
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(0,
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
+
+    val requests: Map[Node, WriteTxnMarkersRequest] = requestGenerator().map{ result =>
+      (result.destination, result.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
+    }.toMap
+
+    val broker1Request = requests(broker1)
+    val broker2Request = requests(broker2)
 
     assertEquals(2, requests.size)
-    assertEquals(Utils.mkList(new WriteTxnMarkerRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition1))), broker1Markers)
-    assertEquals(Utils.mkList(new WriteTxnMarkerRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition2))), broker2Markers)
+    assertEquals(expectedBroker1Request, broker1Request)
+    assertEquals(expectedBroker2Request, broker2Request)
 
+  }
+
+  @Test
+  def shouldGenerateRequestPerCoordinatorEpochPerBroker(): Unit ={
+    val partitionOneEpoch = 0
+    val partitionTwoEpoch = 1
+
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, partitionOneEpoch, List.empty, 0), 0), Set.empty)))
+
+
+    EasyMock.expect(metadataCache.getPartitionInfo(partition2.topic(), partition2.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, partitionTwoEpoch, List.empty, 0), 0), Set.empty)))
+
+    EasyMock.replay(metadataCache)
+
+    channel.addNewBroker(broker1)
+    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, partitionOneEpoch, Set[TopicPartition](partition1))
+    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, partitionTwoEpoch, Set[TopicPartition](partition2))
+
+    val expectedPartition1Request = new WriteTxnMarkersRequest.Builder(0,
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
+    val expectedPartition2Request = new WriteTxnMarkersRequest.Builder(1,
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
+
+    val requests = requestGenerator().map { result =>
+      val markersRequest = result.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
+      (markersRequest.coordinatorEpoch(), (result.destination, markersRequest))
+    }.toMap
+
+    val request1 = requests(partitionOneEpoch)
+    val request2 = requests(partitionTwoEpoch)
+    assertEquals(broker1, request1._1)
+    assertEquals(broker1, request2._1)
+    assertEquals(2, requests.size)
+    assertEquals(expectedPartition1Request, request1._2)
+    assertEquals(expectedPartition2Request, request2._2)
   }
 
   @Test

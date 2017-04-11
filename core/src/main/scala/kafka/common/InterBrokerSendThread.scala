@@ -18,12 +18,10 @@ package kafka.common
 
 import kafka.utils.{ShutdownableThread, ZkUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
-import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.immutable
 
 object InterBrokerSendThread {
 
@@ -34,7 +32,7 @@ object InterBrokerSendThread {
  */
 class InterBrokerSendThread(name: String,
                             networkClient: NetworkClient,
-                            requestGenerator: () => immutable.Map[Node, RequestAndCompletionHandler],
+                            requestGenerator: () => Iterable[RequestAndCompletionHandler],
                             time: Time)
   extends ShutdownableThread(name, isInterruptible = false) {
 
@@ -42,27 +40,27 @@ class InterBrokerSendThread(name: String,
     val now = time.milliseconds()
     var pollTimeout = Long.MaxValue
 
-    val requestsToSend: immutable.Map[Node, RequestAndCompletionHandler] = requestGenerator()
+    val requestsToSend: Iterable[RequestAndCompletionHandler] = requestGenerator()
 
-    for ((destNode: Node, requestAndCallback: RequestAndCompletionHandler) <- requestsToSend) {
-      val destination = Integer.toString(destNode.id)
-      val completionHandler = requestAndCallback.handler
+    for (request: RequestAndCompletionHandler <- requestsToSend) {
+      val destination = Integer.toString(request.destination.id())
+      val completionHandler = request.handler
       val clientRequest = networkClient.newClientRequest(destination,
-        requestAndCallback.request,
+        request.request,
         now,
         true,
         completionHandler)
 
-      if (networkClient.ready(destNode, now)) {
+      if (networkClient.ready(request.destination, now)) {
         networkClient.send(clientRequest, now)
       } else {
-        val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(requestAndCallback.request.desiredOrLatestVersion()),
+        val disConnectedResponse: ClientResponse = new ClientResponse(clientRequest.makeHeader(request.request.desiredOrLatestVersion()),
           completionHandler, destination,
           now /* createdTimeMs */, now /* receivedTimeMs */, true /* disconnected */, null /* versionMismatch */, null /* responseBody */)
 
         // poll timeout would be the minimum of connection delay if there are any dest yet to be reached;
         // otherwise it is infinity
-        pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(destNode, now))
+        pollTimeout = Math.min(pollTimeout, networkClient.connectionDelay(request.destination, now))
 
         completionHandler.onComplete(disConnectedResponse)
       }
@@ -71,4 +69,4 @@ class InterBrokerSendThread(name: String,
   }
 }
 
-case class RequestAndCompletionHandler(request: AbstractRequest.Builder[_ <: AbstractRequest], handler: RequestCompletionHandler)
+case class RequestAndCompletionHandler(destination: Node, request: AbstractRequest.Builder[_ <: AbstractRequest], handler: RequestCompletionHandler)

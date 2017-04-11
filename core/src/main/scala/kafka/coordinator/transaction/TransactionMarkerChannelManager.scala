@@ -25,20 +25,20 @@ import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkerRequest}
-import org.apache.kafka.common.requests.WriteTxnMarkerRequest.TxnMarkerEntry
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Node
 
-import scala.collection.immutable
+import scala.collection.{immutable, mutable}
 import java.util.concurrent.BlockingQueue
 
-
 import collection.JavaConverters._
+import collection.JavaConversions._
 
 case class PendingTxn(transactionMetadata: TransactionMetadata, callback: Errors => Unit)
-case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[WriteTxnMarkerRequest.TxnMarkerEntry])
+case class CoordinatorEpochAndMarkers(coordinatorEpoch: Int, txnMarkerEntry: util.List[WriteTxnMarkersRequest.TxnMarkerEntry])
+case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[CoordinatorEpochAndMarkers])
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
@@ -92,17 +92,21 @@ object TransactionMarkerChannelManager {
   }
 
 
-  private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel): () => immutable.Map[Node, RequestAndCompletionHandler] = {
-    def generateRequests(): immutable.Map[Node, RequestAndCompletionHandler] = {
+  private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel): () => Iterable[RequestAndCompletionHandler] = {
+    def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       transactionMarkerChannel.brokerStateMap.flatMap {case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
-        val markersToSend: java.util.List[TxnMarkerEntry] = new util.ArrayList[TxnMarkerEntry] ()
+        val markersToSend: java.util.List[CoordinatorEpochAndMarkers] = new util.ArrayList[CoordinatorEpochAndMarkers] ()
         destAndMarkerQueue.markersQueue.drainTo (markersToSend)
-        val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(transactionMarkerChannel, markersToSend, brokerId)
-        if (markersToSend.isEmpty)
-          None
-        else
-          Some ((destAndMarkerQueue.destBrokerNode, RequestAndCompletionHandler (new WriteTxnMarkerRequest.Builder (markersToSend), requestCompletionHandler) ) )
-      }.toMap
+        markersToSend.groupBy{ epochAndMarker => epochAndMarker.coordinatorEpoch }
+          .map { case(coordinatorEpoch:Int, buffer: mutable.Buffer[CoordinatorEpochAndMarkers]) =>
+            val txnMarkerEntries = buffer.flatMap { x => x.txnMarkerEntry }.asJava
+            val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(
+              transactionMarkerChannel,
+              CoordinatorEpochAndMarkers(coordinatorEpoch, txnMarkerEntries),
+              brokerId)
+            RequestAndCompletionHandler(destAndMarkerQueue.destBrokerNode, new WriteTxnMarkersRequest.Builder(coordinatorEpoch, txnMarkerEntries), requestCompletionHandler)
+          }
+      }
     }
     generateRequests
   }

@@ -113,7 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
         case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
         case ApiKeys.END_TXN => handleEndTxnRequest(request)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request) 
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
       }
     } catch {
@@ -1367,8 +1367,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId(),
-      endTxnRequest.pid(),
-      endTxnRequest.epoch(),
+      endTxnRequest.producerId(),
+      endTxnRequest.producerEpoch(),
       endTxnRequest.command(),
       sendResponseCallback)
   }
