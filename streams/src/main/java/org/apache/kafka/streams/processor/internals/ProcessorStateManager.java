@@ -82,7 +82,13 @@ public class ProcessorStateManager implements StateManager {
                                  final Map<String, String> storeToChangelogTopic) throws LockException, IOException {
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
-        this.baseDir  = stateDirectory.directoryForTask(taskId);
+        this.logPrefix = String.format("task [%s]", taskId);
+        try {
+            this.baseDir = stateDirectory.directoryForTask(taskId);
+        } catch (ProcessorStateException e) {
+            throw new LockException(String.format("%s Failed to get the directory for task %s. Exception %s",
+                logPrefix, taskId, e));
+        }
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
             this.partitionForTopic.put(source.topic(), source);
@@ -96,7 +102,7 @@ public class ProcessorStateManager implements StateManager {
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
-        this.logPrefix = String.format("task [%s]", taskId);
+
 
         if (!stateDirectory.lock(taskId, 5)) {
             throw new LockException(String.format("%s Failed to lock the state directory: %s", logPrefix, baseDir.getCanonicalPath()));
