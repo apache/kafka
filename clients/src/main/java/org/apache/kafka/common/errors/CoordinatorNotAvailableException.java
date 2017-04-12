@@ -17,15 +17,18 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
- * not yet been created.
+ * In the context of the group coordinator, the broker returns this error code for metadata or offset commit
+ * requests if the group metadata topic has not been created yet.
+ *
+ * In the context of the transactional coordinator, this error will be returned if the underlying transactional log
+ * is under replicated or if an append to the log times out.
  */
 public class CoordinatorNotAvailableException extends RetriableException {
     public static final CoordinatorNotAvailableException INSTANCE = new CoordinatorNotAvailableException();
 
     private static final long serialVersionUID = 1L;
 
-    public CoordinatorNotAvailableException() {
+    private CoordinatorNotAvailableException() {
         super();
     }
 
@@ -35,10 +38,6 @@ public class CoordinatorNotAvailableException extends RetriableException {
 
     public CoordinatorNotAvailableException(String message, Throwable cause) {
         super(message, cause);
-    }
-
-    public CoordinatorNotAvailableException(Throwable cause) {
-        super(cause);
     }
 
 }

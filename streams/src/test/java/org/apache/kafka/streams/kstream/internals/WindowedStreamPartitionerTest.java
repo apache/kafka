@@ -69,7 +69,7 @@ public class WindowedStreamPartitionerTest {
         DefaultPartitioner defaultPartitioner = new DefaultPartitioner();
 
         WindowedSerializer<Integer> windowedSerializer = new WindowedSerializer<>(intSerializer);
-        WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(windowedSerializer);
+        WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(topicName, windowedSerializer);
 
         for (int k = 0; k < 10; k++) {
             Integer key = rand.nextInt();

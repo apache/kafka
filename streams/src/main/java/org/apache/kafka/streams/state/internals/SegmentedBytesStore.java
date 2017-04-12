@@ -66,6 +66,14 @@ public interface SegmentedBytesStore extends StateStore {
     byte[] get(Bytes key);
 
     interface KeySchema {
+
+        /**
+         * Initialized the schema with a topic.
+         *
+         * @param topic a topic name
+         */
+        void init(final String topic);
+
         /**
          * Given a record-key and a time, construct a Segmented key that represents
          * the upper range of keys to search when performing range queries.

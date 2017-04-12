@@ -499,7 +499,7 @@ private[log] class Cleaner(val id: Int,
     if (record.isControlRecord)
       return true
 
-    // retain the entry if it is the last one produced by an active idempotent producer to ensure that
+    // retain the record if it is the last one produced by an active idempotent producer to ensure that
     // the PID is not removed from the log before it has been expired
     if (RecordBatch.NO_PRODUCER_ID < pid && activePids.get(pid).exists(_.lastOffset == record.offset))
       return true

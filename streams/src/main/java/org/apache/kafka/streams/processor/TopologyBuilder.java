@@ -689,14 +689,12 @@ public class TopologyBuilder {
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
-        if (parentNames != null) {
-            for (String parent : parentNames) {
-                if (parent.equals(name)) {
-                    throw new TopologyBuilderException("Processor " + name + " cannot be a parent of itself.");
-                }
-                if (!nodeFactories.containsKey(parent)) {
-                    throw new TopologyBuilderException("Parent processor " + parent + " is not added yet.");
-                }
+        for (final String parent : parentNames) {
+            if (parent.equals(name)) {
+                throw new TopologyBuilderException("Processor " + name + " cannot be a parent of itself.");
+            }
+            if (!nodeFactories.containsKey(parent)) {
+                throw new TopologyBuilderException("Parent processor " + parent + " is not added yet.");
             }
         }
 
@@ -723,14 +721,12 @@ public class TopologyBuilder {
         if (nodeFactories.containsKey(name))
             throw new TopologyBuilderException("Processor " + name + " is already added.");
 
-        if (parentNames != null) {
-            for (String parent : parentNames) {
-                if (parent.equals(name)) {
-                    throw new TopologyBuilderException("Processor " + name + " cannot be a parent of itself.");
-                }
-                if (!nodeFactories.containsKey(parent)) {
-                    throw new TopologyBuilderException("Parent processor " + parent + " is not added yet.");
-                }
+        for (final String parent : parentNames) {
+            if (parent.equals(name)) {
+                throw new TopologyBuilderException("Processor " + name + " cannot be a parent of itself.");
+            }
+            if (!nodeFactories.containsKey(parent)) {
+                throw new TopologyBuilderException("Parent processor " + parent + " is not added yet.");
             }
         }
 

@@ -174,6 +174,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case INIT_PRODUCER_ID:
                 request = new InitPidRequest(struct, version);
                 break;
+            case OFFSET_FOR_LEADER_EPOCH:
+                request = new OffsetsForLeaderEpochRequest(struct, version);
+                break;
             case ADD_PARTITIONS_TO_TXN:
                 request = new AddPartitionsToTxnRequest(struct, version);
                 break;
@@ -185,6 +188,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case WRITE_TXN_MARKERS:
                 request = new WriteTxnMarkersRequest(struct, version);
+                break;
+            case TXN_OFFSET_COMMIT:
+                request = new TxnOffsetCommitRequest(struct, version);
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +

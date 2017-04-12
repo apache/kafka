@@ -241,7 +241,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
                     1,
-                    Importance.MEDIUM,
+                    Importance.HIGH,
                     REPLICATION_FACTOR_DOC)
             .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
@@ -391,6 +391,7 @@ public class StreamsConfig extends AbstractConfig {
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        tempProducerDefaultOverrides.put(ProducerConfig.RETRIES_CONFIG, 10);
 
         PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }

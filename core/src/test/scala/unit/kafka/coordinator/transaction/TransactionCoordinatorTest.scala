@@ -171,7 +171,7 @@ class TransactionCoordinatorTest {
     assertEquals(Errors.INVALID_PID_MAPPING, error)
 
     coordinator.handleAddPartitionsToTransaction("a", 0L, 0, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
-    assertEquals(Errors.PRODUCER_FENCED, error)
+    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
 
     capturedTxn.getValue.state = PrepareCommit
     coordinator.handleAddPartitionsToTransaction("a", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
@@ -221,7 +221,7 @@ class TransactionCoordinatorTest {
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 0, TransactionResult.COMMIT, errorsCallback)
-    assertEquals(Errors.PRODUCER_FENCED, error)
+    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
     EasyMock.verify(transactionManager)
   }
 

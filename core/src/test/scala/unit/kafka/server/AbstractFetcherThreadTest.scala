@@ -24,11 +24,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.EpochEndOffset
 import org.junit.Assert.{assertFalse, assertTrue}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.{Map, Set, mutable}
 
 class AbstractFetcherThreadTest {
 
@@ -104,7 +105,7 @@ class AbstractFetcherThreadTest {
                            clientId: String,
                            sourceBroker: BrokerEndPoint,
                            fetchBackOffMs: Int = 0)
-    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
+    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includeLogTruncation = false) {
 
     type REQ = DummyFetchRequest
     type PD = PartitionData
@@ -122,6 +123,12 @@ class AbstractFetcherThreadTest {
 
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): DummyFetchRequest =
       new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap)
+
+    override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = { Map() }
+
+    override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
+
+    override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = { Map() }
   }
 
 
@@ -137,7 +144,7 @@ class AbstractFetcherThreadTest {
     fetcherThread.addPartitions(Map(partition -> 0L))
 
     // Wait until fetcherThread finishes the work
-    TestUtils.waitUntilTrue(() => fetcherThread.fetchCount > 3, "Failed waiting for fetcherThread tp finish the work")
+    TestUtils.waitUntilTrue(() => fetcherThread.fetchCount > 3, "Failed waiting for fetcherThread to finish the work")
 
     fetcherThread.shutdown()
 
@@ -198,7 +205,7 @@ class AbstractFetcherThreadTest {
       val requestMap = new mutable.HashMap[TopicPartition, Long]
       partitionMap.foreach { case (topicPartition, partitionFetchState) =>
         // Add backoff delay check
-        if (partitionFetchState.isActive)
+        if (partitionFetchState.isReadyForFetch)
           requestMap.put(topicPartition, partitionFetchState.fetchOffset)
       }
       new DummyFetchRequest(requestMap)

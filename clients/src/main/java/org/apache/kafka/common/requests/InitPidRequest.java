@@ -23,6 +23,8 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class InitPidRequest extends AbstractRequest {
+    public static final int NO_TRANSACTION_TIMEOUT_MS = Integer.MAX_VALUE;
+
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
     private static final String TRANSACTION_TIMEOUT_KEY_NAME = "transaction_timeout_ms";
 
@@ -33,24 +35,32 @@ public class InitPidRequest extends AbstractRequest {
         private final String transactionalId;
         private final int transactionTimeoutMs;
 
+        public Builder(String transactionalId) {
+            this(transactionalId, NO_TRANSACTION_TIMEOUT_MS);
+        }
+
         public Builder(String transactionalId, int transactionTimeoutMs) {
             super(ApiKeys.INIT_PRODUCER_ID);
-            if (transactionalId != null && transactionalId.isEmpty())
-                throw new IllegalArgumentException("Must set either a null or a non-empty transactional id.");
+
             if (transactionTimeoutMs <= 0)
                 throw new IllegalArgumentException("transaction timeout value is not positive: " + transactionTimeoutMs);
+
+            if (transactionalId != null && transactionalId.isEmpty())
+                throw new IllegalArgumentException("Must set either a null or a non-empty transactional id.");
+
             this.transactionalId = transactionalId;
             this.transactionTimeoutMs = transactionTimeoutMs;
         }
 
         @Override
         public InitPidRequest build(short version) {
-            return new InitPidRequest(version, this.transactionalId, transactionTimeoutMs);
+            return new InitPidRequest(version, transactionalId, transactionTimeoutMs);
         }
 
         @Override
         public String toString() {
-            return "(type=InitPidRequest)";
+            return "(type=InitPidRequest, transactionalId=" + transactionalId + ", transactionTimeoutMs=" +
+                    transactionTimeoutMs + ")";
         }
     }
 

@@ -69,6 +69,7 @@ public class RequestResponseTest {
         checkErrorResponse(createFindCoordinatorRequest(0), new UnknownServerException());
         checkErrorResponse(createFindCoordinatorRequest(1), new UnknownServerException());
         checkResponse(createFindCoordinatorResponse(), 0);
+        checkResponse(createFindCoordinatorResponse(), 1);
         checkRequest(createControlledShutdownRequest());
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
@@ -103,7 +104,7 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 0);
         checkRequest(OffsetFetchRequest.forAllPartitions("group1"));
-        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException());
+        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException("Not Coordinator"));
         checkRequest(createOffsetFetchRequest(0));
         checkRequest(createOffsetFetchRequest(1));
         checkRequest(createOffsetFetchRequest(2));
@@ -139,9 +140,27 @@ public class RequestResponseTest {
         checkRequest(createDeleteTopicsRequest());
         checkErrorResponse(createDeleteTopicsRequest(), new UnknownServerException());
         checkResponse(createDeleteTopicsResponse(), 0);
+
         checkRequest(createInitPidRequest());
         checkErrorResponse(createInitPidRequest(), new UnknownServerException());
         checkResponse(createInitPidResponse(), 0);
+
+        checkRequest(createAddPartitionsToTxnRequest());
+        checkResponse(createAddPartitionsToTxnResponse(), 0);
+        checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException());
+        checkRequest(createAddOffsetsToTxnRequest());
+        checkResponse(createAddOffsetsToTxnResponse(), 0);
+        checkErrorResponse(createAddOffsetsToTxnRequest(), new UnknownServerException());
+        checkRequest(createEndTxnRequest());
+        checkResponse(createEndTxnResponse(), 0);
+        checkErrorResponse(createEndTxnRequest(), new UnknownServerException());
+        checkRequest(createWriteTxnMarkersRequest());
+        checkResponse(createWriteTxnMarkersResponse(), 0);
+        checkErrorResponse(createWriteTxnMarkersRequest(), new UnknownServerException());
+        checkRequest(createTxnOffsetCommitRequest());
+        checkResponse(createTxnOffsetCommitResponse(), 0);
+        checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
+
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0);
         checkResponse(createMetadataResponse(), 1);
@@ -166,6 +185,9 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(0));
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException());
         checkResponse(createListOffsetResponse(0), 0);
+        checkRequest(createLeaderEpochRequest());
+        checkResponse(createLeaderEpochResponse(), 0);
+        checkErrorResponse(createLeaderEpochRequest(), new UnknownServerException());
         checkRequest(createAddPartitionsToTxnRequest());
         checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException());
         checkResponse(createAddPartitionsToTxnResponse(), 0);
@@ -522,9 +544,10 @@ public class RequestResponseTest {
         Map<TopicPartition, Errors> errors = new HashMap<>();
         errors.put(new TopicPartition("foo", 2), Errors.NONE);
         errors.put(new TopicPartition("bar", 1), Errors.NOT_COORDINATOR);
-        errors.put(new TopicPartition("foo", 3), Errors.PRODUCER_FENCED);
+        errors.put(new TopicPartition("foo", 3), Errors.INVALID_PRODUCER_EPOCH);
         return new TxnOffsetCommitResponse(errors);
     }
+
 
     private FindCoordinatorRequest createFindCoordinatorRequest(int version) {
         return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
@@ -866,10 +889,31 @@ public class RequestResponseTest {
         return new InitPidResponse(Errors.NONE, 3332, (short) 3);
     }
 
+
+    private OffsetsForLeaderEpochRequest createLeaderEpochRequest() {
+        Map<TopicPartition, Integer> epochs = new HashMap<>();
+
+        epochs.put(new TopicPartition("topic1", 0), 1);
+        epochs.put(new TopicPartition("topic1", 1), 1);
+        epochs.put(new TopicPartition("topic2", 2), 3);
+
+        return new OffsetsForLeaderEpochRequest.Builder(epochs).build();
+    }
+
+    private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {
+        Map<TopicPartition, EpochEndOffset> epochs = new HashMap<>();
+
+        epochs.put(new TopicPartition("topic1", 0), new EpochEndOffset(Errors.NONE, 0));
+        epochs.put(new TopicPartition("topic1", 1), new EpochEndOffset(Errors.NONE, 1));
+        epochs.put(new TopicPartition("topic2", 2), new EpochEndOffset(Errors.NONE, 2));
+
+        return new OffsetsForLeaderEpochResponse(epochs);
+    }
+
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
         return new WriteTxnMarkersRequest.Builder(73,
-                                                  Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, TransactionResult.ABORT,
-                                                                                                                      Collections.singletonList(new TopicPartition("topic", 73))))).build();
+            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, TransactionResult.ABORT,
+                Collections.singletonList(new TopicPartition("topic", 73))))).build();
     }
 
     private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
@@ -879,6 +923,7 @@ public class RequestResponseTest {
         response.put(21L, errorPerPartitions);
         return new WriteTxnMarkersResponse(response);
     }
+
 
     private static class ByteBufferChannel implements GatheringByteChannel {
         private final ByteBuffer buf;

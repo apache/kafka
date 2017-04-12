@@ -521,7 +521,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 @Override
                 public void onFailure(RuntimeException e) {
                     pendingAsyncCommits.decrementAndGet();
-                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets, new RetriableCommitFailedException(e)));
+                    completedOffsetCommits.add(new OffsetCommitCompletion(callback, offsets,
+                            RetriableCommitFailedException.withUnderlyingMessage(e.getMessage())));
                 }
             });
         }
@@ -550,7 +551,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 Exception commitException = e;
 
                 if (e instanceof RetriableException)
-                    commitException = new RetriableCommitFailedException(e);
+                    commitException = RetriableCommitFailedException.withUnderlyingMessage(e.getMessage());
 
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
             }

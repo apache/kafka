@@ -67,6 +67,7 @@ class TransactionLogTest extends JUnitSuite {
     val txnRecords = pidMappings.map { case (transactionalId, pid) =>
       val txnMetadata = TransactionMetadata(pid, epoch, transactionTimeoutMs, transactionStates(pid), 0)
 
+
       if (!txnMetadata.state.equals(Empty))
         txnMetadata.addPartitions(topicPartitions)
 

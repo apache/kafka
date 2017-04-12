@@ -182,6 +182,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val (state, assignments) = consumerGroupCommand.describeGroup()
     assertTrue("Expected the state to be 'Dead' with no members in the group.", state == Some("Dead") && assignments == Some(List()))
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -204,6 +205,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe group results.")
 
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -255,6 +257,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -279,6 +282,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     }, "Expected two rows (one row per consumer) in describe group results.")
 
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -292,16 +296,17 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     try {
-      val (state, assignments) = consumerGroupCommand.describeGroup()
+      consumerGroupCommand.describeGroup()
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: TimeoutException =>
+      case _: TimeoutException =>
         // OK
       case e: Throwable =>
         fail("An unexpected exception occurred: " + e.getMessage)
         throw e
     } finally {
       consumerGroupCommand.close()
+      executor.shutdown()
     }
   }
 }
@@ -339,7 +344,7 @@ class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, 
   for (i <- 1 to numConsumers) {
     val consumer = new ConsumerThread(broker, i, groupId, topic)
     consumers ++= List(consumer)
-    executor.submit(consumer);
+    executor.submit(consumer)
   }
 
   Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -350,7 +355,7 @@ class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, 
 
   def shutdown() {
     consumers.foreach(_.shutdown)
-    executor.shutdown();
+    executor.shutdown()
     try {
       executor.awaitTermination(5000, TimeUnit.MILLISECONDS);
     } catch {

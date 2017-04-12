@@ -100,7 +100,7 @@ public class MemoryRecordsTest {
                     assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
                     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
                     assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
-                    assertEquals(RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
+                    assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                     assertNull(batch.countOrNull());
                     if (magic == RecordBatch.MAGIC_VALUE_V0)
                         assertEquals(TimestampType.NO_TIMESTAMP_TYPE, batch.timestampType());
@@ -222,9 +222,9 @@ public class MemoryRecordsTest {
         assertEquals(4, result.messagesRetained);
         assertEquals(buffer.limit(), result.bytesRead);
         assertEquals(filtered.limit(), result.bytesRetained);
-        if (magic > 0) {
+        if (magic > RecordBatch.MAGIC_VALUE_V0) {
             assertEquals(20L, result.maxTimestamp);
-            if (compression == CompressionType.NONE)
+            if (compression == CompressionType.NONE && magic < RecordBatch.MAGIC_VALUE_V2)
                 assertEquals(4L, result.shallowOffsetOfMaxTimestamp);
             else
                 assertEquals(5L, result.shallowOffsetOfMaxTimestamp);

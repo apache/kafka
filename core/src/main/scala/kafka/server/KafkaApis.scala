@@ -25,7 +25,7 @@ import java.util
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
 import kafka.cluster.Partition
-import kafka.common.{KafkaException, KafkaStorageException, OffsetAndMetadata, OffsetMetadata}
+import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata}
 import kafka.common.Topic.{GroupMetadataTopicName, TransactionStateTopicName, isInternal}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
@@ -41,7 +41,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -50,7 +50,6 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import scala.util.Random
 
 /**
  * Logic to handle the various Kafka requests
@@ -109,12 +108,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitPidRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTransactionRequest(request)
-        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTransactionRequest(request)
-        case ApiKeys.END_TXN => handleEndTransactionRequest(request)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkerRequest(request)
+        case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+        case ApiKeys.END_TXN => handleEndTxnRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-        case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1354,11 +1353,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
-
     txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
   }
 
-  def handleEndTransactionRequest(request: RequestChannel.Request): Unit = {
+  def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
     val endTxnRequest = request.body[EndTxnRequest]
 
     def sendResponseCallback(error: Errors) {
@@ -1368,8 +1366,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId(),
-      endTxnRequest.pid(),
-      endTxnRequest.epoch(),
+      endTxnRequest.producerId(),
+      endTxnRequest.producerEpoch(),
       endTxnRequest.command(),
       sendResponseCallback)
   }
@@ -1387,8 +1385,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-      addPartitionsToTxnRequest.pid,
-      addPartitionsToTxnRequest.epoch,
+      addPartitionsToTxnRequest.producerId(),
+      addPartitionsToTxnRequest.producerEpoch(),
       partitionsToAdd.asScala.toSet,
       sendResponseCallback)
   }
@@ -1407,18 +1405,71 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-      addOffsetsToTxnRequest.pid,
-      addOffsetsToTxnRequest.epoch,
+      addOffsetsToTxnRequest.producerId(),
+      addOffsetsToTxnRequest.producerEpoch(),
       Set[TopicPartition](offsetTopicPartition),
       sendResponseCallback)
   }
 
-  def handleWriteTxnMarkerRequest(request: RequestChannel.Request): Unit = {
-    throw new UnsupportedOperationException
+  def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
+    val emptyResponse = new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
+    requestChannel.sendResponse(new RequestChannel.Response(request, new WriteTxnMarkersResponse(emptyResponse)))
+  }
+
+
+  def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {
+    val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
+    val transactionalId = addPartitionsToTxnRequest.transactionalId
+    val partitionsToAdd = addPartitionsToTxnRequest.partitions
+
+    // Send response callback
+    def sendResponseCallback(error: Errors): Unit = {
+      val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(error)
+      trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: $error from client ${request.header.clientId}")
+      requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
+    }
+
+    txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+      addPartitionsToTxnRequest.producerId(),
+      addPartitionsToTxnRequest.producerEpoch(),
+      partitionsToAdd.asScala.toSet,
+      sendResponseCallback)
+  }
+
+  def handleAddOffsetsToTxnRequest(request: RequestChannel.Request): Unit = {
+    val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
+    val transactionalId = addOffsetsToTxnRequest.transactionalId
+    val groupId = addOffsetsToTxnRequest.consumerGroupId
+    val offsetTopicPartition = new TopicPartition(GroupMetadataTopicName, groupCoordinator.partitionFor(groupId))
+
+    // Send response callback
+    def sendResponseCallback(error: Errors): Unit = {
+      val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(error)
+      trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: $error from client ${request.header.clientId}")
+      requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
+    }
+
+    txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+      addOffsetsToTxnRequest.producerId(),
+      addOffsetsToTxnRequest.producerEpoch(),
+      Set[TopicPartition](offsetTopicPartition),
+      sendResponseCallback)
   }
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
-    throw new UnsupportedOperationException
+    val emptyResponse = new java.util.HashMap[TopicPartition, Errors]()
+    requestChannel.sendResponse(new RequestChannel.Response(request, new TxnOffsetCommitResponse(emptyResponse)))
+  }
+
+  def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
+    val offsetForEpoch = request.body[OffsetsForLeaderEpochRequest]
+    val requestInfo = offsetForEpoch.epochsByTopicPartition()
+    authorizeClusterAction(request)
+
+    val responseBody = new OffsetsForLeaderEpochResponse(
+      replicaManager.getResponseFor(requestInfo)
+    )
+    requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

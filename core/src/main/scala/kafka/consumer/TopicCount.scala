@@ -18,7 +18,6 @@
 package kafka.consumer
 
 import scala.collection._
-import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging, CoreUtils}
 import kafka.common.KafkaException
 
@@ -111,14 +110,6 @@ private[kafka] class StaticTopicCount(val consumerIdString: String,
                                 extends TopicCount {
 
   def getConsumerThreadIdsPerTopic = TopicCount.makeConsumerThreadIdsPerTopic(consumerIdString, topicCountMap)
-
-  override def equals(obj: Any): Boolean = {
-    obj match {
-      case null => false
-      case n: StaticTopicCount => consumerIdString == n.consumerIdString && topicCountMap == n.topicCountMap
-      case _ => false
-    }
-  }
 
   def getTopicCountMap = topicCountMap
 

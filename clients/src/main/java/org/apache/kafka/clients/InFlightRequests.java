@@ -131,7 +131,7 @@ final class InFlightRequests {
             if (!deque.isEmpty())
                 return false;
         }
-        return false;
+        return true;
     }
 
     /**

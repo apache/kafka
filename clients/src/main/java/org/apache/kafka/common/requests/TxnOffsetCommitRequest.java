@@ -28,10 +28,10 @@ import java.util.Map;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
     private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
-    private static final String PID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String RETENTION_TIME_KEY_NAME = "retention_time";
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String PARTITION_KEY_NAME = "partition";
@@ -40,39 +40,39 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
         private final String consumerGroupId;
-        private final long pid;
-        private final short epoch;
+        private final long producerId;
+        private final short producerEpoch;
         private final long retentionTimeMs;
         private final Map<TopicPartition, CommittedOffset> offsets;
 
-        public Builder(String consumerGroupId, long pid, short epoch, long retentionTimeMs,
+        public Builder(String consumerGroupId, long producerId, short producerEpoch, long retentionTimeMs,
                        Map<TopicPartition, CommittedOffset> offsets) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
             this.consumerGroupId = consumerGroupId;
-            this.pid = pid;
-            this.epoch = epoch;
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
             this.retentionTimeMs = retentionTimeMs;
             this.offsets = offsets;
         }
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
-            return new TxnOffsetCommitRequest(version, consumerGroupId, pid, epoch, retentionTimeMs, offsets);
+            return new TxnOffsetCommitRequest(version, consumerGroupId, producerId, producerEpoch, retentionTimeMs, offsets);
         }
     }
 
     private final String consumerGroupId;
-    private final long pid;
-    private final short epoch;
+    private final long producerId;
+    private final short producerEpoch;
     private final long retentionTimeMs;
     private final Map<TopicPartition, CommittedOffset> offsets;
 
-    public TxnOffsetCommitRequest(short version, String consumerGroupId, long pid, short epoch,
+    public TxnOffsetCommitRequest(short version, String consumerGroupId, long producerId, short producerEpoch,
                                   long retentionTimeMs, Map<TopicPartition, CommittedOffset> offsets) {
         super(version);
         this.consumerGroupId = consumerGroupId;
-        this.pid = pid;
-        this.epoch = epoch;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
         this.retentionTimeMs = retentionTimeMs;
         this.offsets = offsets;
     }
@@ -80,8 +80,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public TxnOffsetCommitRequest(Struct struct, short version) {
         super(version);
         this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
-        this.pid = struct.getLong(PID_KEY_NAME);
-        this.epoch = struct.getShort(EPOCH_KEY_NAME);
+        this.producerId = struct.getLong(PID_KEY_NAME);
+        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
         this.retentionTimeMs = struct.getLong(RETENTION_TIME_KEY_NAME);
 
         Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
@@ -104,12 +104,12 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return consumerGroupId;
     }
 
-    public long pid() {
-        return pid;
+    public long producerId() {
+        return producerId;
     }
 
-    public short epoch() {
-        return epoch;
+    public short producerEpoch() {
+        return producerEpoch;
     }
 
     public long retentionTimeMs() {
@@ -124,8 +124,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.requestSchema(version()));
         struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
-        struct.set(PID_KEY_NAME, pid);
-        struct.set(EPOCH_KEY_NAME, epoch);
+        struct.set(PID_KEY_NAME, producerId);
+        struct.set(EPOCH_KEY_NAME, producerEpoch);
         struct.set(RETENTION_TIME_KEY_NAME, retentionTimeMs);
 
         Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupDataByTopic(offsets);
@@ -138,7 +138,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             Map<Integer, CommittedOffset> partitionOffsets = topicAndPartitions.getValue();
             Object[] partitionOffsetsArray = new Object[partitionOffsets.size()];
             int j = 0;
-            for (Map.Entry<Integer, CommittedOffset> partitionOffset: partitionOffsets.entrySet()) {
+            for (Map.Entry<Integer, CommittedOffset> partitionOffset : partitionOffsets.entrySet()) {
                 Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
                 partitionOffsetStruct.set(PARTITION_KEY_NAME, partitionOffset.getKey());
                 CommittedOffset committedOffset = partitionOffset.getValue();
@@ -180,8 +180,15 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         public String toString() {
             return "CommittedOffset(" +
                     "offset=" + offset +
-                    ", metadata='" + metadata + '\'' +
-                    ')';
+                    ", metadata='" + metadata + "')";
+        }
+
+        public long offset() {
+            return offset;
+        }
+
+        public String metadata() {
+            return metadata;
         }
     }
 

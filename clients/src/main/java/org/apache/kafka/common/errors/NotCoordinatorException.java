@@ -17,16 +17,15 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code if it receives an offset fetch or commit request for a consumer group that it is
- * not a coordinator for.
+ * In the context of the group coordinator, the broker returns this error code if it receives an offset fetch
+ * or commit request for a group it's not the coordinator of.
+ *
+ * In the context of the transactional coordinator, it returns this error when it receives a transactional
+ * request with a transactionalId the coordinator doesn't own.
  */
 public class NotCoordinatorException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
-
-    public NotCoordinatorException() {
-        super();
-    }
 
     public NotCoordinatorException(String message) {
         super(message);
@@ -34,10 +33,6 @@ public class NotCoordinatorException extends RetriableException {
 
     public NotCoordinatorException(String message, Throwable cause) {
         super(message, cause);
-    }
-
-    public NotCoordinatorException(Throwable cause) {
-        super(cause);
     }
 
 }

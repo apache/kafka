@@ -73,13 +73,14 @@ public class FindCoordinatorRequest extends AbstractRequest {
     public FindCoordinatorRequest(Struct struct, short version) {
         super(version);
 
-        if (version == 0) {
-            this.coordinatorType = CoordinatorType.GROUP;
-            this.coordinatorKey = struct.getString(GROUP_ID_KEY_NAME);
-        } else {
+        if (struct.hasField(COORDINATOR_TYPE_KEY_NAME))
             this.coordinatorType = CoordinatorType.forId(struct.getByte(COORDINATOR_TYPE_KEY_NAME));
+        else
+            this.coordinatorType = CoordinatorType.GROUP;
+        if (struct.hasField(GROUP_ID_KEY_NAME))
+            this.coordinatorKey = struct.getString(GROUP_ID_KEY_NAME);
+        else
             this.coordinatorKey = struct.getString(COORDINATOR_KEY_KEY_NAME);
-        }
     }
 
     @Override
@@ -110,19 +111,18 @@ public class FindCoordinatorRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        short version = version();
-        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.requestSchema(version));
-        if (version == 0) {
+        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.requestSchema(version()));
+        if (struct.hasField(GROUP_ID_KEY_NAME))
             struct.set(GROUP_ID_KEY_NAME, coordinatorKey);
-        } else {
-            struct.set(COORDINATOR_TYPE_KEY_NAME, coordinatorType.id);
+        else
             struct.set(COORDINATOR_KEY_KEY_NAME, coordinatorKey);
-        }
+        if (struct.hasField(COORDINATOR_TYPE_KEY_NAME))
+            struct.set(COORDINATOR_TYPE_KEY_NAME, coordinatorType.id);
         return struct;
     }
 
     public enum CoordinatorType {
-        GROUP((byte) 0), TRANSACTION((byte) 1), UNKNOWN((byte) -1);
+        GROUP((byte) 0), TRANSACTION((byte) 1);
 
         final byte id;
 
@@ -137,7 +137,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
                 case 1:
                     return TRANSACTION;
                 default:
-                    return UNKNOWN;
+                    throw new IllegalArgumentException("Unknown coordinator type received: " + id);
             }
         }
     }

@@ -1257,7 +1257,7 @@ public class FetcherTest {
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, int baseOffset, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, 0, true);
 
         for (SimpleRecord record : records) {
             builder.append(record);
@@ -1268,7 +1268,7 @@ public class FetcherTest {
 
     private int commitTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, 0, true);
         builder.appendControlRecord(timestamp, ControlRecordType.COMMIT, null);
         builder.build();
         return 1;
@@ -1276,7 +1276,7 @@ public class FetcherTest {
 
     private int abortTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, 0, true);
         builder.appendControlRecord(timestamp, ControlRecordType.ABORT, null);
         builder.build();
         return 1;

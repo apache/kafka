@@ -168,7 +168,7 @@ class TransactionCoordinator(brokerId: Int,
             if (metadata.pid != pid) {
               (Errors.INVALID_PID_MAPPING, null)
             } else if (metadata.epoch != epoch) {
-              (Errors.PRODUCER_FENCED, null)
+              (Errors.INVALID_PRODUCER_EPOCH, null)
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
               (Errors.COORDINATOR_LOAD_IN_PROGRESS, null)
@@ -224,7 +224,7 @@ class TransactionCoordinator(brokerId: Int,
             if (metadata.pid != pid)
               responseCallback(Errors.INVALID_PID_MAPPING)
             else if (metadata.epoch != epoch)
-              responseCallback(Errors.PRODUCER_FENCED)
+              responseCallback(Errors.INVALID_PRODUCER_EPOCH)
             else metadata.state match {
               case Ongoing =>
                 commitOrAbort(transactionalId, pid, epoch, command, responseCallback, metadata)

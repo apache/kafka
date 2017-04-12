@@ -36,7 +36,7 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
     MergedSortedCacheSessionStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                           final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator,
                                           final StateSerdes<K, AGG> serdes) {
-        super(cacheIterator, storeIterator, new StateSerdes<>(serdes.stateName(),
+        super(cacheIterator, storeIterator, new StateSerdes<>(serdes.topic(),
                                                               new SessionKeySerde<>(serdes.keySerde()),
                                                               serdes.valueSerde()));
 
@@ -51,7 +51,7 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
 
     @Override
     Windowed<K> deserializeCacheKey(final Bytes cacheKey) {
-        return SessionKeySerde.from(cacheKey.get(), rawSerdes.keyDeserializer());
+        return SessionKeySerde.from(cacheKey.get(), rawSerdes.keyDeserializer(), rawSerdes.topic());
     }
 
     @Override

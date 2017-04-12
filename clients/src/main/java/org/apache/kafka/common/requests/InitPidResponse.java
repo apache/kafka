@@ -29,8 +29,8 @@ public class InitPidResponse extends AbstractResponse {
      * OK
      *
      */
-    private static final String PRODUCER_ID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
     private final Errors error;
     private final long producerId;

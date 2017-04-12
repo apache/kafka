@@ -104,7 +104,7 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(joinError(memberId, Errors.INVALID_GROUP_ID))
     } else if (!isCoordinatorForGroup(groupId)) {
       responseCallback(joinError(memberId, Errors.NOT_COORDINATOR))
-    } else if (isCoordinatorLoadingInProgress(groupId)) {
+    } else if (isCoordinatorLoadInProgress(groupId)) {
       responseCallback(joinError(memberId, Errors.COORDINATOR_LOAD_IN_PROGRESS))
     } else if (sessionTimeoutMs < groupConfig.groupMinSessionTimeoutMs ||
                sessionTimeoutMs > groupConfig.groupMaxSessionTimeoutMs) {
@@ -305,7 +305,7 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
     } else if (!isCoordinatorForGroup(groupId)) {
       responseCallback(Errors.NOT_COORDINATOR)
-    } else if (isCoordinatorLoadingInProgress(groupId)) {
+    } else if (isCoordinatorLoadInProgress(groupId)) {
       responseCallback(Errors.COORDINATOR_LOAD_IN_PROGRESS)
     } else {
       groupManager.getGroup(groupId) match {
@@ -339,7 +339,7 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
     } else if (!isCoordinatorForGroup(groupId)) {
       responseCallback(Errors.NOT_COORDINATOR)
-    } else if (isCoordinatorLoadingInProgress(groupId)) {
+    } else if (isCoordinatorLoadInProgress(groupId)) {
       // the group is still loading, so respond just blindly
       responseCallback(Errors.NONE)
     } else {
@@ -402,7 +402,7 @@ class GroupCoordinator(val brokerId: Int,
       responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
     } else if (!isCoordinatorForGroup(groupId)) {
       responseCallback(offsetMetadata.mapValues(_ => Errors.NOT_COORDINATOR))
-    } else if (isCoordinatorLoadingInProgress(groupId)) {
+    } else if (isCoordinatorLoadInProgress(groupId)) {
       responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_LOAD_IN_PROGRESS))
     } else {
       groupManager.getGroup(groupId) match {
@@ -461,7 +461,7 @@ class GroupCoordinator(val brokerId: Int,
     else if (!isCoordinatorForGroup(groupId)) {
       debug("Could not fetch offsets for group %s (not group coordinator).".format(groupId))
       (Errors.NOT_COORDINATOR, Map())
-    } else if (isCoordinatorLoadingInProgress(groupId))
+    } else if (isCoordinatorLoadInProgress(groupId))
       (Errors.COORDINATOR_LOAD_IN_PROGRESS, Map())
     else {
       // return offsets blindly regardless the current group state since the group may be using
@@ -484,7 +484,7 @@ class GroupCoordinator(val brokerId: Int,
       (Errors.COORDINATOR_NOT_AVAILABLE, GroupCoordinator.EmptyGroup)
     } else if (!isCoordinatorForGroup(groupId)) {
       (Errors.NOT_COORDINATOR, GroupCoordinator.EmptyGroup)
-    } else if (isCoordinatorLoadingInProgress(groupId)) {
+    } else if (isCoordinatorLoadInProgress(groupId)) {
       (Errors.COORDINATOR_LOAD_IN_PROGRESS, GroupCoordinator.EmptyGroup)
     } else {
       groupManager.getGroup(groupId) match {
@@ -754,7 +754,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def isCoordinatorForGroup(groupId: String) = groupManager.isGroupLocal(groupId)
 
-  private def isCoordinatorLoadingInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
+  private def isCoordinatorLoadInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
 }
 
 object GroupCoordinator {

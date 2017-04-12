@@ -211,7 +211,6 @@ object TransactionLog {
         val stateByte = value.getByte(VALUE_SCHEMA_TXN_STATUS_FIELD)
         val state = TransactionMetadata.byteToState(stateByte)
         val timestamp = value.get(VALUE_SCHEMA_TXN_TIMESTAMP_FIELD).asInstanceOf[Long]
-
         val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state, mutable.Set.empty[TopicPartition], timestamp)
 
         if (!state.equals(Empty)) {

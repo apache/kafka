@@ -24,48 +24,48 @@ import java.nio.ByteBuffer;
 
 public class AddOffsetsToTxnRequest extends AbstractRequest {
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PID_KEY_NAME = "pid";
-    private static final String EPOCH_KEY_NAME = "epoch";
+    private static final String PID_KEY_NAME = "producer_id";
+    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {
         private final String transactionalId;
-        private final long pid;
-        private final short epoch;
+        private final long producerId;
+        private final short producerEpoch;
         private final String consumerGroupId;
 
-        public Builder(String transactionalId, long pid, short epoch, String consumerGroupId) {
+        public Builder(String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
             super(ApiKeys.ADD_OFFSETS_TO_TXN);
             this.transactionalId = transactionalId;
-            this.pid = pid;
-            this.epoch = epoch;
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
             this.consumerGroupId = consumerGroupId;
         }
 
         @Override
         public AddOffsetsToTxnRequest build(short version) {
-            return new AddOffsetsToTxnRequest(version, transactionalId, pid, epoch, consumerGroupId);
+            return new AddOffsetsToTxnRequest(version, transactionalId, producerId, producerEpoch, consumerGroupId);
         }
     }
 
     private final String transactionalId;
-    private final long pid;
-    private final short epoch;
+    private final long producerId;
+    private final short producerEpoch;
     private final String consumerGroupId;
 
-    private AddOffsetsToTxnRequest(short version, String transactionalId, long pid, short epoch, String consumerGroupId) {
+    private AddOffsetsToTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
         super(version);
         this.transactionalId = transactionalId;
-        this.pid = pid;
-        this.epoch = epoch;
+        this.producerId = producerId;
+        this.producerEpoch = producerEpoch;
         this.consumerGroupId = consumerGroupId;
     }
 
     public AddOffsetsToTxnRequest(Struct struct, short version) {
         super(version);
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.pid = struct.getLong(PID_KEY_NAME);
-        this.epoch = struct.getShort(EPOCH_KEY_NAME);
+        this.producerId = struct.getLong(PID_KEY_NAME);
+        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
         this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
     }
 
@@ -73,12 +73,12 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
         return transactionalId;
     }
 
-    public long pid() {
-        return pid;
+    public long producerId() {
+        return producerId;
     }
 
-    public short epoch() {
-        return epoch;
+    public short producerEpoch() {
+        return producerEpoch;
     }
 
     public String consumerGroupId() {
@@ -89,8 +89,8 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.requestSchema(version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(PID_KEY_NAME, pid);
-        struct.set(EPOCH_KEY_NAME, epoch);
+        struct.set(PID_KEY_NAME, producerId);
+        struct.set(EPOCH_KEY_NAME, producerEpoch);
         struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
         return struct;
     }

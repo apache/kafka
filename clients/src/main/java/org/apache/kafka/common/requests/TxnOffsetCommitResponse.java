@@ -27,7 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class TxnOffsetCommitResponse extends AbstractResponse {
-    private static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String PARTITIONS_KEY_NAME = "partitions";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_KEY_NAME = "partition";

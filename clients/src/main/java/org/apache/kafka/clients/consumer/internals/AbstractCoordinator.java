@@ -323,15 +323,19 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     private void closeHeartbeatThread() {
-        if (heartbeatThread != null) {
+        HeartbeatThread thread = null;
+        synchronized (this) {
+            if (heartbeatThread == null)
+                return;
             heartbeatThread.close();
-
-            try {
-                heartbeatThread.join();
-            } catch (InterruptedException e) {
-                log.warn("Interrupted while waiting for consumer heartbeat thread to close");
-                throw new InterruptException(e);
-            }
+            thread = heartbeatThread;
+            heartbeatThread = null;
+        }
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            log.warn("Interrupted while waiting for consumer heartbeat thread to close");
+            throw new InterruptException(e);
         }
     }
 
