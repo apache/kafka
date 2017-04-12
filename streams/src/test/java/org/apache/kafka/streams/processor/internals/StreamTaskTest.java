@@ -51,8 +51,8 @@ import org.apache.kafka.test.NoOpProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Test;
 import org.junit.Before;
+import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -553,6 +553,28 @@ public class StreamTaskTest {
         assertTrue(source2.closed);
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void shouldThrowWhenClosingProducerForNonEoS() {
+        task.closeProducer();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldCloseProducerWhenExactlyOneEnabled() {
+        final Map properties = this.config.values();
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
+        final StreamsConfig config = new StreamsConfig(properties);
+
+        final MockedProducer producer = new MockedProducer(null);
+
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
+            changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
+
+        task.closeProducer();
+
+        assertTrue(producer.closed);
+    }
+
     @SuppressWarnings("unchecked")
     private StreamTask createTaskThatThrowsExceptionOnClose() {
         final MockSourceNode processorNode = new MockSourceNode(topic1, intDeserializer, intDeserializer) {
@@ -579,4 +601,25 @@ public class StreamTaskTest {
     private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
         return Arrays.asList(recs);
     }
+
+    private final static class MockedProducer extends MockProducer {
+        private final AtomicBoolean flushed;
+        boolean closed = false;
+
+        MockedProducer(final AtomicBoolean flushed) {
+            super(false, null, null);
+            this.flushed = flushed;
+        }
+
+        @Override
+        public void flush() {
+            flushed.set(true);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
 }
