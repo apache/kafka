@@ -158,4 +158,10 @@ private[coordinator] class TransactionMetadata(val pid: Long,
       topicPartitions.equals(other.topicPartitions)
     case _ => false
   }
+
+
+  override def hashCode(): Int = {
+    val state = Seq(pid, txnTimeoutMs, topicPartitions, timestamp)
+    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+  }
 }

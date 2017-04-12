@@ -224,7 +224,7 @@ class TransactionCoordinator(brokerId: Int,
             if (metadata.pid != pid)
               responseCallback(Errors.INVALID_PID_MAPPING)
             else if (metadata.epoch != epoch)
-              responseCallback(Errors.PRODUCER_FENCED)
+              responseCallback(Errors.INVALID_PRODUCER_EPOCH)
             else metadata.state match {
               case Ongoing =>
                 commitOrAbort(transactionalId, pid, epoch, command, responseCallback, metadata)
