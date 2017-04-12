@@ -813,6 +813,13 @@ $ java -cp path-to-app-fatjar.jar com.example.MyStreamsApp
         See <a href="#streams_api_changes_0101">below</a> a complete list of 0.10.1 API changes that allow you to advance your application and/or simplify your code base, including the usage of new features.
         </p>
 
+         <h3><a id="streams_api_changes_01021" href="#streams_api_changes_0102">Notable changes in 0.10.2.1</a></h3>
+         <p>
+            Parameter updates in <code>StreamsConfig</code>:
+        </p>
+          <ul>
+            <li> of particular importance to improve the resiliency of a Kafka Streams application are two changes to default parameters of producer <code>retries</code> and consumer <code>max.poll.interval.ms</code> </li>
+          </ul>
         <h3><a id="streams_api_changes_0102" href="#streams_api_changes_0102">Streams API changes in 0.10.2.0</a></h3>
 
         <p>
