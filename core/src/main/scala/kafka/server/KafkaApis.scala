@@ -800,6 +800,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def createInternalTopic(topic: String): MetadataResponse.TopicMetadata = {
+    if (topic == null) throw new IllegalArgumentException("topic must not be null")
+
     val aliveBrokers = metadataCache.getAliveBrokers
     val requiredReplicas = if (topic == GroupMetadataTopicName)
       config.offsetsTopicReplicationFactor

@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
 import java.io.PrintStream
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.record.CompressionType
 
@@ -247,10 +248,10 @@ object TransactionLog {
           val pidMetadata =
             if (value == null) "NULL"
             else readMessageValue(ByteBuffer.wrap(value))
-          output.write(transactionalId.getBytes)
-          output.write("::".getBytes)
-          output.write(pidMetadata.toString.getBytes)
-          output.write("\n".getBytes)
+          output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
+          output.write("::".getBytes(StandardCharsets.UTF_8))
+          output.write(pidMetadata.toString.getBytes(StandardCharsets.UTF_8))
+          output.write("\n".getBytes(StandardCharsets.UTF_8))
         case _ => // no-op
       }
     }
