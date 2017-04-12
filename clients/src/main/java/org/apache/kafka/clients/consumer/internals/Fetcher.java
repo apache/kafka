@@ -69,7 +69,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -358,9 +357,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             return client.send(node, request);
     }
 
-    private long offsetResetStrategy(final TopicPartition partition) {
+    private long offsetResetStrategyTimestamp(final TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
         final long timestamp;
         if (strategy == OffsetResetStrategy.EARLIEST)
             timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
@@ -371,10 +369,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
         return timestamp;
     }
 
+    /**
+     * Reset offsets for the given partition using the offset reset strategy.
+     *
+     * @param partitions  The partitions that need offsets reset
+     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
+     */
     private void resetOffsets(final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> offsetResets = new HashMap<>();
         for (final TopicPartition partition : partitions) {
-            offsetResets.put(partition, offsetResetStrategy(partition));
+            offsetResets.put(partition, offsetResetStrategyTimestamp(partition));
         }
         final Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(offsetResets, Long.MAX_VALUE, false);
         for (final TopicPartition partition : partitions) {
@@ -384,6 +388,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
             }
             // we might lose the assignment while fetching the offset, so check it is still active
             if (subscriptions.isAssigned(partition)) {
+                log.debug("Resetting offset for partition {} to {} offset.", partition, offsetData.offset);
                 this.subscriptions.seek(partition, offsetData.offset);
             }
         }
