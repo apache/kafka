@@ -55,7 +55,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  * Note that in contrast to {@link KTable} a {@code GlobalKTable}'s state holds a full copy of the underlying topic,
  * thus all keys can be queried locally.
  * <p>
- * Records from the source topic that have null keys are dropped
+ * Records from the source topic that have null keys are dropped.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
