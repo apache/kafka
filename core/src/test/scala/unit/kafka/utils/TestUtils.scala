@@ -50,6 +50,7 @@ import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
@@ -1142,6 +1143,71 @@ object TestUtils extends Logging {
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+  }
+
+  /**
+   * Verifies that this ACL is the secure one. The
+   * values are based on the constants used in the
+   * ZooKeeper code base.
+   */
+  def isAclSecure(acl: ACL, sensitive: Boolean): Boolean = {
+    info(s"ACL $acl")
+    acl.getPerms match {
+      case 1 => !sensitive && acl.getId.getScheme.equals("world")
+      case 31 => acl.getId.getScheme.equals("sasl")
+      case _ => false
+    }
+  }
+
+  /**
+   * Verifies that the ACL corresponds to the unsecure one.
+   */
+  def isAclUnsecure(acl: ACL): Boolean = {
+    info(s"ACL $acl")
+    acl.getPerms match {
+      case 31 => acl.getId.getScheme.equals("world")
+      case _ => false
+    }
+  }
+
+  private def secureZkPaths(zkUtils: ZkUtils) = {
+    def subPaths(path: String) = {
+      if (zkUtils.pathExists(path))
+        zkUtils.getChildren(path).map(c => path + "/" + c)
+      else
+        Seq.empty
+    }
+    val topLevelPaths = ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths
+    topLevelPaths.map(subPaths).flatten
+  }
+
+  /**
+   * Verifies that all secure paths in ZK are created with the expected ACL.
+   */
+  def verifySecureZkAcls(zkUtils: ZkUtils, usersWithAccess: Int) {
+    secureZkPaths(zkUtils).foreach(path => {
+      if (zkUtils.pathExists(path)) {
+        val sensitive = ZkUtils.sensitivePath(path)
+        val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
+        val acls = zkUtils.zkConnection.getAcl(path).getKey
+        assertEquals(s"Invalid ACLs for $path $acls", aclCount, acls.size)
+        acls.asScala.foreach(acl => isAclSecure(acl, sensitive))
+      }
+    })
+  }
+
+  /**
+   * Verifies that secure paths in ZK have no access control. This is
+   * the case when zookeeper.set.acl=false and no ACLs have been configured.
+   */
+  def verifyUnsecureZkAcls(zkUtils: ZkUtils) {
+    secureZkPaths(zkUtils).foreach(path => {
+      if (zkUtils.pathExists(path)) {
+        val acls = zkUtils.zkConnection.getAcl(path).getKey
+        assertEquals(s"Invalid ACLs for $path $acls", 1, acls.size)
+        acls.asScala.foreach(isAclUnsecure)
+      }
+    })
   }
 
   /**

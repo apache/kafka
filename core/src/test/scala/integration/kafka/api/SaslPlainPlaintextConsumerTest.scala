@@ -17,8 +17,9 @@ import java.util.Locale
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
-import kafka.utils.JaasTestUtils
+import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
+import org.junit.Before
 
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected val zkSaslEnabled = true
@@ -27,9 +28,15 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarne
   override protected val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   override protected val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
+
+  @Before
+  override def setUp {
+    super.setUp
+    TestUtils.verifyUnsecureZkAcls(zkUtils)
+  }
 }
