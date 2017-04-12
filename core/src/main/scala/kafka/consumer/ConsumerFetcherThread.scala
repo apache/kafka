@@ -24,6 +24,7 @@ import kafka.server.{AbstractFetcherThread, PartitionFetchState}
 import kafka.common.{ErrorMapping, TopicAndPartition}
 
 import scala.collection.Map
+import scala.util.Random
 import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -44,6 +45,8 @@ class ConsumerFetcherThread(name: String,
 
   type REQ = FetchRequest
   type PD = PartitionData
+
+  private val random = new Random
 
   private val clientId = config.clientId
   private val fetchSize = config.fetchMessageMaxBytes
@@ -99,8 +102,17 @@ class ConsumerFetcherThread(name: String,
     consumerFetcherManager.addPartitionsWithError(partitions)
   }
 
+  private def shuffle(requestInfo: Seq[(TopicPartition, PartitionFetchState)]): Seq[(TopicPartition, PartitionFetchState)] = {
+    val groupedByTopic = requestInfo.groupBy { case (tp, _) => tp.topic }.map { case (topic, values) =>
+      topic -> random.shuffle(values)
+    }
+    random.shuffle(groupedByTopic.toSeq).flatMap { case (topic, partitions) =>
+      partitions.map { case (tp, fetchState) => tp -> fetchState }
+    }
+  }
+
   protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
-    partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
+    shuffle(partitionMap).foreach { case ((topicPartition, partitionFetchState)) =>
       if (partitionFetchState.isReadyForFetch)
         fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
     }
