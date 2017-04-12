@@ -103,12 +103,19 @@ public class StateDirectory {
      * @throws IOException
      */
     boolean lock(final TaskId taskId, int retry) throws IOException {
+        final File lockFile;
         // we already have the lock so bail out here
         if (locks.containsKey(taskId)) {
             log.trace("{} Found cached state dir lock for task {}", logPrefix, taskId);
             return true;
         }
-        final File lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
+        try {
+            lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
+        } catch (ProcessorStateException e) {
+            // directoryForTask could be throwing an exception if another thread
+            // has concurrently deleted the directory
+            return false;
+        }
 
         final FileChannel channel;
 
