@@ -115,7 +115,7 @@ public class RegexSourceIntegrationTest {
     @Before
     public void setUp() {
         final Properties properties = new Properties();
-        properties.put("internal.leave.group.on.close", true);
+        properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
                                                                  CLUSTER.bootstrapServers(),
                                                                  STRING_SERDE_CLASSNAME,
