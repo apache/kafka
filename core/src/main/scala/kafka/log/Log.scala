@@ -508,7 +508,7 @@ class Log(@volatile var dir: File,
         }
 
         //Update the epoch cache with the epoch stamped onto the message by the leader
-        records.batches().asScala.map { batch =>
+        validRecords.batches().asScala.map { batch =>
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
             leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
         }
