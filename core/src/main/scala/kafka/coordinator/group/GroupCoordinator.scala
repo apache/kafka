@@ -474,7 +474,7 @@ class GroupCoordinator(val brokerId: Int,
     if (!isActive.get) {
       (Errors.COORDINATOR_NOT_AVAILABLE, List[GroupOverview]())
     } else {
-      val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
+      val errorCode = if (groupManager.isLoading()) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
       (errorCode, groupManager.currentGroups.map(_.overview).toList)
     }
   }

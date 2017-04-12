@@ -66,7 +66,7 @@ class TransactionStateManager(brokerId: Int,
   private val partitionLock = new ReentrantLock()
 
   /** partitions of transaction topic that are assigned to this manager, partition lock should be called BEFORE accessing this set */
-  private val ownedPartitions: mutable.Set[Int] = mutable.Set()
+  private val ownedPartitions: mutable.Map[Int, Int] = mutable.Map()
 
   /** partitions of transaction topic that are being loaded, partition lock should be called BEFORE accessing this set */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
@@ -123,6 +123,10 @@ class TransactionStateManager(brokerId: Int,
   }
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
+
+  def coordinatorEpochFor(transactionId: String): Option[Int] = inLock (partitionLock) {
+    ownedPartitions.get(partitionFor(transactionId))
+  }
 
   def isCoordinatorFor(transactionalId: String): Boolean = inLock(partitionLock) {
     val partitionId = partitionFor(transactionalId)
@@ -224,7 +228,7 @@ class TransactionStateManager(brokerId: Int,
    * When this broker becomes a leader for a transaction log partition, load this partition and
    * populate the transaction metadata cache with the transactional ids.
    */
-  def loadTransactionsForPartition(partition: Int) {
+  def loadTransactionsForPartition(partition: Int, coordinatorEpoch: Int) {
     validateTransactionTopicPartitionCountIsStable()
 
     val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partition)
@@ -249,7 +253,7 @@ class TransactionStateManager(brokerId: Int,
         case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
       } finally {
         inLock(partitionLock) {
-          ownedPartitions.add(partition)
+          ownedPartitions.put(partition, coordinatorEpoch)
           loadingPartitions.remove(partition)
         }
       }
@@ -305,7 +309,8 @@ class TransactionStateManager(brokerId: Int,
 
   def appendTransactionToLog(transactionalId: String,
                              txnMetadata: TransactionMetadata,
-                             responseCallback: Errors => Unit) {
+                             responseCallback: Errors => Unit,
+                             acks:Short = TransactionLog.EnforcedRequiredAcks) {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -403,7 +408,7 @@ class TransactionStateManager(brokerId: Int,
 
     replicaManager.appendRecords(
       txnMetadata.txnTimeoutMs.toLong,     // use the txn timeout value as the timeout for append
-      TransactionLog.EnforcedRequiredAcks,
+      acks,
       internalTopicsAllowed = true,        // allow appending to internal offset topic
       recordsPerPartition,
       updateCacheCallback)

@@ -65,8 +65,8 @@ class TransactionStateManagerTest {
   val txnMessageKeyBytes1: Array[Byte] = TransactionLog.keyToBytes(txnId1)
   val txnMessageKeyBytes2: Array[Byte] = TransactionLog.keyToBytes(txnId2)
   val pidMappings: Map[String, Long] = Map[String, Long](txnId1 -> 1L, txnId2 -> 2L)
-  var txnMetadata1: TransactionMetadata = TransactionMetadata(pidMappings(txnId1), 1, transactionTimeoutMs)
-  var txnMetadata2: TransactionMetadata = TransactionMetadata(pidMappings(txnId2), 1, transactionTimeoutMs)
+  var txnMetadata1: TransactionMetadata = TransactionMetadata(pidMappings(txnId1), 1, transactionTimeoutMs, 0)
+  var txnMetadata2: TransactionMetadata = TransactionMetadata(pidMappings(txnId2), 1, transactionTimeoutMs, 0)
 
   var expectedError: Errors = Errors.NONE
 
@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.loadTransactionsForPartition(partitionId)
+    transactionManager.loadTransactionsForPartition(partitionId, 0)
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -290,6 +290,21 @@ class TransactionStateManagerTest {
 
     // append the new metadata into log
     transactionManager.appendTransactionToLog(txnId1, txnMetadata1, assertCallback)
+  }
+
+  @Test
+  def shouldReturnEpochForTransactionId(): Unit = {
+    val coordinatorEpoch = 10
+    EasyMock.expect(replicaManager.getLog(EasyMock.anyObject(classOf[TopicPartition]))).andReturn(None)
+    EasyMock.replay(replicaManager)
+    transactionManager.loadTransactionsForPartition(partitionId, coordinatorEpoch)
+    val epoch = transactionManager.coordinatorEpochFor(txnId1).get
+    assertEquals(coordinatorEpoch, epoch)
+  }
+
+  @Test
+  def shouldReturnNoneIfTransactionIdPartitionNotOwned(): Unit = {
+    assertEquals(None, transactionManager.coordinatorEpochFor(txnId1))
   }
 
   private def assertCallback(error: Errors): Unit = {
