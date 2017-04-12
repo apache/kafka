@@ -83,12 +83,6 @@ public class ProcessorStateManager implements StateManager {
         this.taskId = taskId;
         this.stateDirectory = stateDirectory;
         this.logPrefix = String.format("task [%s]", taskId);
-        try {
-            this.baseDir = stateDirectory.directoryForTask(taskId);
-        } catch (ProcessorStateException e) {
-            throw new LockException(String.format("%s Failed to get the directory for task %s. Exception %s",
-                logPrefix, taskId, e));
-        }
         this.partitionForTopic = new HashMap<>();
         for (TopicPartition source : sources) {
             this.partitionForTopic.put(source.topic(), source);
@@ -102,10 +96,18 @@ public class ProcessorStateManager implements StateManager {
         this.restoreCallbacks = isStandby ? new HashMap<String, StateRestoreCallback>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
-
-
         if (!stateDirectory.lock(taskId, 5)) {
-            throw new LockException(String.format("%s Failed to lock the state directory: %s", logPrefix, baseDir.getCanonicalPath()));
+            throw new LockException(String.format("%s Failed to lock the state directory for task %s",
+                logPrefix, taskId));
+        }
+        // get a handle on the parent/base directory of the task directory
+        // note that the parent directory could have been accidentally deleted here,
+        // so catch that exception if that is the case
+        try {
+            this.baseDir = stateDirectory.directoryForTask(taskId);
+        } catch (ProcessorStateException e) {
+            throw new LockException(String.format("%s Failed to get the directory for task %s. Exception %s",
+                logPrefix, taskId, e));
         }
 
         // load the checkpoint information
