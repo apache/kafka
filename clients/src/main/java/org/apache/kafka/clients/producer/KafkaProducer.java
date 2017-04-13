@@ -702,6 +702,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     try {
                         this.ioThread.join(timeUnit.toMillis(timeout));
                     } catch (InterruptedException t) {
+                        Thread.currentThread().interrupt();
                         firstException.compareAndSet(null, t);
                         log.error("Interrupted while joining ioThread", t);
                     }
@@ -718,6 +719,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 try {
                     this.ioThread.join();
                 } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     firstException.compareAndSet(null, e);
                 }
             }
@@ -730,15 +732,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId);
         log.debug("The Kafka producer has closed.");
-        Throwable exception = firstException.get();
-        if (exception != null && !swallowException) {
-            if (exception instanceof InterruptedException) {
-                throw new InterruptException("kafka producer thread was interrupted");
-            } else if (exception instanceof InterruptException) {
-                throw (InterruptException) exception;
-            }
-            throw new KafkaException("Failed to close kafka producer", exception);
-        }
+        if (firstException.get() != null && !swallowException)
+            throw new KafkaException("Failed to close kafka producer", firstException.get());
     }
 
     private ClusterResourceListeners configureClusterResourceListeners(Serializer<K> keySerializer, Serializer<V> valueSerializer, List<?>... candidateLists) {
