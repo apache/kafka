@@ -154,7 +154,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (partition.topic == GroupMetadataTopicName)
             groupCoordinator.handleGroupImmigration(partition.partitionId)
           else if (partition.topic == TransactionStateTopicName)
-            txnCoordinator.handleTxnImmigration(partition.partitionId)
+            txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
         }
 
         updatedFollowers.foreach { partition =>
@@ -801,6 +801,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def createInternalTopic(topic: String): MetadataResponse.TopicMetadata = {
+    if (topic == null) throw new IllegalArgumentException("topic must not be null")
+
     val aliveBrokers = metadataCache.getAliveBrokers
     val requiredReplicas = if (topic == GroupMetadataTopicName)
       config.offsetsTopicReplicationFactor
@@ -1358,7 +1360,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
-    requestChannel.sendResponse(new RequestChannel.Response(request, new EndTxnResponse(Errors.UNSUPPORTED_VERSION)))
+    val endTxnRequest = request.body[EndTxnRequest]
+
+    def sendResponseCallback(error: Errors) {
+      val responseBody = new EndTxnResponse(error)
+      trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId()}.")
+      requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
+    }
+
+    txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId(),
+      endTxnRequest.producerId(),
+      endTxnRequest.producerEpoch(),
+      endTxnRequest.command(),
+      sendResponseCallback)
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
