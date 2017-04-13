@@ -319,7 +319,6 @@ class LeaderEpochFileCacheTest {
     val cache = new LeaderEpochFileCache(tp, () => leoFinder, checkpoint)
     cache.assign(epoch = 0, offset = 0) //leo=0
 
-
     //When
     cache.assign(epoch = 1, offset = 0) //leo=0
 
@@ -327,7 +326,7 @@ class LeaderEpochFileCacheTest {
     assertEquals(1, cache.latestEpoch())
     //offset for 1 should still be 0
     assertEquals(0, cache.endOffsetFor(1))
-    //offset for 0 should the start offset of epoch(1) => 0
+    //offset for epoch 0 should still be 0
     assertEquals(0, cache.endOffsetFor(0))
 
     //When we write 5 messages as epoch 1
@@ -335,7 +334,7 @@ class LeaderEpochFileCacheTest {
 
     //Then end offset for epoch(1) should be leo => 5
     assertEquals(5, cache.endOffsetFor(1))
-    //Epoch(0) should still show the start offset for Epoch(1) => 0
+    //Epoch 0 should still be at offset 0
     assertEquals(0, cache.endOffsetFor(0))
 
     //When

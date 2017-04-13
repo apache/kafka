@@ -380,12 +380,6 @@ public class MemoryRecords extends AbstractRecords {
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, RecordBatch.NO_PARTITION_LEADER_EPOCH, records);
     }
 
-    public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
-                                            TimestampType timestampType, Integer partitionLeaderEpoch, SimpleRecord... records) {
-        return withRecords(magic, initialOffset, compressionType, timestampType, RecordBatch.NO_PRODUCER_ID,
-                RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch, records);
-    }
-
     private static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                              TimestampType timestampType, long producerId, short producerEpoch,
                                              int baseSequence, int partitionLeaderEpoch, SimpleRecord ... records) {
