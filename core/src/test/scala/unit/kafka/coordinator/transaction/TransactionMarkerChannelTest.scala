@@ -19,7 +19,6 @@ package kafka.coordinator.transaction
 
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.coordinator.transaction.{CoordinatorEpochAndMarkers, PrepareCommit, TransactionMarkerChannel, TransactionMetadata}
 import kafka.server.MetadataCache
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}

@@ -52,7 +52,7 @@ object TransactionCoordinator {
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
     val transactionMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, time)
+    new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, txnMarkerPurgatory, time)
   }
 
   private def initTransactionError(error: Errors): InitPidResult = {
@@ -76,6 +76,7 @@ class TransactionCoordinator(brokerId: Int,
                              pidManager: ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
+                             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                              time: Time) extends Logging {
   this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
 
@@ -129,10 +130,45 @@ class TransactionCoordinator(brokerId: Int,
           responseCallback(initTransactionMetadata(metadata))
 
         case Some(metadata) =>
-          metadata synchronized {
-            metadata.epoch = (metadata.epoch + 1).toShort
-          }
-          responseCallback(initTransactionMetadata(metadata))
+          initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
+      }
+    }
+  }
+
+  private def initPidWithExistingMetadata(transactionalId: String,
+                                          transactionTimeoutMs: Int,
+                                          responseCallback: InitPidCallback,
+                                          metadata: TransactionMetadata) = {
+
+    metadata synchronized {
+      if (metadata.state == Ongoing) {
+        // abort the ongoing transaction
+        handleEndTransaction(transactionalId,
+          metadata.pid,
+          metadata.epoch,
+          TransactionResult.ABORT,
+          (errors: Errors) => {
+            if (errors != Errors.NONE) {
+              responseCallback(initTransactionError(errors))
+            } else {
+              // init pid again
+              handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
+            }
+          })
+      } else if (metadata.state == PrepareAbort || metadata.state == PrepareCommit) {
+        // wait for the commit to complete and then init pid again
+        txnMarkerPurgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, () => {
+          handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
+        }), Seq(metadata.pid))
+      } else {
+        // reset the metadata and respond with new epoch
+        // TODO: should this append to the transaction log?, i.e., it doesn't above in the None case
+        metadata.epoch = (metadata.epoch + 1).toShort
+        metadata.state = Empty
+        metadata.txnTimeoutMs = transactionTimeoutMs
+        metadata.topicPartitions.clear()
+        metadata.timestamp = time.milliseconds()
+        responseCallback(initTransactionMetadata(metadata))
       }
     }
   }
