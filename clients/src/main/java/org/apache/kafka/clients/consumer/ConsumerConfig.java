@@ -234,6 +234,14 @@ public class ConsumerConfig extends AbstractConfig {
      */
     static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
+
+    /**
+     * <code>max.block.ms</code>
+     */
+    public static final String MAX_BLOCK_MS_CONFIG = "max.block.ms";
+    private static final String MAX_BLOCK_MS_DOC = "The configuration controls how long <code>KafkaConsumer</code> will block for discovering <code>ConsumerCoordinator</code>.";
+    public static final long DEFAULT_MAX_BLOCK_MS = 60 * 1000;
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -405,6 +413,12 @@ public class ConsumerConfig extends AbstractConfig {
                                                 Type.BOOLEAN,
                                                 true,
                                                 Importance.LOW)
+                .define(MAX_BLOCK_MS_CONFIG,
+                        Type.LONG,
+                        DEFAULT_MAX_BLOCK_MS,
+                        atLeast(0),
+                        Importance.MEDIUM,
+                        MAX_BLOCK_MS_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,

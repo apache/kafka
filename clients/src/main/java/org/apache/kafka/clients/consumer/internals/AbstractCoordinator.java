@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -198,6 +199,11 @@ public abstract class AbstractCoordinator implements Closeable {
     public synchronized void ensureCoordinatorReady() {
         // Using zero as current time since timeout is effectively infinite
         ensureCoordinatorReady(0, Long.MAX_VALUE);
+    }
+
+    public synchronized void ensureCoordinatorReady(long timeoutMs) {
+        long now = time.milliseconds();
+        ensureCoordinatorReady(now, timeoutMs);
     }
 
     /**

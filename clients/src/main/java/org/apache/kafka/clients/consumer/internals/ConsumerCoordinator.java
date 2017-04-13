@@ -79,6 +79,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private final ConsumerInterceptors<?, ?> interceptors;
     private final boolean excludeInternalTopics;
     private final AtomicInteger pendingAsyncCommits;
+    private final long maxBlockMs;
 
     // this collection must be thread-safe because it is modified from the response handler
     // of offset commit requests, which may be invoked from the heartbeat thread
@@ -109,7 +110,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean excludeInternalTopics,
-                               final boolean leaveGroupOnClose) {
+                               final boolean leaveGroupOnClose,
+                               long maxBlockMs) {
         super(client,
               groupId,
               rebalanceTimeoutMs,
@@ -132,6 +134,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.interceptors = interceptors;
         this.excludeInternalTopics = excludeInternalTopics;
         this.pendingAsyncCommits = new AtomicInteger();
+        this.maxBlockMs = maxBlockMs;
 
         if (autoCommitEnabled)
             this.nextAutoCommitDeadline = time.milliseconds() + autoCommitIntervalMs;
@@ -282,7 +285,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned() && coordinatorUnknown()) {
-            ensureCoordinatorReady();
+            ensureCoordinatorReady(maxBlockMs);
             now = time.milliseconds();
         }
 
@@ -454,7 +457,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      */
     public Map<TopicPartition, OffsetAndMetadata> fetchCommittedOffsets(Set<TopicPartition> partitions) {
         while (true) {
-            ensureCoordinatorReady();
+            ensureCoordinatorReady(maxBlockMs);
 
             // contact coordinator to fetch committed offsets
             RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future = sendOffsetFetchRequest(partitions);

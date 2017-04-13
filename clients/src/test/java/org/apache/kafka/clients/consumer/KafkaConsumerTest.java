@@ -1501,6 +1501,7 @@ public class KafkaConsumerTest {
         int fetchSize = 1024 * 1024;
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
+        long maxBlockMs = 30 * 1000;
 
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
@@ -1529,7 +1530,8 @@ public class KafkaConsumerTest {
                 autoCommitIntervalMs,
                 interceptors,
                 excludeInternalTopics,
-                true);
+                true,
+                maxBlockMs);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
                 consumerClient,
