@@ -19,7 +19,7 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
-import org.junit.Before
+import org.junit.{Before, Test}
 
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected val zkSaslEnabled = true
@@ -37,6 +37,14 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarne
   @Before
   override def setUp {
     super.setUp
+  }
+
+  /**
+   * Checks that everyone can access ZkUtils.SecureZkRootPaths and ZkUtils.SensitiveZkRootPaths
+   * when zookeeper.set.acl=false, even if Zookeeper is SASL-enabled.
+   */
+  @Test
+  def testZkAclsDisabled() {
     TestUtils.verifyUnsecureZkAcls(zkUtils)
   }
 }

@@ -50,6 +50,7 @@ import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
@@ -1151,21 +1152,22 @@ object TestUtils extends Logging {
    * ZooKeeper code base.
    */
   def isAclSecure(acl: ACL, sensitive: Boolean): Boolean = {
-    info(s"ACL $acl")
+    debug(s"ACL $acl")
     acl.getPerms match {
-      case 1 => !sensitive && acl.getId.getScheme.equals("world")
-      case 31 => acl.getId.getScheme.equals("sasl")
+      case Perms.READ => !sensitive && acl.getId.getScheme == "world"
+      case Perms.ALL => acl.getId.getScheme == "sasl"
       case _ => false
     }
   }
 
   /**
-   * Verifies that the ACL corresponds to the unsecure one.
+   * Verifies that the ACL corresponds to the unsecure one that
+   * provides ALL access to everyone (world).
    */
   def isAclUnsecure(acl: ACL): Boolean = {
-    info(s"ACL $acl")
+    debug(s"ACL $acl")
     acl.getPerms match {
-      case 31 => acl.getId.getScheme.equals("world")
+      case Perms.ALL => acl.getId.getScheme == "world"
       case _ => false
     }
   }
@@ -1178,7 +1180,7 @@ object TestUtils extends Logging {
         Seq.empty
     }
     val topLevelPaths = ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths
-    topLevelPaths.map(subPaths).flatten
+    topLevelPaths.flatMap(subPaths)
   }
 
   /**
@@ -1188,6 +1190,8 @@ object TestUtils extends Logging {
     secureZkPaths(zkUtils).foreach(path => {
       if (zkUtils.pathExists(path)) {
         val sensitive = ZkUtils.sensitivePath(path)
+        // usersWithAccess have ALL access to path. For paths that are
+        // not sensitive, world has READ access.
         val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
         val acls = zkUtils.zkConnection.getAcl(path).getKey
         assertEquals(s"Invalid ACLs for $path $acls", aclCount, acls.size)

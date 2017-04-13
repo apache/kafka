@@ -162,9 +162,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     // create the test topic with all the brokers as replicas
     TestUtils.createTopic(zkUtils, topic, 1, 3, this.servers)
-    // Check that secure path created by broker and acl path created by AclCommand
-    // have expected ACLs
-    TestUtils.verifySecureZkAcls(zkUtils, 1)
   }
 
   override def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
