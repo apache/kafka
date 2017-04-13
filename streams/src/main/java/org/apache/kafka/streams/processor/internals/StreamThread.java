@@ -451,7 +451,7 @@ public class StreamThread extends Thread {
             log.warn("{} Negative cache size passed in thread. Reverting to cache size of 0 bytes.", logPrefix);
         }
         cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
-        exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals("exactly_once");
+        exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
 
 
         // set the consumer clients
