@@ -33,8 +33,8 @@ class TransactionCoordinatorTest {
   val transactionManager: TransactionStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
   val transactionMarkerChannelManager: TransactionMarkerChannelManager = EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
   val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
-  val capturedArgument: Capture[Errors => Unit] = EasyMock.newCapture()
-
+  val capturedErrorsCallback: Capture[Errors => Unit] = EasyMock.newCapture()
+  val capturedNoArgCallback: Capture[() => Unit] = EasyMock.newCapture()
 
   private def setupMocks() {
     EasyMock.expect(pidManager.nextPid())
@@ -92,7 +92,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq("a"),
       EasyMock.capture(capturedTxn),
-      EasyMock.capture(capturedArgument),
+      EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
@@ -438,11 +438,11 @@ class TransactionCoordinatorTest {
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionId),
       EasyMock.eq(prepareCommitMetadata),
-      EasyMock.capture(capturedArgument),
+      EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
-          if (runCallback) capturedArgument.getValue.apply(Errors.NONE)
+          if (runCallback) capturedErrorsCallback.getValue.apply(Errors.NONE)
         }
       }).once()
     prepareCommitMetadata
@@ -474,7 +474,7 @@ class TransactionCoordinatorTest {
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionId),
       EasyMock.eq(completedMetadata),
-      EasyMock.capture(capturedArgument),
+      EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
@@ -485,10 +485,10 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
       EasyMock.anyObject(),
       EasyMock.anyInt(),
-      EasyMock.capture(capturedArgument)
+      EasyMock.capture(capturedNoArgCallback)
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
-        capturedArgument.getValue.apply(Errors.NONE)
+        capturedNoArgCallback.getValue.apply()
       }
     })
   }
