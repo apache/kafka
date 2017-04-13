@@ -162,7 +162,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
             case LogCleaningInProgress =>
               inProgress.put(topicPartition, LogCleaningAborted)
             case s =>
-              throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
+              throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted since it is in $s state.")
           }
       }
       while (!isCleaningInState(topicPartition, LogCleaningPaused))
