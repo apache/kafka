@@ -19,9 +19,9 @@ package kafka.coordinator.transaction
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.common.InterBrokerSendThread
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.coordinator.transaction._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
+import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
@@ -37,7 +37,7 @@ class TransactionMarkerChannelManagerTest {
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val interBrokerSendThread = EasyMock.createNiceMock(classOf[InterBrokerSendThread])
   private val channel = new TransactionMarkerChannel(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), metadataCache)
-  private val purgatory = EasyMock.createNiceMock(classOf[DelayedOperationPurgatory[DelayedTxnMarker]])
+  private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name", new MockTimer, reaperEnabled = false)
   private val requestGenerator = TransactionMarkerChannelManager.requestGenerator(channel, purgatory)
   private val partition1 = new TopicPartition("topic1", 0)
   private val partition2 = new TopicPartition("topic1", 1)
@@ -177,14 +177,12 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
 
-    EasyMock.expect(purgatory.tryCompleteElseWatch(EasyMock.anyObject[DelayedTxnMarker](), EasyMock.eq(Seq(1))))
-      .andReturn(false)
-    EasyMock.replay(metadataCache, purgatory)
+    EasyMock.replay(metadataCache)
 
     channel.addNewBroker(broker1)
 
     channelManager.addTxnMarkerRequest(metadata, 0, completionCallback)
-    EasyMock.verify(purgatory)
+    assertEquals(1,purgatory.watched)
   }
 
   @Test

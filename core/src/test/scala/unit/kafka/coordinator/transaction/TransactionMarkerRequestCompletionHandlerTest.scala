@@ -20,6 +20,7 @@ import java.{lang, util}
 
 import kafka.coordinator.transaction._
 import kafka.server.DelayedOperationPurgatory
+import kafka.utils.timer.MockTimer
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -34,7 +35,7 @@ import scala.collection.mutable
 class TransactionMarkerRequestCompletionHandlerTest {
 
   private val markerChannel = EasyMock.createNiceMock(classOf[TransactionMarkerChannel])
-  private val purgatory = EasyMock.createNiceMock(classOf[DelayedOperationPurgatory[DelayedTxnMarker]])
+  private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name", new MockTimer, reaperEnabled = false)
   private val topic1 = new TopicPartition("topic1", 0)
   private val epochAndMarkers = CoordinatorEpochAndMarkers(0,
     Utils.mkList(
@@ -84,18 +85,23 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   @Test
-  def shouldTryAndCompleteDelayedTxnOperation(): Unit = {
+  def shouldTryCompleteDelayedTxnOperation(): Unit = {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
 
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
+    var completed = false
+
+    purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, () => {
+      completed = true
+    }), Seq(0L))
+
     EasyMock.expect(markerChannel.pendingTxnMetadata(0))
       .andReturn(metadata)
-    EasyMock.expect(purgatory.checkAndComplete(0L))
-    .andReturn(0)
-    EasyMock.replay(markerChannel, purgatory)
+
+    EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))
-    EasyMock.verify(purgatory)
+    assertTrue(completed)
   }
 
   @Test
