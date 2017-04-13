@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -49,7 +49,8 @@ object TransactionCoordinator {
 
     val pidManager = new ProducerIdManager(config.brokerId, zkUtils)
     val logManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
-    val transactionMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, time)
+    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
+    val transactionMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnMarkerPurgatory, time)
 
     new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, time)
   }
@@ -261,7 +262,7 @@ class TransactionCoordinator(brokerId: Int,
       else {
         txnManager.coordinatorEpochFor(transactionalId) match {
           case Some(coordinatorEpoch) =>
-            def completionCallback(error: Errors): Unit = {
+            def completionCallback(): Unit = {
               val preparedCommitMetadata = txnManager.getTransaction(transactionalId).get
               val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
               val committedMetadata = new TransactionMetadata(pid,
@@ -272,6 +273,7 @@ class TransactionCoordinator(brokerId: Int,
                 newMetadata.timestamp)
               preparedCommitMetadata.prepareTransitionTo(completedState)
               txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
+              txnMarkerChannelManager.removeCompleted(pid)
             }
             txnMarkerChannelManager.addTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
           case None =>

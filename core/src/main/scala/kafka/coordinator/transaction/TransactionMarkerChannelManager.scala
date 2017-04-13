@@ -19,24 +19,22 @@ package kafka.coordinator.transaction
 import java.util
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
-import kafka.server.{KafkaConfig, MetadataCache}
-import kafka.utils.{KafkaScheduler, Logging, Scheduler}
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
+import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Node
 
-import scala.collection.{immutable, mutable}
+import scala.collection.mutable
 import java.util.concurrent.BlockingQueue
 
 import collection.JavaConverters._
 import collection.JavaConversions._
 
-case class PendingTxn(transactionMetadata: TransactionMetadata, callback: Errors => Unit)
 case class CoordinatorEpochAndMarkers(coordinatorEpoch: Int, txnMarkerEntry: util.List[WriteTxnMarkersRequest.TxnMarkerEntry])
 case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[CoordinatorEpochAndMarkers])
 
@@ -44,6 +42,7 @@ object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
             metrics: Metrics,
             metadataCache: MetadataCache,
+            txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
             time: Time): TransactionMarkerChannelManager = {
 
     val channel = new TransactionMarkerChannel(config.interBrokerListenerName, metadataCache)
@@ -81,18 +80,19 @@ object TransactionMarkerChannelManager {
         new ApiVersions
       )
 
-      new InterBrokerSendThread(threadName, networkClient, requestGenerator(channel), time)
+      new InterBrokerSendThread(threadName, networkClient, requestGenerator(channel, txnMarkerPurgatory), time)
     }
 
     new TransactionMarkerChannelManager(config,
       metadataCache,
-      new KafkaScheduler(1, "transaction-marker-channel-manager"),
+      txnMarkerPurgatory,
       sendThread,
       channel)
   }
 
 
-  private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel): () => Iterable[RequestAndCompletionHandler] = {
+  private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel,
+                                            txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): () => Iterable[RequestAndCompletionHandler] = {
     def generateRequests(): Iterable[RequestAndCompletionHandler] = {
       transactionMarkerChannel.brokerStateMap.flatMap {case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
         val markersToSend: java.util.List[CoordinatorEpochAndMarkers] = new util.ArrayList[CoordinatorEpochAndMarkers] ()
@@ -102,8 +102,10 @@ object TransactionMarkerChannelManager {
             val txnMarkerEntries = buffer.flatMap { x => x.txnMarkerEntry }.asJava
             val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(
               transactionMarkerChannel,
+              txnMarkerPurgatory,
               CoordinatorEpochAndMarkers(coordinatorEpoch, txnMarkerEntries),
-              brokerId)
+              brokerId
+              )
             RequestAndCompletionHandler(destAndMarkerQueue.destBrokerNode, new WriteTxnMarkersRequest.Builder(coordinatorEpoch, txnMarkerEntries), requestCompletionHandler)
           }
       }
@@ -116,36 +118,30 @@ object TransactionMarkerChannelManager {
 
 class TransactionMarkerChannelManager(config: KafkaConfig,
                                       metadataCache: MetadataCache,
-                                      scheduler: Scheduler,
+                                      txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                                       interBrokerSendThread: InterBrokerSendThread,
                                       transactionMarkerChannel: TransactionMarkerChannel) extends Logging {
 
-  type WriteTxnMarkerCallback = Errors => Unit
-
-  // TODO: Config for how often this runs.
-  private val CommitCompleteScheduleMs = 10
-
+  type WriteTxnMarkerCallback = () => Unit
 
   def start(): Unit = {
-    scheduler.startup()
     interBrokerSendThread.start()
-
-    scheduler.schedule("transaction-channel-manager",
-      completeCompletedRequests,
-      delay = CommitCompleteScheduleMs,
-      period = CommitCompleteScheduleMs)
   }
 
   def shutdown(): Unit = {
     interBrokerSendThread.shutdown()
-    scheduler.shutdown()
     transactionMarkerChannel.clear()
   }
 
 
   def addTxnMarkerRequest(metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
     val metadataToWrite = metadata synchronized metadata.copy()
-    transactionMarkerChannel.maybeAddPendingRequest(metadataToWrite, completionCallback)
+
+    transactionMarkerChannel.maybeAddPendingRequest(metadata)
+
+    val delayedTxnMarker = new DelayedTxnMarker(metadataToWrite, completionCallback)
+    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(metadata.pid))
+
     val result = metadataToWrite.state match {
       case PrepareCommit => TransactionResult.COMMIT
       case PrepareAbort => TransactionResult.ABORT
@@ -154,13 +150,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     transactionMarkerChannel.addRequestToSend(metadataToWrite.pid, metadataToWrite.epoch, result, coordinatorEpoch, metadataToWrite.topicPartitions.toSet)
   }
 
-
-  private[transaction] def completeCompletedRequests(): Unit = {
-    transactionMarkerChannel.completedTransactions().foreach {
-      completed =>
-        completed._2.callback(Errors.NONE)
-        transactionMarkerChannel.removeCompletedTxn(completed._1)
-    }
+  def removeCompleted(pid: Long): Unit = {
+    transactionMarkerChannel.removeCompletedTxn(pid)
   }
 
 }

@@ -33,7 +33,7 @@ import collection.JavaConverters._
 class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCache: MetadataCache) extends Logging {
 
   private[transaction] val brokerStateMap: concurrent.Map[Int, DestinationBrokerAndQueuedMarkers] = concurrent.TrieMap.empty[Int, DestinationBrokerAndQueuedMarkers]
-  private val pendingTxnMap: concurrent.Map[Long, PendingTxn] = concurrent.TrieMap.empty[Long, PendingTxn]
+  private val pendingTxnMap: concurrent.Map[Long, TransactionMetadata] = concurrent.TrieMap.empty[Long, TransactionMetadata]
 
   def addNewBroker(broker: Node) {
     val markersQueue = new LinkedBlockingQueue[CoordinatorEpochAndMarkers]()
@@ -71,14 +71,10 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
     }
   }
 
-  def maybeAddPendingRequest(metadata: TransactionMetadata, completionCallback: Errors => Unit): Unit = {
-    val existingMetadataToWrite = pendingTxnMap.putIfAbsent(metadata.pid, PendingTxn(metadata, completionCallback))
+  def maybeAddPendingRequest(metadata: TransactionMetadata): Unit = {
+    val existingMetadataToWrite = pendingTxnMap.putIfAbsent(metadata.pid, metadata)
     if (existingMetadataToWrite.isDefined)
       throw new IllegalStateException(s"There is already a pending txn to write its markers ${existingMetadataToWrite.get}; this should not happen")
-  }
-
-  def completedTransactions(): mutable.Map[Long, PendingTxn] = pendingTxnMap.filter { entry =>
-    entry._2.transactionMetadata.topicPartitions.isEmpty
   }
 
   def removeCompletedTxn(pid: Long): Unit = {
@@ -86,7 +82,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
   }
 
   def pendingTxnMetadata(pid: Long): TransactionMetadata = {
-    pendingTxnMap.getOrElse (pid, throw new IllegalStateException ("Cannot find the pending txn marker in cache; it should not happen") ).transactionMetadata
+    pendingTxnMap.getOrElse (pid, throw new IllegalStateException ("Cannot find the pending txn marker in cache; it should not happen") )
   }
 
   def clear(): Unit = {

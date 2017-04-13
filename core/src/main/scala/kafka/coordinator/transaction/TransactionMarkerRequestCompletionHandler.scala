@@ -17,6 +17,7 @@
 
 package kafka.coordinator.transaction
 
+import kafka.server.DelayedOperationPurgatory
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
@@ -28,6 +29,7 @@ import scala.collection.mutable
 import collection.JavaConversions._
 
 class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: TransactionMarkerChannel,
+                                                txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                                                 epochAndMarkers: CoordinatorEpochAndMarkers,
                                                 brokerId: Int) extends RequestCompletionHandler with Logging {
   override def onComplete(response: ClientResponse): Unit = {
@@ -66,6 +68,8 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
             // re-enqueue with possible new leaders of the partitions
             transactionMarkerChannel.addRequestToSend(txnMarker.producerId(), txnMarker.producerEpoch(), txnMarker.transactionResult, epochAndMarkers.coordinatorEpoch, retryPartitions.toSet)
           }
+          val completed = txnMarkerPurgatory.checkAndComplete(txnMarker.producerId())
+          trace(s"Competed $completed transactions for producerId ${txnMarker.producerId()}")
         }
       }
     }

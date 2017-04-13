@@ -19,13 +19,14 @@ package kafka.coordinator.transaction
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.common.InterBrokerSendThread
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.server.{KafkaConfig, MetadataCache}
-import kafka.utils.{Scheduler, TestUtils}
-import org.apache.kafka.common.{Node, TopicPartition}
+import kafka.coordinator.transaction._
+import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
@@ -33,19 +34,18 @@ import org.junit.Test
 import scala.collection.mutable
 
 class TransactionMarkerChannelManagerTest {
-  private var completionErrors:Errors = _
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
-  private val scheduler = EasyMock.createNiceMock(classOf[Scheduler])
   private val interBrokerSendThread = EasyMock.createNiceMock(classOf[InterBrokerSendThread])
   private val channel = new TransactionMarkerChannel(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), metadataCache)
-  private val requestGenerator = TransactionMarkerChannelManager.requestGenerator(channel)
+  private val purgatory = EasyMock.createNiceMock(classOf[DelayedOperationPurgatory[DelayedTxnMarker]])
+  private val requestGenerator = TransactionMarkerChannelManager.requestGenerator(channel, purgatory)
   private val partition1 = new TopicPartition("topic1", 0)
   private val partition2 = new TopicPartition("topic1", 1)
   private val broker1 = new Node(1, "host", 10)
   private val broker2 = new Node(2, "otherhost", 10)
   private val channelManager = new TransactionMarkerChannelManager(KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
-    scheduler,
+    purgatory,
     interBrokerSendThread,
     channel)
 
@@ -172,53 +172,38 @@ class TransactionMarkerChannelManagerTest {
   }
 
   @Test
-  def shouldInvokeCallbackOnCompletedRequest(): Unit = {
-    channel.maybeAddPendingRequest(new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0L), completionCallback)
+  def shouldAddDelayedTxnMarkerToPurgatory(): Unit = {
+    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L)
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
 
-    channelManager.completeCompletedRequests()
-    assertEquals(Errors.NONE, completionErrors)
+    EasyMock.expect(purgatory.tryCompleteElseWatch(EasyMock.anyObject[DelayedTxnMarker](), EasyMock.eq(Seq(1))))
+      .andReturn(false)
+    EasyMock.replay(metadataCache, purgatory)
 
-    try {
-      channel.pendingTxnMetadata(1)
-      fail("should have removed the txn metadata")
-    } catch {
-      case e: IllegalStateException => // expected
-    }
+    channel.addNewBroker(broker1)
+
+    channelManager.addTxnMarkerRequest(metadata, 0, completionCallback)
+    EasyMock.verify(purgatory)
   }
 
   @Test
   def shouldStartInterBrokerThreadOnStartup(): Unit = {
     EasyMock.expect(interBrokerSendThread.start())
-    EasyMock.replay(interBrokerSendThread, scheduler)
+    EasyMock.replay(interBrokerSendThread)
     channelManager.start()
     EasyMock.verify(interBrokerSendThread)
   }
 
-  @Test
-  def shouldStartSchedulerOnStartupA(): Unit = {
-    EasyMock.expect(scheduler.startup())
-    EasyMock.replay(interBrokerSendThread, scheduler)
-    channelManager.start()
-    EasyMock.verify(scheduler)
-  }
-
-  @Test
-  def shouldStopSchedulerOnShutdown(): Unit = {
-    EasyMock.expect(scheduler.shutdown())
-    EasyMock.replay(interBrokerSendThread, scheduler)
-    channelManager.shutdown()
-    EasyMock.verify(scheduler)
-  }
 
   @Test
   def shouldStopInterBrokerThreadOnShutdown(): Unit = {
     EasyMock.expect(interBrokerSendThread.shutdown())
-    EasyMock.replay(interBrokerSendThread, scheduler)
+    EasyMock.replay(interBrokerSendThread)
     channelManager.shutdown()
     EasyMock.verify(interBrokerSendThread)
   }
 
-  def completionCallback(errors:Errors): Unit = {
-    completionErrors = errors
+  def completionCallback(): Unit = {
   }
 }

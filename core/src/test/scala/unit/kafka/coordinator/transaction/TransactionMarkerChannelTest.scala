@@ -19,15 +19,16 @@ package kafka.coordinator.transaction
 
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.coordinator.transaction.{CoordinatorEpochAndMarkers, PrepareCommit, TransactionMarkerChannel, TransactionMetadata}
 import kafka.server.MetadataCache
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.easymock.EasyMock
-import org.junit.Test
 import org.junit.Assert._
+import org.junit.Test
 
 import scala.collection.mutable
 
@@ -60,9 +61,9 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldNotAddPendingTxnIfOneAlreadyExistsForPid(): Unit = {
-    channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0), errorCallback)
+    channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
     try {
-      channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0), errorCallback)
+      channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
       fail("Should have throw IllegalStateException")
     } catch {
       case e: IllegalStateException => // ok
@@ -104,23 +105,12 @@ class TransactionMarkerChannelTest {
     EasyMock.verify(metadataCache)
   }
 
-  @Test
-  def shouldReturnCompletedTransactions(): Unit = {
-    val completedTransaction = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0)
-    channel.maybeAddPendingRequest(completedTransaction, errorCallback)
-    channel.maybeAddPendingRequest(new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0), errorCallback)
-    channel.maybeAddPendingRequest(new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set[TopicPartition](new TopicPartition("topic", 2)), 0), errorCallback)
 
-    val completed = channel.completedTransactions()
-    assertEquals(1, completed.size)
-    val pendingTxn = completed(0L)
-    assertEquals(completedTransaction, pendingTxn.transactionMetadata)
-  }
 
   def shouldGetPendingTxnMetadataByPid(): Unit = {
     val transaction = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0)
-    channel.maybeAddPendingRequest(transaction, errorCallback)
-    channel.maybeAddPendingRequest(new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0), errorCallback)
+    channel.maybeAddPendingRequest(transaction)
+    channel.maybeAddPendingRequest(new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0))
     assertEquals(transaction, channel.pendingTxnMetadata(1))
   }
 
