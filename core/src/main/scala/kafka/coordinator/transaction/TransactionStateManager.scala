@@ -18,6 +18,7 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Properties
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
@@ -29,7 +30,7 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{FileRecords, SimpleRecord, MemoryRecords}
+import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -39,8 +40,8 @@ import scala.collection.JavaConverters._
 
 object TransactionManager {
   // default transaction management config values
-  val DefaultTransactionalIdExpirationMs = 604800000 // 7 days
-  val DefaultTransactionsMaxTimeoutMs = 900000 // 15 min
+  val DefaultTransactionalIdExpirationMs = TimeUnit.DAYS.toMillis(7)
+  val DefaultTransactionsMaxTimeoutMs = TimeUnit.MINUTES.toMillis(15)
 }
 
 /**
