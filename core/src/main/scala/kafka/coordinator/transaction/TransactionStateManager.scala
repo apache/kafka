@@ -40,8 +40,8 @@ import scala.collection.JavaConverters._
 
 object TransactionManager {
   // default transaction management config values
-  val DefaultTransactionalIdExpirationMs = TimeUnit.DAYS.toMillis(7)
-  val DefaultTransactionsMaxTimeoutMs = TimeUnit.MINUTES.toMillis(15)
+  val DefaultTransactionalIdExpirationMs = TimeUnit.DAYS.toMillis(7).toInt
+  val DefaultTransactionsMaxTimeoutMs = TimeUnit.MINUTES.toMillis(15).toInt
 }
 
 /**
