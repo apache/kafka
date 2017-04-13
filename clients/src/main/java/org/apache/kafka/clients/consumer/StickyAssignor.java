@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -125,25 +126,22 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         final HashMap<String, List<TopicPartition>> consumer2AllPotentialPartitions = new HashMap<>();
 
         // initialize partition2AllPotentialConsumers and consumer2AllPotentialPartitions in the following two for loops
-        Set<String> topics = partitionsPerTopic.keySet();
-        for (String topic: topics) {
-            int partitions = partitionsPerTopic.get(topic);
-            for (int i = 0; i < partitions; ++i)
-                partition2AllPotentialConsumers.put(new TopicPartition(topic, i), new ArrayList<String>());
+        for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
+            for (int i = 0; i < entry.getValue(); ++i)
+                partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<String>());
         }
 
-        Set<String> consumers = subscriptions.keySet();
-        for (String consumer: consumers) {
+        for (Entry<String, List<String>> entry: subscriptions.entrySet()) {
+            String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
-            List<String> consumerTopics = subscriptions.get(consumer);
-            for (String topic: consumerTopics) {
-                int partitions = partitionsPerTopic.get(topic);
-                for (int i = 0; i < partitions; ++i) {
+            for (String topic: entry.getValue()) {
+                for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
                     partition2AllPotentialConsumers.get(topicPartition).add(consumer);
                 }
             }
+
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
             if (!currentAssignment.containsKey(consumer))
                 currentAssignment.put(consumer, new ArrayList<TopicPartition>());
@@ -151,9 +149,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
         // a mapping of partition to current consumer
         HashMap<TopicPartition, String> currentPartitionConsumer = new HashMap<>();
-        for (String consumer: currentAssignment.keySet())
-            for (TopicPartition topicPartition: currentAssignment.get(consumer))
-                currentPartitionConsumer.put(topicPartition, consumer);
+        for (Map.Entry<String, List<TopicPartition>> entry: currentAssignment.entrySet())
+            for (TopicPartition topicPartition: entry.getValue())
+                currentPartitionConsumer.put(topicPartition, entry.getKey());
 
         // an ascending sorted set of topic partitions based on how many consumers can potentially use them
         TreeSet<TopicPartition> sortedAllPartitions = new TreeSet<>(new PartitionComparator(partition2AllPotentialConsumers));
@@ -289,14 +287,20 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      */
     protected int getBalanceScore(Map<String, List<TopicPartition>> assignment) {
         int score = 0;
-        Set<String> consumers = assignment.keySet();
-        Set<String> consumersCopy = new HashSet<>(consumers);
-        for (String consumer: consumers) {
-            consumersCopy.remove(consumer);
-            int consumerAssignmentSize = assignment.get(consumer).size();
-            for (String otherKey: consumersCopy)
-                score += Math.abs(consumerAssignmentSize - assignment.get(otherKey).size());
+
+        Map<String, Integer> consumer2AssignmentSize = new HashMap<>();
+        for (Entry<String, List<TopicPartition>> entry: assignment.entrySet())
+            consumer2AssignmentSize.put(entry.getKey(), entry.getValue().size());
+
+        Iterator<Entry<String, Integer>> it = consumer2AssignmentSize.entrySet().iterator();
+        while (it.hasNext()) {
+            Entry<String, Integer> entry = it.next();
+            int consumerAssignmentSize = entry.getValue();
+            it.remove();
+            for (Entry<String, Integer> otherEntry: consumer2AssignmentSize.entrySet())
+                score += Math.abs(consumerAssignmentSize - otherEntry.getValue());
         }
+
         return score;
     }
 
@@ -396,8 +400,35 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         Map<String, List<TopicPartition>> preBalanceAssignment = deepCopy(currentAssignment);
         HashMap<TopicPartition, String> preBalancePartitionConsumers = deepCopy(currentPartitionConsumer);
 
-        // repeat reassignment until no partition can be moved to improve the balance
+        reassignmentPerformed = performReassignments(sortedAllPartitions, sortedCurrentSubscriptions,
+                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
+
+        // if we are not preserving existing assignments and we have made changes to the current assignment
+        // make sure we are getting a more balanced assignment; otherwise, revert to previous assignment
+        if (!initializing && reassignmentPerformed && getBalanceScore(currentAssignment) >= getBalanceScore(preBalanceAssignment)) {
+            deepCopy(preBalanceAssignment, currentAssignment);
+            currentPartitionConsumer.clear();
+            currentPartitionConsumer.putAll(preBalancePartitionConsumers);
+        }
+
+        // add the fixed assignments (those that could not change) back
+        for (Entry<String, List<TopicPartition>> entry: fixedAssignments.entrySet()) {
+            String consumer = entry.getKey();
+            currentAssignment.put(consumer, entry.getValue());
+            sortedCurrentSubscriptions.add(consumer);
+        }
+
+        fixedAssignments.clear();
+    }
+
+    private boolean performReassignments(TreeSet<TopicPartition> sortedAllPartitions, TreeSet<String> sortedCurrentSubscriptions,
+                                      HashMap<String, List<TopicPartition>> consumer2AllPotentialPartitions,
+                                      HashMap<TopicPartition, List<String>> partition2AllPotentialConsumers,
+                                      HashMap<TopicPartition, String> currentPartitionConsumer) {
+        boolean reassignmentPerformed = false;
         boolean modified = true;
+
+        // repeat reassignment until no partition can be moved to improve the balance
         while (modified) {
             modified = false;
             // reassign all reassignable partitions (starting from the partition with least potential consumers and if needed)
@@ -429,22 +460,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
         }
 
-        // if we are not preserving existing assignments and we have made changes to the current assignment
-        // make sure we are getting a more balanced assignment; otherwise, revert to previous assignment
-        if (!initializing && reassignmentPerformed && getBalanceScore(currentAssignment) >= getBalanceScore(preBalanceAssignment)) {
-            deepCopy(preBalanceAssignment, currentAssignment);
-            currentPartitionConsumer = preBalancePartitionConsumers;
-        }
-
-        // add the fixed assignments (those that could not change) back
-        for (String consumer: fixedAssignments.keySet()) {
-            currentAssignment.put(consumer, fixedAssignments.get(consumer));
-            sortedCurrentSubscriptions.add(consumer);
-        }
-        fixedAssignments.clear();
+        return reassignmentPerformed;
     }
 
-    private static class PartitionComparator implements Comparator<TopicPartition> {
+    @SuppressWarnings("serial")
+    private static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private Map<TopicPartition, List<String>> map;
 
         PartitionComparator(Map<TopicPartition, List<String>> map) {
@@ -462,7 +482,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             return ret;
         }
     }
-    protected static class SubscriptionComparator implements Comparator<String> {
+
+    @SuppressWarnings("serial")
+    protected static class SubscriptionComparator implements Comparator<String>, Serializable {
         private Map<String, List<TopicPartition>> map;
 
         SubscriptionComparator(Map<String, List<TopicPartition>> map) {
@@ -477,4 +499,5 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             return ret;
         }
     }
+
 }
