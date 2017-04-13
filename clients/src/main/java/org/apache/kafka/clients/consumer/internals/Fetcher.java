@@ -382,7 +382,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (strategy == OffsetResetStrategy.EARLIEST)
             timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
         else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = isolationLevel == IsolationLevel.READ_COMMITTED ? ListOffsetRequest.LSO_TIMESTAMP : ListOffsetRequest.LATEST_TIMESTAMP;
+            timestamp = endTimestamp();
         else
             throw new NoOffsetForPartitionException(partition);
         return timestamp;
@@ -469,8 +469,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, long timeout) {
-        long endTimestamp = isolationLevel == IsolationLevel.READ_COMMITTED ? ListOffsetRequest.LSO_TIMESTAMP : ListOffsetRequest.LATEST_TIMESTAMP;
-        return beginningOrEndOffset(partitions, endTimestamp, timeout);
+        return beginningOrEndOffset(partitions, endTimestamp(), timeout);
+    }
+
+    private long endTimestamp() {
+        return isolationLevel == IsolationLevel.READ_COMMITTED ? ListOffsetRequest.LSO_TIMESTAMP : ListOffsetRequest.LATEST_TIMESTAMP;
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,

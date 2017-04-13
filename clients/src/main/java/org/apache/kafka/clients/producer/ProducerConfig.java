@@ -345,7 +345,7 @@ public class ProducerConfig extends AbstractConfig {
                                         TRANSACTION_TIMEOUT_DOC)
                                 .define(TRANSACTIONAL_ID_CONFIG,
                                         Type.STRING,
-                                        "",
+                                        null,
                                         Importance.LOW,
                                         TRANSACTIONAL_ID_DOC);
     }

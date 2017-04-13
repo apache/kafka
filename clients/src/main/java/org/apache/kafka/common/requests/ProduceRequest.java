@@ -55,7 +55,7 @@ public class ProduceRequest extends AbstractRequest {
         private final short acks;
         private final int timeout;
         private final Map<TopicPartition, MemoryRecords> partitionRecords;
-        private final String transactioanlId;
+        private final String transactionalId;
 
         public Builder(byte magic,
                        short acks,
@@ -67,7 +67,7 @@ public class ProduceRequest extends AbstractRequest {
             this.acks = acks;
             this.timeout = timeout;
             this.partitionRecords = partitionRecords;
-            this.transactioanlId = transactionalId;
+            this.transactionalId = transactionalId;
         }
 
         public Builder(byte magic,
@@ -82,7 +82,7 @@ public class ProduceRequest extends AbstractRequest {
             if (version < 2)
                 throw new UnsupportedVersionException("ProduceRequest versions older than 2 are not supported.");
 
-            return new ProduceRequest(version, acks, timeout, partitionRecords, transactioanlId);
+            return new ProduceRequest(version, acks, timeout, partitionRecords, transactionalId);
         }
 
         @Override
@@ -93,8 +93,8 @@ public class ProduceRequest extends AbstractRequest {
                     .append(", acks=").append(acks)
                     .append(", timeout=").append(timeout)
                     .append(", partitionRecords=(").append(partitionRecords)
-                    .append(", transactionalId=(").append(transactioanlId != null ? transactioanlId : "")
-                    .append("))");
+                    .append("), transactionalId='").append(transactionalId != null ? transactionalId : "")
+                    .append("'");
             return bld.toString();
         }
     }
@@ -109,10 +109,6 @@ public class ProduceRequest extends AbstractRequest {
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
-
-    private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords) {
-       this(version, acks, timeout, partitionRecords, null);
-    }
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(version);

@@ -40,7 +40,6 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
-import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,6 +60,8 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 public class TransactionState {
     private static final Logger log = LoggerFactory.getLogger(TransactionState.class);
 
+    private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
+
     private volatile PidAndEpoch pidAndEpoch;
     private final Map<TopicPartition, Integer> sequenceNumbers;
     private final String transactionalId;
@@ -70,7 +71,7 @@ public class TransactionState {
     private final Set<TopicPartition> pendingPartitionsToBeAddedToTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> pendingTxnOffsetCommits;
-    private int inFlightRequestCorrelationId = Integer.MIN_VALUE;
+    private int inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
 
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
@@ -79,7 +80,7 @@ public class TransactionState {
     private volatile boolean isInitializing = false;
     private volatile boolean isFenced = false;
 
-    public TransactionState(Time time, String transactionalId, int transactionTimeoutMs) {
+    public TransactionState(String transactionalId, int transactionTimeoutMs) {
         pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         sequenceNumbers = new HashMap<>();
         this.transactionalId = transactionalId;
@@ -96,6 +97,10 @@ public class TransactionState {
         this.pendingPartitionsToBeAddedToTransaction = new HashSet<>();
         this.partitionsInTransaction = new HashSet<>();
         this.pendingTxnOffsetCommits = new HashMap<>();
+    }
+
+    public TransactionState() {
+        this("", 0);
     }
 
     public static class TransactionalRequest {
@@ -201,12 +206,9 @@ public class TransactionState {
         return pendingTransactionalRequests.poll();
     }
 
-    public TransactionState(Time time) {
-        this(time, "", 0);
-    }
 
     public boolean isTransactional() {
-        return !transactionalId.isEmpty();
+        return transactionalId != null && !transactionalId.isEmpty();
     }
 
     public String transactionalId() {
@@ -287,7 +289,7 @@ public class TransactionState {
             case TRANSACTION:
                 return transactionCoordinator;
             default:
-                return null;
+                throw new IllegalStateException("Received an invalid coordinator type: " + type);
         }
     }
 
@@ -302,6 +304,9 @@ public class TransactionState {
                 break;
             case TRANSACTION:
                 transactionCoordinator = null;
+                break;
+            default:
+                throw new IllegalStateException("Got an invalid coordintor type: " + type);
         }
         pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, false));
     }
@@ -312,11 +317,11 @@ public class TransactionState {
     }
 
     public void resetInFlightRequestCorrelationId() {
-        inFlightRequestCorrelationId = Integer.MIN_VALUE;
+        inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
     public boolean hasInflightTransactionalRequest() {
-        return inFlightRequestCorrelationId != Integer.MIN_VALUE;
+        return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
     // visible for testing
@@ -366,7 +371,7 @@ public class TransactionState {
     }
 
     /**
-     * This method is used when the producer needs to reset it's internal state because of an irrecoverable exception
+     * This method is used when the producer needs to reset its internal state because of an irrecoverable exception
      * from the broker.
      *
      * We need to reset the producer id and associated state when we have sent a batch to the broker, but we either get
@@ -376,17 +381,15 @@ public class TransactionState {
      * In all of these cases, we don't know whether batch was actually committed on the broker, and hence whether the
      * sequence number was actually updated. If we don't reset the producer state, we risk the chance that all future
      * messages will return an OutOfOrderSequenceException.
+     *
+     * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
+     * for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and the user
+     * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
+     * produce error to the user and let them abort the transaction and close the producer explicitly.
      */
     public synchronized void resetProducerId() {
-        if (isTransactional()) {
-            // We can't reset the producer state for the transactional producer as this would mean bumping the epoch
-            // for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and
-            // the user would not have any way of knowing this happened.
-            //
-            // So it's best to return the produce error to the user and let them abort the transaction and close
-            // the producer explicitly.
+        if (isTransactional())
             return;
-        }
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers.clear();
     }

@@ -533,7 +533,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
-    private final IsolationLevel isolationLevel;
     private volatile boolean closed = false;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
@@ -663,8 +662,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
 
-            this.isolationLevel = IsolationLevel.valueOf(
-                    config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ENGLISH));
+            IsolationLevel isolationLevel = IsolationLevel.valueOf(
+                    config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
 
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder),
@@ -717,7 +716,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     metricGrpPrefix,
                     this.time,
                     this.retryBackoffMs,
-                    IsolationLevel.READ_UNCOMMITTED);
+                    isolationLevel);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId);
@@ -745,8 +744,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   SubscriptionState subscriptions,
                   Metadata metadata,
                   long retryBackoffMs,
-                  long requestTimeoutMs,
-                  String isolationLevel) {
+                  long requestTimeoutMs) {
         this.clientId = clientId;
         this.coordinator = coordinator;
         this.keyDeserializer = keyDeserializer;
@@ -760,7 +758,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.requestTimeoutMs = requestTimeoutMs;
-        this.isolationLevel = IsolationLevel.valueOf(isolationLevel.toUpperCase(Locale.ENGLISH));
     }
 
     /**

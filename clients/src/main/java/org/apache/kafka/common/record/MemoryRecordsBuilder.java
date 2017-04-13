@@ -246,8 +246,6 @@ public class MemoryRecordsBuilder {
         if (builtRecords != null)
             return;
 
-        closeForRecordAppends();
-
         if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
             throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
 
@@ -261,6 +259,8 @@ public class MemoryRecordsBuilder {
             if (magic < RecordBatch.MAGIC_VALUE_V2)
                 throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
         }
+
+        closeForRecordAppends();
 
         if (numRecords == 0L) {
             buffer().position(initPos);

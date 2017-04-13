@@ -373,7 +373,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (idempotenceEnabled) {
             String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
             int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-            transactionState = new TransactionState(time, transactionalId, transactionTimeoutMs);
+            transactionState = new TransactionState(transactionalId, transactionTimeoutMs);
             if (transactionState.isTransactional())
                 log.info("Instantiated a transactional producer.");
             else
@@ -473,7 +473,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void beginTransaction() throws ProducerFencedException {
         // Set the transactional bit in the producer.
-        assert transactionState != null && transactionState.isTransactional() && !transactionState.isInTransaction() && transactionState.hasPid();
+        if (transactionState == null || !transactionState.isTransactional() || transactionState.isInTransaction()
+                || transactionState.isCompletingTransaction() || !transactionState.hasPid())
+            throw new IllegalStateException("Cannot begin a new transaction. Either transactions are not configured, " +
+                    "or there is already a transaction ongoing, or the producer is fenced.");
         transactionState.beginTransaction();
     }
 
@@ -485,12 +488,16 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
-        assert transactionState != null && transactionState.isInTransaction() && !transactionState.isCompletingTransaction() && transactionState.hasPid();
+        if (transactionState == null || !transactionState.isInTransaction() || transactionState.isCompletingTransaction()
+                || !transactionState.hasPid())
+            throw new IllegalStateException("Cannot send offsets to transaction. Either transactions are not enabled, or a transaction" +
+                    " isn't active right now, or a transaction is in the process of being completed, or the producer" +
+                    " has been fenced.");
         FutureTransactionalResult result = transactionState.sendOffsetsToTransaction(offsets, consumerGroupId);
         result.get();
     }
@@ -498,11 +505,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Commits the ongoing transaction.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     public void commitTransaction() throws ProducerFencedException {
-        assert transactionState != null && transactionState.isInTransaction() && transactionState.hasPid() && !transactionState.isCompletingTransaction();
+        if (transactionState == null || !transactionState.isInTransaction() || !transactionState.hasPid()
+                || transactionState.isCompletingTransaction())
+            throw new IllegalStateException("Cannot commit transaction. Either transactions are not enabled, or there is" +
+                    " no transaction in progress, or the producer is fenced, or a transaction is already completing.");
         FutureTransactionalResult result = transactionState.beginCommittingTransaction();
         result.get();
 
@@ -511,11 +521,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Aborts the ongoing transaction.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     public void abortTransaction() throws ProducerFencedException {
-        assert transactionState != null && transactionState.isInTransaction() && transactionState.hasPid() && !transactionState.isCompletingTransaction();
+        if (transactionState == null || !transactionState.isInTransaction() || !transactionState.hasPid()
+                || transactionState.isCompletingTransaction())
+            throw new IllegalStateException("Cannot commit transaction. Either transactions are not enabled, or there is" +
+                    " no transaction in progress, or the producer is fenced, or a transaction is already completing.");
         FutureTransactionalResult result = transactionState.beginAbortingTransaction();
         result.get();
     }

@@ -549,7 +549,7 @@ public class RecordAccumulatorTest {
         apiVersions.update("foobar", NodeApiVersions.create(Arrays.asList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id,
                 (short) 0, (short) 2))));
         RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
-                CompressionType.NONE, 10, 100L, metrics, time, apiVersions, new TransactionState(time));
+                CompressionType.NONE, 10, 100L, metrics, time, apiVersions, new TransactionState());
         accum.append(tp1, 0L, key, value, null, 0);
     }
 

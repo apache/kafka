@@ -56,7 +56,7 @@ public interface Producer<K, V> extends Closeable {
     /**
      * Should be called before the start of each new transaction.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     void beginTransaction() throws ProducerFencedException;
@@ -69,7 +69,7 @@ public interface Producer<K, V> extends Closeable {
      * This method should be used when you need to batch consumed and produced messages
      * together, typically in a consume-transform-produce pattern.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
@@ -78,7 +78,7 @@ public interface Producer<K, V> extends Closeable {
     /**
      * Commits the ongoing transaction.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     void commitTransaction() throws ProducerFencedException;
@@ -86,7 +86,7 @@ public interface Producer<K, V> extends Closeable {
     /**
      * Aborts the ongoing transaction.
      *
-     * @throws ProducerFencedException if another producer is with the same
+     * @throws ProducerFencedException if another producer with the same
      *         transactional.id is active.
      */
     void abortTransaction() throws ProducerFencedException;

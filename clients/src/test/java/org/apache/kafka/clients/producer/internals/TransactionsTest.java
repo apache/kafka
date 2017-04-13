@@ -98,7 +98,7 @@ public class TransactionsTest {
         int batchSize = 16 * 1024;
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.brokerNode = new Node(0, "localhost", 2211);
-        this.transactionState = new TransactionState(time, transactionalId, transactionTimeoutMs);
+        this.transactionState = new TransactionState(transactionalId, transactionTimeoutMs);
         Metrics metrics = new Metrics(metricConfig, time);
         this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionState);
         this.sender = new Sender(this.client,

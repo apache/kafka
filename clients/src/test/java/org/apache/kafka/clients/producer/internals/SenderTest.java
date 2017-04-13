@@ -377,7 +377,7 @@ public class SenderTest {
     @Test
     public void testInitPidRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
+        TransactionState transactionState = new TransactionState();
         setupWithTransactionState(transactionState);
         client.setNode(new Node(1, "localhost", 33343));
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -395,7 +395,7 @@ public class SenderTest {
     @Test
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
+        TransactionState transactionState = new TransactionState();
         transactionState.setPidAndEpoch(producerId, (short) 0);
         setupWithTransactionState(transactionState);
         client.setNode(new Node(1, "localhost", 33343));
@@ -448,7 +448,7 @@ public class SenderTest {
     @Test
     public void testAbortRetryWhenPidChanges() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
+        TransactionState transactionState = new TransactionState();
         transactionState.setPidAndEpoch(producerId, (short) 0);
         setupWithTransactionState(transactionState);
         client.setNode(new Node(1, "localhost", 33343));
@@ -497,7 +497,7 @@ public class SenderTest {
     @Test
     public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
+        TransactionState transactionState = new TransactionState();
         transactionState.setPidAndEpoch(producerId, (short) 0);
         setupWithTransactionState(transactionState);
         client.setNode(new Node(1, "localhost", 33343));
