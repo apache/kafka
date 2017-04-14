@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.KCogroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -342,10 +343,24 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 storeSupplier.name());
     }
 
+    public <T> KCogroupedStream<K, T> cogroup(final Initializer<T> initializer,
+                                              final Aggregator<K, V, T> aggregator,
+                                              final Serde<T> aggValueSerde,
+                                              final String storeName) {
+        return cogroup(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
+    }
+
+    @SuppressWarnings("rawtypes")
+    public <T> KCogroupedStream<K, T> cogroup(final Initializer<T> initializer,
+                                              final Aggregator<K, V, T> aggregator,
+                                              final StateStoreSupplier storeSupplier) {
+        return new KCogroupedStreamImpl<>(topology, this, initializer, aggregator, storeSupplier);
+    }
+
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired(final String storeName) {
+    String repartitionIfRequired(final String storeName) {
         if (!repartitionRequired) {
             return this.name;
         }
