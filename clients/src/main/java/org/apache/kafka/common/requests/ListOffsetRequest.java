@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 public class ListOffsetRequest extends AbstractRequest {
+    public static final long LSO_TIMESTAMP = -3L;
     public static final long EARLIEST_TIMESTAMP = -2L;
     public static final long LATEST_TIMESTAMP = -1L;
 

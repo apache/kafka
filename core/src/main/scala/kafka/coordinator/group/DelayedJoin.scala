@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import kafka.server.DelayedOperation
 
@@ -29,10 +29,9 @@ import kafka.server.DelayedOperation
  * the group are marked as failed, and complete this operation to proceed rebalance with
  * the rest of the group.
  */
-private[coordinator] class DelayedJoin(coordinator: GroupCoordinator,
-                                       group: GroupMetadata,
-                                       rebalanceTimeout: Long)
-  extends DelayedOperation(rebalanceTimeout) {
+private[group] class DelayedJoin(coordinator: GroupCoordinator,
+                                 group: GroupMetadata,
+                                 rebalanceTimeout: Long) extends DelayedOperation(rebalanceTimeout) {
 
   // overridden since tryComplete already synchronizes on the group. This makes it safe to
   // call purgatory operations while holding the group lock.
