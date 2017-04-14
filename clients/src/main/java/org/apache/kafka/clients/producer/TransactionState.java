@@ -530,8 +530,6 @@ public class TransactionState {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
-            } else if (error == Errors.INVALID_TRANSACTION_TIMEOUT) {
-                result.setError(error.exception());
             } else {
                 result.setError(error.exception());
             }
