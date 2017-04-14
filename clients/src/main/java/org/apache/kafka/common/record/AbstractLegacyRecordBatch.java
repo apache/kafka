@@ -175,6 +175,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
+    public boolean hasProducerId() {
+        return false;
+    }
+
+    @Override
     public long sequence() {
         return RecordBatch.NO_SEQUENCE;
     }
@@ -196,7 +201,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
     @Override
     public int partitionLeaderEpoch() {
-        return RecordBatch.UNKNOWN_PARTITION_LEADER_EPOCH;
+        return RecordBatch.NO_PARTITION_LEADER_EPOCH;
     }
 
     @Override

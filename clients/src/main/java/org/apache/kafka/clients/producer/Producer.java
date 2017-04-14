@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.PartitionInfo;
+
 import java.io.Closeable;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.MetricName;
 
 
 /**
@@ -36,7 +36,7 @@ public interface Producer<K, V> extends Closeable {
 
     /**
      * Send the given record asynchronously and return a future which will eventually contain the response information.
-     * 
+     *
      * @param record The record to send
      * @return A future which will eventually contain the response information
      */
@@ -46,7 +46,7 @@ public interface Producer<K, V> extends Closeable {
      * Send a record and invoke the given callback when the record has been acknowledged by the server
      */
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback);
-    
+
     /**
      * Flush any accumulated records from the producer. Blocks until all sends are complete.
      */

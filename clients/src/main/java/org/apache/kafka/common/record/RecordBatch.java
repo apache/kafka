@@ -58,7 +58,7 @@ public interface RecordBatch extends Iterable<Record> {
      * Used to indicate an unknown leader epoch, which will be the case when the record set is
      * first created by the producer.
      */
-    int UNKNOWN_PARTITION_LEADER_EPOCH = -1;
+    int NO_PARTITION_LEADER_EPOCH = -1;
 
     /**
      * Check whether the checksum of this batch is correct.
@@ -144,6 +144,11 @@ public interface RecordBatch extends Iterable<Record> {
      * @return The producer epoch, or -1 if there is none
      */
     short producerEpoch();
+
+    /**
+     * Does the batch have a valid producer id set.
+     */
+    boolean hasProducerId();
 
     /**
      * Get the first sequence number of this record batch.

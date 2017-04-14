@@ -307,8 +307,8 @@ object AdminUtils extends Logging with AdminUtilities {
       if (brokerList.size != brokerList.toSet.size)
         throw new AdminOperationException("duplicate brokers in replica assignment: " + brokerList)
       if (checkBrokerAvailable && !brokerList.toSet.subsetOf(availableBrokerList))
-        throw new AdminOperationException("some specified brokers not available. specified brokers: " + brokerList.toString +
-          "available broker:" + availableBrokerList.toString)
+        throw new AdminOperationException("some specified brokers not available. specified brokers: " + brokerList +
+          "available broker:" + availableBrokerList)
       ret.put(partitionId, brokerList.toList)
       if (ret(partitionId).size != ret(startPartitionId).size)
         throw new AdminOperationException("partition " + i + " has different replication factor: " + brokerList)

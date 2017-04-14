@@ -69,7 +69,7 @@ class GroupMetadataManager(val brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /* number of partitions for the consumer metadata topic */
-  private val groupMetadataTopicPartitionCount = getOffsetsTopicPartitionCount
+  private val groupMetadataTopicPartitionCount = getGroupMetadataTopicPartitionCount
 
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
@@ -184,10 +184,10 @@ class GroupMetadataManager(val brokerId: Int,
               case Errors.UNKNOWN_TOPIC_OR_PARTITION
                    | Errors.NOT_ENOUGH_REPLICAS
                    | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
-                Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                Errors.COORDINATOR_NOT_AVAILABLE
 
               case Errors.NOT_LEADER_FOR_PARTITION =>
-                Errors.NOT_COORDINATOR_FOR_GROUP
+                Errors.NOT_COORDINATOR
 
               case Errors.REQUEST_TIMED_OUT =>
                 Errors.REBALANCE_IN_PROGRESS
@@ -214,7 +214,7 @@ class GroupMetadataManager(val brokerId: Int,
         Some(DelayedStore(groupMetadataRecords, putCacheCallback))
 
       case None =>
-        responseCallback(Errors.NOT_COORDINATOR_FOR_GROUP)
+        responseCallback(Errors.NOT_COORDINATOR)
         None
     }
   }
@@ -300,10 +300,10 @@ class GroupMetadataManager(val brokerId: Int,
                   case Errors.UNKNOWN_TOPIC_OR_PARTITION
                        | Errors.NOT_ENOUGH_REPLICAS
                        | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
-                    Errors.GROUP_COORDINATOR_NOT_AVAILABLE
+                    Errors.COORDINATOR_NOT_AVAILABLE
 
                   case Errors.NOT_LEADER_FOR_PARTITION =>
-                    Errors.NOT_COORDINATOR_FOR_GROUP
+                    Errors.NOT_COORDINATOR
 
                   case Errors.MESSAGE_TOO_LARGE
                        | Errors.RECORD_LIST_TOO_LARGE
@@ -335,7 +335,7 @@ class GroupMetadataManager(val brokerId: Int,
 
         case None =>
           val commitStatus = offsetMetadata.map { case (topicPartition, _) =>
-            (topicPartition, Errors.NOT_COORDINATOR_FOR_GROUP)
+            (topicPartition, Errors.NOT_COORDINATOR)
           }
           responseCallback(commitStatus)
           None
@@ -667,16 +667,11 @@ class GroupMetadataManager(val brokerId: Int,
   }
 
   /**
-   * Gets the partition count of the offsets topic from ZooKeeper.
+   * Gets the partition count of the group metadata topic from ZooKeeper.
    * If the topic does not exist, the configured partition count is returned.
    */
-  private def getOffsetsTopicPartitionCount = {
-    val topic = Topic.GroupMetadataTopicName
-    val topicData = zkUtils.getPartitionAssignmentForTopics(Seq(topic))
-    if (topicData(topic).nonEmpty)
-      topicData(topic).size
-    else
-      config.offsetsTopicNumPartitions
+  private def getGroupMetadataTopicPartitionCount: Int = {
+    zkUtils.getTopicPartitionCount(Topic.GroupMetadataTopicName).getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**

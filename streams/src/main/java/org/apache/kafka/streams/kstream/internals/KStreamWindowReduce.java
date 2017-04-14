@@ -114,9 +114,9 @@ public class KStreamWindowReduce<K, V, W extends Window> implements KStreamAggPr
             }
 
             // create the new window for the rest of unmatched window that do not exist yet
-            for (long windowStartMs : matchedWindows.keySet()) {
-                windowStore.put(key, value, windowStartMs);
-                tupleForwarder.maybeForward(new Windowed<>(key, matchedWindows.get(windowStartMs)), value, null);
+            for (final Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
+                windowStore.put(key, value, entry.getKey());
+                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), value, null);
             }
         }
     }

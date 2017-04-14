@@ -31,7 +31,10 @@ public class WindowStoreUtils {
     /** Inner byte array serde used for segments */
     static final Serde<Bytes> INNER_KEY_SERDE = Serdes.Bytes();
     static final Serde<byte[]> INNER_VALUE_SERDE = Serdes.ByteArray();
-    static final StateSerdes<Bytes, byte[]> INNER_SERDES = new StateSerdes<>("rocksDB-inner", INNER_KEY_SERDE, INNER_VALUE_SERDE);
+
+    static StateSerdes<Bytes, byte[]> getInnerStateSerde(final String topic) {
+        return new StateSerdes<>(topic, INNER_KEY_SERDE, INNER_VALUE_SERDE);
+    }
 
     static <K> Bytes toBinaryKey(K key, final long timestamp, final int seqnum, StateSerdes<K, ?> serdes) {
         byte[] serializedKey = serdes.rawKey(key);

@@ -24,7 +24,12 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.List;
 
 class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
-    private final StateSerdes<Bytes, byte[]> serdes = new StateSerdes<>("window-store-key-schema", Serdes.Bytes(), Serdes.ByteArray());
+    private StateSerdes<Bytes, byte[]> serdes;
+
+    @Override
+    public void init(final String topic) {
+        serdes = new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray());
+    }
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {

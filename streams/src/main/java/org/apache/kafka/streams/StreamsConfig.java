@@ -241,7 +241,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
                     1,
-                    Importance.MEDIUM,
+                    Importance.HIGH,
                     REPLICATION_FACTOR_DOC)
             .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
@@ -391,6 +391,7 @@ public class StreamsConfig extends AbstractConfig {
     static {
         final Map<String, Object> tempProducerDefaultOverrides = new HashMap<>();
         tempProducerDefaultOverrides.put(ProducerConfig.LINGER_MS_CONFIG, "100");
+        tempProducerDefaultOverrides.put(ProducerConfig.RETRIES_CONFIG, 10);
 
         PRODUCER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempProducerDefaultOverrides);
     }
@@ -401,6 +402,7 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
         // MAX_POLL_INTERVAL_MS_CONFIG needs to be large for streams to handle cases when
         // streams is recovering data from state stores. We may set it to Integer.MAX_VALUE since
         // the streams code itself catches most exceptions and acts accordingly without needing
@@ -408,7 +410,6 @@ public class StreamsConfig extends AbstractConfig {
         // are losing the ability to detect them by setting this value to large. Hopefully
         // deadlocks happen very rarely or never.
         tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 

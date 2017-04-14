@@ -122,7 +122,6 @@ public class KafkaStreams {
     private GlobalStreamThread globalStreamThread;
 
     private final StreamThread[] threads;
-    private final Map<Long, StreamThread.State> threadState;
     private final Metrics metrics;
     private final QueryableStoreProvider queryableStoreProvider;
 
@@ -189,8 +188,12 @@ public class KafkaStreams {
             return validTransitions.contains(newState.ordinal());
         }
     }
+
+    private final Object stateLock = new Object();
+
     private volatile State state = State.CREATED;
-    private StateListener stateListener = null;
+
+    private KafkaStreams.StateListener stateListener = null;
 
 
     /**
@@ -208,25 +211,25 @@ public class KafkaStreams {
     }
 
     /**
-     * An app can set a single {@link StateListener} so that the app is notified when state changes.
+     * An app can set a single {@link KafkaStreams.StateListener} so that the app is notified when state changes.
      * @param listener a new state listener
      */
-    public void setStateListener(final StateListener listener) {
+    public void setStateListener(final KafkaStreams.StateListener listener) {
         stateListener = listener;
     }
 
-    private synchronized void setState(final State newState) {
-        final State oldState = state;
-        if (!state.isValidTransition(newState)) {
-            log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
-        } else {
-            log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
-        }
-
-        state = newState;
-
-        if (stateListener != null) {
-            stateListener.onChange(state, oldState);
+    private void setState(final State newState) {
+        synchronized (stateLock) {
+            final State oldState = state;
+            if (!state.isValidTransition(newState)) {
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+            } else {
+                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+            }
+            state = newState;
+            if (stateListener != null) {
+                stateListener.onChange(state, oldState);
+            }
         }
     }
 
@@ -248,7 +251,14 @@ public class KafkaStreams {
         return Collections.unmodifiableMap(metrics.metrics());
     }
 
-    private class StreamStateListener implements StreamThread.StateListener {
+    private final class StreamStateListener implements StreamThread.StateListener {
+
+        private final Map<Long, StreamThread.State> threadState;
+
+        StreamStateListener(Map<Long, StreamThread.State> threadState) {
+            this.threadState = threadState;
+        }
+
         @Override
         public synchronized void onChange(final StreamThread thread,
                                           final StreamThread.State newState,
@@ -329,7 +339,7 @@ public class KafkaStreams {
         metrics = new Metrics(metricConfig, reporters, time);
 
         threads = new StreamThread[config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG)];
-        threadState = new HashMap<>(threads.length);
+        final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();
         streamsMetadataState = new StreamsMetadataState(builder, parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
 
@@ -354,6 +364,7 @@ public class KafkaStreams {
                                                         globalThreadId);
         }
 
+        final StreamStateListener streamStateListener = new StreamStateListener(threadState);
         for (int i = 0; i < threads.length; i++) {
             threads[i] = new StreamThread(builder,
                                           config,
@@ -365,7 +376,7 @@ public class KafkaStreams {
                                           time,
                                           streamsMetadataState,
                                           cacheSizeBytes);
-            threads[i].setStateListener(new StreamStateListener());
+            threads[i].setStateListener(streamStateListener);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }

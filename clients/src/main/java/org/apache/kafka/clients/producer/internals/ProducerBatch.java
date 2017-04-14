@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -28,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -48,7 +50,7 @@ public final class ProducerBatch {
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
 
-    private volatile int attempts;
+    private final AtomicInteger attempts = new AtomicInteger(0);
     int recordCount;
     int maxRecordSize;
     private long lastAttemptMs;
@@ -66,6 +68,7 @@ public final class ProducerBatch {
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
+        this.retry = false;
     }
 
     /**
@@ -179,11 +182,11 @@ public final class ProducerBatch {
     }
 
     int attempts() {
-        return attempts;
+        return attempts.get();
     }
 
     void reenqueued(long now) {
-        attempts++;
+        attempts.getAndIncrement();
         lastAttemptMs = Math.max(lastAppendTime, now);
         lastAppendTime = Math.max(lastAppendTime, now);
         retry = true;
@@ -208,7 +211,7 @@ public final class ProducerBatch {
     /**
      * Returns if the batch is been retried for sending to kafka
      */
-    private boolean inRetry() {
+    public boolean inRetry() {
         return this.retry;
     }
 
@@ -228,8 +231,24 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
+    public void setProducerState(TransactionState.PidAndEpoch pidAndEpoch, int baseSequence) {
+        recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
+    }
+
+    /**
+     * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
+     * possible to update the RecordBatch header.
+     */
+    public void closeForRecordAppends() {
+        recordsBuilder.closeForRecordAppends();
+    }
+
     public void close() {
         recordsBuilder.close();
+    }
+
+    public boolean isClosed() {
+        return recordsBuilder.isClosed();
     }
 
     public ByteBuffer buffer() {
@@ -246,5 +265,12 @@ public final class ProducerBatch {
 
     public byte magic() {
         return recordsBuilder.magic();
+    }
+
+    /**
+     * Return the ProducerId (Pid) of the current batch.
+     */
+    public long producerId() {
+        return recordsBuilder.producerId();
     }
 }

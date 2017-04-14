@@ -77,21 +77,24 @@ object ImportZkOffsets extends Logging {
   }
 
   private def getPartitionOffsetsFromFile(filename: String):Map[String,String] = {
-    val fr = new InputStreamReader(new FileInputStream(filename), StandardCharsets.UTF_8)
-    val br = new BufferedReader(fr)
-    var partOffsetsMap: Map[String,String] = Map()
-    
-    var s: String = br.readLine()
-    while ( s != null && s.length() >= 1) {
-      val tokens = s.split(":")
-      
-      partOffsetsMap += tokens(0) -> tokens(1)
-      debug("adding node path [" + s + "]")
-      
-      s = br.readLine()
+    val br = new BufferedReader(new InputStreamReader(new FileInputStream(filename), StandardCharsets.UTF_8))
+    try {
+      var partOffsetsMap: Map[String,String] = Map()
+
+      var s: String = br.readLine()
+      while ( s != null && s.length() >= 1) {
+        val tokens = s.split(":")
+
+        partOffsetsMap += tokens(0) -> tokens(1)
+        debug("adding node path [" + s + "]")
+
+        s = br.readLine()
+      }
+
+      partOffsetsMap
+    } finally {
+      br.close()
     }
-    
-    partOffsetsMap
   }
   
   private def updateZkOffsets(zkUtils: ZkUtils, partitionOffsets: Map[String,String]): Unit = {

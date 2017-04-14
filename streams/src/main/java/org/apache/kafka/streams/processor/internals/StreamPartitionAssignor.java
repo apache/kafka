@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -57,7 +58,7 @@ import static org.apache.kafka.streams.processor.internals.InternalTopicManager.
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
-
+    private Time time = Time.SYSTEM;
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
 
@@ -73,6 +74,21 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         @Override
         public int compareTo(final AssignedPartition that) {
             return PARTITION_COMPARATOR.compare(this.partition, that.partition);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (!(o instanceof AssignedPartition)) {
+                return false;
+            }
+            AssignedPartition other = (AssignedPartition) o;
+            return compareTo(other) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            // Only partition is important for compareTo, equals and hashCode.
+            return partition.hashCode();
         }
     }
 
@@ -159,6 +175,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
     /**
+     * Package-private method to set the time. Used for tests.
+     * @param time Time to be used.
+     */
+    void time(final Time time) {
+        this.time = time;
+    }
+
+    /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,
      * and the latter needs former's returned assignment when adding tasks.
@@ -207,7 +231,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
                 configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
                         (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
 
         this.copartitionedTopicsValidator = new CopartitionedTopicsValidator(streamThread.getName());
     }
