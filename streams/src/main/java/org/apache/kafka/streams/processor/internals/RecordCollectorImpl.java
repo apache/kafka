@@ -146,4 +146,10 @@ public class RecordCollectorImpl implements RecordCollector {
     public Map<TopicPartition, Long> offsets() {
         return this.offsets;
     }
+
+    // for testing only
+    Producer<byte[], byte[]> producer() {
+        return producer;
+    }
+
 }

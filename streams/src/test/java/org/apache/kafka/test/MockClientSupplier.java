@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.util.Map;
-
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -26,8 +24,12 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.streams.KafkaClientSupplier;
 
+import java.util.Map;
+
 public class MockClientSupplier implements KafkaClientSupplier {
     private static final ByteArraySerializer BYTE_ARRAY_SERIALIZER = new ByteArraySerializer();
+
+    public int numberOfCreatedProducers = 0;
 
     public final MockProducer<byte[], byte[]> producer =
             new MockProducer<>(true, BYTE_ARRAY_SERIALIZER, BYTE_ARRAY_SERIALIZER);
@@ -36,6 +38,7 @@ public class MockClientSupplier implements KafkaClientSupplier {
 
     @Override
     public Producer<byte[], byte[]> getProducer(Map<String, Object> config) {
+        ++numberOfCreatedProducers;
         return producer;
     }
 
@@ -48,4 +51,5 @@ public class MockClientSupplier implements KafkaClientSupplier {
     public Consumer<byte[], byte[]> getRestoreConsumer(Map<String, Object> config) {
         return restoreConsumer;
     }
+
 }
