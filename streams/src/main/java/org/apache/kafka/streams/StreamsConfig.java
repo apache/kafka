@@ -283,7 +283,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
-                    Importance.HIGH,
+                    Importance.LOW,
                     CommonClientConfigs.CLIENT_ID_DOC)
             .define(ZOOKEEPER_CONNECT_CONFIG,
                     Type.STRING,
@@ -293,7 +293,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(STATE_DIR_CONFIG,
                     Type.STRING,
                     "/tmp/kafka-streams",
-                    Importance.MEDIUM,
+                    Importance.HIGH,
                     STATE_DIR_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
                     Type.INT,
@@ -313,7 +313,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(PARTITION_GROUPER_CLASS_CONFIG,
                     Type.CLASS,
                     DefaultPartitionGrouper.class.getName(),
-                    Importance.MEDIUM,
+                    Importance.LOW,
                     PARTITION_GROUPER_CLASS_DOC)
             .define(KEY_SERDE_CLASS_CONFIG,
                         Type.CLASS,
@@ -348,12 +348,12 @@ public class StreamsConfig extends AbstractConfig {
             .define(NUM_STREAM_THREADS_CONFIG,
                     Type.INT,
                     1,
-                    Importance.LOW,
+                    Importance.MEDIUM,
                     NUM_STREAM_THREADS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
                     Type.INT,
                     0,
-                    Importance.LOW,
+                    Importance.MEDIUM,
                     NUM_STANDBY_REPLICAS_DOC)
             .define(BUFFERED_RECORDS_PER_PARTITION_CONFIG,
                     Type.INT,
@@ -401,13 +401,13 @@ public class StreamsConfig extends AbstractConfig {
             .define(WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG,
                     Type.LONG,
                     24 * 60 * 60 * 1000,
-                    Importance.MEDIUM,
+                    Importance.LOW,
                     WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
                     Type.LONG,
                     10 * 1024 * 1024L,
                     atLeast(0),
-                    Importance.LOW,
+                    Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
                     Type.STRING,
@@ -417,7 +417,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
                     9 * 60 * 1000,
-                    ConfigDef.Importance.MEDIUM,
+                    ConfigDef.Importance.LOW,
                     CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(RETRY_BACKOFF_MS_CONFIG,
                     ConfigDef.Type.LONG,
@@ -447,19 +447,19 @@ public class StreamsConfig extends AbstractConfig {
                     ConfigDef.Type.INT,
                     128 * 1024,
                     atLeast(0),
-                    ConfigDef.Importance.MEDIUM,
+                    ConfigDef.Importance.LOW,
                     SEND_BUFFER_DOC)
             .define(RECEIVE_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     32 * 1024,
                     atLeast(0),
-                    ConfigDef.Importance.MEDIUM,
+                    ConfigDef.Importance.LOW,
                     RECEIVE_BUFFER_DOC)
             .define(REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     40 * 1000,
                     atLeast(0),
-                    ConfigDef.Importance.MEDIUM,
+                    ConfigDef.Importance.LOW,
                     REQUEST_TIMEOUT_MS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     ConfigDef.Type.STRING,
