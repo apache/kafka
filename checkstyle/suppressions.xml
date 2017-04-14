@@ -146,13 +146,7 @@
 
     <!-- Streams -->
     <suppress checks="ClassFanOutComplexity"
-              files="(KafkaStreams|KStreamImpl|KTableImpl|StreamThread).java"/>
-    <suppress checks="ClassFanOutComplexity"
-              files="KStreamImpl.java"/>
-    <suppress checks="ClassFanOutComplexity"
-              files="KTableImpl.java"/>
-    <suppress checks="ClassFanOutComplexity"
-              files="StreamThread.java"/>
+              files="(KafkaStreams|KStreamImpl|KTableImpl|StreamThread|StreamTask).java"/>
 
     <suppress checks="MethodLength"
               files="StreamPartitionAssignor.java"/>
@@ -184,7 +178,7 @@
 
     <!-- streams tests -->
     <suppress checks="ClassFanOutComplexity"
-              files="(StreamTaskTest|ProcessorTopologyTestDriver).java"/>
+              files="(StreamThreadTest|StreamTaskTest|ProcessorTopologyTestDriver).java"/>
 
     <suppress checks="MethodLength"
               files="KStreamKTableJoinIntegrationTest.java"/>
