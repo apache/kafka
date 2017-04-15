@@ -593,6 +593,40 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchPositionAfterOffsetOutOfRangeException() {
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1, tp2));
+        subscriptionsNoAutoReset.seek(tp1, 1);
+        subscriptionsNoAutoReset.seek(tp2, 1);
+
+        assertEquals(1, fetcherNoAutoReset.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+        partitions.put(tp2, new FetchResponse.PartitionData(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
+        client.prepareResponse(new FetchResponse(new LinkedHashMap<>(partitions), 0));
+        consumerClient.poll(0);
+
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
+
+        for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+            fetchedRecords.addAll(records);
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+            fail("Should have thrown OffsetOutOfRangeException");
+        } catch (OffsetOutOfRangeException e) {
+            assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
+            assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+        }
+
+        assertEquals(4, subscriptionsNoAutoReset.position(tp2).longValue());
+        assertEquals(3, fetchedRecords.size());
+    }
+
+    @Test
     public void testFetchDisconnected() {
         subscriptions.assignFromUser(singleton(tp1));
         subscriptions.seek(tp1, 0);
