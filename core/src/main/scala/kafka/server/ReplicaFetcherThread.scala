@@ -96,7 +96,7 @@ class ReplicaFetcherThread(name: String,
           .format(replica.brokerId, replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
       // Append the leader's messages to the log
-      replica.log.get.append(records, assignOffsets = false)
+      replica.log.get.appendAsFollower(records)
 
       if (logger.isTraceEnabled)
         trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"

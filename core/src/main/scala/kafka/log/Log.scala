@@ -436,18 +436,40 @@ class Log(@volatile var dir: File,
     }
   }
 
+
   /**
-   * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
-   *
-   * This method will generally be responsible for assigning offsets to the messages,
-   * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
-   *
-   * @param records The log records to append
-   * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
-   * @throws KafkaStorageException If the append fails due to an I/O error.
-   * @return Information about the appended messages including the first and last offset.
-   */
-  def append(records: MemoryRecords, assignOffsets: Boolean = true, leaderEpoch: Int = leaderEpochCache.latestEpoch()): LogAppendInfo = {
+    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
+    * @param records The records to append
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended messages including the first and last offset.
+    */
+  def appendAsLeader(records: MemoryRecords, leaderEpoch: Int): LogAppendInfo = {
+    append(records, assignOffsets = true, leaderEpoch)
+  }
+
+  /**
+    * Append this message set to the active segment of the log without assigning offsets or Partition Leader Epochs
+    * @param records The records to append
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended messages including the first and last offset.
+    */
+  def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+    append(records, assignOffsets = false, leaderEpoch = -1)
+  }
+
+  /**
+    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
+    *
+    * This method will generally be responsible for assigning offsets to the messages,
+    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
+    *
+    * @param records The log records to append
+    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended messages including the first and last offset.
+    */
+  private def append(records: MemoryRecords, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
