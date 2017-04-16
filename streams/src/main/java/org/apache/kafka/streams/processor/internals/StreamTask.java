@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
@@ -54,18 +55,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
-    private final Map<TopicPartition, RecordQueue> partitionQueues;
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
     private final int maxBufferedSize;
+    private final boolean exactlyOnceEnabled;
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
     private boolean requiresPoll = true;
     private final Time time;
     private final TaskMetrics metrics;
-    private Runnable commitDelegate = new Runnable() {
+    private final Runnable commitDelegate = new Runnable() {
         @Override
         public void run() {
             // 1) flush local state
@@ -94,54 +95,55 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param stateDirectory        the {@link StateDirectory} created by the thread
      * @param recordCollector       the instance of {@link RecordCollector} used to produce records
      */
-    public StreamTask(TaskId id,
-                      String applicationId,
-                      Collection<TopicPartition> partitions,
-                      ProcessorTopology topology,
-                      Consumer<byte[], byte[]> consumer,
+    public StreamTask(final TaskId id,
+                      final String applicationId,
+                      final Collection<TopicPartition> partitions,
+                      final ProcessorTopology topology,
+                      final Consumer<byte[], byte[]> consumer,
                       final ChangelogReader changelogReader,
-                      StreamsConfig config,
-                      StreamsMetrics metrics,
-                      StateDirectory stateDirectory,
-                      ThreadCache cache,
-                      Time time,
+                      final StreamsConfig config,
+                      final StreamsMetrics metrics,
+                      final StateDirectory stateDirectory,
+                      final ThreadCache cache,
+                      final Time time,
                       final RecordCollector recordCollector) {
         super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache);
-        this.punctuationQueue = new PunctuationQueue();
-        this.maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        punctuationQueue = new PunctuationQueue();
+        maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
+        exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals("exactly_once");
         this.metrics = new TaskMetrics(metrics);
 
         // create queues for each assigned partition and associate them
         // to corresponding source nodes in the processor topology
-        partitionQueues = new HashMap<>();
+        final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
-        TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
+        final TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
 
-        for (TopicPartition partition : partitions) {
-            SourceNode source = topology.source(partition.topic());
-            RecordQueue queue = createRecordQueue(partition, source, timestampExtractor);
+        for (final TopicPartition partition : partitions) {
+            final SourceNode source = topology.source(partition.topic());
+            final RecordQueue queue = createRecordQueue(partition, source, timestampExtractor);
             partitionQueues.put(partition, queue);
         }
 
-        this.logPrefix = String.format("task [%s]", id);
+        logPrefix = String.format("task [%s]", id);
 
-        this.partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
+        partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache
-        this.consumedOffsets = new HashMap<>();
+        consumedOffsets = new HashMap<>();
 
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = recordCollector;
 
         // initialize the topology with its own context
-        this.processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
+        processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
         // initialize the state stores
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         initTopology();
-        this.processorContext.initialized();
+        processorContext.initialized();
     }
 
     /**
@@ -150,7 +152,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      *
      * @param partition the partition
      * @param records  the records
-     * @returns the number of added records
+     * @return the number of added records
      */
     @SuppressWarnings("unchecked")
     public int addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
@@ -389,6 +391,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
         metrics.removeAllSensors();
     }
 
+    void closeProducer() {
+        if (exactlyOnceEnabled) {
+            try {
+                recordCollector.close();
+            } catch (final Throwable e) {
+                log.error("{} Failed to close producer: ", logPrefix, e);
+            }
+        } else {
+            throw new IllegalStateException("Tasks should only close producers if exactly-once semantics is enabled.");
+        }
+    }
+
     @Override
     protected Map<TopicPartition, Long> recordCollectorOffsets() {
         return recordCollector.offsets();
@@ -437,6 +451,11 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public void flushState() {
         super.flushState();
         recordCollector.flush();
+    }
+
+    // for testing only
+    Producer<byte[], byte[]> producer() {
+        return ((RecordCollectorImpl) recordCollector).producer();
     }
 
 }

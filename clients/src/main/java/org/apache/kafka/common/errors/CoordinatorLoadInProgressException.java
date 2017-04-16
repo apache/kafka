@@ -17,31 +17,23 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The broker returns this error code for consumer metadata requests or offset commit requests if the offsets topic has
- * not yet been created.
+ * In the context of the group coordinator, the broker returns this error code for any coordinator request if
+ * it is still loading the group metadata (e.g. after a leader change for that group metadata topic partition).
  *
- * @deprecated As of Kafka 0.11, this has been replaced by {@link CoordinatorNotAvailableException}
+ * In the context of the transactional coordinator, this error will be returned if there is a pending transactional
+ * request with the same transactional id, or if the transaction cache is currently being populated from the transaction
+ * log.
  */
-@Deprecated
-public class GroupCoordinatorNotAvailableException extends RetriableException {
-    public static final GroupCoordinatorNotAvailableException INSTANCE = new GroupCoordinatorNotAvailableException();
+public class CoordinatorLoadInProgressException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public GroupCoordinatorNotAvailableException() {
-        super();
-    }
-
-    public GroupCoordinatorNotAvailableException(String message) {
+    public CoordinatorLoadInProgressException(String message) {
         super(message);
     }
 
-    public GroupCoordinatorNotAvailableException(String message, Throwable cause) {
+    public CoordinatorLoadInProgressException(String message, Throwable cause) {
         super(message, cause);
-    }
-
-    public GroupCoordinatorNotAvailableException(Throwable cause) {
-        super(cause);
     }
 
 }

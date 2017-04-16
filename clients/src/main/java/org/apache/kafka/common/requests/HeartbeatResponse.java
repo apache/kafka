@@ -30,7 +30,7 @@ public class HeartbeatResponse extends AbstractResponse {
      * Possible error codes:
      *
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_GROUP (16)
+     * NOT_COORDINATOR (16)
      * ILLEGAL_GENERATION (22)
      * UNKNOWN_MEMBER_ID (25)
      * REBALANCE_IN_PROGRESS (27)

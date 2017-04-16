@@ -23,8 +23,8 @@ import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.GroupLoadInProgressException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
@@ -42,10 +42,11 @@ import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.InvalidTxnStateException;
+import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
-import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
@@ -109,12 +110,12 @@ public enum Errors {
             new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
     NETWORK_EXCEPTION(13,
             new NetworkException("The server disconnected before a response was received.")),
-    GROUP_LOAD_IN_PROGRESS(14,
-            new GroupLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
-    GROUP_COORDINATOR_NOT_AVAILABLE(15,
-            new GroupCoordinatorNotAvailableException("The group coordinator is not available.")),
-    NOT_COORDINATOR_FOR_GROUP(16,
-            new NotCoordinatorForGroupException("This is not the correct coordinator for this group.")),
+    COORDINATOR_LOAD_IN_PROGRESS(14,
+            new CoordinatorLoadInProgressException("The coordinator is loading and hence can't process requests.")),
+    COORDINATOR_NOT_AVAILABLE(15,
+            new CoordinatorNotAvailableException("The coordinator is not available.")),
+    NOT_COORDINATOR(16,
+            new NotCoordinatorException("This is not the correct coordinator.")),
     INVALID_TOPIC_EXCEPTION(17,
             new InvalidTopicException("The request attempted to perform an operation on an invalid topic.")),
     RECORD_LIST_TOO_LARGE(18,
@@ -182,7 +183,10 @@ public enum Errors {
     INVALID_TXN_STATE(48,
         new InvalidTxnStateException("The producer attempted a transactional operation in an invalid state")),
     INVALID_PID_MAPPING(49,
-        new InvalidPidMappingException("The PID mapping is invalid"));
+        new InvalidPidMappingException("The PID mapping is invalid")),
+    INVALID_TRANSACTION_TIMEOUT(50,
+        new InvalidTxnTimeoutException("The transaction timeout is larger than the maximum value allowed by the broker " +
+            "(as configured by max.transaction.timeout.ms)."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
