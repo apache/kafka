@@ -14,6 +14,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
+import java.util.Collections._
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
@@ -599,10 +600,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   @Test
   def testPatternSubscriptionMatchingInternalTopicWithDescribeOnlyPermission() {
-    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
-    sendRecords(1, tp)
     removeAllAcls()
-
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), topicResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), groupResource)
     val internalTopicResource = new Resource(Topic, kafka.common.Topic.GroupMetadataTopicName)
@@ -613,8 +611,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group,
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
     try {
-      consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
-      consumeRecords(consumer)
+      consumer.subscribe(singletonList(kafka.common.Topic.GroupMetadataTopicName), new NoOpConsumerRebalanceListener)
+      consumeRecords(consumer, topic = kafka.common.Topic.GroupMetadataTopicName)
       Assert.fail("Expected TopicAuthorizationException")
     } catch {
       case _: TopicAuthorizationException => //expected
