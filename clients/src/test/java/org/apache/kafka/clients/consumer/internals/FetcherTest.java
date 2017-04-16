@@ -306,12 +306,15 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(0);
+
+        assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
+        assertEquals(1, subscriptions.position(tp1).longValue());
+
         try {
             fetcher.fetchedRecords();
-            fail("fetchedRecords should have raised");
+            fail("fetchedRecords should have raised KafkaException");
         } catch (KafkaException e) {
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp1).longValue());
+
         }
     }
 
