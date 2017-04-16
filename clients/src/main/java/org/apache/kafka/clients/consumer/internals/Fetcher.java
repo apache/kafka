@@ -100,7 +100,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
     private PartitionRecords nextInLineRecords = null;
-    private KafkaException nextInLineException = null;
+    private ExceptionMetadata nextInLineExceptionMetadata = null;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -467,13 +467,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
-        if (nextInLineException != null) {
-            KafkaException e = nextInLineException;
-            nextInLineException = null;
-            throw e;
+        if (nextInLineExceptionMetadata != null) {
+            ExceptionMetadata exceptionMetadata = nextInLineExceptionMetadata;
+            nextInLineExceptionMetadata = null;
+            TopicPartition tp = exceptionMetadata.partition;
+            if (subscriptions.isFetchable(tp) && subscriptions.position(tp) == exceptionMetadata.fetchedOffset)
+                throw exceptionMetadata.exception;
         }
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
         int recordsRemaining = maxPollRecords;
+        // Needed to construct ExceptionMetadata if any exception is found when processing completedFetch
+        TopicPartition fetchedPartition = null;
+        long fetchedOffset = -1;
 
         try {
             while (recordsRemaining > 0) {
@@ -481,8 +486,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     CompletedFetch completedFetch = completedFetches.poll();
                     if (completedFetch == null) break;
 
+                    fetchedPartition = completedFetch.partition;
+                    fetchedOffset = completedFetch.fetchedOffset;
                     nextInLineRecords = parseCompletedFetch(completedFetch);
                 } else {
+                    fetchedPartition = nextInLineRecords.partition;
+                    fetchedOffset = nextInLineRecords.nextFetchOffset;
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
                     TopicPartition partition = nextInLineRecords.partition;
                     if (!records.isEmpty()) {
@@ -503,11 +512,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
             }
         } catch (KafkaException e) {
-            if (fetched.isEmpty()) {
+            if (fetched.isEmpty())
                 throw e;
-            } else {
-                nextInLineException = e;
-            }
+            nextInLineExceptionMetadata = new ExceptionMetadata(fetchedPartition, fetchedOffset, e);
         }
         return fetched;
     }
@@ -980,6 +987,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
     }
 
+    private static class ExceptionMetadata {
+        private final TopicPartition partition;
+        private final long fetchedOffset;
+        private final KafkaException exception;
+
+        private ExceptionMetadata(TopicPartition partition, long fetchedOffset, KafkaException exception) {
+            this.partition = partition;
+            this.fetchedOffset = fetchedOffset;
+            this.exception = exception;
+        }
+    }
+
     private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
@@ -1200,6 +1219,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public void close() {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
+        nextInLineExceptionMetadata = null;
     }
 
 }

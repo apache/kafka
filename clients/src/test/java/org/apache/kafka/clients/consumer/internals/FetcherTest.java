@@ -593,7 +593,9 @@ public class FetcherTest {
     }
 
     @Test
-    public void testFetchPositionAfterOffsetOutOfRangeException() {
+    public void testFetchPositionAfterException() {
+        // verify the advancement in the next fetch offset equals the number of fetched records when
+        // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
         subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1, tp2));
         subscriptionsNoAutoReset.seek(tp1, 1);
         subscriptionsNoAutoReset.seek(tp2, 1);
@@ -609,21 +611,32 @@ public class FetcherTest {
         consumerClient.poll(0);
 
         List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
-
-        for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
-            fetchedRecords.addAll(records);
+        List<OffsetOutOfRangeException> exceptions = new ArrayList<>();
 
         try {
             for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
                 fetchedRecords.addAll(records);
-            fail("Should have thrown OffsetOutOfRangeException");
         } catch (OffsetOutOfRangeException e) {
-            assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
-            assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+            exceptions.add(e);
+        }
+
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp2).longValue() - 1);
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (OffsetOutOfRangeException e) {
+            exceptions.add(e);
         }
 
         assertEquals(4, subscriptionsNoAutoReset.position(tp2).longValue());
         assertEquals(3, fetchedRecords.size());
+
+        // Should have received one OffsetOutOfRangeException for partition tp1
+        assertEquals(1, exceptions.size());
+        OffsetOutOfRangeException e = exceptions.get(0);
+        assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
+        assertEquals(e.offsetOutOfRangePartitions().size(), 1);
     }
 
     @Test
