@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
 /**
@@ -178,7 +179,11 @@ public interface KTable<K, V> {
      * <p>
      * Note that {@code print()} is not applied to the internal state store and only called for each new {@code KTable}
      * update record.
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#print()} on the result.
      */
+    @Deprecated
     void print();
 
     /**
@@ -195,7 +200,11 @@ public interface KTable<K, V> {
      * update record.
      *
      * @param streamName the name used to label the key/value pairs printed to the console
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#print(String)} on the result.
      */
+    @Deprecated
     void print(final String streamName);
 
     /**
@@ -213,8 +222,12 @@ public interface KTable<K, V> {
      * update record.
      *
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
-     * @param valSerde value serde used to deserialize value if type is {@code byte[]},
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#print(Serde, Serde)} on the result.
      */
+    @Deprecated
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde);
 
@@ -234,7 +247,11 @@ public interface KTable<K, V> {
      * @param keySerde   key serde used to deserialize key if type is {@code byte[]},
      * @param valSerde   value serde used to deserialize value if type is {@code byte[]},
      * @param streamName the name used to label the key/value pairs printed to the console
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#print(Serde, Serde, String)} on the result.
      */
+    @Deprecated
     void print(final Serde<K> keySerde,
                final Serde<V> valSerde,
                final String streamName);
@@ -254,7 +271,11 @@ public interface KTable<K, V> {
      * {@code KTable} update record.
      *
      * @param filePath name of file to write to
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#writeAsText(String)}} on the result.
      */
+    @Deprecated
     void writeAsText(final String filePath);
 
     /**
@@ -272,7 +293,11 @@ public interface KTable<K, V> {
      *
      * @param filePath   name of file to write to
      * @param streamName the name used to label the key/value pairs printed out to the console
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#writeAsText(String, String)}} on the result.
      */
+    @Deprecated
     void writeAsText(final String filePath,
                      final String streamName);
 
@@ -292,8 +317,12 @@ public interface KTable<K, V> {
      *
      * @param filePath name of file to write to
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
-     * @param valSerde value serde used to deserialize value if type is {@code byte[]},
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#writeAsText(String, Serde, Serde)}} on the result.
      */
+    @Deprecated
     void  writeAsText(final String filePath,
                       final Serde<K> keySerde,
                       final Serde<V> valSerde);
@@ -314,8 +343,13 @@ public interface KTable<K, V> {
      * @param filePath name of file to write to
      * @param streamName the name used to label the key/value pairs printed to the console
      * @param keySerde key serde used to deserialize key if type is {@code byte[]},
-     * @param valSerde value serde used to deserialize value if type is {@code byte[]},
+     * @param valSerde value serde used to deserialize value if type is {@code byte[]}
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#writeAsText(String, String, Serde, Serde)}} on the result.
+
      */
+    @Deprecated
     void writeAsText(final String filePath,
                      final String streamName,
                      final Serde<K> keySerde,
@@ -329,7 +363,11 @@ public interface KTable<K, V> {
      * {@code KTable} update record.
      *
      * @param action an action to perform on each record
+     * @deprecated Use the Interactive Queries APIs (e.g., {@link KafkaStreams#store(String, QueryableStoreType) }
+     * followed by {@link ReadOnlyKeyValueStore#all()}) to iterate over the keys of a KTable. Alternatively
+     * convert to a KStream using {@code toStream()} and then use {@link KStream#foreach(ForeachAction)}} on the result.
      */
+    @Deprecated
     void foreach(final ForeachAction<? super K, ? super V> action);
 
     /**
