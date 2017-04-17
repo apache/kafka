@@ -99,8 +99,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
-
     private PartitionRecords nextInLineRecords = null;
+    private ExceptionMetadata nextInLineExceptionMetadata = null;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -467,37 +467,55 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
+        if (nextInLineExceptionMetadata != null) {
+            ExceptionMetadata exceptionMetadata = nextInLineExceptionMetadata;
+            nextInLineExceptionMetadata = null;
+            TopicPartition tp = exceptionMetadata.partition;
+            if (subscriptions.isFetchable(tp) && subscriptions.position(tp) == exceptionMetadata.fetchedOffset)
+                throw exceptionMetadata.exception;
+        }
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
         int recordsRemaining = maxPollRecords;
+        // Needed to construct ExceptionMetadata if any exception is found when processing completedFetch
+        TopicPartition fetchedPartition = null;
+        long fetchedOffset = -1;
 
-        while (recordsRemaining > 0) {
-            if (nextInLineRecords == null || nextInLineRecords.isFetched) {
-                CompletedFetch completedFetch = completedFetches.poll();
-                if (completedFetch == null)
-                    break;
+        try {
+            while (recordsRemaining > 0) {
+                if (nextInLineRecords == null || nextInLineRecords.isFetched) {
+                    CompletedFetch completedFetch = completedFetches.poll();
+                    if (completedFetch == null) break;
 
-                nextInLineRecords = parseCompletedFetch(completedFetch);
-            } else {
-                TopicPartition partition = nextInLineRecords.partition;
-                List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
-                if (!records.isEmpty()) {
-                    List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
-                    if (currentRecords == null) {
-                        fetched.put(partition, records);
-                    } else {
-                        // this case shouldn't usually happen because we only send one fetch at a time per partition,
-                        // but it might conceivably happen in some rare cases (such as partition leader changes).
-                        // we have to copy to a new list because the old one may be immutable
-                        List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
-                        newRecords.addAll(currentRecords);
-                        newRecords.addAll(records);
-                        fetched.put(partition, newRecords);
+                    fetchedPartition = completedFetch.partition;
+                    fetchedOffset = completedFetch.fetchedOffset;
+                    nextInLineRecords = parseCompletedFetch(completedFetch);
+                } else {
+                    fetchedPartition = nextInLineRecords.partition;
+                    fetchedOffset = nextInLineRecords.nextFetchOffset;
+                    List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
+                    TopicPartition partition = nextInLineRecords.partition;
+                    if (!records.isEmpty()) {
+                        List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
+                        if (currentRecords == null) {
+                            fetched.put(partition, records);
+                        } else {
+                            // this case shouldn't usually happen because we only send one fetch at a time per partition,
+                            // but it might conceivably happen in some rare cases (such as partition leader changes).
+                            // we have to copy to a new list because the old one may be immutable
+                            List<ConsumerRecord<K, V>> newRecords = new ArrayList<>(records.size() + currentRecords.size());
+                            newRecords.addAll(currentRecords);
+                            newRecords.addAll(records);
+                            fetched.put(partition, newRecords);
+                        }
+                        recordsRemaining -= records.size();
                     }
-                    recordsRemaining -= records.size();
                 }
             }
+        } catch (KafkaException e) {
+            if (fetched.isEmpty())
+                throw e;
+            nextInLineExceptionMetadata = new ExceptionMetadata(fetchedPartition, fetchedOffset, e);
         }
-
         return fetched;
     }
 
@@ -969,6 +987,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
     }
 
+    private static class ExceptionMetadata {
+        private final TopicPartition partition;
+        private final long fetchedOffset;
+        private final KafkaException exception;
+
+        private ExceptionMetadata(TopicPartition partition, long fetchedOffset, KafkaException exception) {
+            this.partition = partition;
+            this.fetchedOffset = fetchedOffset;
+            this.exception = exception;
+        }
+    }
+
     private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
@@ -1189,6 +1219,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public void close() {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
+        nextInLineExceptionMetadata = null;
     }
 
 }
