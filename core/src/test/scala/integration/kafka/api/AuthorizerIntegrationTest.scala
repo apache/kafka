@@ -614,6 +614,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(consumerConfig))
     try {
       consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
+      // It is possible that the first call returns records of "topic" and the second call throws TopicAuthorizationException
+      consumeRecords(consumer)
       consumeRecords(consumer)
       Assert.fail("Expected TopicAuthorizationException")
     } catch {
