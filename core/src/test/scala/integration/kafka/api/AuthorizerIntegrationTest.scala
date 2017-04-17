@@ -605,6 +605,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     try {
       consumer.subscribe(Pattern.compile(".*"), new NoOpConsumerRebalanceListener)
       consumeRecords(consumer)
+      consumeRecords(consumer)
       Assert.fail("Expected TopicAuthorizationException")
     } catch {
       case _: TopicAuthorizationException => //expected

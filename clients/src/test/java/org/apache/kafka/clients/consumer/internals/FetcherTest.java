@@ -57,6 +57,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -84,6 +85,7 @@ public class FetcherTest {
     private String groupId = "test-group";
     private final String metricGroup = "consumer" + groupId + "-fetch-manager-metrics";
     private TopicPartition tp = new TopicPartition(topicName, 0);
+    private TopicPartition tp1 = new TopicPartition(topicName, 1);
     private int minBytes = 1;
     private int maxBytes = Integer.MAX_VALUE;
     private int maxWaitMs = 0;
@@ -92,7 +94,7 @@ public class FetcherTest {
     private MockTime time = new MockTime(1);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
     private MockClient client = new MockClient(time, metadata);
-    private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
+    private Cluster cluster = TestUtils.singletonCluster(topicName, 2);
     private Node node = cluster.nodes().get(0);
     private Metrics metrics = new Metrics(time);
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
@@ -827,28 +829,28 @@ public class FetcherTest {
     }
 
     private void testGetOffsetsForTimesWithError(Errors errorForTp0,
-                                                 Errors errorForTp1,
+                                                 Errors errorFortp,
                                                  long offsetForTp0,
-                                                 long offsetForTp1,
+                                                 long offsetFortp,
                                                  Long expectedOffsetForTp0,
-                                                 Long expectedOffsetForTp1) {
+                                                 Long expectedOffsetFortp) {
         client.reset();
         TopicPartition tp0 = tp;
-        TopicPartition tp1 = new TopicPartition(topicName, 1);
+        TopicPartition tp = new TopicPartition(topicName, 1);
         // Ensure metadata has both partition.
         Cluster cluster = TestUtils.clusterWith(2, topicName, 2);
         metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
 
         // First try should fail due to metadata error.
         client.prepareResponseFrom(listOffsetResponse(tp0, errorForTp0, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, errorForTp1, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(tp, errorFortp, offsetFortp, offsetFortp), cluster.leaderFor(tp));
         // Second try should succeed.
         client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, offsetForTp0, offsetForTp0), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForTp1, offsetForTp1), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(tp, Errors.NONE, offsetFortp, offsetFortp), cluster.leaderFor(tp));
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, 0L);
-        timestampToSearch.put(tp1, 0L);
+        timestampToSearch.put(tp, 0L);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = fetcher.getOffsetsByTimes(timestampToSearch, Long.MAX_VALUE);
 
         if (expectedOffsetForTp0 == null)
@@ -858,12 +860,85 @@ public class FetcherTest {
             assertEquals(expectedOffsetForTp0.longValue(), offsetAndTimestampMap.get(tp0).offset());
         }
 
-        if (expectedOffsetForTp1 == null)
-            assertNull(offsetAndTimestampMap.get(tp1));
+        if (expectedOffsetFortp == null)
+            assertNull(offsetAndTimestampMap.get(tp));
         else {
-            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).timestamp());
-            assertEquals(expectedOffsetForTp1.longValue(), offsetAndTimestampMap.get(tp1).offset());
+            assertEquals(expectedOffsetFortp.longValue(), offsetAndTimestampMap.get(tp).timestamp());
+            assertEquals(expectedOffsetFortp.longValue(), offsetAndTimestampMap.get(tp).offset());
         }
+    }
+
+    @Test
+    public void testFetchPositionAfterException() {
+    // verify the advancement in the next fetch offset equals the number of fetched records when
+        // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp, tp1));
+        subscriptionsNoAutoReset.seek(tp, 1);
+        subscriptionsNoAutoReset.seek(tp1, 1);
+
+        assertEquals(1, fetcherNoAutoReset.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE.code(), 100, MemoryRecords.EMPTY));
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.NONE.code(), 100, records));
+        client.prepareResponse(new FetchResponse(new LinkedHashMap<>(partitions), 0));
+        consumerClient.poll(0);
+
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
+        List<OffsetOutOfRangeException> exceptions = new ArrayList<>();
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (OffsetOutOfRangeException e) {
+            exceptions.add(e);
+        }
+
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1) - 1);
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (OffsetOutOfRangeException e) {
+            exceptions.add(e);
+        }
+
+        assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
+        assertEquals(3, fetchedRecords.size());
+
+        // Should have received one OffsetOutOfRangeException for partition tp
+        assertEquals(1, exceptions.size());
+        OffsetOutOfRangeException e = exceptions.get(0);
+        assertTrue(e.offsetOutOfRangePartitions().containsKey(tp));
+        assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+    }
+
+    @Test
+    public void testSeekBeforeException() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptionsNoAutoReset, new Metrics(time), 2);
+
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp));
+        subscriptionsNoAutoReset.seek(tp, 1);
+        assertEquals(1, fetcher.sendFetches());
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp, new FetchResponse.PartitionData(Errors.NONE.code(), 100, records));
+        client.prepareResponse(fetchResponse(this.records, Errors.NONE.code(), 100L, 0));
+        consumerClient.poll(0);
+
+        assertEquals(2, fetcher.fetchedRecords().get(tp).size());
+
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp, tp1));
+        subscriptionsNoAutoReset.seek(tp1, 1);
+        assertEquals(1, fetcher.sendFetches());
+        partitions = new HashMap<>();
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE.code(), 100, MemoryRecords.EMPTY));
+        client.prepareResponse(new FetchResponse(new LinkedHashMap<>(partitions), 0));
+        consumerClient.poll(0);
+        assertEquals(1, fetcher.fetchedRecords().get(tp).size());
+
+        subscriptionsNoAutoReset.seek(tp1, 10);
+        // Should not throw OffsetOutOfRangeException after the seek
+        assertEquals(0, fetcher.fetchedRecords().size());
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
