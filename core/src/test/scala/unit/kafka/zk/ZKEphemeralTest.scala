@@ -80,7 +80,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
     try {
       zkUtils.createEphemeralPathExpectConflict("/tmp/zktest", "node created")
     } catch {                       
-      case e: Exception =>
+      case _: Exception =>
     }
 
     var testData: String = null
@@ -147,7 +147,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
         zwe.create()
         false
       } catch {
-        case e: ZkNodeExistsException => true
+        case _: ZkNodeExistsException => true
       }
     Assert.assertTrue(gotException)
     zkClient2.close()
@@ -155,7 +155,6 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
   
   /**
    * Tests if succeeds with znode from the same session
-   * 
    */
   @Test
   def testSameSession = {
@@ -171,7 +170,7 @@ class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
         zwe.create()
         false
       } catch {
-        case e: ZkNodeExistsException => true
+        case _: ZkNodeExistsException => true
       }
     Assert.assertFalse(gotException)
   }

@@ -17,14 +17,11 @@
 package kafka.controller
 
 import collection._
-import collection.JavaConversions
-import collection.mutable.Buffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.utils.{Logging, ReplicationUtils}
 import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.controller.Callbacks.CallbackBuilder
 import kafka.utils.CoreUtils._
@@ -49,8 +46,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
-  private val topicChangeListener = new TopicChangeListener()
-  private val deleteTopicsListener = new DeleteTopicsListener()
+  private val topicChangeListener = new TopicChangeListener(controller)
+  private val deleteTopicsListener = new DeleteTopicsListener(controller)
   private val partitionModificationsListeners: mutable.Map[String, PartitionModificationsListener] = mutable.Map.empty
   private val stateChangeLogger = KafkaController.stateChangeLogger
 
@@ -238,7 +235,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * zookeeper
    */
   private def initializePartitionState() {
-    for((topicPartition, replicaAssignment) <- controllerContext.partitionReplicaAssignment) {
+    for (topicPartition <- controllerContext.partitionReplicaAssignment.keys) {
       // check if leader and isr path exists for partition. If not, then it is in NEW state
       controllerContext.partitionLeadershipInfo.get(topicPartition) match {
         case Some(currentLeaderIsrAndEpoch) =>
@@ -269,42 +266,52 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * OfflinePartition state.
    * @param topicAndPartition   The topic/partition whose leader and isr path is to be initialized
    */
-  private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) {
-    val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
-    val liveAssignedReplicas = replicaAssignment.filter(r => controllerContext.liveBrokerIds.contains(r))
-    liveAssignedReplicas.size match {
-      case 0 =>
-        val failMsg = ("encountered error during state change of partition %s from New to Online, assigned replicas are [%s], " +
-                       "live brokers are [%s]. No assigned replica is alive.")
-                         .format(topicAndPartition, replicaAssignment.mkString(","), controllerContext.liveBrokerIds)
-        stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
+  private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) = {
+    val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition).toList
+    val liveAssignedReplicas = replicaAssignment.filter(controllerContext.liveBrokerIds.contains)
+    liveAssignedReplicas.headOption match {
+      case None =>
+        val failMsg = s"Controller $controllerId epoch ${controller.epoch} encountered error during state change of " +
+          s"partition $topicAndPartition from New to Online, assigned replicas are " +
+          s"[${replicaAssignment.mkString(",")}], live brokers are [${controllerContext.liveBrokerIds}]. No assigned " +
+          "replica is alive."
+
+        stateChangeLogger.error(failMsg)
         throw new StateChangeFailedException(failMsg)
-      case _ =>
-        debug("Live assigned replicas for partition %s are: [%s]".format(topicAndPartition, liveAssignedReplicas))
-        // make the first replica in the list of assigned replicas, the leader
-        val leader = liveAssignedReplicas.head
-        val leaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader, liveAssignedReplicas.toList),
-          controller.epoch)
-        debug("Initializing leader and isr for partition %s to %s".format(topicAndPartition, leaderIsrAndControllerEpoch))
+
+      // leader is the first replica in the list of assigned replicas
+      case Some(leader) =>
+        debug(s"Live assigned replicas for partition $topicAndPartition are: [$liveAssignedReplicas]")
+        val leaderAndIsr = LeaderAndIsr(leader, liveAssignedReplicas)
+        val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controller.epoch)
+        debug(s"Initializing leader and isr for partition $topicAndPartition to $leaderIsrAndControllerEpoch")
+
         try {
           zkUtils.createPersistentPath(
             getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
-            zkUtils.leaderAndIsrZkData(leaderIsrAndControllerEpoch.leaderAndIsr, controller.epoch))
+            zkUtils.leaderAndIsrZkData(leaderAndIsr, controller.epoch)
+          )
           // NOTE: the above write can fail only if the current controller lost its zk session and the new controller
           // took over and initialized this partition. This can happen if the current controller went into a long
           // GC pause
           controllerContext.partitionLeadershipInfo.put(topicAndPartition, leaderIsrAndControllerEpoch)
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topicAndPartition.topic,
-            topicAndPartition.partition, leaderIsrAndControllerEpoch, replicaAssignment)
+          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+            liveAssignedReplicas,
+            topicAndPartition.topic,
+            topicAndPartition.partition,
+            leaderIsrAndControllerEpoch,
+            replicaAssignment
+          )
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             // read the controller epoch
             val leaderIsrAndEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topicAndPartition.topic,
               topicAndPartition.partition).get
-            val failMsg = ("encountered error while changing partition %s's state from New to Online since LeaderAndIsr path already " +
-                           "exists with value %s and controller epoch %d")
-                             .format(topicAndPartition, leaderIsrAndEpoch.leaderAndIsr.toString(), leaderIsrAndEpoch.controllerEpoch)
-            stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
+
+            val failMsg = s"Controller $controllerId epoch ${controller.epoch} encountered error while changing " +
+              s"partition $topicAndPartition's state from New to Online since LeaderAndIsr path already exists with " +
+              s"value ${leaderIsrAndEpoch.leaderAndIsr} and controller epoch ${leaderIsrAndEpoch.controllerEpoch}"
+            stateChangeLogger.error(failMsg)
             throw new StateChangeFailedException(failMsg)
         }
     }
@@ -342,12 +349,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
         val (updateSucceeded, newVersion) = ReplicationUtils.updateLeaderAndIsr(zkUtils, topic, partition,
           leaderAndIsr, controller.epoch, currentLeaderAndIsr.zkVersion)
-        newLeaderAndIsr = leaderAndIsr
-        newLeaderAndIsr.zkVersion = newVersion
+        newLeaderAndIsr = leaderAndIsr.withZkVersion(newVersion)
         zookeeperPathUpdateSucceeded = updateSucceeded
         replicasForThisPartition = replicas
       }
-      val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
+      val newLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
       // update the leader cache
       controllerContext.partitionLeadershipInfo.put(TopicAndPartition(topic, partition), newLeaderIsrAndControllerEpoch)
       stateChangeLogger.trace("Controller %d epoch %d elected leader %d for Offline partition %s"
@@ -357,7 +363,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition,
         newLeaderIsrAndControllerEpoch, replicas)
     } catch {
-      case lenne: LeaderElectionNotNeededException => // swallow
+      case _: LeaderElectionNotNeededException => // swallow
       case nroe: NoReplicaOnlineException => throw nroe
       case sce: Throwable =>
         val failMsg = "encountered error while electing leader for partition %s due to: %s.".format(topicAndPartition, sce.getMessage)
@@ -376,7 +382,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   def registerPartitionChangeListener(topic: String) = {
-    partitionModificationsListeners.put(topic, new PartitionModificationsListener(topic))
+    partitionModificationsListeners.put(topic, new PartitionModificationsListener(controller, topic))
     zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), partitionModificationsListeners(topic))
   }
 
@@ -407,18 +413,17 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * This is the zookeeper listener that triggers all the state transitions for a partition
    */
-  class TopicChangeListener extends IZkChildListener with Logging {
-    this.logIdent = "[TopicChangeListener on Controller " + controller.config.brokerId + "]: "
+  class TopicChangeListener(protected val controller: KafkaController) extends ControllerZkChildListener {
 
-    @throws(classOf[Exception])
-    def handleChildChange(parentPath : String, children : java.util.List[String]) {
+    protected def logName = "TopicChangeListener"
+
+    def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
         if (hasStarted.get) {
           try {
             val currentChildren = {
-              import JavaConversions._
               debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
-              (children: Buffer[String]).toSet
+              children.toSet
             }
             val newTopics = currentChildren -- controllerContext.allTopics
             val deletedTopics = controllerContext.allTopics -- currentChildren
@@ -430,10 +435,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
             info("New topics: [%s], deleted topics: [%s], new partition replica assignment [%s]".format(newTopics,
               deletedTopics, addedPartitionReplicaAssignment))
-            if(newTopics.nonEmpty)
-              controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet.toSet)
+            if (newTopics.nonEmpty)
+              controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet)
           } catch {
-            case e: Throwable => error("Error while handling new topic", e )
+            case e: Throwable => error("Error while handling new topic", e)
           }
         }
       }
@@ -445,24 +450,22 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * 1. Add the topic to be deleted to the delete topics cache, only if the topic exists
    * 2. If there are topics to be deleted, it signals the delete topic thread
    */
-  class DeleteTopicsListener() extends IZkChildListener with Logging {
-    this.logIdent = "[DeleteTopicsListener on " + controller.config.brokerId + "]: "
-    val zkUtils = controllerContext.zkUtils
+  class DeleteTopicsListener(protected val controller: KafkaController) extends ControllerZkChildListener {
+    private val zkUtils = controllerContext.zkUtils
+
+    protected def logName = "DeleteTopicsListener"
 
     /**
      * Invoked when a topic is being deleted
      * @throws Exception On any error.
      */
-    @throws(classOf[Exception])
-    def handleChildChange(parentPath : String, children : java.util.List[String]) {
+    @throws[Exception]
+    def doHandleChildChange(parentPath: String, children: Seq[String]) {
       inLock(controllerContext.controllerLock) {
-        var topicsToBeDeleted = {
-          import JavaConversions._
-          (children: Buffer[String]).toSet
-        }
+        var topicsToBeDeleted = children.toSet
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
         val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
-        if(nonExistentTopics.nonEmpty) {
+        if (nonExistentTopics.nonEmpty) {
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
           nonExistentTopics.foreach(topic => zkUtils.deletePathRecursive(getDeleteTopicPath(topic)))
         }
@@ -486,29 +489,20 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           // If delete topic is disabled remove entries under zookeeper path : /admin/delete_topics
           for (topic <- topicsToBeDeleted) {
             info("Removing " + getDeleteTopicPath(topic) + " since delete topic is disabled")
-            val zkUtils = controllerContext.zkUtils
             zkUtils.zkClient.delete(getDeleteTopicPath(topic))
           }
         }
       }
     }
 
-    /**
-     *
-     * @throws Exception
-   *             On any error.
-     */
-    @throws(classOf[Exception])
-    def handleDataDeleted(dataPath: String) {
-    }
+    def doHandleDataDeleted(dataPath: String) {}
   }
 
-  class PartitionModificationsListener(topic: String) extends IZkDataListener with Logging {
+  class PartitionModificationsListener(protected val controller: KafkaController, topic: String) extends ControllerZkDataListener {
 
-    this.logIdent = "[AddPartitionsListener on " + controller.config.brokerId + "]: "
+    protected def logName = "AddPartitionsListener"
 
-    @throws(classOf[Exception])
-    def handleDataChange(dataPath : String, data: Object) {
+    def doHandleDataChange(dataPath: String, data: AnyRef) {
       inLock(controllerContext.controllerLock) {
         try {
           info(s"Partition modification triggered $data for path $dataPath")
@@ -522,19 +516,17 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             if (partitionsToBeAdded.nonEmpty) {
               info("New partitions to be added %s".format(partitionsToBeAdded))
               controllerContext.partitionReplicaAssignment.++=(partitionsToBeAdded)
-              controller.onNewPartitionCreation(partitionsToBeAdded.keySet.toSet)
+              controller.onNewPartitionCreation(partitionsToBeAdded.keySet)
             }
           }
         } catch {
-          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e )
+          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e)
         }
       }
     }
 
-    @throws(classOf[Exception])
-    def handleDataDeleted(parentPath : String) {
-      // this is not implemented for partition change
-    }
+    // this is not implemented for partition change
+    def doHandleDataDeleted(parentPath: String): Unit = {}
   }
 }
 

@@ -16,7 +16,7 @@
 
 from kafkatest.directory_layout.kafka_path import create_path_resolver, KafkaSystemTestPathResolver, \
     KAFKA_PATH_RESOLVER_KEY
-from kafkatest.version import V_0_9_0_1, TRUNK, KafkaVersion
+from kafkatest.version import V_0_9_0_1, DEV_BRANCH, KafkaVersion
 
 
 class DummyContext(object):
@@ -56,9 +56,9 @@ class CheckCreatePathResolver(object):
         """Check expected path resolution without any version specified."""
         resolver = create_path_resolver(DummyContext())
 
-        assert resolver.home() == "/opt/kafka-trunk"
-        assert resolver.bin() == "/opt/kafka-trunk/bin"
-        assert resolver.script("kafka-run-class.sh") == "/opt/kafka-trunk/bin/kafka-run-class.sh"
+        assert resolver.home() == "/opt/kafka-dev"
+        assert resolver.bin() == "/opt/kafka-dev/bin"
+        assert resolver.script("kafka-run-class.sh") == "/opt/kafka-dev/bin/kafka-run-class.sh"
 
     def check_versioned_source_paths(self):
         """Check expected paths when using versions."""
@@ -74,16 +74,16 @@ class CheckCreatePathResolver(object):
         """
         resolver = create_path_resolver(DummyContext())
 
-        # Node with no version attribute should resolve to TRUNK
+        # Node with no version attribute should resolve to DEV_BRANCH
         node = DummyNode()
-        assert resolver._version(node) == TRUNK
+        assert resolver._version(node) == DEV_BRANCH
 
         # Node with version attribute should resolve to the version attribute
         node.version = V_0_9_0_1
         assert resolver._version(node) == V_0_9_0_1
 
         # A KafkaVersion object should resolve to itself
-        assert resolver._version(TRUNK) == TRUNK
+        assert resolver._version(DEV_BRANCH) == DEV_BRANCH
         version = KafkaVersion("999.999.999")
         assert resolver._version(version) == version
 

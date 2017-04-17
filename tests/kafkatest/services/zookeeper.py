@@ -15,14 +15,15 @@
 
 
 import re
-import subprocess
 import time
 
 from ducktape.services.service import Service
+from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 
 class ZookeeperService(KafkaPathResolverMixin, Service):
@@ -46,7 +47,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
     @property
     def security_config(self):
-        return SecurityConfig(zk_sasl=self.zk_sasl)
+        return SecurityConfig(self.context, zk_sasl=self.zk_sasl)
 
     @property
     def security_system_properties(self):
@@ -85,7 +86,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             cmd = "ps ax | grep -i zookeeper | grep java | grep -v grep | awk '{print $1}'"
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def alive(self, node):
@@ -95,6 +96,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         idx = self.idx(node)
         self.logger.info("Stopping %s node %d on %s" % (type(self).__name__, idx, node.account.hostname))
         node.account.kill_process("zookeeper", allow_fail=False)
+        wait_until(lambda: not self.alive(node), timeout_sec=5, err_msg="Timed out waiting for zookeeper to stop.")
 
     def clean_node(self, node):
         self.logger.info("Cleaning ZK node %d on %s", self.idx(node), node.account.hostname)
@@ -120,7 +122,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         """
         Queries zookeeper for data associated with 'path' and returns all fields in the schema
         """
-        kafka_run_class = self.path.script("kafka-run-class.sh", TRUNK)
+        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
         cmd = "%s kafka.tools.ZooKeeperMainWrapper -server %s get %s" % \
               (kafka_run_class, self.connect_setting(), path)
         self.logger.debug(cmd)

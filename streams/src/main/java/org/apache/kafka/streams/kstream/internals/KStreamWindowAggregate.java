@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,21 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.state.internals.CachedStateStore;
 
 import java.util.Map;
 
@@ -37,11 +35,11 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
     private final String storeName;
     private final Windows<W> windows;
     private final Initializer<T> initializer;
-    private final Aggregator<K, V, T> aggregator;
+    private final Aggregator<? super K, ? super V, T> aggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<K, V, T> aggregator) {
+    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
         this.windows = windows;
         this.storeName = storeName;
         this.initializer = initializer;
@@ -61,6 +59,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
     private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
         private WindowStore<K, T> windowStore;
+        private TupleForwarder<Windowed<K>, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -68,7 +67,7 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
             super.init(context);
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
-            ((CachedStateStore) windowStore).setFlushListener(new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues));
+            tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
         }
 
         @Override
@@ -110,17 +109,18 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
-
+                        tupleForwarder.maybeForward(new Windowed<>(key, window), newAgg, oldAgg);
                         matchedWindows.remove(entry.key);
                     }
                 }
             }
 
             // create the new window for the rest of unmatched window that do not exist yet
-            for (long windowStartMs : matchedWindows.keySet()) {
+            for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
                 T oldAgg = initializer.apply();
                 T newAgg = aggregator.apply(key, value, oldAgg);
-                windowStore.put(key, newAgg, windowStartMs);
+                windowStore.put(key, newAgg, entry.getKey());
+                tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
         }
     }

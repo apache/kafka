@@ -17,28 +17,30 @@
 
 package kafka.network
 
-import java.net._
-import javax.net.ssl._
 import java.io._
-import java.util.HashMap
-import java.util.Random
+import java.net._
 import java.nio.ByteBuffer
+import java.util.{HashMap, Random}
+import javax.net.ssl._
 
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.NetworkSend
-import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.requests.{ProduceRequest, RequestHeader}
-import org.apache.kafka.common.utils.SystemTime
-
+import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.{Metrics => YammerMetrics}
+import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.{ListenerName, NetworkSend}
+import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
+import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
+import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 
+import scala.collection.JavaConverters.mapAsScalaMapConverter
 import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
@@ -53,7 +55,8 @@ class SocketServerTest extends JUnitSuite {
   props.put("connections.max.idle.ms", "60000")
   val config = KafkaConfig.fromProps(props)
   val metrics = new Metrics
-  val server = new SocketServer(config, metrics, new SystemTime)
+  val credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
+  val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
 
@@ -86,17 +89,15 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def processRequest(channel: RequestChannel, request: RequestChannel.Request) {
-    val byteBuffer = ByteBuffer.allocate(request.header.sizeOf + request.body.sizeOf)
-    request.header.writeTo(byteBuffer)
-    request.body.writeTo(byteBuffer)
+    val byteBuffer = request.body[AbstractRequest].serialize(request.header)
     byteBuffer.rewind()
 
     val send = new NetworkSend(request.connectionId, byteBuffer)
-    channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
+    channel.sendResponse(new RequestChannel.Response(request, send))
   }
 
   def connect(s: SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
-    val socket = new Socket("localhost", s.boundPort(protocol))
+    val socket = new Socket("localhost", s.boundPort(ListenerName.forSecurityProtocol(protocol)))
     sockets += socket
     socket
   }
@@ -116,13 +117,12 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = 10000
     val ack = 0: Short
 
-    val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-    val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
-
-    val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf + emptyRequest.sizeOf)
-    emptyHeader.writeTo(byteBuffer)
-    emptyRequest.writeTo(byteBuffer)
+    val emptyRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, ack, ackTimeoutMs,
+      new HashMap[TopicPartition, MemoryRecords]()).build()
+    val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
+    val byteBuffer = emptyRequest.serialize(emptyHeader)
     byteBuffer.rewind()
+
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
     byteBuffer.get(serializedBytes)
     serializedBytes
@@ -159,7 +159,22 @@ class SocketServerTest extends JUnitSuite {
       outgoing.flush()
       receiveResponse(socket)
     } catch {
-      case e: IOException => // thats fine
+      case _: IOException => // thats fine
+    }
+  }
+
+  @Test
+  def testGracefulClose() {
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val serializedBytes = producerRequestBytes
+
+    for (i <- 0 until 10)
+      sendRequest(plainSocket, serializedBytes)
+    plainSocket.close()
+    for (i <- 0 until 10) {
+      val request = server.requestChannel.receiveRequest(2000)
+      assertNotNull("receiveRequest timed out", request)
+      server.requestChannel.noOperation(request.processor, request)
     }
   }
 
@@ -167,13 +182,16 @@ class SocketServerTest extends JUnitSuite {
   def testSocketsCloseOnShutdown() {
     // open a connection
     val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    plainSocket.setTcpNoDelay(true)
     val traceSocket = connect(protocol = SecurityProtocol.TRACE)
+    traceSocket.setTcpNoDelay(true)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
     sendRequest(plainSocket, bytes, Some(0))
     sendRequest(traceSocket, bytes, Some(0))
     processRequest(server.requestChannel)
-
+    // the following sleep is necessary to reliably detect the connection close when we send data below
+    Thread.sleep(200L)
     // make sure the sockets are open
     server.acceptors.values.map(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
@@ -186,14 +204,14 @@ class SocketServerTest extends JUnitSuite {
       sendRequest(plainSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed plain socket")
     } catch {
-      case e: IOException => // expected
+      case _: IOException => // expected
     }
 
     try {
       sendRequest(traceSocket, largeChunkOfBytes, Some(0))
       fail("expected exception when writing to closed trace socket")
     } catch {
-      case e: IOException => // expected
+      case _: IOException => // expected
     }
   }
 
@@ -225,7 +243,7 @@ class SocketServerTest extends JUnitSuite {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime())
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
     try {
       overrideServer.startup()
       // make the maximum allowable number of connections
@@ -255,13 +273,14 @@ class SocketServerTest extends JUnitSuite {
     overrideProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
 
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, new SystemTime)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics, Time.SYSTEM, credentialProvider)
     try {
       overrideServer.startup()
       val sslContext = SSLContext.getInstance("TLSv1.2")
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
-      val sslSocket = socketFactory.createSocket("localhost", overrideServer.boundPort(SecurityProtocol.SSL)).asInstanceOf[SSLSocket]
+      val sslSocket = socketFactory.createSocket("localhost",
+        overrideServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.SSL))).asInstanceOf[SSLSocket]
       sslSocket.setNeedClientAuth(false)
 
       val apiKey = ApiKeys.PRODUCE.id
@@ -269,12 +288,11 @@ class SocketServerTest extends JUnitSuite {
       val clientId = ""
       val ackTimeoutMs = 10000
       val ack = 0: Short
-      val emptyHeader = new RequestHeader(apiKey, clientId, correlationId)
-      val emptyRequest = new ProduceRequest(ack, ackTimeoutMs, new HashMap[TopicPartition, ByteBuffer]())
+      val emptyRequest = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, ack, ackTimeoutMs,
+        new HashMap[TopicPartition, MemoryRecords]()).build()
+      val emptyHeader = new RequestHeader(apiKey, emptyRequest.version, clientId, correlationId)
 
-      val byteBuffer = ByteBuffer.allocate(emptyHeader.sizeOf() + emptyRequest.sizeOf())
-      emptyHeader.writeTo(byteBuffer)
-      emptyRequest.writeTo(byteBuffer)
+      val byteBuffer = emptyRequest.serialize(emptyHeader)
       byteBuffer.rewind()
       val serializedBytes = new Array[Byte](byteBuffer.remaining)
       byteBuffer.get(serializedBytes)
@@ -303,10 +321,11 @@ class SocketServerTest extends JUnitSuite {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime) {
-      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, protocol: SecurityProtocol): Processor = {
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider) {
+      override def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
+                                protocol: SecurityProtocol): Processor = {
         new Processor(id, time, config.socketRequestMaxBytes, requestChannel, connectionQuotas,
-          config.connectionsMaxIdleMs, protocol, config.values, metrics) {
+          config.connectionsMaxIdleMs, listenerName, protocol, config, metrics, credentialProvider) {
           override protected[network] def sendResponse(response: RequestChannel.Response) {
             conn.close()
             super.sendResponse(response)
@@ -333,7 +352,7 @@ class SocketServerTest extends JUnitSuite {
       // detected. If the buffer is larger than 102400 bytes, a second write is attempted and it fails with an
       // IOException.
       val send = new NetworkSend(request.connectionId, ByteBuffer.allocate(550000))
-      channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
+      channel.sendResponse(new RequestChannel.Response(request, send))
       TestUtils.waitUntilTrue(() => totalTimeHistCount() == expectedTotalTimeCount,
         s"request metrics not updated, expected: $expectedTotalTimeCount, actual: ${totalTimeHistCount()}")
 
@@ -353,7 +372,7 @@ class SocketServerTest extends JUnitSuite {
     props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "100")
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, new SystemTime)
+    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics, Time.SYSTEM, credentialProvider)
     try {
       overrideServer.startup()
       conn = connect(overrideServer)
@@ -379,6 +398,20 @@ class SocketServerTest extends JUnitSuite {
       serverMetrics.close()
     }
 
+  }
+
+  @Test
+  def testMetricCollectionAfterShutdown(): Unit = {
+    server.shutdown()
+
+    val sum = YammerMetrics
+      .defaultRegistry
+      .allMetrics.asScala
+      .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
+      .collect { case (_, metric: Gauge[_]) => metric.value.asInstanceOf[Double] }
+      .sum
+
+    assertEquals(0, sum, 0)
   }
 
 }

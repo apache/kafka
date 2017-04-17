@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -52,10 +51,10 @@ public class KStreamTransformTest {
     public void testTransform() {
         KStreamBuilder builder = new KStreamBuilder();
 
-        TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>> transformerSupplier =
-            new TransformerSupplier<Integer, Integer, KeyValue<Integer, Integer>>() {
-                public Transformer<Integer, Integer, KeyValue<Integer, Integer>> get() {
-                    return new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+            new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+                public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
+                    return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
                         private int total = 0;
 
@@ -64,9 +63,9 @@ public class KStreamTransformTest {
                         }
 
                         @Override
-                        public KeyValue<Integer, Integer> transform(Integer key, Integer value) {
-                            total += value;
-                            return KeyValue.pair(key * 2, total);
+                        public KeyValue<Integer, Integer> transform(Number key, Number value) {
+                            total += value.intValue();
+                            return KeyValue.pair(key.intValue() * 2, total);
                         }
 
                         @Override
@@ -88,8 +87,8 @@ public class KStreamTransformTest {
         stream.transform(transformerSupplier).process(processor);
 
         driver = new KStreamTestDriver(builder);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            driver.process(topicName, expectedKeys[i], expectedKeys[i] * 10);
+        for (int expectedKey : expectedKeys) {
+            driver.process(topicName, expectedKey, expectedKey * 10);
         }
 
         driver.punctuate(2);

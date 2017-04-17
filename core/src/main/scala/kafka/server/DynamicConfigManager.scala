@@ -18,18 +18,13 @@
 package kafka.server
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.security.auth.Resource
 import kafka.utils.Json
 import kafka.utils.Logging
-import kafka.utils.SystemTime
-import kafka.utils.Time
 import kafka.utils.ZkUtils
-import org.apache.zookeeper.Watcher.Event.KeeperState
 
 import scala.collection._
 import kafka.admin.AdminUtils
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
-
+import org.apache.kafka.common.utils.Time
 
 /**
  * Represents all the entities that can be configured via ZK
@@ -87,8 +82,7 @@ object ConfigEntityName {
 class DynamicConfigManager(private val zkUtils: ZkUtils,
                            private val configHandlers: Map[String, ConfigHandler],
                            private val changeExpirationMs: Long = 15*60*1000,
-                           private val time: Time = SystemTime) extends Logging {
-  private var lastExecutedChange = -1L
+                           private val time: Time = Time.SYSTEM) extends Logging {
 
   object ConfigChangedNotificationHandler extends NotificationHandler {
     override def processNotification(json: String) = {
@@ -106,7 +100,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
                 "Supported versions are 1 and 2.")
           }
 
-        case o => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
+        case _ => throw new IllegalArgumentException("Config change notification has an unexpected value. The format is:" +
           "{\"version\" : 1, \"entity_type\":\"topics/clients\", \"entity_name\" : \"topic_name/client_id\"}." + " or " +
           "{\"version\" : 2, \"entity_path\":\"entity_type/entity_name\"}." +
           " Received: " + json)
@@ -154,7 +148,7 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
     }
   }
 
-  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.EntityConfigChangesPath, AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
+  private val configChangeListener = new ZkNodeChangeNotificationListener(zkUtils, ZkUtils.ConfigChangesPath, AdminUtils.EntityConfigChangeZnodePrefix, ConfigChangedNotificationHandler)
 
   /**
    * Begin watching for config changes

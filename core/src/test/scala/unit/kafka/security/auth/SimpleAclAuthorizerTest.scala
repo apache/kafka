@@ -347,7 +347,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val acl = new Acl(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username), Allow, WildCardHost, All)
 
     // Alternate authorizer to keep adding and removing zookeeper path
-    val concurrentFuctions = (0 to 50).map { i =>
+    val concurrentFuctions = (0 to 50).map { _ =>
       () => {
         simpleAclAuthorizer.addAcls(Set(acl), resource)
         simpleAclAuthorizer2.removeAcls(Set(acl), resource)

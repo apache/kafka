@@ -22,7 +22,6 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
 import kafka.common.Topic
 import kafka.server.KafkaConfig
-
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -34,8 +33,9 @@ import org.apache.kafka.common.errors.WakeupException
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
-abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
+abstract class BaseConsumerTest extends IntegrationTestHarness {
 
+  val epsilon = 0.1
   val producerCount = 1
   val consumerCount = 2
   val serverCount = 3
@@ -116,7 +116,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
   }
-
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
     var callsToAssigned = 0
@@ -256,7 +255,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
      */
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
       if (subscriptionChanged) {
-        throw new IllegalStateException("Do not call subscribe until the previous subsribe request is processed.")
+        throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
       }
       topicsSubscription = newTopicsToSubscribe
       subscriptionChanged = true
@@ -280,7 +279,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
       try {
         consumer.poll(50)
       } catch {
-        case e: WakeupException => // ignore for shutdown
+        case _: WakeupException => // ignore for shutdown
       }
     }
   }

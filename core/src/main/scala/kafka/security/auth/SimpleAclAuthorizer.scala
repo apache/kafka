@@ -46,20 +46,20 @@ object SimpleAclAuthorizer {
   val AllowEveryoneIfNoAclIsFoundProp = "allow.everyone.if.no.acl.found"
 
   /**
-   * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, ConsumerGroup).
+   * The root acl storage node. Under this node there will be one child node per resource type (Topic, Cluster, Group).
    * under each resourceType there will be a unique child for each resource instance and the data for that child will contain
    * list of its acls as a json object. Following gives an example:
    *
    * <pre>
    * /kafka-acl/Topic/topic-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
    * /kafka-acl/Cluster/kafka-cluster => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
-   * /kafka-acl/ConsumerGroup/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
+   * /kafka-acl/Group/group-1 => {"version": 1, "acls": [ { "host":"host1", "permissionType": "Allow","operation": "Read","principal": "User:alice"}]}
    * </pre>
    */
-  val AclZkPath = "/kafka-acl"
+  val AclZkPath = ZkUtils.KafkaAclPath
 
   //notification node which gets updated with the resource name when acl on a resource is changed.
-  val AclChangedZkPath = "/kafka-acl-changes"
+  val AclChangedZkPath = ZkUtils.KafkaAclChangesPath
 
   //prefix of all the change notification sequence node.
   val AclChangedPrefix = "acl_changes_"
@@ -107,8 +107,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     val zkSessionTimeOutMs = configs.get(SimpleAclAuthorizer.ZkSessionTimeOutProp).map(_.toString.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
 
     zkUtils = ZkUtils(zkUrl,
-                      zkConnectionTimeoutMs,
-                      zkSessionTimeOutMs,
+                      sessionTimeout = zkSessionTimeOutMs,
+                      connectionTimeout = zkConnectionTimeoutMs,
                       JaasUtils.isZkSecurityEnabled())
     zkUtils.makeSurePersistentPathExists(SimpleAclAuthorizer.AclZkPath)
 
@@ -316,13 +316,13 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     try {
       zkUtils.conditionalUpdatePersistentPathIfExists(path, data, expectedVersion)
     } catch {
-      case e: ZkNoNodeException =>
+      case _: ZkNoNodeException =>
         try {
           debug(s"Node $path does not exist, attempting to create it.")
           zkUtils.createPersistentPath(path, data)
           (true, 0)
         } catch {
-          case e: ZkNodeExistsException =>
+          case _: ZkNodeExistsException =>
             debug(s"Failed to create node for $path because it already exists.")
             (false, 0)
         }

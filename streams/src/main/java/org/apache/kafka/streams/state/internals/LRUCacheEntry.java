@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -25,12 +25,12 @@ class LRUCacheEntry implements RecordContext {
 
     public final byte[] value;
     private final long offset;
-    private final long timestamp;
     private final String topic;
-    boolean isDirty;
     private final int partition;
-    private long sizeBytes = 0;
+    private final long timestamp;
 
+    private long sizeBytes;
+    private boolean isDirty;
 
     LRUCacheEntry(final byte[] value) {
         this(value, false, -1, -1, -1, "");
@@ -50,14 +50,7 @@ class LRUCacheEntry implements RecordContext {
                 8 + // timestamp
                 8 + // offset
                 4 + // partition
-                topic.length();
-
-    }
-
-
-
-    void markClean() {
-        isDirty = false;
+                (topic == null ? 0 : topic.length());
     }
 
     @Override
@@ -78,6 +71,10 @@ class LRUCacheEntry implements RecordContext {
     @Override
     public int partition() {
         return partition;
+    }
+
+    void markClean() {
+        isDirty = false;
     }
 
     boolean isDirty() {

@@ -14,17 +14,22 @@
 # limitations under the License.
 
 from ducktape.tests.test import Test
+from ducktape.mark.resource import cluster
+from ducktape.utils.util import wait_until
+from ducktape.mark import matrix, parametrize
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
+from kafkatest.services.kafka import KafkaService, config_property
 from kafkatest.services.connect import ConnectDistributedService, VerifiableSource, VerifiableSink, ConnectRestError, MockSink, MockSource
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.security.security_config import SecurityConfig
-from ducktape.utils.util import wait_until
-from ducktape.mark import matrix
-import subprocess, itertools, time
+
 from collections import Counter, namedtuple
+import itertools
+import json
 import operator
+import time
 
 class ConnectDistributedTest(Test):
     """
@@ -66,10 +71,13 @@ class ConnectDistributedTest(Test):
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
 
-    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT):
+    def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
                                   security_protocol=security_protocol, interbroker_security_protocol=security_protocol,
                                   topics=self.topics)
+        if timestamp_type is not None:
+            for node in self.kafka.nodes:
+                node.config[config_property.MESSAGE_TIMESTAMP_TYPE] = timestamp_type
 
         self.cc = ConnectDistributedService(self.test_context, 3, self.kafka, [self.INPUT_FILE, self.OUTPUT_FILE])
         self.cc.log_level = "DEBUG"
@@ -139,6 +147,7 @@ class ConnectDistributedTest(Test):
         status = self._connector_status(connector.name, node)
         return self._task_has_state(task_id, status, 'RUNNING')
 
+    @cluster(num_nodes=5)
     def test_restart_failed_connector(self):
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -155,43 +164,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self.connector_is_running(self.sink), timeout_sec=10,
                    err_msg="Failed to see connector transition to the RUNNING state")
 
-    @matrix(delete_before_reconfig=[False, True])
-    def test_bad_connector_class(self, delete_before_reconfig):
-        """
-        For the same connector name, first configure it with a bad connector class name such that it fails to start, verify that it enters a FAILED state.
-        Restart should also fail.
-        Then try to rectify by reconfiguring it as a MockConnector and verifying it successfully transitions to RUNNING.
-        """
-        self.setup_services()
-        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
-        self.cc.start()
-
-        connector_name = 'bad-to-good-test'
-
-        connector = namedtuple('BadConnector', ['name', 'tasks'])(connector_name, 1)
-        config = {
-            'name': connector.name,
-            'tasks.max': connector.tasks,
-            'connector.class': 'java.util.HashMap'
-        }
-        self.cc.create_connector(config)
-
-        wait_until(lambda: self.connector_is_failed(connector), timeout_sec=10, err_msg="Failed to see connector transition to FAILED state")
-
-        try:
-            self.cc.restart_connector(connector_name)
-        except ConnectRestError:
-            pass
-        else:
-            raise AssertionError("Expected restart of %s to fail" % connector_name)
-
-        if delete_before_reconfig:
-            self.cc.delete_connector(connector_name)
-
-        config['connector.class'] = 'org.apache.kafka.connect.tools.MockSourceConnector'
-        self.cc.set_connector_config(connector_name, config)
-        wait_until(lambda: self.connector_is_running(connector), timeout_sec=10, err_msg="Failed to see connector transition to the RUNNING state")
-
+    @cluster(num_nodes=5)
     @matrix(connector_type=["source", "sink"])
     def test_restart_failed_task(self, connector_type):
         self.setup_services()
@@ -215,7 +188,7 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self.task_is_running(connector, task_id), timeout_sec=10,
                    err_msg="Failed to see task transition to the RUNNING state")
 
-
+    @cluster(num_nodes=5)
     def test_pause_and_resume_source(self):
         """
         Verify that source connectors stop producing records when paused and begin again after
@@ -240,9 +213,9 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the PAUSED state")
 
         # verify that we do not produce new messages while paused
-        num_messages = len(self.source.messages())
+        num_messages = len(self.source.sent_messages())
         time.sleep(10)
-        assert num_messages == len(self.source.messages()), "Paused source connector should not produce any messages"
+        assert num_messages == len(self.source.sent_messages()), "Paused source connector should not produce any messages"
 
         self.cc.resume_connector(self.source.name)
 
@@ -251,9 +224,10 @@ class ConnectDistributedTest(Test):
                        err_msg="Failed to see connector transition to the RUNNING state")
 
         # after resuming, we should see records produced again
-        wait_until(lambda: len(self.source.messages()) > num_messages, timeout_sec=30,
+        wait_until(lambda: len(self.source.sent_messages()) > num_messages, timeout_sec=30,
                    err_msg="Failed to produce messages after resuming source connector")
 
+    @cluster(num_nodes=5)
     def test_pause_and_resume_sink(self):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
@@ -267,6 +241,9 @@ class ConnectDistributedTest(Test):
         # use the verifiable source to produce a steady stream of messages
         self.source = VerifiableSource(self.cc)
         self.source.start()
+
+        wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
+                   err_msg="Timeout expired waiting for source task to produce a message")
 
         self.sink = VerifiableSink(self.cc)
         self.sink.start()
@@ -294,9 +271,9 @@ class ConnectDistributedTest(Test):
 
         # after resuming, we should see records consumed again
         wait_until(lambda: len(self.sink.received_messages()) > num_messages, timeout_sec=30,
-                   err_msg="Failed to consume messages after resuming source connector")
+                   err_msg="Failed to consume messages after resuming sink connector")
 
-
+    @cluster(num_nodes=5)
     def test_pause_state_persistent(self):
         """
         Verify that paused state is preserved after a cluster restart.
@@ -321,7 +298,10 @@ class ConnectDistributedTest(Test):
             wait_until(lambda: self.is_paused(self.source, node), timeout_sec=30,
                        err_msg="Failed to see connector startup in PAUSED state")
 
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL])
+    @cluster(num_nodes=5)
+    @parametrize(security_protocol=SecurityConfig.PLAINTEXT)
+    @cluster(num_nodes=6)
+    @parametrize(security_protocol=SecurityConfig.SASL_SSL)
     def test_file_source_and_sink(self, security_protocol):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
@@ -352,7 +332,7 @@ class ConnectDistributedTest(Test):
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
 
-
+    @cluster(num_nodes=5)
     @matrix(clean=[True, False])
     def test_bounce(self, clean):
         """
@@ -401,8 +381,8 @@ class ConnectDistributedTest(Test):
         success = True
         errors = []
         allow_dups = not clean
-        src_messages = self.source.messages()
-        sink_messages = self.sink.messages()
+        src_messages = self.source.committed_messages()
+        sink_messages = self.sink.flushed_messages()
         for task in range(num_tasks):
             # Validate source messages
             src_seqnos = [msg['seqno'] for msg in src_messages if msg['task'] == task]
@@ -425,7 +405,7 @@ class ConnectDistributedTest(Test):
 
 
             # Validate sink messages
-            sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task and 'flushed' in msg]
+            sink_seqnos = [msg['seqno'] for msg in sink_messages if msg['task'] == task]
             # Every seqno up to the largest one we ever saw should appear. Each seqno should only appear once because
             # clean bouncing should commit on rebalance.
             sink_seqno_max = max(sink_seqnos)
@@ -461,7 +441,60 @@ class ConnectDistributedTest(Test):
 
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
+    @cluster(num_nodes=6)
+    def test_transformations(self):
+        self.setup_services(timestamp_type='CreateTime')
+        self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.start()
 
+        ts_fieldname = 'the_timestamp'
+
+        NamedConnector = namedtuple('Connector', ['name'])
+
+        source_connector = NamedConnector(name='file-src')
+
+        self.cc.create_connector({
+            'name': source_connector.name,
+            'connector.class': 'org.apache.kafka.connect.file.FileStreamSourceConnector',
+            'tasks.max': 1,
+            'file': self.INPUT_FILE,
+            'topic': self.TOPIC,
+            'transforms': 'hoistToStruct,insertTimestampField',
+            'transforms.hoistToStruct.type': 'org.apache.kafka.connect.transforms.HoistField$Value',
+            'transforms.hoistToStruct.field': 'content',
+            'transforms.insertTimestampField.type': 'org.apache.kafka.connect.transforms.InsertField$Value',
+            'transforms.insertTimestampField.timestamp.field': ts_fieldname,
+        })
+
+        wait_until(lambda: self.connector_is_running(source_connector), timeout_sec=30, err_msg='Failed to see connector transition to the RUNNING state')
+
+        for node in self.cc.nodes:
+            node.account.ssh("echo -e -n " + repr(self.FIRST_INPUTS) + " >> " + self.INPUT_FILE)
+
+        consumer = ConsoleConsumer(self.test_context, 1, self.kafka, self.TOPIC, consumer_timeout_ms=15000, print_timestamp=True)
+        consumer.run()
+
+        assert len(consumer.messages_consumed[1]) == len(self.FIRST_INPUT_LIST)
+
+        expected_schema = {
+            'type': 'struct',
+            'fields': [
+                {'field': 'content', 'type': 'string', 'optional': False},
+                {'field': ts_fieldname, 'name': 'org.apache.kafka.connect.data.Timestamp', 'type': 'int64', 'version': 1, 'optional': True},
+            ],
+            'optional': False
+        }
+
+        for msg in consumer.messages_consumed[1]:
+            (ts_info, value) = msg.split('\t')
+
+            assert ts_info.startswith('CreateTime:')
+            ts = int(ts_info[len('CreateTime:'):])
+
+            obj = json.loads(value)
+            assert obj['schema'] == expected_schema
+            assert obj['payload']['content'] in self.FIRST_INPUT_LIST
+            assert obj['payload'][ts_fieldname] == ts
 
     def _validate_file_output(self, input):
         input_set = set(input)
@@ -474,8 +507,8 @@ class ConnectDistributedTest(Test):
 
     def _file_contents(self, node, file):
         try:
-            # Convert to a list here or the CalledProcessError may be returned during a call to the generator instead of
+            # Convert to a list here or the RemoteCommandError may be returned during a call to the generator instead of
             # immediately
             return list(node.account.ssh_capture("cat " + file))
-        except subprocess.CalledProcessError:
+        except RemoteCommandError:
             return []

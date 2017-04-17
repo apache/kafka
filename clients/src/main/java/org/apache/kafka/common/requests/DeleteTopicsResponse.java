@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -18,8 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -28,8 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class DeleteTopicsResponse extends AbstractRequestResponse {
-    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.DELETE_TOPICS.id);
+public class DeleteTopicsResponse extends AbstractResponse {
     private static final String TOPIC_ERROR_CODES_KEY_NAME = "topic_error_codes";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
@@ -45,8 +42,25 @@ public class DeleteTopicsResponse extends AbstractRequestResponse {
     private final Map<String, Errors> errors;
 
     public DeleteTopicsResponse(Map<String, Errors> errors) {
-        super(new Struct(CURRENT_SCHEMA));
+        this.errors = errors;
+    }
 
+    public DeleteTopicsResponse(Struct struct) {
+        Object[] topicErrorCodesStructs = struct.getArray(TOPIC_ERROR_CODES_KEY_NAME);
+        Map<String, Errors> errors = new HashMap<>();
+        for (Object topicErrorCodeStructObj : topicErrorCodesStructs) {
+            Struct topicErrorCodeStruct = (Struct) topicErrorCodeStructObj;
+            String topic = topicErrorCodeStruct.getString(TOPIC_KEY_NAME);
+            Errors error = Errors.forCode(topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME));
+            errors.put(topic, error);
+        }
+
+        this.errors = errors;
+    }
+
+    @Override
+    protected Struct toStruct(short version) {
+        Struct struct = new Struct(ApiKeys.DELETE_TOPICS.responseSchema(version));
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Errors> topicError : errors.entrySet()) {
             Struct topicErrorCodeStruct = struct.instance(TOPIC_ERROR_CODES_KEY_NAME);
@@ -55,34 +69,14 @@ public class DeleteTopicsResponse extends AbstractRequestResponse {
             topicErrorCodeStructs.add(topicErrorCodeStruct);
         }
         struct.set(TOPIC_ERROR_CODES_KEY_NAME, topicErrorCodeStructs.toArray());
-
-        this.errors = errors;
-    }
-
-    public DeleteTopicsResponse(Struct struct) {
-        super(struct);
-
-        Object[] topicErrorCodesStructs = struct.getArray(TOPIC_ERROR_CODES_KEY_NAME);
-        Map<String, Errors> errors = new HashMap<>();
-        for (Object topicErrorCodeStructObj : topicErrorCodesStructs) {
-            Struct topicErrorCodeStruct = (Struct) topicErrorCodeStructObj;
-            String topic = topicErrorCodeStruct.getString(TOPIC_KEY_NAME);
-            short errorCode = topicErrorCodeStruct.getShort(ERROR_CODE_KEY_NAME);
-            errors.put(topic, Errors.forCode(errorCode));
-        }
-
-        this.errors = errors;
+        return struct;
     }
 
     public Map<String, Errors> errors() {
         return errors;
     }
 
-    public static DeleteTopicsResponse parse(ByteBuffer buffer) {
-        return new DeleteTopicsResponse(CURRENT_SCHEMA.read(buffer));
-    }
-
-    public static DeleteTopicsResponse parse(ByteBuffer buffer, int version) {
-        return new DeleteTopicsResponse(ProtoUtils.responseSchema(ApiKeys.DELETE_TOPICS.id, version).read(buffer));
+    public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {
+        return new DeleteTopicsResponse(ApiKeys.DELETE_TOPICS.responseSchema(version).read(buffer));
     }
 }

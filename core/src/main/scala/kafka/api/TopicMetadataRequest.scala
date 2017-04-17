@@ -25,8 +25,6 @@ import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 
-import scala.collection.mutable.ListBuffer
-
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
@@ -63,7 +61,7 @@ case class TopicMetadataRequest(versionId: Short,
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val topicMetadata = topics.map {
-      topic => TopicMetadata(topic, Nil, Errors.forException(e).code)
+      topic => TopicMetadata(topic, Nil, Errors.forException(e))
     }
     val errorResponse = TopicMetadataResponse(Seq(), topicMetadata, correlationId)
     requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))

@@ -28,7 +28,7 @@ class TopicTest {
     val invalidTopicNames = new ArrayBuffer[String]()
     invalidTopicNames += ("", ".", "..")
     var longName = "ATCG"
-    for (i <- 1 to 6)
+    for (_ <- 1 to 6)
       longName += longName
     invalidTopicNames += longName
     invalidTopicNames += longName.drop(6)
@@ -37,24 +37,24 @@ class TopicTest {
       invalidTopicNames += "Is" + weirdChar + "illegal"
     }
 
-    for (i <- 0 until invalidTopicNames.size) {
+    for (i <- invalidTopicNames.indices) {
       try {
         Topic.validate(invalidTopicNames(i))
         fail("Should throw InvalidTopicException.")
       }
       catch {
-        case e: org.apache.kafka.common.errors.InvalidTopicException => // This is good.
+        case _: org.apache.kafka.common.errors.InvalidTopicException => // This is good.
       }
     }
 
     val validTopicNames = new ArrayBuffer[String]()
     validTopicNames += ("valid", "TOPIC", "nAmEs", "ar6", "VaL1d", "_0-9_.", longName.drop(7))
-    for (i <- 0 until validTopicNames.size) {
+    for (i <- validTopicNames.indices) {
       try {
         Topic.validate(validTopicNames(i))
       }
       catch {
-        case e: Exception => fail("Should not throw exception.")
+        case _: Exception => fail("Should not throw exception.")
       }
     }
   }

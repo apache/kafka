@@ -61,11 +61,28 @@ if __name__ == "__main__":
         print >>sys.stderr, "Didn't find any issues for the target fix version"
         sys.exit(1)
 
-    unresolved_issues = [issue for issue in issues if issue.fields.resolution is None]
+    # Some resolutions, including a lack of resolution, indicate that the bug hasn't actually been addressed and we shouldn't even be able to create a release until they are fixed
+    UNRESOLVED_RESOLUTIONS = [None,
+                              "Unresolved",
+                              "Duplicate",
+                              "Invalid",
+                              "Not A Problem",
+                              "Not A Bug",
+                              "Won't Fix",
+                              "Incomplete",
+                              "Cannot Reproduce",
+                              "Later",
+                              "Works for Me",
+                              "Workaround",
+                              "Information Provided"
+                              ]
+    unresolved_issues = [issue for issue in issues if issue.fields.resolution in UNRESOLVED_RESOLUTIONS or issue.fields.resolution.name in UNRESOLVED_RESOLUTIONS]
     if unresolved_issues:
-        print >>sys.stderr, "The release is not completed since unresolved issues were found still tagged with this release as the fix version:"
+        print >>sys.stderr, "The release is not completed since unresolved issues or improperly resolved issues were found still tagged with this release as the fix version:"
         for issue in unresolved_issues:
-            print >>sys.stderr, "Unresolved issue: %s %s" % (issue.key, issue_link(issue))
+            print >>sys.stderr, "Unresolved issue: %15s %20s %s" % (issue.key, issue.fields.resolution, issue_link(issue))
+        print >>sys.stderr
+        print >>sys.stderr, "Note that for some resolutions, you should simply remove the fix version as they have not been truly fixed in this release."
         sys.exit(1)
 
     # Get list of (issue type, [issues]) sorted by the issue ID type, with each subset of issues sorted by their key so they

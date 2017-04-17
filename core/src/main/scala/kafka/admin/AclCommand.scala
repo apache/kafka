@@ -54,7 +54,7 @@ object AclCommand {
       case e: Throwable =>
         println(s"Error while executing ACL command: ${e.getMessage}")
         println(Utils.stackTrace(e))
-        System.exit(-1)
+        Exit.exit(1)
     }
   }
 
@@ -84,7 +84,6 @@ object AclCommand {
         CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
 
       for ((resource, acls) <- resourceToAcl) {
-        val acls = resourceToAcl(resource)
         println(s"Adding ACLs for resource `${resource}`: $Newline ${acls.map("\t" + _).mkString(Newline)} $Newline")
         authorizer.addAcls(acls, resource)
       }

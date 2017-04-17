@@ -1,23 +1,22 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals.assignment;
 
-import org.apache.kafka.common.record.ByteBufferInputStream;
+import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
 import org.apache.kafka.streams.processor.TaskId;
@@ -41,7 +40,7 @@ public class AssignmentInfo {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentInfo.class);
     /**
-     * A new field was added, partitionsByHostState. CURRENT_VERSION
+     * A new field was added, partitionsByHost. CURRENT_VERSION
      * is required so we can decode the previous version. For example, this may occur
      * during a rolling upgrade
      */
@@ -49,7 +48,7 @@ public class AssignmentInfo {
     public final int version;
     public final List<TaskId> activeTasks; // each element corresponds to a partition
     public final Map<TaskId, Set<TopicPartition>> standbyTasks;
-    public final Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
+    public final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
     public AssignmentInfo(List<TaskId> activeTasks, Map<TaskId, Set<TopicPartition>> standbyTasks,
                           Map<HostInfo, Set<TopicPartition>> hostState) {
@@ -61,7 +60,7 @@ public class AssignmentInfo {
         this.version = version;
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
-        this.partitionsByHostState = hostState;
+        this.partitionsByHost = hostState;
     }
 
     /**
@@ -89,8 +88,8 @@ public class AssignmentInfo {
                 Set<TopicPartition> partitions = entry.getValue();
                 writeTopicPartitions(out, partitions);
             }
-            out.writeInt(partitionsByHostState.size());
-            for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState
+            out.writeInt(partitionsByHost.size());
+            for (Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHost
                     .entrySet()) {
                 final HostInfo hostInfo = entry.getKey();
                 out.writeUTF(hostInfo.host());
@@ -174,7 +173,7 @@ public class AssignmentInfo {
 
     @Override
     public int hashCode() {
-        return version ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHostState.hashCode();
+        return version ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ partitionsByHost.hashCode();
     }
 
     @Override
@@ -184,7 +183,7 @@ public class AssignmentInfo {
             return this.version == other.version &&
                     this.activeTasks.equals(other.activeTasks) &&
                     this.standbyTasks.equals(other.standbyTasks) &&
-                    this.partitionsByHostState.equals(other.partitionsByHostState);
+                    this.partitionsByHost.equals(other.partitionsByHost);
         } else {
             return false;
         }

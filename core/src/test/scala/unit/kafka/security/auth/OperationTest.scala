@@ -31,7 +31,7 @@ class OperationTest extends JUnitSuite {
       Operation.fromString("badName")
       fail("Expected exception on invalid operation name.")
     } catch {
-      case e: KafkaException => // expected
+      case _: KafkaException => // expected
     }
   }
 

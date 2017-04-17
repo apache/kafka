@@ -83,7 +83,7 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
       TestUtils.getBrokerListStrFromServers(servers),
       keyEncoder = classOf[StringEncoder].getName)
 
-    for(i <- 0 until numMessages)
+    for(_ <- 0 until numMessages)
       producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
 
     // update offset in zookeeper for consumer to jump "forward" in time
@@ -103,12 +103,12 @@ class AutoOffsetResetTest extends KafkaServerTestHarness with Logging {
     var received = 0
     val iter = messageStream.iterator
     try {
-      for (i <- 0 until numMessages) {
+      for (_ <- 0 until numMessages) {
         iter.next // will throw a timeout exception if the message isn't there
         received += 1
       }
     } catch {
-      case e: ConsumerTimeoutException => 
+      case _: ConsumerTimeoutException =>
         info("consumer timed out after receiving " + received + " messages.")
     } finally {
       producer.close()

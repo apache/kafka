@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
@@ -352,8 +351,12 @@ public class SslTransportLayer implements TransportLayer {
             //remove OP_WRITE if we are complete, otherwise we still have data to write
             if (!handshakeComplete)
                 key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
-            else
+            else {
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+                SSLSession session = sslEngine.getSession();
+                log.debug("SSL handshake completed successfully with peerHost '{}' peerPort {} peerPrincipal '{}' cipherSuite '{}'",
+                        session.getPeerHost(), session.getPeerPort(), peerPrincipal(), session.getCipherSuite());
+            }
 
             log.trace("SSLHandshake FINISHED channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {} ",
                       channelId, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
@@ -397,12 +400,11 @@ public class SslTransportLayer implements TransportLayer {
     private SSLEngineResult handshakeUnwrap(boolean doRead) throws IOException {
         log.trace("SSLHandshake handshakeUnwrap {}", channelId);
         SSLEngineResult result;
-        boolean cont = false;
-        int read = 0;
         if (doRead)  {
-            read = socketChannel.read(netReadBuffer);
+            int read = socketChannel.read(netReadBuffer);
             if (read == -1) throw new EOFException("EOF during handshake.");
         }
+        boolean cont;
         do {
             //prepare the buffer with the incoming data
             netReadBuffer.flip();
@@ -444,7 +446,7 @@ public class SslTransportLayer implements TransportLayer {
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, netReadBufferSize());
             if (netReadBuffer.remaining() > 0) {
                 int netread = socketChannel.read(netReadBuffer);
-                if (netread == 0 && netReadBuffer.position() == 0) return netread;
+                if (netread == 0 && netReadBuffer.position() == 0) return read;
                 else if (netread < 0) throw new EOFException("EOF during read");
             }
             do {
@@ -485,7 +487,11 @@ public class SslTransportLayer implements TransportLayer {
                     }
                     break;
                 } else if (unwrapResult.getStatus() == Status.CLOSED) {
-                    throw new EOFException();
+                    // If data has been read and unwrapped, return the data. Close will be handled on the next poll.
+                    if (appReadBuffer.position() == 0 && read == 0)
+                        throw new EOFException();
+                    else
+                        break;
                 }
             } while (netReadBuffer.position() != 0);
         }

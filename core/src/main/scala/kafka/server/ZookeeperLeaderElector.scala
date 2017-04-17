@@ -16,14 +16,14 @@
  */
 package kafka.server
 
-import kafka.utils.ZkUtils._
 import kafka.utils.CoreUtils._
-import kafka.utils.{Json, SystemTime, Logging, ZKCheckedEphemeral}
+import kafka.utils.{Json, Logging, ZKCheckedEphemeral}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
 import kafka.controller.KafkaController
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.Time
 
 /**
  * This class handles zookeeper based leader election based on an ephemeral path. The election module does not handle
@@ -35,7 +35,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
                              electionPath: String,
                              onBecomingLeader: () => Unit,
                              onResigningAsLeader: () => Unit,
-                             brokerId: Int)
+                             brokerId: Int,
+                             time: Time)
   extends LeaderElector with Logging {
   var leaderId = -1
   // create the election path in ZK, if one does not exist
@@ -51,7 +52,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     }
   }
 
-  private def getControllerID(): Int = {
+  def getControllerID(): Int = {
     controllerContext.zkUtils.readDataMaybeNull(electionPath)._1 match {
        case Some(controller) => KafkaController.parseControllerId(controller)
        case None => -1
@@ -59,7 +60,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   }
 
   def elect: Boolean = {
-    val timestamp = SystemTime.milliseconds.toString
+    val timestamp = time.milliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
    
    leaderId = getControllerID 
@@ -83,7 +84,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
       leaderId = brokerId
       onBecomingLeader()
     } catch {
-      case e: ZkNodeExistsException =>
+      case _: ZkNodeExistsException =>
         // If someone else has written the path, then
         leaderId = getControllerID 
 
@@ -119,16 +120,18 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      * Called when the leader information stored in zookeeper has changed. Record the new leader in memory
      * @throws Exception On any error.
      */
-    @throws(classOf[Exception])
+    @throws[Exception]
     def handleDataChange(dataPath: String, data: Object) {
-      inLock(controllerContext.controllerLock) {
+      val shouldResign = inLock(controllerContext.controllerLock) {
         val amILeaderBeforeDataChange = amILeader
         leaderId = KafkaController.parseControllerId(data.toString)
         info("New leader is %d".format(leaderId))
         // The old leader needs to resign leadership if it is no longer the leader
-        if (amILeaderBeforeDataChange && !amILeader)
-          onResigningAsLeader()
+        amILeaderBeforeDataChange && !amILeader
       }
+
+      if (shouldResign)
+        onResigningAsLeader()
     }
 
     /**
@@ -136,13 +139,18 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      * @throws Exception
      *             On any error.
      */
-    @throws(classOf[Exception])
-    def handleDataDeleted(dataPath: String) {
-      inLock(controllerContext.controllerLock) {
+    @throws[Exception]
+    def handleDataDeleted(dataPath: String) { 
+      val shouldResign = inLock(controllerContext.controllerLock) {
         debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
           .format(brokerId, dataPath))
-        if(amILeader)
-          onResigningAsLeader()
+        amILeader
+      }
+
+      if (shouldResign)
+        onResigningAsLeader()
+
+      inLock(controllerContext.controllerLock) {
         elect
       }
     }

@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,12 +22,14 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
+import org.apache.kafka.test.MockPartitioner;
 import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
@@ -52,10 +54,24 @@ import static org.junit.Assert.fail;
 public class KafkaProducerTest {
 
     @Test
+    public void testConstructorWithSerializers() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer()).close();
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testNoSerializerProvided() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        new KafkaProducer(producerProps);
+    }
+
+    @Test
     public void testConstructorFailureCloseResource() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar:9999");
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar.local:9999");
         props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
@@ -115,6 +131,27 @@ public class KafkaProducerTest {
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
+        }
+    }
+
+    @Test
+    public void testPartitionerClose() throws Exception {
+        try {
+            Properties props = new Properties();
+            props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+            props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
+
+            KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
+                    props, new StringSerializer(), new StringSerializer());
+            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            Assert.assertEquals(0, MockPartitioner.CLOSE_COUNT.get());
+
+            producer.close();
+            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            Assert.assertEquals(1, MockPartitioner.CLOSE_COUNT.get());
+        } finally {
+            // cleanup since we are using mutable static variables in MockPartitioner
+            MockPartitioner.resetCounters();
         }
     }
 

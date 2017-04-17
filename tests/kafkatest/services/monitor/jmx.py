@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.cluster.remoteaccount import RemoteCommandError
+from ducktape.utils.util import wait_until
+
 
 class JmxMixin(object):
     """This mixin helps existing service subclasses start JmxTool on their worker nodes and collect jmx stats.
@@ -31,12 +34,20 @@ class JmxMixin(object):
         self.maximum_jmx_value = {}  # map from object_attribute_name to maximum value observed over time
         self.average_jmx_value = {}  # map from object_attribute_name to average value observed over time
 
+        self.jmx_tool_log = "/mnt/jmx_tool.log"
+        self.jmx_tool_err_log = "/mnt/jmx_tool.err.log"
+
     def clean_node(self, node):
         node.account.kill_process("jmx", clean_shutdown=False, allow_fail=True)
-        node.account.ssh("rm -rf /mnt/jmx_tool.log", allow_fail=False)
+        node.account.ssh("rm -rf %s" % self.jmx_tool_log, allow_fail=False)
 
     def start_jmx_tool(self, idx, node):
-        if self.started[idx-1] or self.jmx_object_names is None:
+        if self.jmx_object_names is None:
+            self.logger.debug("%s: Not starting jmx tool because no jmx objects are defined" % node.account)
+            return
+
+        if self.started[idx-1]:
+            self.logger.debug("%s: jmx tool has been started already on this node" % node.account)
             return
 
         cmd = "%s kafka.tools.JmxTool " % self.path.script("kafka-run-class.sh", node)
@@ -45,31 +56,44 @@ class JmxMixin(object):
             cmd += " --object-name %s" % jmx_object_name
         for jmx_attribute in self.jmx_attributes:
             cmd += " --attributes %s" % jmx_attribute
-        cmd += " | tee -a /mnt/jmx_tool.log"
+        cmd += " 1>> %s" % self.jmx_tool_log
+        cmd += " 2>> %s &" % self.jmx_tool_err_log
 
-        self.logger.debug("Start JmxTool %d command: %s", idx, cmd)
-        jmx_output = node.account.ssh_capture(cmd, allow_fail=False)
-        jmx_output.next()
-
+        self.logger.debug("%s: Start JmxTool %d command: %s" % (node.account, idx, cmd))
+        node.account.ssh(cmd, allow_fail=False)
+        wait_until(lambda: self._jmx_has_output(node), timeout_sec=10, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
         self.started[idx-1] = True
 
+    def _jmx_has_output(self, node):
+        """Helper used as a proxy to determine whether jmx is running by that jmx_tool_log contains output."""
+        try:
+            node.account.ssh("test -z \"$(cat %s)\"" % self.jmx_tool_log, allow_fail=False)
+            return False
+        except RemoteCommandError:
+            return True
+
     def read_jmx_output(self, idx, node):
-        if self.started[idx-1] == False:
+        if not self.started[idx-1]:
             return
 
         object_attribute_names = []
 
-        cmd = "cat /mnt/jmx_tool.log"
+        cmd = "cat %s" % self.jmx_tool_log
         self.logger.debug("Read jmx output %d command: %s", idx, cmd)
-        for line in node.account.ssh_capture(cmd, allow_fail=False):
+        lines = [line for line in node.account.ssh_capture(cmd, allow_fail=False)]
+        assert len(lines) > 1, "There don't appear to be any samples in the jmx tool log: %s" % lines
+
+        for line in lines:
             if "time" in line:
                 object_attribute_names = line.strip()[1:-1].split("\",\"")[1:]
                 continue
             stats = [float(field) for field in line.split(',')]
             time_sec = int(stats[0]/1000)
-            self.jmx_stats[idx-1][time_sec] = {name : stats[i+1] for i, name in enumerate(object_attribute_names)}
+            self.jmx_stats[idx-1][time_sec] = {name: stats[i+1] for i, name in enumerate(object_attribute_names)}
 
         # do not calculate average and maximum of jmx stats until we have read output from all nodes
+        # If the service is multithreaded, this means that the results will be aggregated only when the last
+        # service finishes
         if any(len(time_to_stats) == 0 for time_to_stats in self.jmx_stats):
             return
 

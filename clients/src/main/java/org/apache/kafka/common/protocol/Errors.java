@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,17 +16,15 @@
  */
 package org.apache.kafka.common.protocol;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CorruptRecordException;
+import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException;
-import org.apache.kafka.common.errors.GroupLoadInProgressException;
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
+import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
@@ -35,6 +33,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidFetchSizeException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
+import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -42,31 +41,39 @@ import org.apache.kafka.common.errors.InvalidRequiredAcksException;
 import org.apache.kafka.common.errors.InvalidSessionTimeoutException;
 import org.apache.kafka.common.errors.InvalidTimestampException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
+import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
-import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
+import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TopicExistsException;
-import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
+import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This class contains all the client-server errors--those errors that must be sent from the server to the client. These
@@ -103,12 +110,12 @@ public enum Errors {
             new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
     NETWORK_EXCEPTION(13,
             new NetworkException("The server disconnected before a response was received.")),
-    GROUP_LOAD_IN_PROGRESS(14,
-            new GroupLoadInProgressException("The coordinator is loading and hence can't process requests for this group.")),
-    GROUP_COORDINATOR_NOT_AVAILABLE(15,
-            new GroupCoordinatorNotAvailableException("The group coordinator is not available.")),
-    NOT_COORDINATOR_FOR_GROUP(16,
-            new NotCoordinatorForGroupException("This is not the correct coordinator for this group.")),
+    COORDINATOR_LOAD_IN_PROGRESS(14,
+            new CoordinatorLoadInProgressException("The coordinator is loading and hence can't process requests.")),
+    COORDINATOR_NOT_AVAILABLE(15,
+            new CoordinatorNotAvailableException("The coordinator is not available.")),
+    NOT_COORDINATOR(16,
+            new NotCoordinatorException("This is not the correct coordinator.")),
     INVALID_TOPIC_EXCEPTION(17,
             new InvalidTopicException("The request attempted to perform an operation on an invalid topic.")),
     RECORD_LIST_TOO_LARGE(18,
@@ -164,12 +171,27 @@ public enum Errors {
         new InvalidRequestException("This most likely occurs because of a request being malformed by the client library or" +
             " the message was sent to an incompatible broker. See the broker logs for more details.")),
     UNSUPPORTED_FOR_MESSAGE_FORMAT(43,
-        new UnsupportedForMessageFormatException("The message format version on the broker does not support the request."));
+        new UnsupportedForMessageFormatException("The message format version on the broker does not support the request.")),
+    POLICY_VIOLATION(44,
+        new PolicyViolationException("Request parameters do not satisfy the configured policy.")),
+    OUT_OF_ORDER_SEQUENCE_NUMBER(45,
+        new OutOfOrderSequenceException("The broker received an out of order sequence number")),
+    DUPLICATE_SEQUENCE_NUMBER(46,
+        new DuplicateSequenceNumberException("The broker received a duplicate sequence number")),
+    INVALID_PRODUCER_EPOCH(47,
+        new ProducerFencedException("Producer attempted an operation with an old epoch")),
+    INVALID_TXN_STATE(48,
+        new InvalidTxnStateException("The producer attempted a transactional operation in an invalid state")),
+    INVALID_PID_MAPPING(49,
+        new InvalidPidMappingException("The PID mapping is invalid")),
+    INVALID_TRANSACTION_TIMEOUT(50,
+        new InvalidTxnTimeoutException("The transaction timeout is larger than the maximum value allowed by the broker " +
+            "(as configured by max.transaction.timeout.ms)."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
-    private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
-    private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
+    private static Map<Class<?>, Errors> classToError = new HashMap<>();
+    private static Map<Short, Errors> codeToError = new HashMap<>();
 
     static {
         for (Errors error : Errors.values()) {
@@ -182,7 +204,7 @@ public enum Errors {
     private final short code;
     private final ApiException exception;
 
-    private Errors(int code, ApiException exception) {
+    Errors(int code, ApiException exception) {
         this.code = (short) code;
         this.exception = exception;
     }

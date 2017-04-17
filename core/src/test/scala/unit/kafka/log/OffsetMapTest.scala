@@ -18,6 +18,8 @@
 package kafka.log
 
 import java.nio._
+
+import kafka.utils.Exit
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -62,7 +64,6 @@ class OffsetMapTest extends JUnitSuite {
     val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
     for(i <- 0 until items)
       map.put(key(i), i)
-    var misses = 0
     for(i <- 0 until items)
       assertEquals(map.get(key(i)), i.toLong)
     map
@@ -74,7 +75,7 @@ object OffsetMapTest {
   def main(args: Array[String]) {
     if(args.length != 2) {
       System.err.println("USAGE: java OffsetMapTest size load")
-      System.exit(1)
+      Exit.exit(1)
     }
     val test = new OffsetMapTest()
     val size = args(0).toInt

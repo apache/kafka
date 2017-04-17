@@ -21,10 +21,10 @@ import java.util.Properties
 
 import joptsimple.OptionParser
 import kafka.server.{KafkaServer, KafkaServerStartable}
-import kafka.utils.{CommandLineUtils, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 object Kafka extends Logging {
 
@@ -47,7 +47,7 @@ object Kafka extends Logging {
         CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
       }
 
-      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
+      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt).asScala))
     }
     props
   }
@@ -58,20 +58,18 @@ object Kafka extends Logging {
       val kafkaServerStartable = KafkaServerStartable.fromProps(serverProps)
 
       // attach shutdown handler to catch control-c
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        override def run() = {
-          kafkaServerStartable.shutdown
-        }
+      Runtime.getRuntime().addShutdownHook(new Thread("kafka-shutdown-hook") {
+        override def run(): Unit = kafkaServerStartable.shutdown()
       })
 
-      kafkaServerStartable.startup
-      kafkaServerStartable.awaitShutdown
+      kafkaServerStartable.startup()
+      kafkaServerStartable.awaitShutdown()
     }
     catch {
       case e: Throwable =>
         fatal(e)
-        System.exit(1)
+        Exit.exit(1)
     }
-    System.exit(0)
+    Exit.exit(0)
   }
 }

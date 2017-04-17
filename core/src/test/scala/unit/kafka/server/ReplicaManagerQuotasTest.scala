@@ -16,33 +16,31 @@
   */
 package kafka.server
 
-
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api._
 import kafka.cluster.Replica
-import kafka.common.TopicAndPartition
 import kafka.log.Log
-import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.utils._
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.{MockTime => JMockTime}
+import org.apache.kafka.common.record.{CompressionType, SimpleRecord, MemoryRecords}
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
-import org.easymock.EasyMock._
+import EasyMock._
 import org.junit.Assert._
 import org.junit.{After, Test}
 
+import scala.collection.JavaConverters._
 
 class ReplicaManagerQuotasTest {
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps(_, new Properties()))
   val time = new MockTime
-  val jTime = new JMockTime
   val metrics = new Metrics
-  val message = new Message("some-data-in-a-message".getBytes())
-  val topicAndPartition1 = TopicAndPartition("test-topic", 1)
-  val topicAndPartition2 = TopicAndPartition("test-topic", 2)
-  val fetchInfo = Seq(topicAndPartition1 -> PartitionFetchInfo(0, 100), topicAndPartition2 -> PartitionFetchInfo(0, 100))
+  val record = new SimpleRecord("some-data-in-a-message".getBytes())
+  val topicPartition1 = new TopicPartition("test-topic", 1)
+  val topicPartition2 = new TopicPartition("test-topic", 2)
+  val fetchInfo = Seq(topicPartition1 -> new PartitionData(0, 0, 100), topicPartition2 -> new PartitionData(0, 0, 100))
   var replicaManager: ReplicaManager = null
 
   @Test
@@ -64,10 +62,10 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
 
     assertEquals("But we shouldn't get the second", 0,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
   }
 
   @Test
@@ -89,9 +87,9 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
   }
 
   @Test
@@ -113,9 +111,9 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
   }
 
   @Test
@@ -137,33 +135,34 @@ class ReplicaManagerQuotasTest {
       readPartitionInfo = fetchInfo,
       quota = quota)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
-      fetch.find(_._1 == topicAndPartition1).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
 
     assertEquals("But we should get the second too since it's throttled but in sync", 1,
-      fetch.find(_._1 == topicAndPartition2).get._2.info.messageSet.size)
+      fetch.find(_._1 == topicPartition2).get._2.info.records.batches.asScala.size)
   }
 
-  def setUpMocks(fetchInfo: Seq[(TopicAndPartition, PartitionFetchInfo)], message: Message = this.message, bothReplicasInSync: Boolean = false) {
+  def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
     val zkUtils = createNiceMock(classOf[ZkUtils])
     val scheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
-    val log = createMock(classOf[Log])
+    val log = createNiceMock(classOf[Log])
+    expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
 
     //if we ask for len 1 return a message
     expect(log.read(anyObject(), geq(1), anyObject(), anyObject())).andReturn(
-      new FetchDataInfo(
+      FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        new ByteBufferMessageSet(message)
+        MemoryRecords.withRecords(CompressionType.NONE, record)
       )).anyTimes()
 
     //if we ask for len = 0, return 0 messages
     expect(log.read(anyObject(), EasyMock.eq(0), anyObject(), anyObject())).andReturn(
-      new FetchDataInfo(
+      FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
-        new ByteBufferMessageSet()
+        MemoryRecords.EMPTY
       )).anyTimes()
     replay(log)
 
@@ -174,18 +173,18 @@ class ReplicaManagerQuotasTest {
     expect(logManager.getLog(anyObject())).andReturn(Some(log)).anyTimes()
     replay(logManager)
 
-    replicaManager = new ReplicaManager(configs.head, metrics, time, jTime, zkUtils, scheduler, logManager,
-      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower)
+    replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower, new MetadataCache(configs.head.brokerId))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
-      val partition = replicaManager.getOrCreatePartition(p.topic, p.partition)
+      val partition = replicaManager.getOrCreatePartition(p)
       val leaderReplica = new Replica(configs.head.brokerId, partition, time, 0, Some(log))
       leaderReplica.highWatermark = new LogOffsetMetadata(5)
       partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
       val followerReplica = new Replica(configs.last.brokerId, partition, time, 0, Some(log))
       val allReplicas = Set(leaderReplica, followerReplica)
-      allReplicas.foreach(partition.addReplicaIfNotExists(_))
+      allReplicas.foreach(partition.addReplicaIfNotExists)
       if (bothReplicasInSync) {
         partition.inSyncReplicas = allReplicas
         followerReplica.highWatermark = new LogOffsetMetadata(5)

@@ -31,7 +31,7 @@ class ResourceTypeTest extends JUnitSuite {
       ResourceType.fromString("badName")
       fail("Expected exception on invalid ResourceType name.")
     } catch {
-      case e: KafkaException => // expected
+      case _: KafkaException => // expected
     }
   }
 

@@ -18,16 +18,16 @@
 package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
-import kafka.producer.{OldProducer, NewShinyProducer}
-import kafka.utils.{ToolsUtils, VerifiableProperties, Logging, CommandLineUtils}
+import kafka.producer.{NewShinyProducer, OldProducer}
+import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils, VerifiableProperties}
 import kafka.message.CompressionCodec
 import kafka.serializer._
-
 import java.util.concurrent.{CountDownLatch, Executors}
 import java.util.concurrent.atomic.AtomicLong
 import java.util._
 import java.text.SimpleDateFormat
 import java.math.BigInteger
+import java.nio.charset.StandardCharsets
 
 import org.apache.kafka.common.utils.Utils
 import org.apache.log4j.Logger
@@ -67,7 +67,7 @@ object ProducerPerformance extends Logging {
       config.dateFormat.format(startMs), config.dateFormat.format(endMs),
       config.compressionCodec.codec, config.messageSize, config.batchSize, totalMBSent,
       totalMBSent / elapsedSecs, totalMessagesSent.get, totalMessagesSent.get / elapsedSecs))
-    System.exit(0)
+    Exit.exit(0)
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
@@ -246,7 +246,7 @@ object ProducerPerformance extends Logging {
 
       val seqMsgString = String.format("%1$-" + msgSize + "s", msgHeader).replace(' ', 'x')
       debug(seqMsgString)
-      seqMsgString.getBytes()
+      seqMsgString.getBytes(StandardCharsets.UTF_8)
     }
 
     private def generateProducerData(topic: String, messageId: Long): Array[Byte] = {
@@ -277,7 +277,7 @@ object ProducerPerformance extends Logging {
                 Thread.sleep(config.messageSendGapMs)
             })
         } catch {
-          case e: Throwable => error("Error when sending message " + new String(message), e)
+          case e: Throwable => error("Error when sending message " + new String(message, StandardCharsets.UTF_8), e)
         }
         i += 1
       }

@@ -18,11 +18,11 @@ import json
 import os.path
 import re
 import signal
-import subprocess
 import time
 
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
+from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from config import KafkaConfig
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -30,7 +30,7 @@ from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import TRUNK
+from kafkatest.version import DEV_BRANCH
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
@@ -67,7 +67,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
-                 authorizer_class_name=None, topics=None, version=TRUNK, jmx_object_names=None,
+                 authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
                  jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=[]):
         """
         :type context
@@ -88,6 +88,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.authorizer_class_name = authorizer_class_name
         self.zk_set_acl = False
         self.server_prop_overides = server_prop_overides
+        self.log_level = "DEBUG"
 
         #
         # In a heavily loaded and not very fast machine, it is
@@ -118,11 +119,21 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             node.version = version
             node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
 
+
+    def set_version(self, version):
+        for node in self.nodes:
+            node.version = version
+
     @property
     def security_config(self):
-        return SecurityConfig(self.security_protocol, self.interbroker_security_protocol,
-                              zk_sasl = self.zk.zk_sasl,
+        config = SecurityConfig(self.context, self.security_protocol, self.interbroker_security_protocol,
+                              zk_sasl=self.zk.zk_sasl,
                               client_sasl_mechanism=self.client_sasl_mechanism, interbroker_sasl_mechanism=self.interbroker_sasl_mechanism)
+        for protocol in self.port_mappings:
+            port = self.port_mappings[protocol]
+            if port.open:
+                config.enable_security_protocol(port.name)
+        return config
 
     def open_port(self, protocol):
         self.port_mappings[protocol] = self.port_mappings[protocol]._replace(open=True)
@@ -202,12 +213,18 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties', log_dir=KafkaService.OPERATIONAL_LOG_DIR))
 
         self.security_config.setup_node(node)
+        self.security_config.setup_credentials(node, self.path, self.zk.connect_setting(), broker=True)
 
         cmd = self.start_cmd(node)
         self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
-            monitor.wait_until("Kafka Server.*started", timeout_sec=30, err_msg="Kafka server didn't finish startup")
+            monitor.wait_until("Kafka Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
+
+        # Credentials for inter-broker communication are created before starting Kafka.
+        # Client credentials are created after starting Kafka so that both loading of
+        # existing credentials from ZK and dynamic update of credentials in Kafka are tested.
+        self.security_config.setup_credentials(node, self.path, self.zk.connect_setting(), broker=False)
 
         self.start_jmx_tool(self.idx(node), node)
         if len(self.pids(node)) == 0:
@@ -220,7 +237,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
             pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
             return pid_arr
-        except (subprocess.CalledProcessError, ValueError) as e:
+        except (RemoteCommandError, ValueError) as e:
             return []
 
     def signal_node(self, node, sig=signal.SIGTERM):
@@ -295,6 +312,15 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
+
+    def list_topics(self, topic, node=None):
+        if node is None:
+            node = self.nodes[0]
+        cmd = "%s --zookeeper %s --list" % \
+              (self.path.script("kafka-topics.sh", node), self.zk.connect_setting())
+        for line in node.account.ssh_capture(cmd):
+            if not line.startswith("SLF4J"):
+                yield line.rstrip()
 
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
@@ -461,7 +487,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.info("Leader for topic %s and partition %d is now: %d" % (topic, partition, leader_idx))
         return self.get_node(leader_idx)
 
-    def list_consumer_groups(self, node=None, new_consumer=False, command_config=None):
+    def list_consumer_groups(self, node=None, new_consumer=True, command_config=None):
         """ Get list of consumer groups.
         """
         if node is None:
@@ -488,7 +514,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug(output)
         return output
 
-    def describe_consumer_group(self, group, node=None, new_consumer=False, command_config=None):
+    def describe_consumer_group(self, group, node=None, new_consumer=True, command_config=None):
         """ Describe a consumer group.
         """
         if node is None:
@@ -509,7 +535,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         output = ""
         self.logger.debug(cmd)
         for line in node.account.ssh_capture(cmd):
-            if not (line.startswith("SLF4J") or line.startswith("GROUP") or line.startswith("Could not fetch offset")):
+            if not (line.startswith("SLF4J") or line.startswith("TOPIC") or line.startswith("Could not fetch offset")):
                 output += line
         self.logger.debug(output)
         return output

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -13,8 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -89,6 +88,9 @@ public class ConnectorsResource {
     public Response createConnector(final @QueryParam("forward") Boolean forward,
                                     final CreateConnectorRequest createRequest) throws Throwable {
         String name = createRequest.name();
+        if (name.contains("/")) {
+            throw new BadRequestException("connector name should not contain '/'");
+        }
         Map<String, String> configs = createRequest.config();
         if (!configs.containsKey(ConnectorConfig.NAME_CONFIG))
             configs.put(ConnectorConfig.NAME_CONFIG, name);
@@ -215,7 +217,7 @@ public class ConnectorsResource {
     public void destroyConnector(final @PathParam("connector") String connector,
                                  final @QueryParam("forward") Boolean forward) throws Throwable {
         FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>();
-        herder.putConnectorConfig(connector, null, true, cb);
+        herder.deleteConnectorConfig(connector, cb);
         completeOrForwardRequest(cb, "/connectors/" + connector, "DELETE", null, forward);
     }
 
@@ -282,14 +284,14 @@ public class ConnectorsResource {
         T translate(RestServer.HttpResponse<U> response);
     }
 
-    private class IdentityTranslator<T> implements Translator<T, T> {
+    private static class IdentityTranslator<T> implements Translator<T, T> {
         @Override
         public T translate(RestServer.HttpResponse<T> response) {
             return response.body();
         }
     }
 
-    private class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
+    private static class CreatedConnectorInfoTranslator implements Translator<Herder.Created<ConnectorInfo>, ConnectorInfo> {
         @Override
         public Herder.Created<ConnectorInfo> translate(RestServer.HttpResponse<ConnectorInfo> response) {
             boolean created = response.status() == 201;

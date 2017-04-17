@@ -56,6 +56,7 @@ object Defaults {
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
+  val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -234,6 +235,8 @@ object LogConfig {
         case _ => super.getConfigValue(key, headerName)
       }
     }
+
+    def serverConfigName(configName: String): Option[String] = serverDefaultConfigNames.get(configName)
   }
 
   private val configDef: LogConfigDef = {
@@ -298,6 +301,8 @@ object LogConfig {
   def apply(): LogConfig = LogConfig(new Properties())
 
   def configNames: Seq[String] = configDef.names.asScala.toSeq.sorted
+
+  def serverConfigName(configName: String): Option[String] = configDef.serverConfigName(configName)
 
   /**
    * Create a log config instance using the given properties and defaults

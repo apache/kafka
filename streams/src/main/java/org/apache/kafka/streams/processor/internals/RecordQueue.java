@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,20 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayDeque;
 
-import static java.lang.String.format;
 
 /**
  * RecordQueue is a FIFO queue of {@link StampedRecord} (ConsumerRecord + timestamp). It also keeps track of the
@@ -39,19 +35,25 @@ public class RecordQueue {
     private static final Logger log = LoggerFactory.getLogger(RecordQueue.class);
 
     private final SourceNode source;
+    private final TimestampExtractor timestampExtractor;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
     private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
+    private final RecordDeserializer recordDeserializer;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
 
-    public RecordQueue(TopicPartition partition, SourceNode source) {
+    RecordQueue(final TopicPartition partition,
+                final SourceNode source,
+                final TimestampExtractor timestampExtractor) {
         this.partition = partition;
         this.source = source;
-
+        this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
         this.timeTracker = new MinTimestampTracker<>();
+        this.recordDeserializer = new SourceNodeRecordDeserializer(source);
     }
+
 
     /**
      * Returns the corresponding source node in the topology
@@ -75,43 +77,20 @@ public class RecordQueue {
      * Add a batch of {@link ConsumerRecord} into the queue
      *
      * @param rawRecords the raw records
-     * @param timestampExtractor TimestampExtractor
      * @return the size of this queue
      */
-    public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords, TimestampExtractor timestampExtractor) {
+    public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
-            // deserialize the raw record, extract the timestamp and put into the queue
-            final Object key;
-            try {
-                key = source.deserializeKey(rawRecord.topic(), rawRecord.key());
-            } catch (Exception e) {
-                throw new StreamsException(format("Failed to deserialize key for record. topic=%s, partition=%d, offset=%d",
-                                                  rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
+            ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
+            long timestamp = timestampExtractor.extract(record, timeTracker.get());
+            log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
+
+            // drop message if TS is invalid, i.e., negative
+            if (timestamp < 0) {
+                continue;
             }
-
-            final Object value;
-            try {
-                value = source.deserializeValue(rawRecord.topic(), rawRecord.value());
-            } catch (Exception e) {
-                throw new StreamsException(format("Failed to deserialize value for record. topic=%s, partition=%d, offset=%d",
-                                                  rawRecord.topic(), rawRecord.partition(), rawRecord.offset()), e);
-            }
-
-            ConsumerRecord<Object, Object> record = new ConsumerRecord<>(rawRecord.topic(), rawRecord.partition(), rawRecord.offset(),
-                                                                         rawRecord.timestamp(), TimestampType.CREATE_TIME,
-                                                                         rawRecord.checksum(),
-                                                                         rawRecord.serializedKeySize(),
-                                                                         rawRecord.serializedValueSize(), key, value);
-            long timestamp = timestampExtractor.extract(record);
-
-            log.trace("Source node {} extracted timestamp {} for record {} when adding to buffered queue", source.name(), timestamp, record);
-
-            // validate that timestamp must be non-negative
-            if (timestamp < 0)
-                throw new StreamsException("Extracted timestamp value is negative, which is not allowed.");
 
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
-
             fifoQueue.addLast(stampedRecord);
             timeTracker.addElement(stampedRecord);
         }
@@ -175,5 +154,12 @@ public class RecordQueue {
      */
     public long timestamp() {
         return partitionTime;
+    }
+
+    /**
+     * Clear the fifo queue of its elements
+     */
+    public void clear() {
+        fifoQueue.clear();
     }
 }

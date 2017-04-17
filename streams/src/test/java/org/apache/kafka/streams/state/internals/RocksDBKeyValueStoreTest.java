@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -52,7 +52,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @SuppressWarnings("unchecked")
     private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes, final boolean enableCaching) {
 
-        Stores.PersistentKeyValueFactory<?, ?> factory = null;
+        Stores.PersistentKeyValueFactory<?, ?> factory;
         if (useContextSerdes) {
             factory = Stores
                     .create("my-store")
@@ -97,7 +97,9 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, false);
+        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+        context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.range(1, 2);
@@ -109,7 +111,9 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
         final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final KeyValueStore<Integer, String> store = createStore(driver.context(), Integer.class, String.class, false, false);
+        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false, false);
+        context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> range = store.all();
