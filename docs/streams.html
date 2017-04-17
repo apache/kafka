@@ -664,11 +664,11 @@ KStream&lt;String, String&gt; materialized = joined.through("topic4");
         Besides defining the topology, developers will also need to configure their applications
         in <code>StreamsConfig</code> before running it. A complete list of
         Kafka Streams configs can be found <a href="/{{version}}/documentation/#streamsconfigs"><b>here</b></a>.
-        Note, that different parameters do have differente "levels of importance", with the following interpretation:
+        Note, that different parameters do have different "levels of importance", with the following interpretation:
         </p>
         <ul>
           <li> HIGH: you most likely need to change the default value if you go to production </li>
-          <li> MEDIUM: default value should be ok, but you should double check it </li>
+          <li> MEDIUM: default value should be ok, but you should double-check it </li>
           <li> LOW: default value is most likely ok; only consider to change it if you hit an issues when running in production </li>
         </ul>
 
