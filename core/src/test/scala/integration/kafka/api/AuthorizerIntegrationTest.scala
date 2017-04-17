@@ -14,7 +14,6 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.util
-import java.util.Collections._
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
 import java.util.{ArrayList, Collections, Properties}
