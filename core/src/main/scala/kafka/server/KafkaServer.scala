@@ -382,7 +382,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           "kafka-server-controlled-shutdown",
           Map.empty.asJava,
           false,
-          channelBuilder
+          channelBuilder,
+          Selector.DEFAULT_CONNECT_TIMEOUT_MS
         )
         new NetworkClient(
           selector,
@@ -395,7 +396,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           config.requestTimeoutMs,
           time,
           false,
-          new ApiVersions)
+          new ApiVersions,
+          NetworkClient.DEFAULT_CONNECT_TIMEOUT_MS)
       }
 
       var shutdownSucceeded: Boolean = false

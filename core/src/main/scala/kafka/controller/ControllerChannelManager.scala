@@ -109,7 +109,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         "controller-channel",
         Map("broker-id" -> broker.id.toString).asJava,
         false,
-        channelBuilder
+        channelBuilder,
+        Selector.DEFAULT_CONNECT_TIMEOUT_MS
       )
       new NetworkClient(
         selector,
@@ -122,7 +123,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         config.requestTimeoutMs,
         time,
         false,
-        new ApiVersions
+        new ApiVersions,
+        NetworkClient.DEFAULT_CONNECT_TIMEOUT_MS
       )
     }
     val threadName = threadNamePrefix match {

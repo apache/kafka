@@ -82,6 +82,7 @@ import org.slf4j.LoggerFactory;
 public class Selector implements Selectable {
 
     public static final long NO_IDLE_TIMEOUT_MS = -1;
+    public static final long DEFAULT_CONNECT_TIMEOUT_MS = 5000L;
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector nioSelector;
@@ -102,6 +103,8 @@ public class Selector implements Selectable {
     private final int maxReceiveSize;
     private final boolean metricsPerConnection;
     private final IdleExpiryManager idleExpiryManager;
+    private final long connectingTimeoutNanos;
+    private final Map<String, Long> connectingChannels;
 
     /**
      * Create a new nioSelector
@@ -122,7 +125,8 @@ public class Selector implements Selectable {
                     String metricGrpPrefix,
                     Map<String, String> metricTags,
                     boolean metricsPerConnection,
-                    ChannelBuilder channelBuilder) {
+                    ChannelBuilder channelBuilder,
+                    long connectTimeoutMs) {
         try {
             this.nioSelector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -145,10 +149,12 @@ public class Selector implements Selectable {
         this.channelBuilder = channelBuilder;
         this.metricsPerConnection = metricsPerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
+        this.connectingChannels = new HashMap<String, Long>();
+        this.connectingTimeoutNanos = connectTimeoutMs * 1000 * 1000;
     }
 
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, long connectTimeoutMs) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder, connectTimeoutMs);
     }
 
     /**
@@ -178,6 +184,7 @@ public class Selector implements Selectable {
         if (receiveBufferSize != Selectable.USE_DEFAULT_BUFFER_SIZE)
             socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
+        socket.setSoLinger(true, 0);
         boolean connected;
         try {
             connected = socketChannel.connect(address);
@@ -192,6 +199,7 @@ public class Selector implements Selectable {
         KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
+        this.connectingChannels.put(id,  time.nanoseconds());
 
         if (connected) {
             // OP_CONNECT won't trigger for immediately connected channels
@@ -316,6 +324,7 @@ public class Selector implements Selectable {
         // we use the time at the end of select to ensure that we don't close any connections that
         // have just been processed in pollSelectionKeys
         maybeCloseOldestConnection(endSelect);
+        checkTimeoutConnectingChannels(endSelect);
     }
 
     private void pollSelectionKeys(Iterable<SelectionKey> selectionKeys,
@@ -339,6 +348,7 @@ public class Selector implements Selectable {
                     if (channel.finishConnect()) {
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
+                        this.connectingChannels.remove(channel.id());
                         SocketChannel socketChannel = (SocketChannel) key.channel();
                         log.debug("Created socket with SO_RCVBUF = {}, SO_SNDBUF = {}, SO_TIMEOUT = {} to node {}",
                                 socketChannel.socket().getReceiveBufferSize(),
@@ -452,6 +462,22 @@ public class Selector implements Selectable {
             }
         }
     }
+    
+    private void checkTimeoutConnectingChannels(long currentTimeNanos) {
+        if (connectingChannels.size() > 0) {
+            Iterator<Map.Entry<String, Long>> iter = this.connectingChannels.entrySet().iterator();
+            while (iter.hasNext()) {
+                Map.Entry<String, Long> entry = iter.next();
+                long connectingTime = entry.getValue();
+                if (currentTimeNanos > connectingTime + connectingTimeoutNanos) {
+                    String channelId = entry.getKey();
+                    iter.remove();
+                    log.warn("Connecting to node " + channelId + " timeout for " + (currentTimeNanos - connectingTime) / 1000 / 1000 + " millis");
+                    close(channelId);
+                }
+            }
+        }
+    }
 
     /**
      * Clear the results from the prior poll
@@ -534,6 +560,7 @@ public class Selector implements Selectable {
         } else
             doClose(channel, processOutstanding);
         this.channels.remove(channel.id());
+        this.connectingChannels.remove(channel.id());
 
         if (idleExpiryManager != null)
             idleExpiryManager.remove(channel.id());

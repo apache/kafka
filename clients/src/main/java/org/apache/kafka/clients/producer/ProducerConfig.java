@@ -218,6 +218,10 @@ public class ProducerConfig extends AbstractConfig {
                                                         + " This should be larger than replica.lag.time.max.ms (a broker configuration)"
                                                         + " to reduce the possibility of message duplication due to unnecessary producer retries.";
 
+    /** <code>connect.timeout.ms</code> */
+    public static final String CONNECT_TIMEOUT_MS_CONFIG = CommonClientConfigs.CONNECT_TIMEOUT_MS_CONFIG;
+    private static final String CONNECT_TIMEOUT_MS_DOC = CommonClientConfigs.CONNECT_TIMEOUT_MS_DOC;
+    
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
     public static final String INTERCEPTOR_CLASSES_DOC = "A list of classes to use as interceptors. "
@@ -325,7 +329,13 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         false,
                                         Importance.LOW,
-                                        ENABLE_IDEMPOTENCE_DOC);
+                                        ENABLE_IDEMPOTENCE_DOC)
+                                .define(CONNECT_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        5L * 1000,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        CONNECT_TIMEOUT_MS_DOC);
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,

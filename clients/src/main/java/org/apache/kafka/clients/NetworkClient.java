@@ -59,6 +59,8 @@ import java.util.Set;
 public class NetworkClient implements KafkaClient {
 
     private static final Logger log = LoggerFactory.getLogger(NetworkClient.class);
+    
+    public static final long DEFAULT_CONNECT_TIMEOUT_MS = 5000L;
 
     /* the selector used to perform network i/o */
     private final Selectable selector;
@@ -87,6 +89,9 @@ public class NetworkClient implements KafkaClient {
 
     /* max time in ms for the producer to wait for acknowledgement from server*/
     private final int requestTimeoutMs;
+    
+    /* connect timeout for the networkclient */
+    private final long connectTimeoutMs;
 
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
@@ -114,9 +119,10 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
-                         ApiVersions apiVersions) {
+                         ApiVersions apiVersions,
+                         long connectTimeoutMs) {
         this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions, connectTimeoutMs);
     }
 
     public NetworkClient(Selectable selector,
@@ -129,9 +135,10 @@ public class NetworkClient implements KafkaClient {
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
-                         ApiVersions apiVersions) {
+                         ApiVersions apiVersions,
+                         long connectTimeoutMs) {
         this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
+                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions, connectTimeoutMs);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -145,7 +152,8 @@ public class NetworkClient implements KafkaClient {
                           int requestTimeoutMs,
                           Time time,
                           boolean discoverBrokerVersions,
-                          ApiVersions apiVersions) {
+                          ApiVersions apiVersions,
+                          long connectTimeoutMs) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -170,6 +178,7 @@ public class NetworkClient implements KafkaClient {
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
+        this.connectTimeoutMs = connectTimeoutMs;
     }
 
     /**
@@ -356,7 +365,7 @@ public class NetworkClient implements KafkaClient {
     public List<ClientResponse> poll(long timeout, long now) {
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs));
+            this.selector.poll(Utils.min(timeout, metadataTimeout, requestTimeoutMs, connectTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }

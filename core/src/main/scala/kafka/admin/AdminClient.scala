@@ -371,6 +371,7 @@ object AdminClient {
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
+  val DefaultConnectTimeoutMs = 5000L
 
   val AdminClientIdSequence = new AtomicInteger(1)
   val AdminConfigDef = {
@@ -392,6 +393,12 @@ object AdminClient {
         DefaultRequestTimeoutMs,
         ConfigDef.Importance.MEDIUM,
         CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+      .define(
+        CommonClientConfigs.CONNECT_TIMEOUT_MS_CONFIG,
+        ConfigDef.Type.LONG,
+        DefaultConnectTimeoutMs,
+        ConfigDef.Importance.MEDIUM,
+        CommonClientConfigs.CONNECT_TIMEOUT_MS_DOC)
       .define(
         CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
         ConfigDef.Type.LONG,
@@ -422,6 +429,7 @@ object AdminClient {
     val metadata = new Metadata
     val channelBuilder = ClientUtils.createChannelBuilder(config)
     val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
+    val connectTimeoutMs = config.getLong(CommonClientConfigs.CONNECT_TIMEOUT_MS_CONFIG)
     val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
@@ -434,7 +442,8 @@ object AdminClient {
       metrics,
       time,
       "admin",
-      channelBuilder)
+      channelBuilder,
+      connectTimeoutMs)
 
     val networkClient = new NetworkClient(
       selector,
@@ -447,7 +456,8 @@ object AdminClient {
       requestTimeoutMs,
       time,
       true,
-      new ApiVersions)
+      new ApiVersions,
+      connectTimeoutMs)
 
     val highLevelClient = new ConsumerNetworkClient(
       networkClient,

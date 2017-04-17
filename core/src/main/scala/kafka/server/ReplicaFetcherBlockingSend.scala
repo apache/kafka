@@ -65,7 +65,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       "replica-fetcher",
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
-      channelBuilder
+      channelBuilder,
+      socketTimeout
     )
     new NetworkClient(
       selector,
@@ -78,7 +79,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig.requestTimeoutMs,
       time,
       false,
-      new ApiVersions
+      new ApiVersions,
+      socketTimeout
     )
   }
 

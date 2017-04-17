@@ -160,6 +160,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionState transactionState;
+    private final long connectTimeoutMs;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -263,6 +264,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             this.maxBlockTimeMs = configureMaxBlockTime(config, userProvidedConfigs);
             this.requestTimeoutMs = configureRequestTimeout(config, userProvidedConfigs);
+            this.connectTimeoutMs = config.getLong(ProducerConfig.CONNECT_TIMEOUT_MS_CONFIG);
             this.transactionState = configureTransactionState(config, time);
             int retries = configureRetries(config, transactionState != null);
             int maxInflightRequests = configureInflightRequests(config, transactionState != null);
@@ -283,7 +285,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
             NetworkClient client = new NetworkClient(
                     new Selector(config.getLong(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                            this.metrics, time, "producer", channelBuilder),
+                            this.metrics, time, "producer", channelBuilder, this.connectTimeoutMs),
                     this.metadata,
                     clientId,
                     maxInflightRequests,
@@ -293,7 +295,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     this.requestTimeoutMs,
                     time,
                     true,
-                    apiVersions);
+                    apiVersions,
+                    this.connectTimeoutMs);
             this.sender = new Sender(client,
                     this.metadata,
                     this.accumulator,

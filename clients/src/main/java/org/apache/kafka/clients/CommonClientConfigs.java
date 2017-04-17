@@ -84,6 +84,9 @@ public class CommonClientConfigs {
                                                          + "for the response of a request. If the response is not received before the timeout "
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
+    
+    public static final String CONNECT_TIMEOUT_MS_CONFIG = "connect.timeout.ms";
+    public static final String CONNECT_TIMEOUT_MS_DOC = "The configuration controls the maximun amount of time the client will connect to the brokers. ";
 
     private static List<String> nonTestingSecurityProtocolNames() {
         List<String> names = new ArrayList<>();

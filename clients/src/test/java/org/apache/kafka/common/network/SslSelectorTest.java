@@ -59,7 +59,7 @@ public class SslSelectorTest extends SelectorTest {
         this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
-        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, 5000L);
     }
 
     @After
@@ -87,7 +87,7 @@ public class SslSelectorTest extends SelectorTest {
             }
         };
         channelBuilder.configure(sslClientConfigs);
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder);
+        Selector selector = new Selector(5000, metrics, time, "MetricGroup2", channelBuilder, 5000L);
         try {
             int reqs = 500;
             String node = "0";

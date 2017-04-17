@@ -209,6 +209,9 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
+    
+    public static final String CONNECT_TIMEOUT_MS_CONFIG = CommonClientConfigs.CONNECT_TIMEOUT_MS_CONFIG;
+    private static final String CONNECT_TIMEOUT_MS_DOC = CommonClientConfigs.CONNECT_TIMEOUT_MS_DOC;
 
     /** <code>interceptor.classes</code> */
     public static final String INTERCEPTOR_CLASSES_CONFIG = "interceptor.classes";
@@ -412,7 +415,13 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
-                                .withClientSaslSupport();
+                                .withClientSaslSupport()
+                                .define(CONNECT_TIMEOUT_MS_CONFIG,
+                                        Type.LONG,
+                                        5L * 1000,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        CONNECT_TIMEOUT_MS_DOC);
 
     }
 

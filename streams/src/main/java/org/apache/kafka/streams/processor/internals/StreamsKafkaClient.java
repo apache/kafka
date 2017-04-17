@@ -117,7 +117,8 @@ public class StreamsKafkaClient {
             metrics,
             time,
             "kafka-client",
-            channelBuilder);
+            channelBuilder,
+            Selector.DEFAULT_CONNECT_TIMEOUT_MS);
 
         kafkaClient = new NetworkClient(
             selector,
@@ -130,7 +131,8 @@ public class StreamsKafkaClient {
             streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
             time,
             true,
-            new ApiVersions());
+            new ApiVersions(),
+            NetworkClient.DEFAULT_CONNECT_TIMEOUT_MS);
     }
 
     public void close() throws IOException {
