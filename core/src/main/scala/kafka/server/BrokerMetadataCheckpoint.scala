@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.io._
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util.Properties
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
@@ -30,7 +30,7 @@ case class BrokerMetadata(brokerId: Int)
   */
 class BrokerMetadataCheckpoint(val file: File) extends Logging {
   private val lock = new Object()
-  Files.deleteIfExists(new File(file + ".tmp").toPath()) // try to delete any existing temp files for cleanliness
+  Files.deleteIfExists(Paths.get(file + ".tmp")) // try to delete any existing temp files for cleanliness
 
   def write(brokerMetadata: BrokerMetadata) = {
     lock synchronized {

@@ -28,6 +28,7 @@ import kafka.utils._
 import kafka.log.Log
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 
@@ -132,8 +133,8 @@ object TestLogCleaning {
     
     println("De-duplicating and validating output files...")
     validateOutput(producedDataFile, consumedDataFile)
-    producedDataFile.delete()
-    consumedDataFile.delete()
+    Utils.delete(producedDataFile)
+    Utils.delete(consumedDataFile)
   }
   
   def dumpLog(dir: File) {
@@ -183,8 +184,8 @@ object TestLogCleaning {
     require(!consumed.hasNext, "Additional values consumed not found in producer log.")
     require(mismatched == 0, "Non-zero number of row mismatches.")
     // if all the checks worked out we can delete the deduped files
-    producedDedupedFile.delete()
-    consumedDedupedFile.delete()
+    Utils.delete(producedDedupedFile)
+    Utils.delete(consumedDedupedFile)
   }
   
   def valuesIterator(reader: BufferedReader) = {

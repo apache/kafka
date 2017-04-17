@@ -21,6 +21,7 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.nio.charset.Charset
+import java.nio.file.Files
 import java.security.cert.X509Certificate
 import java.util.Properties
 import java.util.concurrent.{Callable, Executors, TimeUnit}
@@ -86,7 +87,7 @@ object TestUtils extends Logging {
    */
   def tempRelativeDir(parent: String): File = {
     val parentFile = new File(parent)
-    parentFile.mkdirs()
+    Files.createDirectories(parentFile.toPath)
 
     JTestUtils.tempDirectory(parentFile.toPath, null)
   }
@@ -98,7 +99,14 @@ object TestUtils extends Logging {
   def randomPartitionLogDir(parentDir: File): File = {
     val attempts = 1000
     val f = Iterator.continually(new File(parentDir, "kafka-" + random.nextInt(1000000)))
-                                  .take(attempts).find(_.mkdir())
+                                  .take(attempts).find(f =>
+                                    try {
+                                      Files.createDirectories(f.toPath)
+                                      true
+                                    } catch {
+                                      case ioe: IOException => false
+                                    }
+                                  )
                                   .getOrElse(sys.error(s"Failed to create directory after $attempts attempts"))
     f.deleteOnExit()
     f

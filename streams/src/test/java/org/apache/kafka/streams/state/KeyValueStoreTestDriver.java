@@ -37,6 +37,8 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -185,7 +187,6 @@ public class KeyValueStoreTestDriver<K, V> {
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
         final RecordCollector recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
-            @SuppressWarnings("unchecked")
             @Override
             public <K1, V1> void send(final String topic,
                                       final K1 key,
@@ -215,7 +216,11 @@ public class KeyValueStoreTestDriver<K, V> {
         };
 
         File stateDir = TestUtils.tempDirectory();
-        stateDir.mkdirs();
+        try {
+            Files.createDirectories(stateDir.toPath());
+        } catch (IOException ioe) {
+            throw new RuntimeException("Failed to create a directory " + stateDir.toPath(), ioe);
+        }
         stateSerdes = serdes;
 
         props = new Properties();

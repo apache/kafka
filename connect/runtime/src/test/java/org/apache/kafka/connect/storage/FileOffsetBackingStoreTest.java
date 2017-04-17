@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.EasyMock;
@@ -63,8 +64,8 @@ public class FileOffsetBackingStoreTest {
     }
 
     @After
-    public void teardown() {
-        tempFile.delete();
+    public void teardown() throws IOException {
+        Utils.delete(tempFile);
     }
 
     @Test

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTaskContext;
@@ -61,8 +62,8 @@ public class FileStreamSourceTaskTest {
     }
 
     @After
-    public void teardown() {
-        tempFile.delete();
+    public void teardown() throws IOException {
+        Utils.delete(tempFile);
 
         if (verifyMocks)
             PowerMock.verifyAll();

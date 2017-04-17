@@ -19,7 +19,7 @@
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.record.{RecordBatch, _}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.{After, Test}
 
@@ -36,8 +36,8 @@ class LogSegmentTest {
     val ms = FileRecords.open(msFile)
     val idxFile = TestUtils.tempFile()
     val timeIdxFile = TestUtils.tempFile()
-    idxFile.delete()
-    timeIdxFile.delete()
+    Utils.delete(idxFile)
+    Utils.delete(timeIdxFile)
     val idx = new OffsetIndex(idxFile, offset, 1000)
     val timeIdx = new TimeIndex(timeIdxFile, offset, 1500)
     val seg = new LogSegment(ms, idx, timeIdx, offset, indexIntervalBytes, 0, Time.SYSTEM)
