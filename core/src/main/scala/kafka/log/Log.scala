@@ -528,10 +528,10 @@ class Log(@volatile var dir: File,
             throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
         }
 
-        //Update the epoch cache with the epoch stamped onto the message by the leader
-        validRecords.batches().asScala.map { batch =>
+        // update the epoch cache with the epoch stamped onto the message by the leader
+        validRecords.batches.asScala.map { batch =>
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -1108,8 +1108,8 @@ class Log(@volatile var dir: File,
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
         this.logStartOffset = math.min(targetOffset, this.logStartOffset)
         leaderEpochCache.clearLatest(targetOffset)
+        buildAndRecoverPidMap(targetOffset)
       }
-      buildAndRecoverPidMap(targetOffset)
     }
   }
 
@@ -1119,7 +1119,7 @@ class Log(@volatile var dir: File,
    *  @param newOffset The new offset to start the log with
    */
   private[log] def truncateFullyAndStartAt(newOffset: Long) {
-    debug("Truncate and start log '" + name + "' to " + newOffset)
+    debug(s"Truncate and start log '$name' at offset $newOffset")
     lock synchronized {
       val segmentsToDelete = logSegments.toList
       segmentsToDelete.foreach(deleteSegment)
@@ -1134,6 +1134,10 @@ class Log(@volatile var dir: File,
                                 preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
       leaderEpochCache.clear()
+
+      pidMap.clear()
+      pidMap.updateMapEndOffset(newOffset)
+
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       this.logStartOffset = newOffset
     }

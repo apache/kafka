@@ -335,6 +335,11 @@ class ProducerIdMapping(val config: LogConfig,
     pidMap.retain((pid, entry) => entry.lastOffset >= startOffset)
   }
 
+  def clear() {
+    pidMap.clear()
+    listSnapshotFiles.foreach(_.delete())
+  }
+
   private def maybeRemoveOldestSnapshot() {
     val list = listSnapshotFiles
     if (list.size > maxPidSnapshotsToRetain) {

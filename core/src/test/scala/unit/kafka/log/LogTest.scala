@@ -171,7 +171,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncation() {
+  def testPidMapTruncate() {
     val log = createLog(2048)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
@@ -187,6 +187,31 @@ class LogTest {
     log.truncateTo(1)
     assertEquals(None, log.latestPidSnapshotOffset)
     assertEquals(1, log.latestPidMapOffset)
+  }
+
+  @Test
+  def testPidMapTruncateFullyAndStartAt() {
+    val records = TestUtils.singletonRecords("foo".getBytes)
+    val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    assertEquals(3, log.logSegments.size)
+    assertEquals(3, log.latestPidMapOffset)
+    assertEquals(Some(3), log.latestPidSnapshotOffset)
+
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size)
+
+    // truncate to an offset which is earlier than the offset of the first segment
+    log.truncateTo(0)
+    assertEquals(1, log.logSegments.size)
+    assertEquals(None, log.latestPidSnapshotOffset)
+    assertEquals(0, log.latestPidMapOffset)
   }
 
   @Test
@@ -1818,9 +1843,9 @@ class LogTest {
 
 
   def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
-                retentionBytes: Int = -1, cleanupPolicy: String = "delete"): Log = {
+                retentionBytes: Int = -1, cleanupPolicy: String = "delete", messagesPerSegment: Int = 5): Log = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * 5: Integer)
+    logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * messagesPerSegment: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
     logProps.put(LogConfig.RetentionBytesProp, retentionBytes: Integer)
     logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
