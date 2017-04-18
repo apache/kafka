@@ -27,7 +27,7 @@ import org.apache.log4j.Logger
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import kafka.utils.CommandLineUtils
 import java.util.{Collections, Properties, Random}
 
@@ -37,6 +37,8 @@ import kafka.consumer.KafkaStream
 import kafka.consumer.ConsumerTimeoutException
 import java.text.SimpleDateFormat
 import java.util.concurrent.atomic.AtomicBoolean
+
+import scala.collection.mutable
 
 /**
  * Performance test for the full zookeeper consumer
@@ -51,6 +53,7 @@ object ConsumerPerformance {
     val totalMessagesRead = new AtomicLong(0)
     val totalBytesRead = new AtomicLong(0)
     val consumerTimeout = new AtomicBoolean(false)
+    var metrics: mutable.Map[MetricName, _ <: Metric] = null
 
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
@@ -66,6 +69,10 @@ object ConsumerPerformance {
       startMs = System.currentTimeMillis
       consume(consumer, List(config.topic), config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis
+
+      if (config.printMetrics) {
+        metrics = consumer.metrics().asScala
+      }
       consumer.close()
     } else {
       import kafka.consumer.ConsumerConfig
@@ -96,6 +103,24 @@ object ConsumerPerformance {
       println("%s, %s, %.4f, %.4f, %d, %.4f".format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
         totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
     }
+
+    if (metrics != null) {
+      var maxLengthOfDisplayName = 0
+      metrics.foreach {
+        case (mName, _) =>
+          val key = Array(mName.group(), mName.name(), mName.tags()).mkString(":")
+          if (maxLengthOfDisplayName < key.length) {
+            maxLengthOfDisplayName = key.length
+          }
+      }
+      println(s"\n%-${maxLengthOfDisplayName}s   %s".format("Metric Name", "Value"))
+      metrics.foreach {
+        case (mName, metric) =>
+          val key = Array(mName.group(), mName.name(), mName.tags()).mkString(":")
+          println(s"%-${maxLengthOfDisplayName}s : %.3f".format(key, metric.value()))
+      }
+    }
+
   }
 
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], topics: List[String], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
@@ -210,12 +235,14 @@ object ConsumerPerformance {
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
+    val printMetricsOpt = parser.accepts("print-metrics", "Print out the metrics. This only applies to new consumer.")
 
     val options = parser.parse(args: _*)
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
 
     val useOldConsumer = options.has(zkConnectOpt)
+    val printMetrics = options.has(printMetricsOpt)
 
     val props = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))

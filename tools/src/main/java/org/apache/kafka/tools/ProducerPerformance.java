@@ -247,14 +247,14 @@ public class ProducerPerformance {
         int maxLengthOfDisplayName = 0;
         for (Metric metric : metrics.values()) {
             MetricName mName = metric.metricName();
-            String mergedName = mName.group() + ":" + mName.name();
+            String mergedName = mName.group() + ":" + mName.name() + ":" + mName.tags();
             maxLengthOfDisplayName = maxLengthOfDisplayName < mergedName.length() ? mergedName.length() : maxLengthOfDisplayName;
         }
         String outputFormat = "%-" + maxLengthOfDisplayName + "s : %.3f";
         System.out.println(String.format("\n%-" + maxLengthOfDisplayName + "s   %s", "Metric Name", "Value"));
         for (Metric metric : metrics.values()) {
-            System.out.println(String.format(outputFormat, metric.metricName().group() + ":" + metric.metricName().name(),
-                    metric.value()));
+            MetricName mName = metric.metricName();
+            System.out.println(String.format(outputFormat, mName.group() + ":" + mName.name() + ":" + mName.tags(), metric.value()));
         }
     }
 
