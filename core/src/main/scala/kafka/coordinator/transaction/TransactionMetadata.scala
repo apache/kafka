@@ -100,10 +100,10 @@ private[coordinator] object TransactionMetadata {
 @nonthreadsafe
 private[coordinator] class TransactionMetadata(val pid: Long,
                                                var epoch: Short,
-                                               val txnTimeoutMs: Int,
+                                               var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
-                                               val timestamp: Long) {
+                                               var timestamp: Long) {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;

@@ -378,6 +378,13 @@ class TransactionStateManager(brokerId: Int,
         debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
           s"has been appended to the log since the metadata does not match anymore.")
       } else {
+        def completeStateTransition(metadata: TransactionMetadata, newState: TransactionState): Boolean = {
+          // there is no transition in this case
+          if (metadata.state == Empty && newState == Empty)
+            true
+          else
+            metadata.completeTransitionTo(txnMetadata.state)
+        }
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
         getTransaction(transactionalId) match {
@@ -386,7 +393,7 @@ class TransactionStateManager(brokerId: Int,
               if (metadata.pid == txnMetadata.pid &&
                 metadata.epoch == txnMetadata.epoch &&
                 metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
-                metadata.completeTransitionTo(txnMetadata.state)) {
+                completeStateTransition(metadata, txnMetadata.state)) {
                 // only topic-partition lists could possibly change (state should have transited in the above condition)
                 metadata.addPartitions(txnMetadata.topicPartitions.toSet)
               } else {

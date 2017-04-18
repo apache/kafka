@@ -52,7 +52,7 @@ object TransactionCoordinator {
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
     val transactionMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, time)
+    new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, txnMarkerPurgatory, time)
   }
 
   private def initTransactionError(error: Errors): InitPidResult = {
@@ -76,6 +76,7 @@ class TransactionCoordinator(brokerId: Int,
                              pidManager: ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
+                             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                              time: Time) extends Logging {
   this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
 
@@ -124,15 +125,60 @@ class TransactionCoordinator(brokerId: Int,
           metadata synchronized {
             if (!metadata.equals(newMetadata))
               metadata.epoch = (metadata.epoch + 1).toShort
+
+            appendMetadataToLog(transactionalId,  metadata, responseCallback)
           }
-
-          responseCallback(initTransactionMetadata(metadata))
-
         case Some(metadata) =>
-          metadata synchronized {
-            metadata.epoch = (metadata.epoch + 1).toShort
-          }
-          responseCallback(initTransactionMetadata(metadata))
+          initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
+      }
+    }
+  }
+
+  private def appendMetadataToLog(transactionalId: String,
+                             metadata: TransactionMetadata,
+                             initPidCallback: InitPidCallback): Unit ={
+    def callback(errors: Errors): Unit = {
+      if (errors == Errors.NONE) initPidCallback(initTransactionMetadata(metadata))
+      else initPidCallback(initTransactionError(errors))
+    }
+
+    txnManager.appendTransactionToLog(transactionalId, metadata, callback)
+
+  }
+
+
+  private def initPidWithExistingMetadata(transactionalId: String,
+                                          transactionTimeoutMs: Int,
+                                          responseCallback: InitPidCallback,
+                                          metadata: TransactionMetadata) = {
+
+    metadata synchronized {
+      if (metadata.state == Ongoing) {
+        // abort the ongoing transaction
+        handleEndTransaction(transactionalId,
+          metadata.pid,
+          metadata.epoch,
+          TransactionResult.ABORT,
+          (errors: Errors) => {
+            if (errors != Errors.NONE) {
+              responseCallback(initTransactionError(errors))
+            } else {
+              // init pid again
+              handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
+            }
+          })
+      } else if (metadata.state == PrepareAbort || metadata.state == PrepareCommit) {
+        // wait for the commit to complete and then init pid again
+        txnMarkerPurgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, () => {
+          handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
+        }), Seq(metadata.pid))
+      } else {
+        metadata.epoch = (metadata.epoch + 1).toShort
+        metadata.txnTimeoutMs = transactionTimeoutMs
+        metadata.topicPartitions.clear()
+        metadata.timestamp = time.milliseconds()
+        metadata.state = Empty
+        appendMetadataToLog(transactionalId, metadata, responseCallback)
       }
     }
   }
@@ -173,7 +219,7 @@ class TransactionCoordinator(brokerId: Int,
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
               (Errors.COORDINATOR_LOAD_IN_PROGRESS, null)
-            } else if (!TransactionMetadata.isValidTransition(metadata.state, Ongoing)) {
+            } else if (metadata.state != Empty && metadata.state != Ongoing) {
               (Errors.INVALID_TXN_STATE, null)
             } else if (partitions.subsetOf(metadata.topicPartitions)) {
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
