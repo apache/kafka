@@ -85,7 +85,7 @@ object StressTestLog {
   class WriterThread(val log: Log) extends WorkerThread {
     @volatile var offset = 0
     override def work() {
-      val logAppendInfo = log.append(TestUtils.singletonRecords(offset.toString.getBytes))
+      val logAppendInfo = log.appendAsFollower(TestUtils.singletonRecords(offset.toString.getBytes))
       require(logAppendInfo.firstOffset == offset && logAppendInfo.lastOffset == offset)
       offset += 1
       if(offset % 1000 == 0)
