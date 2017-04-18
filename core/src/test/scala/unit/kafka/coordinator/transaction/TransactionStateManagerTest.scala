@@ -268,7 +268,7 @@ class TransactionStateManagerTest {
     txnMetadata1.epoch = (txnMetadata1.epoch + 1).toShort
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(txnId1, txnMetadata1, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)
   }
 
   @Test(expected = classOf[IllegalStateException])
@@ -289,7 +289,7 @@ class TransactionStateManagerTest {
     txnMetadata1.pendingState = None
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(txnId1, txnMetadata1, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)
   }
 
   @Test
