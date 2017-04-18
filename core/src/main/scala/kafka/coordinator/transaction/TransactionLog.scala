@@ -155,10 +155,9 @@ object TransactionLog {
       // first group the topic partitions by their topic names
       val topicAndPartitions = txnMetadata.topicPartitions.groupBy(_.topic())
 
-      val partitionArray = topicAndPartitions.map { topicAndPartitionIds =>
+      val partitionArray = topicAndPartitions.map { case(topic, partitions) =>
         val topicPartitionsStruct = value.instance(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)
-        val topic: String = topicAndPartitionIds._1
-        val partitionIds: Array[Integer] = topicAndPartitionIds._2.map(topicPartition => Integer.valueOf(topicPartition.partition())).toArray
+        val partitionIds: Array[Integer] = partitions.map(topicPartition => Integer.valueOf(topicPartition.partition())).toArray
 
         topicPartitionsStruct.set(PARTITIONS_SCHEMA_TOPIC_FIELD, topic)
         topicPartitionsStruct.set(PARTITIONS_SCHEMA_PARTITION_IDS_FIELD, partitionIds)
@@ -236,17 +235,17 @@ object TransactionLog {
 
         transactionMetadata
       } else {
-        throw new IllegalStateException(s"Unknown version $version from the pid mapping message value")
+        throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
       }
     }
   }
 
   // Formatter for use with tools to read transaction log messages
-  class PidMessageFormatter extends MessageFormatter {
+  class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
       Option(consumerRecord.key).map(key => readMessageKey(ByteBuffer.wrap(key))).foreach {
         case txnKey: TxnKey =>
-          val transactionalId = txnKey.key
+          val transactionalId = txnKey.transactionalId
           val value = consumerRecord.value
           val pidMetadata =
             if (value == null) "NULL"
@@ -263,9 +262,9 @@ object TransactionLog {
 
 trait BaseKey{
   def version: Short
-  def key: Any
+  def transactionalId: Any
 }
 
-case class TxnKey(version: Short, key: String) extends BaseKey {
-  override def toString: String = key.toString
+case class TxnKey(version: Short, transactionalId: String) extends BaseKey {
+  override def toString: String = transactionalId.toString
 }

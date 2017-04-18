@@ -179,7 +179,7 @@ class TransactionStateManager(brokerId: Int,
 
                 case txnKey: TxnKey =>
                   // load transaction metadata along with transaction state
-                  val transactionalId: String = txnKey.key
+                  val transactionalId: String = txnKey.transactionalId
                   if (!record.hasValue) {
                     loadedTransactions.remove(transactionalId)
                     removedTransactionalIds.add(transactionalId)

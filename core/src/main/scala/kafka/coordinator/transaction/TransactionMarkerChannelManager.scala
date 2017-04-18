@@ -61,7 +61,7 @@ object TransactionMarkerChannelManager {
         config.connectionsMaxIdleMs,
         metrics,
         time,
-        "replica-fetcher",
+        "txn-marker-channel",
         Map("broker-id" -> config.brokerId.toString).asJava,
         false,
         channelBuilder

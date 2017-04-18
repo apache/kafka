@@ -84,7 +84,7 @@ class TransactionLogTest extends JUnitSuite {
 
       key match {
         case pidKey: TxnKey =>
-          val transactionalId = pidKey.key
+          val transactionalId = pidKey.transactionalId
           val txnMetadata = TransactionLog.readMessageValue(record.value())
 
           assertEquals(pidMappings(transactionalId), txnMetadata.pid)

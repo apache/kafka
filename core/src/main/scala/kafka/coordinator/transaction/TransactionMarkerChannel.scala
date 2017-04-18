@@ -54,6 +54,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
         case Some(partitionInfo) =>
           val brokerId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
           if (!brokerStateMap.contains(brokerId)) {
+            // TODO: What should we do if we get BrokerEndPointNotAvailableException?
             val broker = metadataCache.getAliveEndpoint(brokerId, interBrokerListenerName).get
             addNewBroker(broker)
           }

@@ -309,17 +309,21 @@ class TransactionCoordinator(brokerId: Int,
         txnManager.coordinatorEpochFor(transactionalId) match {
           case Some(coordinatorEpoch) =>
             def completionCallback(): Unit = {
-              val preparedCommitMetadata = txnManager.getTransactionState(transactionalId).get
-              val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
-              val committedMetadata = new TransactionMetadata(pid,
-                epoch,
-                newMetadata.txnTimeoutMs,
-                completedState,
-                metadata.topicPartitions,
-                newMetadata.timestamp)
-              preparedCommitMetadata.prepareTransitionTo(completedState)
-              txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
-              txnMarkerChannelManager.removeCompleted(pid)
+              txnManager.getTransactionState(transactionalId) match {
+                case Some(preparedCommitMetadata) =>
+                  val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
+                  val committedMetadata = new TransactionMetadata(pid,
+                    epoch,
+                    newMetadata.txnTimeoutMs,
+                    completedState,
+                    metadata.topicPartitions,
+                    newMetadata.timestamp)
+                  preparedCommitMetadata.prepareTransitionTo(completedState)
+                  txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
+                  txnMarkerChannelManager.removeCompleted(pid)
+                case None =>
+                  responseCallback(Errors.NOT_COORDINATOR)
+              }
             }
             txnMarkerChannelManager.addTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
           case None =>

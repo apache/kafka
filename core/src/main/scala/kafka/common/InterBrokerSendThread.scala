@@ -16,7 +16,7 @@
  */
 package kafka.common
 
-import kafka.utils.{ShutdownableThread, ZkUtils}
+import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest
