@@ -1001,7 +1001,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
-  def shouldDelayInitialRebalaneByGroupInitialRebalanceDelayOnEmptyGroup() {
+  def shouldDelayInitialRebalanceByGroupInitialRebalanceDelayOnEmptyGroup() {
     val firstJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
     timer.advanceClock(GroupInitialRebalanceDelay / 2)
     verifyDelayedTaskNotCompleted(firstJoinFuture)

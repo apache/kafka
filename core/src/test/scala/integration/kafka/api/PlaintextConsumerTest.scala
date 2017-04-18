@@ -724,8 +724,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       (record.topic, record.partition, new String(record.key), new String(record.value), record.timestamp)
     }.toSet
 
-    println("Actual " + actual.size)
-    println("Expected " + expected.size)
     assertEquals(expected, actual)
   }
 

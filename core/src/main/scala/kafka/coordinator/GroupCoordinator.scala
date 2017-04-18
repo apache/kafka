@@ -700,7 +700,8 @@ class GroupCoordinator(val brokerId: Int,
         // TODO: cut the socket connection to the client
       }
 
-      if(group.is(InitialRebalance)) group.transitionTo(PreparingRebalance)
+      if (group.is(InitialRebalance))
+        group.transitionTo(PreparingRebalance)
 
       if (!group.is(Dead)) {
         group.initNextGeneration()
