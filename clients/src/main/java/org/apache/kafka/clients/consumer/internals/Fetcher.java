@@ -996,11 +996,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         return null;
                     }
                     currentBatch = batches.next();
+
+                    maybeEnsureValid(currentBatch);
+
                     if (isBatchAborted(currentBatch, abortedPids, abortedTransactions)) {
                         continue;
                     }
 
-                    maybeEnsureValid(currentBatch);
                     records = currentBatch.streamingIterator();
                 }
 
