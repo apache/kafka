@@ -55,6 +55,7 @@ import org.junit.Assert._
 import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.util.Try
 
 /**
  * Utility functions to help with testing
@@ -849,6 +850,15 @@ object TestUtils extends Logging {
       waitTime = timeout)
 
     leader
+  }
+
+  def waitUntilControllerElected(zkUtils: ZkUtils, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    var controllerIdTry: Try[Int] = null
+    TestUtils.waitUntilTrue(() => {
+      controllerIdTry = Try { zkUtils.getController() }
+      controllerIdTry.isSuccess
+    }, s"Controller not elected after $timeout ms", waitTime = timeout)
+    controllerIdTry.get
   }
 
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
