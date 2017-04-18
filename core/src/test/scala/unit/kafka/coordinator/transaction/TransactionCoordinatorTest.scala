@@ -39,78 +39,10 @@ class TransactionCoordinatorTest {
   val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
   val capturedErrorsCallback: Capture[Errors => Unit] = EasyMock.newCapture()
   val capturedNoArgCallback: Capture[() => Unit] = EasyMock.newCapture()
-
-  private def setupMocks() {
-    EasyMock.expect(pidManager.nextPid())
-      .andAnswer(new IAnswer[Long] {
-        override def answer(): Long = {
-          nextPid += 1
-          nextPid - 1
-        }
-      })
-      .anyTimes()
-
-
-    EasyMock.expect(transactionManager.isCoordinatorFor(EasyMock.eq("a")))
-      .andReturn(true)
-      .anyTimes()
-    EasyMock.expect(transactionManager.isCoordinatorFor(EasyMock.eq("b")))
-      .andReturn(false)
-      .anyTimes()
-    EasyMock.expect(transactionManager.isCoordinatorFor(EasyMock.eq("c")))
-      .andReturn(true)
-      .anyTimes()
-    EasyMock.expect(transactionManager.isCoordinatorLoadingInProgress(EasyMock.anyString()))
-      .andReturn(false)
-      .anyTimes()
-    EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
-      .andReturn(true)
-      .anyTimes()
-
-
-    EasyMock.expect(transactionManager.addTransaction(EasyMock.eq("a"), EasyMock.capture(capturedTxn)))
-      .andAnswer(new IAnswer[TransactionMetadata] {
-        override def answer(): TransactionMetadata = {
-          capturedTxn.getValue
-        }
-      })
-      .once()
-    EasyMock.expect(transactionManager.getTransaction(EasyMock.eq("a")))
-      .andAnswer(new IAnswer[Option[TransactionMetadata]] {
-        override def answer(): Option[TransactionMetadata] = {
-          if (capturedTxn.hasCaptured) {
-            Some(capturedTxn.getValue)
-          } else {
-            None
-          }
-        }
-      })
-      .anyTimes()
-    EasyMock.expect(transactionManager.getTransaction(EasyMock.eq("c")))
-      .andAnswer(new IAnswer[Option[TransactionMetadata]] {
-        override def answer(): Option[TransactionMetadata] = {
-          None
-        }
-      })
-      .anyTimes()
-    EasyMock.expect(transactionManager.appendTransactionToLog(
-      EasyMock.eq("a"),
-      EasyMock.capture(capturedTxn),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()))
-      .andAnswer(new IAnswer[Unit] {
-        override def answer(): Unit = {
-          // do nothing
-        }
-      })
-      .anyTimes()
-    EasyMock.replay(pidManager, transactionManager)
-  }
-
-
   val brokerId = 0
 
   private val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("test", new MockTimer, reaperEnabled = false)
+  private val partitions = mutable.Set[TopicPartition](new TopicPartition("topic1", 0))
 
   val coordinator: TransactionCoordinator = new TransactionCoordinator(brokerId,
     pidManager,
@@ -122,72 +54,233 @@ class TransactionCoordinatorTest {
   var result: InitPidResult = _
   var error: Errors = Errors.NONE
 
+  val transactionTimeoutMs = 1000
+
+  private def mockPidManager(): Unit = {
+    EasyMock.expect(pidManager.nextPid())
+      .andAnswer(new IAnswer[Long] {
+        override def answer(): Long = {
+          nextPid += 1
+          nextPid - 1
+        }
+      })
+      .anyTimes()
+  }
+
+  private def initPidGenericMocks(transactionalId: String): Unit = {
+    mockPidManager()
+    EasyMock.expect(transactionManager.isCoordinatorFor(EasyMock.eq(transactionalId)))
+      .andReturn(true)
+      .anyTimes()
+
+    EasyMock.expect(transactionManager.isCoordinatorLoadingInProgress(EasyMock.anyString()))
+      .andReturn(false)
+      .anyTimes()
+    EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
+      .andReturn(true)
+      .anyTimes()
+  }
+
 
   @Test
-  def testHandleInitPid() = {
-    setupMocks()
-
-    val transactionTimeoutMs = 1000
+  def shouldAcceptInitPidAndReturnNextPidWhenTransactionalIdIsEmpty(): Unit = {
+    mockPidManager()
+    EasyMock.replay(pidManager)
 
     coordinator.handleInitPid("", transactionTimeoutMs, initPidMockCallback)
     assertEquals(InitPidResult(0L, 0, Errors.NONE), result)
-
-    coordinator.handleInitPid(null, transactionTimeoutMs, initPidMockCallback)
+    coordinator.handleInitPid("", transactionTimeoutMs, initPidMockCallback)
     assertEquals(InitPidResult(1L, 0, Errors.NONE), result)
-
-    coordinator.handleInitPid("a", transactionTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(2L, 0, Errors.NONE), result)
-
-    coordinator.handleInitPid("a", transactionTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(2L, 1, Errors.NONE), result)
-
-    coordinator.handleInitPid("b", transactionTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(-1L, -1, Errors.NOT_COORDINATOR), result)
   }
 
   @Test
-  def testHandleAddPartitionsToTxn() = {
-    setupMocks()
-    val transactionTimeoutMs = 1000
+  def shouldAcceptInitPidAndReturnNextPidWhenTransactionalIdIsNull(): Unit = {
+    mockPidManager()
+    EasyMock.replay(pidManager)
+
+    coordinator.handleInitPid(null, transactionTimeoutMs, initPidMockCallback)
+    assertEquals(InitPidResult(0L, 0, Errors.NONE), result)
+    coordinator.handleInitPid(null, transactionTimeoutMs, initPidMockCallback)
+    assertEquals(InitPidResult(1L, 0, Errors.NONE), result)
+  }
+
+  @Test
+  def shouldInitPidWithEpochZeroForNewTransactionalId(): Unit = {
+    val transactionalId = "a"
+    initPidGenericMocks(transactionalId)
+    EasyMock.expect(transactionManager.addTransaction(EasyMock.eq(transactionalId), EasyMock.capture(capturedTxn)))
+      .andAnswer(new IAnswer[TransactionMetadata] {
+        override def answer(): TransactionMetadata = {
+          capturedTxn.getValue
+        }
+      })
+      .once()
+    EasyMock.expect(transactionManager.getTransaction(EasyMock.eq(transactionalId)))
+      .andAnswer(new IAnswer[Option[TransactionMetadata]] {
+        override def answer(): Option[TransactionMetadata] = {
+          if (capturedTxn.hasCaptured) {
+            Some(capturedTxn.getValue)
+          } else {
+            None
+          }
+        }
+      })
+      .once()
+
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionalId),
+      EasyMock.capture(capturedTxn),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()))
+      .andAnswer(new IAnswer[Unit] {
+        override def answer(): Unit = {
+          capturedErrorsCallback.getValue.apply(Errors.NONE)
+        }
+      })
+      .anyTimes()
+    EasyMock.replay(pidManager, transactionManager)
 
     coordinator.handleInitPid("a", transactionTimeoutMs, initPidMockCallback)
-    coordinator.handleInitPid("a", transactionTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(0L, 1, Errors.NONE), result)
+    assertEquals(InitPidResult(0L, 0, Errors.NONE), result)
+  }
 
-    coordinator.handleAddPartitionsToTransaction("a", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
-    assertEquals(0L, capturedTxn.getValue.pid)
-    assertEquals(1, capturedTxn.getValue.epoch)
-    assertEquals(Ongoing, capturedTxn.getValue.state)
-    assertEquals(None, capturedTxn.getValue.pendingState)
-    assertEquals(transactionTimeoutMs, capturedTxn.getValue.txnTimeoutMs)
-    assertEquals(Set[TopicPartition](new TopicPartition("topic1", 0)), capturedTxn.getValue.topicPartitions)
+  @Test
+  def shouldRespondWithNotCoordinatorOnInitPidWhenNotCoordinatorForId(): Unit = {
+    mockPidManager()
+    EasyMock.replay(pidManager)
+    coordinator.handleInitPid("some-pid", transactionTimeoutMs, initPidMockCallback)
+    assertEquals(InitPidResult(-1, -1, Errors.NOT_COORDINATOR), result)
+  }
 
-    assertEquals(Errors.NONE, error)
+  @Test
+  def shouldRespondWithInvalidPidMappingOnAddPartitionsToTransactionWhenTransactionalIdNotPresent(): Unit = {
+    val transactionalId = "a"
+    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
+      .andReturn(true)
 
-    // testing error cases
-    coordinator.handleAddPartitionsToTransaction("", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
+    EasyMock.expect(transactionManager.getTransaction(EasyMock.eq(transactionalId)))
+      .andReturn(None)
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
+    assertEquals(Errors.INVALID_PID_MAPPING, error)
+  }
+
+  @Test
+  def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsEmpty(): Unit = {
+    coordinator.handleAddPartitionsToTransaction("", 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.INVALID_REQUEST, error)
+  }
 
-    coordinator.handleAddPartitionsToTransaction("b", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
+  @Test
+  def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsNull(): Unit = {
+    coordinator.handleAddPartitionsToTransaction(null, 0L, 1, partitions, errorsCallback)
+    assertEquals(Errors.INVALID_REQUEST, error)
+  }
+
+  @Test
+  def shouldRespondWithNotCoordinatorOnAddPartitionsWhenNotCoordinator(): Unit = {
+    coordinator.handleAddPartitionsToTransaction("txn", 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.NOT_COORDINATOR, error)
+  }
 
-    coordinator.handleAddPartitionsToTransaction("c", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
-    assertEquals(Errors.INVALID_PID_MAPPING, error)
+  @Test
+  def shouldRespondWithCoordinatorLoadInProgressOnAddPartitionsWhenCoordintorLoading(): Unit = {
+    val transactionalId = "a"
+    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
+      .andReturn(true)
+    EasyMock.expect(transactionManager.isCoordinatorLoadingInProgress(transactionalId))
+    .andReturn(true)
 
-    coordinator.handleAddPartitionsToTransaction("a", 1L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
-    assertEquals(Errors.INVALID_PID_MAPPING, error)
+    EasyMock.replay(transactionManager)
 
-    coordinator.handleAddPartitionsToTransaction("a", 0L, 0, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
-    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
-
-    capturedTxn.getValue.state = PrepareCommit
-    coordinator.handleAddPartitionsToTransaction("a", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, error)
-
-    capturedTxn.getValue.state = Ongoing
-    capturedTxn.getValue.pendingState = Some(PrepareCommit)
-    coordinator.handleAddPartitionsToTransaction("a", 0L, 1, Set[TopicPartition](new TopicPartition("topic1", 0)), errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, error)
+  }
+
+  @Test
+  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsPrepareCommit(): Unit = {
+    validateInvalidTxnState(PrepareCommit)
+  }
+
+  @Test
+  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsPrepareAbort(): Unit = {
+    validateInvalidTxnState(PrepareAbort)
+  }
+
+  @Test
+  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsCompleteCommit(): Unit = {
+    validateInvalidTxnState(CompleteCommit)
+  }
+
+  @Test
+  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsCompleteAbort(): Unit = {
+    validateInvalidTxnState(CompleteAbort)
+  }
+
+  def validateInvalidTxnState(state: TransactionState): Unit = {
+    val transactionalId = "a"
+    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
+      .andReturn(true)
+    EasyMock.expect(transactionManager.getTransaction(transactionalId))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, state, mutable.Set.empty, 0)))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+    assertEquals(Errors.INVALID_TXN_STATE, error)
+  }
+
+  @Test
+  def shouldRespondWithInvalidTnxProduceEpochOnAddPartitionsWhenEpochsAreDifferent(): Unit = {
+    val transactionalId = "a"
+    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
+      .andReturn(true)
+    EasyMock.expect(transactionManager.getTransaction(transactionalId))
+      .andReturn(Some(new TransactionMetadata(0, 10, 0, PrepareCommit, mutable.Set.empty, 0)))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+    assertEquals(Errors.INVALID_PRODUCER_EPOCH, error)
+  }
+
+  @Test
+  def shouldAppendNewMetadataToLogOnAddPartitionsWhenPartitionsAdded(): Unit = {
+    val transactionalId = "a"
+    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
+      .andReturn(true)
+    EasyMock.expect(transactionManager.getTransaction(transactionalId))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, mutable.Set.empty, 0)))
+
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionalId),
+      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, time.milliseconds())),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
+    ))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+
+    EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def shouldRespondWithErrorsNoneOnAddPartitionWhenNoErrorsAndPartitionsTheSame(): Unit = {
+    val transactionalId = "a"
+    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
+      .andReturn(true)
+    EasyMock.expect(transactionManager.getTransaction(transactionalId))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, partitions, 0)))
+
+    EasyMock.replay(transactionManager)
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+    assertEquals(Errors.NONE, error)
+    EasyMock.verify(transactionManager)
+
   }
 
   @Test
@@ -468,6 +561,17 @@ class TransactionCoordinatorTest {
       .andReturn(Some(completedMetadata))
       .once()
 
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionId),
+      EasyMock.anyObject(classOf[TransactionMetadata]),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
+    )).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      }
+    })
+
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
     coordinator.handleInitPid(transactionId, 10, initPidMockCallback)
@@ -486,6 +590,18 @@ class TransactionCoordinatorTest {
     val metadata = new TransactionMetadata(0, 0, 0, state, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0)
     EasyMock.expect(transactionManager.getTransaction(transactionId))
       .andReturn(Some(metadata)).anyTimes()
+
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionId),
+      EasyMock.anyObject(classOf[TransactionMetadata]),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
+    )).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      }
+    })
+
     EasyMock.replay(transactionManager)
 
     coordinator.handleInitPid(transactionId, 10, initPidMockCallback)
@@ -510,9 +626,22 @@ class TransactionCoordinatorTest {
     val metadata = new TransactionMetadata(0, 0, 0, state, mutable.Set.empty[TopicPartition], 0)
     EasyMock.expect(transactionManager.getTransaction(transactionId))
       .andReturn(Some(metadata))
+
+    EasyMock.expect(transactionManager.appendTransactionToLog(
+      EasyMock.eq(transactionId),
+      EasyMock.anyObject(classOf[TransactionMetadata]),
+      EasyMock.capture(capturedErrorsCallback),
+      EasyMock.anyObject()
+    )).andAnswer(new IAnswer[Unit] {
+      override def answer(): Unit = {
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
+      }
+    })
+
     EasyMock.replay(transactionManager)
 
     coordinator.handleInitPid(transactionId, 10, initPidMockCallback)
+
     assertEquals(1, result.epoch)
     assertEquals(0, result.pid)
     assertEquals(Errors.NONE, result.error)

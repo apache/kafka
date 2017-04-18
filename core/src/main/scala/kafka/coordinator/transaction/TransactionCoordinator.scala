@@ -125,15 +125,27 @@ class TransactionCoordinator(brokerId: Int,
           metadata synchronized {
             if (!metadata.equals(newMetadata))
               metadata.epoch = (metadata.epoch + 1).toShort
+
+            appendMetadataToLog(transactionalId,  metadata, responseCallback)
           }
-
-          responseCallback(initTransactionMetadata(metadata))
-
         case Some(metadata) =>
           initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
       }
     }
   }
+
+  private def appendMetadataToLog(transactionalId: String,
+                             metadata: TransactionMetadata,
+                             initPidCallback: InitPidCallback): Unit ={
+    def callback(errors: Errors): Unit = {
+      if (errors == Errors.NONE) initPidCallback(initTransactionMetadata(metadata))
+      else initPidCallback(initTransactionError(errors))
+    }
+
+    txnManager.appendTransactionToLog(transactionalId, metadata, callback)
+
+  }
+
 
   private def initPidWithExistingMetadata(transactionalId: String,
                                           transactionTimeoutMs: Int,
@@ -161,14 +173,12 @@ class TransactionCoordinator(brokerId: Int,
           handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
         }), Seq(metadata.pid))
       } else {
-        // reset the metadata and respond with new epoch
-        // TODO: should this append to the transaction log?, i.e., it doesn't above in the None case
         metadata.epoch = (metadata.epoch + 1).toShort
-        metadata.state = Empty
         metadata.txnTimeoutMs = transactionTimeoutMs
         metadata.topicPartitions.clear()
         metadata.timestamp = time.milliseconds()
-        responseCallback(initTransactionMetadata(metadata))
+        metadata.state = Empty
+        appendMetadataToLog(transactionalId, metadata, responseCallback)
       }
     }
   }
@@ -209,7 +219,7 @@ class TransactionCoordinator(brokerId: Int,
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
               (Errors.COORDINATOR_LOAD_IN_PROGRESS, null)
-            } else if (!TransactionMetadata.isValidTransition(metadata.state, Ongoing)) {
+            } else if (metadata.state != Empty && metadata.state != Ongoing) {
               (Errors.INVALID_TXN_STATE, null)
             } else if (partitions.subsetOf(metadata.topicPartitions)) {
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
