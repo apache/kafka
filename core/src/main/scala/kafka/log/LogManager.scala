@@ -18,23 +18,28 @@
 package kafka.log
 
 import java.io._
-import java.util.concurrent.TimeUnit
+import java.nio.file.Files
+import java.util.concurrent._
 
+import kafka.admin.AdminUtils
+import kafka.common.{KafkaException, KafkaStorageException}
+import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.utils.Time
 
+import scala.collection.JavaConverters._
 import scala.collection._
-import kafka.common.{KafkaException, TopicAndPartition}
-import kafka.server.{BrokerState, OffsetCheckpoint, RecoveringFromUncleanShutdown}
-import java.util.concurrent.{ExecutionException, ExecutorService, Executors, Future}
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
  * All read and write operations are delegated to the individual log instances.
- * 
+ *
  * The log manager maintains logs in one or more directories. New logs are created in the data directory
  * with the fewest logs. No attempt is made to move partitions after the fact or balance based on
  * size or I/O rate.
- * 
+ *
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
@@ -44,20 +49,26 @@ class LogManager(val logDirs: Array[File],
                  val cleanerConfig: CleanerConfig,
                  ioThreads: Int,
                  val flushCheckMs: Long,
-                 val flushCheckpointMs: Long,
+                 val flushRecoveryOffsetCheckpointMs: Long,
+                 val flushStartOffsetCheckpointMs: Long,
                  val retentionCheckMs: Long,
+                 val maxPidExpirationMs: Int,
                  scheduler: Scheduler,
                  val brokerState: BrokerState,
-                 private val time: Time) extends Logging {
+                 time: Time) extends Logging {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
+  val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
   val LockFile = ".lock"
   val InitialTaskDelayMs = 30*1000
+
   private val logCreationOrDeletionLock = new Object
-  private val logs = new Pool[TopicAndPartition, Log]()
+  private val logs = new Pool[TopicPartition, Log]()
+  private val logsToBeDeleted = new LinkedBlockingQueue[Log]()
 
   createAndValidateLogDirs(logDirs)
   private val dirLocks = lockLogDirs(logDirs)
-  private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, RecoveryPointCheckpointFile)))).toMap
+  private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile)))).toMap
+  private val logStartOffsetCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile)))).toMap
   loadLogs()
 
   // public, so we can access this from kafka.admin.DeleteTopicTest
@@ -66,13 +77,13 @@ class LogManager(val logDirs: Array[File],
       new LogCleaner(cleanerConfig, logDirs, logs, time = time)
     else
       null
-  
+
   /**
    * Create and check validity of the given directories, specifically:
    * <ol>
    * <li> Ensure that there are no duplicates in the directory list
    * <li> Create each directory if it doesn't exist
-   * <li> Check that each path is a readable directory 
+   * <li> Check that each path is a readable directory
    * </ol>
    */
   private def createAndValidateLogDirs(dirs: Seq[File]) {
@@ -89,7 +100,7 @@ class LogManager(val logDirs: Array[File],
         throw new KafkaException(dir.getAbsolutePath + " is not a readable log directory.")
     }
   }
-  
+
   /**
    * Lock all the given directories
    */
@@ -97,12 +108,12 @@ class LogManager(val logDirs: Array[File],
     dirs.map { dir =>
       val lock = new FileLock(new File(dir, LockFile))
       if(!lock.tryLock())
-        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath + 
+        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath +
                                ". A Kafka instance in another process or thread is using this directory.")
       lock
     }
   }
-  
+
   /**
    * Recover and load all logs in the given data directories
    */
@@ -116,13 +127,22 @@ class LogManager(val logDirs: Array[File],
       val pool = Executors.newFixedThreadPool(ioThreads)
       threadPools.append(pool)
 
-      var recoveryPoints = Map[TopicAndPartition, Long]()
+      var recoveryPoints = Map[TopicPartition, Long]()
+
       try {
         recoveryPoints = this.recoveryPointCheckpoints(dir).read
       } catch {
         case e: Exception =>
-          warn("Error occured while reading recovery-point-offset-checkpoint file of directory " + dir, e)
+          warn("Error occurred while reading recovery-point-offset-checkpoint file of directory " + dir, e)
           warn("Resetting the recovery checkpoint to 0")
+      }
+
+      var logStartOffsets = Map[TopicPartition, Long]()
+      try {
+        logStartOffsets = this.logStartOffsetCheckpoints(dir).read
+      } catch {
+        case e: Exception =>
+          warn("Error occurred while reading log-start-offset-checkpoint file of directory " + dir, e)
       }
 
       val jobsForDir = for {
@@ -135,14 +155,26 @@ class LogManager(val logDirs: Array[File],
           val topicPartition = Log.parseTopicPartitionName(logDir)
           val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
+          val logStartOffset = logStartOffsets.getOrElse(topicPartition, 0L)
 
-          val current = new Log(logDir, config, logRecoveryPoint, scheduler, time, brokerState)
-          val previous = this.logs.put(topicPartition, current)
-
-          if (previous != null) {
-            throw new IllegalArgumentException(
-              "Duplicate log directories found: %s, %s!".format(
-              current.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+          val current = new Log(
+            dir = logDir,
+            config = config,
+            logStartOffset = logStartOffset,
+            recoveryPoint = logRecoveryPoint,
+            maxPidExpirationMs = maxPidExpirationMs,
+            scheduler = scheduler,
+            time = time,
+            brokerState = brokerState)
+          if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
+            this.logsToBeDeleted.add(current)
+          } else {
+            val previous = this.logs.put(topicPartition, current)
+            if (previous != null) {
+              throw new IllegalArgumentException(
+                "Duplicate log directories found: %s, %s!".format(
+                  current.dir.getAbsolutePath, previous.dir.getAbsolutePath))
+            }
           }
         }
       }
@@ -178,15 +210,25 @@ class LogManager(val logDirs: Array[File],
                          period = retentionCheckMs,
                          TimeUnit.MILLISECONDS)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
-      scheduler.schedule("kafka-log-flusher", 
-                         flushDirtyLogs, 
-                         delay = InitialTaskDelayMs, 
-                         period = flushCheckMs, 
+      scheduler.schedule("kafka-log-flusher",
+                         flushDirtyLogs,
+                         delay = InitialTaskDelayMs,
+                         period = flushCheckMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-recovery-point-checkpoint",
                          checkpointRecoveryPointOffsets,
                          delay = InitialTaskDelayMs,
-                         period = flushCheckpointMs,
+                         period = flushRecoveryOffsetCheckpointMs,
+                         TimeUnit.MILLISECONDS)
+      scheduler.schedule("kafka-log-start-offset-checkpoint",
+                         checkpointLogStartOffsets,
+                         delay = InitialTaskDelayMs,
+                         period = flushStartOffsetCheckpointMs,
+                         TimeUnit.MILLISECONDS)
+      scheduler.schedule("kafka-delete-logs",
+                         deleteLogs,
+                         delay = InitialTaskDelayMs,
+                         period = defaultConfig.fileDeleteDelayMs,
                          TimeUnit.MILLISECONDS)
     }
     if(cleanerConfig.enableCleaner)
@@ -234,7 +276,10 @@ class LogManager(val logDirs: Array[File],
 
         // update the last flush point
         debug("Updating recovery points at " + dir)
-        checkpointLogsInDir(dir)
+        checkpointLogRecoveryOffsetsInDir(dir)
+
+        debug("Updating log start offsets at " + dir)
+        checkpointLogStartOffsetsInDir(dir)
       }
     } catch {
       case e: ExecutionException => {
@@ -254,21 +299,21 @@ class LogManager(val logDirs: Array[File],
   /**
    * Truncate the partition logs to the specified offsets and checkpoint the recovery point to this offset
    *
-   * @param partitionAndOffsets Partition logs that need to be truncated
+   * @param partitionOffsets Partition logs that need to be truncated
    */
-  def truncateTo(partitionAndOffsets: Map[TopicAndPartition, Long]) {
-    for ((topicAndPartition, truncateOffset) <- partitionAndOffsets) {
-      val log = logs.get(topicAndPartition)
+  def truncateTo(partitionOffsets: Map[TopicPartition, Long]) {
+    for ((topicPartition, truncateOffset) <- partitionOffsets) {
+      val log = logs.get(topicPartition)
       // If the log does not exist, skip it
       if (log != null) {
         //May need to abort and pause the cleaning of the log, and resume after truncation is done.
         val needToStopCleaner: Boolean = truncateOffset < log.activeSegment.baseOffset
         if (needToStopCleaner && cleaner != null)
-          cleaner.abortAndPauseCleaning(topicAndPartition)
+          cleaner.abortAndPauseCleaning(topicPartition)
         log.truncateTo(truncateOffset)
         if (needToStopCleaner && cleaner != null) {
-          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicAndPartition, log.activeSegment.baseOffset)
-          cleaner.resumeCleaning(topicAndPartition)
+          cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+          cleaner.resumeCleaning(topicPartition)
         }
       }
     }
@@ -279,34 +324,42 @@ class LogManager(val logDirs: Array[File],
    *  Delete all data in a partition and start the log at the new offset
    *  @param newOffset The new offset to start the log with
    */
-  def truncateFullyAndStartAt(topicAndPartition: TopicAndPartition, newOffset: Long) {
-    val log = logs.get(topicAndPartition)
+  def truncateFullyAndStartAt(topicPartition: TopicPartition, newOffset: Long) {
+    val log = logs.get(topicPartition)
     // If the log does not exist, skip it
     if (log != null) {
         //Abort and pause the cleaning of the log, and resume after truncation is done.
       if (cleaner != null)
-        cleaner.abortAndPauseCleaning(topicAndPartition)
+        cleaner.abortAndPauseCleaning(topicPartition)
       log.truncateFullyAndStartAt(newOffset)
       if (cleaner != null) {
-        cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicAndPartition, log.activeSegment.baseOffset)
-        cleaner.resumeCleaning(topicAndPartition)
+        cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
+        cleaner.resumeCleaning(topicPartition)
       }
     }
     checkpointRecoveryPointOffsets()
   }
 
   /**
-   * Write out the current recovery point for all logs to a text file in the log directory 
+   * Write out the current recovery point for all logs to a text file in the log directory
    * to avoid recovering the whole log on startup.
    */
   def checkpointRecoveryPointOffsets() {
-    this.logDirs.foreach(checkpointLogsInDir)
+    this.logDirs.foreach(checkpointLogRecoveryOffsetsInDir)
+  }
+
+  /**
+   * Write out the current log start offset for all logs to a text file in the log directory
+   * to avoid exposing data that have been deleted by DeleteRecordsRequest
+   */
+  def checkpointLogStartOffsets() {
+    this.logDirs.foreach(checkpointLogStartOffsetsInDir)
   }
 
   /**
    * Make a checkpoint for all logs in provided directory.
    */
-  private def checkpointLogsInDir(dir: File): Unit = {
+  private def checkpointLogRecoveryOffsetsInDir(dir: File): Unit = {
     val recoveryPoints = this.logsByDir.get(dir.toString)
     if (recoveryPoints.isDefined) {
       this.recoveryPointCheckpoints(dir).write(recoveryPoints.get.mapValues(_.recoveryPoint))
@@ -314,67 +367,118 @@ class LogManager(val logDirs: Array[File],
   }
 
   /**
+   * Checkpoint log start offset for all logs in provided directory.
+   */
+  private def checkpointLogStartOffsetsInDir(dir: File): Unit = {
+    val logs = this.logsByDir.get(dir.toString)
+    if (logs.isDefined) {
+      this.logStartOffsetCheckpoints(dir).write(
+        logs.get.filter{case (tp, log) => log.logStartOffset > log.logSegments.head.baseOffset}.mapValues(_.logStartOffset))
+    }
+  }
+
+  /**
    * Get the log if it exists, otherwise return None
    */
-  def getLog(topicAndPartition: TopicAndPartition): Option[Log] = {
-    val log = logs.get(topicAndPartition)
-    if (log == null)
-      None
-    else
-      Some(log)
-  }
+  def getLog(topicPartition: TopicPartition): Option[Log] = Option(logs.get(topicPartition))
 
   /**
    * Create a log for the given topic and the given partition
    * If the log already exists, just return a copy of the existing log
    */
-  def createLog(topicAndPartition: TopicAndPartition, config: LogConfig): Log = {
+  def createLog(topicPartition: TopicPartition, config: LogConfig): Log = {
     logCreationOrDeletionLock synchronized {
-      var log = logs.get(topicAndPartition)
-      
-      // check if the log has already been created in another thread
-      if(log != null)
-        return log
-      
-      // if not, create it
-      val dataDir = nextLogDir()
-      val dir = new File(dataDir, topicAndPartition.topic + "-" + topicAndPartition.partition)
-      dir.mkdirs()
-      log = new Log(dir, 
-                    config,
-                    recoveryPoint = 0L,
-                    scheduler,
-                    time,
-                    brokerState)
-      logs.put(topicAndPartition, log)
-      info("Created log for partition [%s,%d] in %s with properties {%s}."
-           .format(topicAndPartition.topic, 
-                   topicAndPartition.partition, 
-                   dataDir.getAbsolutePath,
-                   {import JavaConversions._; config.originals.mkString(", ")}))
-      log
+      // create the log if it has not already been created in another thread
+      getLog(topicPartition).getOrElse {
+        val dataDir = nextLogDir()
+        val dir = new File(dataDir, topicPartition.topic + "-" + topicPartition.partition)
+        Files.createDirectories(dir.toPath)
+
+        val log = new Log(
+          dir = dir,
+          config = config,
+          logStartOffset = 0L,
+          recoveryPoint = 0L,
+          maxPidExpirationMs = maxPidExpirationMs,
+          scheduler = scheduler,
+          time = time,
+          brokerState = brokerState)
+        logs.put(topicPartition, log)
+        info("Created log for partition [%s,%d] in %s with properties {%s}."
+          .format(topicPartition.topic,
+            topicPartition.partition,
+            dataDir.getAbsolutePath,
+            config.originals.asScala.mkString(", ")))
+        log
+      }
     }
   }
 
   /**
-   *  Delete a log.
+   *  Delete logs marked for deletion.
    */
-  def deleteLog(topicAndPartition: TopicAndPartition) {
-    var removedLog: Log = null
-    logCreationOrDeletionLock synchronized {
-      removedLog = logs.remove(topicAndPartition)
+  private def deleteLogs(): Unit = {
+    try {
+      var failed = 0
+      while (!logsToBeDeleted.isEmpty && failed < logsToBeDeleted.size()) {
+        val removedLog = logsToBeDeleted.take()
+        if (removedLog != null) {
+          try {
+            removedLog.delete()
+            info(s"Deleted log for partition ${removedLog.topicPartition} in ${removedLog.dir.getAbsolutePath}.")
+          } catch {
+            case e: Throwable =>
+              error(s"Exception in deleting $removedLog. Moving it to the end of the queue.", e)
+              failed = failed + 1
+              logsToBeDeleted.put(removedLog)
+          }
+        }
+      }
+    } catch {
+      case e: Throwable =>
+        error(s"Exception in kafka-delete-logs thread.", e)
     }
+}
+
+  /**
+    * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and
+    * add it in the queue for deletion.
+    * @param topicPartition TopicPartition that needs to be deleted
+    */
+  def asyncDelete(topicPartition: TopicPartition) = {
+    val removedLog: Log = logCreationOrDeletionLock synchronized {
+                            logs.remove(topicPartition)
+                          }
     if (removedLog != null) {
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null) {
-        cleaner.abortCleaning(topicAndPartition)
+        cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-      removedLog.delete()
-      info("Deleted log for partition [%s,%d] in %s."
-           .format(topicAndPartition.topic,
-                   topicAndPartition.partition,
-                   removedLog.dir.getAbsolutePath))
+      // renaming the directory to topic-partition.uniqueId-delete
+      val dirName = new StringBuilder(removedLog.name)
+                        .append(".")
+                        .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
+                        .append(Log.DeleteDirSuffix)
+                        .toString()
+      removedLog.close()
+      val renamedDir = new File(removedLog.dir.getParent, dirName)
+      val renameSuccessful = removedLog.dir.renameTo(renamedDir)
+      if (renameSuccessful) {
+        checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
+        removedLog.dir = renamedDir
+        // change the file pointers for log and index file
+        for (logSegment <- removedLog.logSegments) {
+          logSegment.log.setFile(new File(renamedDir, logSegment.log.file.getName))
+          logSegment.index.file = new File(renamedDir, logSegment.index.file.getName)
+        }
+
+        logsToBeDeleted.add(removedLog)
+        removedLog.removeLogMetrics()
+        info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
+      } else {
+        throw new KafkaStorageException("Failed to rename log directory from " + removedLog.dir.getAbsolutePath + " to " + renamedDir.getAbsolutePath)
+      }
     }
   }
 
@@ -390,8 +494,8 @@ class LogManager(val logDirs: Array[File],
       // count the number of logs in each parent directory (including 0 for empty directories
       val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
       val zeros = logDirs.map(dir => (dir.getPath, 0)).toMap
-      var dirCounts = (zeros ++ logCounts).toBuffer
-    
+      val dirCounts = (zeros ++ logCounts).toBuffer
+
       // choose the directory with the least logs in it
       val leastLoaded = dirCounts.sortBy(_._2).head
       new File(leastLoaded._1)
@@ -420,9 +524,9 @@ class LogManager(val logDirs: Array[File],
   def allLogs(): Iterable[Log] = logs.values
 
   /**
-   * Get a map of TopicAndPartition => Log
+   * Get a map of TopicPartition => Log
    */
-  def logsByTopicPartition: Map[TopicAndPartition, Log] = logs.toMap
+  def logsByTopicPartition: Map[TopicPartition, Log] = logs.toMap
 
   /**
    * Map of log dir to logs by topic and partitions in that dir
@@ -439,17 +543,56 @@ class LogManager(val logDirs: Array[File],
   private def flushDirtyLogs() = {
     debug("Checking for dirty logs to flush...")
 
-    for ((topicAndPartition, log) <- logs) {
+    for ((topicPartition, log) <- logs) {
       try {
         val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
-        debug("Checking if flush is needed on " + topicAndPartition.topic + " flush interval  " + log.config.flushMs +
+        debug("Checking if flush is needed on " + topicPartition.topic + " flush interval  " + log.config.flushMs +
               " last flushed " + log.lastFlushTime + " time since last flush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= log.config.flushMs)
           log.flush
       } catch {
         case e: Throwable =>
-          error("Error flushing topic " + topicAndPartition.topic, e)
+          error("Error flushing topic " + topicPartition.topic, e)
       }
     }
+  }
+}
+
+object LogManager {
+  def apply(config: KafkaConfig,
+            zkUtils: ZkUtils,
+            brokerState: BrokerState,
+            kafkaScheduler: KafkaScheduler,
+            time: Time): LogManager = {
+    val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
+    val defaultLogConfig = LogConfig(defaultProps)
+
+    val topicConfigs = AdminUtils.fetchAllTopicConfigs(zkUtils).map { case (topic, configs) =>
+      topic -> LogConfig.fromProps(defaultProps, configs)
+    }
+
+    // read the log configurations from zookeeper
+    val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
+      dedupeBufferSize = config.logCleanerDedupeBufferSize,
+      dedupeBufferLoadFactor = config.logCleanerDedupeBufferLoadFactor,
+      ioBufferSize = config.logCleanerIoBufferSize,
+      maxMessageSize = config.messageMaxBytes,
+      maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
+      backOffMs = config.logCleanerBackoffMs,
+      enableCleaner = config.logCleanerEnable)
+
+    new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
+      topicConfigs = topicConfigs,
+      defaultConfig = defaultLogConfig,
+      cleanerConfig = cleanerConfig,
+      ioThreads = config.numRecoveryThreadsPerDataDir,
+      flushCheckMs = config.logFlushSchedulerIntervalMs,
+      flushRecoveryOffsetCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
+      flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,
+      retentionCheckMs = config.logCleanupIntervalMs,
+      maxPidExpirationMs = config.transactionIdExpirationMs,
+      scheduler = kafkaScheduler,
+      brokerState = brokerState,
+      time = time)
   }
 }

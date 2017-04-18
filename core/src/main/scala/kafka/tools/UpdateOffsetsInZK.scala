@@ -18,10 +18,11 @@
 package kafka.tools
 
 import org.I0Itec.zkclient.ZkClient
-import kafka.consumer.{SimpleConsumer, ConsumerConfig}
-import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
-import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.utils.{ZKGroupTopicDirs, ZkUtils, CoreUtils}
+import kafka.consumer.{ConsumerConfig, SimpleConsumer}
+import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
+import kafka.common.{KafkaException, TopicAndPartition}
+import kafka.utils.{CoreUtils, Exit, ZKGroupTopicDirs, ZkUtils}
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
@@ -67,9 +68,8 @@ object UpdateOffsetsInZK {
 
       zkUtils.getBrokerInfo(broker) match {
         case Some(brokerInfo) =>
-          val consumer = new SimpleConsumer(brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).host,
-                                            brokerInfo.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).port,
-                                            10000, 100 * 1024, "UpdateOffsetsInZk")
+          val brokerEndPoint = brokerInfo.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+          val consumer = new SimpleConsumer(brokerEndPoint.host, brokerEndPoint.port, 10000, 100 * 1024, "UpdateOffsetsInZk")
           val topicAndPartition = TopicAndPartition(topic, partition)
           val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(offsetOption, 1)))
           val offset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
@@ -86,6 +86,6 @@ object UpdateOffsetsInZK {
 
   private def usage() = {
     println("USAGE: " + UpdateOffsetsInZK.getClass.getName + " [earliest | latest] consumer.properties topic")
-    System.exit(1)
+    Exit.exit(1)
   }
 }

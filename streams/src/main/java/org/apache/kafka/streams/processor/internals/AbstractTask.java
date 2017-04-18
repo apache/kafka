@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
@@ -28,6 +27,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collection;
@@ -37,6 +38,8 @@ import java.util.Map;
 import java.util.Set;
 
 public abstract class AbstractTask {
+    private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
+
     protected final TaskId id;
     protected final String applicationId;
     protected final ProcessorTopology topology;
@@ -48,14 +51,14 @@ public abstract class AbstractTask {
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
-    protected AbstractTask(TaskId id,
-                           String applicationId,
-                           Collection<TopicPartition> partitions,
-                           ProcessorTopology topology,
-                           Consumer<byte[], byte[]> consumer,
-                           Consumer<byte[], byte[]> restoreConsumer,
-                           boolean isStandby,
-                           StateDirectory stateDirectory,
+    protected AbstractTask(final TaskId id,
+                           final String applicationId,
+                           final Collection<TopicPartition> partitions,
+                           final ProcessorTopology topology,
+                           final Consumer<byte[], byte[]> consumer,
+                           final ChangelogReader changelogReader,
+                           final boolean isStandby,
+                           final StateDirectory stateDirectory,
                            final ThreadCache cache) {
         this.id = id;
         this.applicationId = applicationId;
@@ -66,8 +69,7 @@ public abstract class AbstractTask {
 
         // create the processor state manager
         try {
-            this.stateMgr = new ProcessorStateManager(applicationId, id, partitions, restoreConsumer, isStandby, stateDirectory, topology.sourceStoreToSourceTopic(), topology.storeToProcessorNodeMap());
-
+            stateMgr = new ProcessorStateManager(id, partitions, isStandby, stateDirectory, topology.storeToChangelogTopic(), changelogReader);
         } catch (IOException e) {
             throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
@@ -78,8 +80,10 @@ public abstract class AbstractTask {
         initializeOffsetLimits();
 
         for (StateStore store : this.topology.stateStores()) {
+            log.trace("task [{}] Initializing store {}", id(), store.name());
             store.init(this.processorContext, store);
         }
+
     }
 
     public final TaskId id() {
@@ -117,10 +121,12 @@ public abstract class AbstractTask {
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
+     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
-    void closeStateManager() {
+    void closeStateManager(final boolean writeCheckpoint) {
+        log.trace("task [{}] Closing", id());
         try {
-            stateMgr.close(recordCollectorOffsets());
+            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
         } catch (IOException e) {
             throw new ProcessorStateException("Error while closing the state manager", e);
         }
@@ -150,29 +156,37 @@ public abstract class AbstractTask {
     }
 
     /**
-     * Produces a string representation contain useful information about a StreamTask.
+     * Produces a string representation containing useful information about a StreamTask.
      * This is useful in debugging scenarios.
      * @return A string representation of the StreamTask instance.
      */
+    @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("StreamsTask taskId:" + this.id() + "\n");
+        return toString("");
+    }
+
+    /**
+     * Produces a string representation containing useful information about a StreamTask starting with the given indent.
+     * This is useful in debugging scenarios.
+     * @return A string representation of the StreamTask instance.
+     */
+    public String toString(final String indent) {
+        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
 
         // print topology
         if (topology != null) {
-            sb.append("\t\t\t" + topology.toString());
+            sb.append(indent).append(topology.toString(indent + "\t"));
         }
 
         // print assigned partitions
         if (partitions != null && !partitions.isEmpty()) {
-            sb.append("\t\t\tPartitions [");
+            sb.append(indent).append("Partitions [");
             for (TopicPartition topicPartition : partitions) {
-                sb.append(topicPartition.toString() + ",");
+                sb.append(topicPartition.toString()).append(", ");
             }
-            sb.setLength(sb.length() - 1);
-            sb.append("]");
+            sb.setLength(sb.length() - 2);
+            sb.append("]\n");
         }
-
-        sb.append("\n");
         return sb.toString();
     }
 

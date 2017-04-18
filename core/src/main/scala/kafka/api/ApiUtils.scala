@@ -17,9 +17,7 @@
 package kafka.api
 
 import java.nio._
-import java.nio.channels.GatheringByteChannel
 import kafka.common._
-import org.apache.kafka.common.network.TransportLayer
 
 /**
  * Helper functions specific to parsing or serializing requests and responses
@@ -97,22 +95,6 @@ object ApiUtils {
     if(value < range._1 || value > range._2)
       throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value
-  }
-
-  /**
-   * Read a long out of the bytebuffer from the current position and check that it falls within the given
-   * range. If not, throw KafkaException.
-   */
-  def readLongInRange(buffer: ByteBuffer, name: String, range: (Long, Long)): Long = {
-    val value = buffer.getLong
-    if(value < range._1 || value > range._2)
-      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
-    else value
-  }
-
-  private[api] def hasPendingWrites(channel: GatheringByteChannel): Boolean = channel match {
-    case t: TransportLayer => t.hasPendingWrites
-    case _ => false
   }
   
 }

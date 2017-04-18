@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -54,8 +54,9 @@ public class ArrayOf extends Type {
         Object[] objs = (Object[]) o;
         int size = objs.length;
         buffer.putInt(size);
-        for (int i = 0; i < size; i++)
-            type.write(buffer, objs[i]);
+
+        for (Object obj : objs)
+            type.write(buffer, obj);
     }
 
     @Override
@@ -81,8 +82,8 @@ public class ArrayOf extends Type {
             return size;
 
         Object[] objs = (Object[]) o;
-        for (int i = 0; i < objs.length; i++)
-            size += type.sizeOf(objs[i]);
+        for (Object obj : objs)
+            size += type.sizeOf(obj);
         return size;
     }
 
@@ -102,8 +103,8 @@ public class ArrayOf extends Type {
                 return null;
 
             Object[] array = (Object[]) item;
-            for (int i = 0; i < array.length; i++)
-                type.validate(array[i]);
+            for (Object obj : array)
+                type.validate(obj);
             return array;
         } catch (ClassCastException e) {
             throw new SchemaException("Not an Object[].");

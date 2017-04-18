@@ -15,7 +15,7 @@
 
 from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
-
+import time
 
 class ProduceConsumeValidateTest(Test):
     """This class provides a shared template for tests which follow the common pattern of:
@@ -42,6 +42,7 @@ class ProduceConsumeValidateTest(Test):
         # producer begins producing messages, in which case we will miss the
         # initial set of messages and get spurious test failures.
         self.consumer_init_timeout_sec = 0
+        self.enable_idempotence = False
 
     def setup_producer_and_consumer(self):
         raise NotImplementedError("Subclasses should implement this")
@@ -50,12 +51,28 @@ class ProduceConsumeValidateTest(Test):
         # Start background producer and consumer
         self.consumer.start()
         if (self.consumer_init_timeout_sec > 0):
-            self.logger.debug("Waiting %ds for the consumer to fork.",
+            self.logger.debug("Waiting %ds for the consumer to initialize.",
                               self.consumer_init_timeout_sec)
+            start = int(time.time())
             wait_until(lambda: self.consumer.alive(self.consumer.nodes[0]) is True,
                        timeout_sec=self.consumer_init_timeout_sec,
                        err_msg="Consumer process took more than %d s to fork" %\
                        self.consumer_init_timeout_sec)
+            end = int(time.time())
+            # If `JMXConnectFactory.connect` is invoked during the
+            # initialization of the JMX server, it may fail to throw the
+            # specified IOException back to the calling code. The sleep is a
+            # workaround that should allow initialization to complete before we
+            # try to connect. See KAFKA-4620 for more details.
+            time.sleep(1)
+            remaining_time = self.consumer_init_timeout_sec - (end - start)
+            if remaining_time < 0 :
+                remaining_time = 0
+            if self.consumer.new_consumer:
+                wait_until(lambda: self.consumer.has_partitions_assigned(self.consumer.nodes[0]) is True,
+                           timeout_sec=remaining_time,
+                           err_msg="Consumer process took more than %d s to have partitions assigned" %\
+                           remaining_time)
 
         self.producer.start()
         wait_until(lambda: self.producer.num_acked > 5,
@@ -102,7 +119,7 @@ class ProduceConsumeValidateTest(Test):
         except BaseException as e:
             for s in self.test_context.services:
                 self.mark_for_collect(s)
-            raise e
+            raise
 
     @staticmethod
     def annotate_missing_msgs(missing, acked, consumed, msg):
@@ -151,9 +168,17 @@ class ProduceConsumeValidateTest(Test):
             msg = self.annotate_data_lost(data_lost, msg, len(to_validate))
 
 
+        if self.enable_idempotence:
+            self.logger.info("Ran a test with idempotence enabled. We expect no duplicates")
+        else:
+            self.logger.info("Ran a test with idempotence disabled.")
+
         # Are there duplicates?
         if len(set(consumed)) != len(consumed):
-            msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % abs(len(set(consumed)) - len(consumed))
+            num_duplicates = abs(len(set(consumed)) - len(consumed))
+            msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % num_duplicates
+            if self.enable_idempotence:
+                assert False, "Detected %s duplicates even though idempotence was enabled." % num_duplicates
 
         # Collect all logs if validation fails
         if not success:

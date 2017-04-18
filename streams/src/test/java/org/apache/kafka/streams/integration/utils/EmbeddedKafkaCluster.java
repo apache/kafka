@@ -1,30 +1,33 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.KafkaConfig$;
+import kafka.server.KafkaServer;
 import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.rules.ExternalResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -34,31 +37,38 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
+    public static final int TOPIC_CREATION_TIMEOUT = 30000;
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
+    private final Properties brokerConfig;
 
     public EmbeddedKafkaCluster(final int numBrokers) {
-        brokers = new KafkaEmbedded[numBrokers];
+        this(numBrokers, new Properties());
     }
 
-    public MockTime time = new MockTime();
+    public EmbeddedKafkaCluster(final int numBrokers, final Properties brokerConfig) {
+        brokers = new KafkaEmbedded[numBrokers];
+        this.brokerConfig = brokerConfig;
+    }
+
+    public final MockTime time = new MockTime();
 
     /**
      * Creates and starts a Kafka cluster.
      */
     public void start() throws IOException, InterruptedException {
-        final Properties brokerConfig = new Properties();
-
         log.debug("Initiating embedded Kafka cluster startup");
         log.debug("Starting a ZooKeeper instance");
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
+
         brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
         brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
-        brokerConfig.put(KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
-        brokerConfig.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
-        brokerConfig.put(KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
-        brokerConfig.put(KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), false);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicReplicationFactorProp(), (short) 1);
+        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
 
         for (int i = 0; i < brokers.length; i++) {
             brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
@@ -68,6 +78,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
                 brokers[i].brokerList(), brokers[i].zookeeperConnect());
         }
+    }
+
+    private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
+        if (!props.containsKey(propertyKey))
+            brokerConfig.put(propertyKey, propertyValue);
     }
 
     /**
@@ -112,7 +127,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      *
      * @param topic The name of the topic.
      */
-    public void createTopic(final String topic) {
+    public void createTopic(final String topic) throws InterruptedException {
         createTopic(topic, 1, 1, new Properties());
     }
 
@@ -123,7 +138,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param partitions  The number of partitions for this topic.
      * @param replication The replication factor for (the partitions of) this topic.
      */
-    public void createTopic(final String topic, final int partitions, final int replication) {
+    public void createTopic(final String topic, final int partitions, final int replication) throws InterruptedException {
         createTopic(topic, partitions, replication, new Properties());
     }
 
@@ -138,11 +153,24 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     public void createTopic(final String topic,
                             final int partitions,
                             final int replication,
-                            final Properties topicConfig) {
+                            final Properties topicConfig) throws InterruptedException {
         brokers[0].createTopic(topic, partitions, replication, topicConfig);
+        final List<TopicPartition> topicPartitions = new ArrayList<>();
+        for (int partition = 0; partition < partitions; partition++) {
+            topicPartitions.add(new TopicPartition(topic, partition));
+        }
+        IntegrationTestUtils.waitForTopicPartitions(brokers(), topicPartitions, TOPIC_CREATION_TIMEOUT);
     }
 
     public void deleteTopic(final String topic) {
         brokers[0].deleteTopic(topic);
+    }
+
+    public List<KafkaServer> brokers() {
+        final List<KafkaServer> servers = new ArrayList<>();
+        for (final KafkaEmbedded broker : brokers) {
+            servers.add(broker.kafkaServer());
+        }
+        return servers;
     }
 }

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -40,14 +40,15 @@ import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -56,7 +57,6 @@ import java.util.concurrent.CountDownLatch;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
-
 
 /**
  * Command line consumer designed for system testing. It outputs consumer events to STDOUT as JSON
@@ -215,7 +215,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     public void run() {
         try {
-            consumer.subscribe(Arrays.asList(topic), this);
+            printJson(new StartupComplete());
+            consumer.subscribe(Collections.singletonList(topic), this);
 
             while (true) {
                 ConsumerRecords<String, String> records = consumer.poll(Long.MAX_VALUE);
@@ -264,6 +265,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @JsonProperty
         public long timestamp() {
             return timestamp;
+        }
+    }
+
+    private static class StartupComplete extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "startup_complete";
         }
     }
 
@@ -602,7 +611,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         ArgumentParser parser = argParser();
         if (args.length == 0) {
             parser.printHelp();
-            System.exit(0);
+            Exit.exit(0);
         }
 
         try {
@@ -617,7 +626,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             consumer.run();
         } catch (ArgumentParserException e) {
             parser.handleError(e);
-            System.exit(1);
+            Exit.exit(1);
         }
     }
 

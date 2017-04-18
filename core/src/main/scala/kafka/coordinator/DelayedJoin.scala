@@ -31,8 +31,12 @@ import kafka.server.DelayedOperation
  */
 private[coordinator] class DelayedJoin(coordinator: GroupCoordinator,
                                        group: GroupMetadata,
-                                       sessionTimeout: Long)
-  extends DelayedOperation(sessionTimeout) {
+                                       rebalanceTimeout: Long)
+  extends DelayedOperation(rebalanceTimeout) {
+
+  // overridden since tryComplete already synchronizes on the group. This makes it safe to
+  // call purgatory operations while holding the group lock.
+  override def safeTryComplete(): Boolean = tryComplete()
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete)
   override def onExpiration() = coordinator.onExpireJoin()

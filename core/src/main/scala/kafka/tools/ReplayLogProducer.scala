@@ -24,6 +24,7 @@ import kafka.consumer._
 import kafka.utils.{ToolsUtils, CommandLineUtils, Logging, ZkUtils}
 import kafka.api.OffsetRequest
 import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
+import scala.collection.JavaConverters._
 
 object ReplayLogProducer extends Logging {
 
@@ -114,8 +115,7 @@ object ReplayLogProducer extends Logging {
     val outputTopic = options.valueOf(outputTopicOpt)
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val isSync = options.has(syncOpt)
-    import scala.collection.JavaConversions._
-    val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
+    val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")

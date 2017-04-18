@@ -38,7 +38,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
  * we are dead.
  */
 class KafkaHealthcheck(brokerId: Int,
-                       advertisedEndpoints: Map[SecurityProtocol, EndPoint],
+                       advertisedEndpoints: Seq[EndPoint],
                        zkUtils: ZkUtils,
                        rack: Option[String],
                        interBrokerProtocolVersion: ApiVersion) extends Logging {
@@ -55,17 +55,18 @@ class KafkaHealthcheck(brokerId: Int,
    */
   def register() {
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    val updatedEndpoints = advertisedEndpoints.mapValues(endpoint =>
+    val updatedEndpoints = advertisedEndpoints.map(endpoint =>
       if (endpoint.host == null || endpoint.host.trim.isEmpty)
-        EndPoint(InetAddress.getLocalHost.getCanonicalHostName, endpoint.port, endpoint.protocolType)
+        endpoint.copy(host = InetAddress.getLocalHost.getCanonicalHostName)
       else
         endpoint
     )
 
-    // the default host and port are here for compatibility with older client
-    // only PLAINTEXT is supported as default
-    // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
-    val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
+    // the default host and port are here for compatibility with older clients that only support PLAINTEXT
+    // we choose the first plaintext port, if there is one
+    // or we register an empty endpoint, which means that older clients will not be able to connect
+    val plaintextEndpoint = updatedEndpoints.find(_.securityProtocol == SecurityProtocol.PLAINTEXT).getOrElse(
+      new EndPoint(null, -1, null, null))
     zkUtils.registerBrokerInZk(brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, jmxPort, rack,
       interBrokerProtocolVersion)
   }
@@ -92,12 +93,12 @@ class KafkaHealthcheck(brokerId: Int,
       }
     }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     override def handleStateChanged(state: KeeperState) {
       stateToMeterMap.get(state).foreach(_.mark())
     }
 
-    @throws(classOf[Exception])
+    @throws[Exception]
     override def handleNewSession() {
       info("re-registering broker info in ZK for broker " + brokerId)
       register()

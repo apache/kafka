@@ -17,24 +17,14 @@
 
 package kafka.consumer
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.regex.Pattern
 
-import kafka.api.FetchRequestBuilder
 import kafka.api.OffsetRequest
-import kafka.api.Request
-import kafka.client.ClientUtils
-import kafka.cluster.BrokerEndPoint
 import kafka.common.StreamEndException
 import kafka.message.Message
-import kafka.common.TopicAndPartition
-import kafka.message.MessageAndOffset
-import kafka.utils.ToolsUtils
-
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.TopicPartition
 
 /**
@@ -60,8 +50,6 @@ case class BaseConsumerRecord(topic: String,
 class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String], consumerProps: Properties, val timeoutMs: Long = Long.MaxValue) extends BaseConsumer {
   import org.apache.kafka.clients.consumer.KafkaConsumer
 
-  import scala.collection.JavaConversions._
-
   val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
   consumerInit()
   var recordIter = consumer.poll(0).iterator
@@ -74,7 +62,7 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
         // default to latest if no offset is provided
         seek(topic, partitionId, OffsetRequest.LatestTime)
       case (Some(topic), None, None, None) =>
-        consumer.subscribe(List(topic))
+        consumer.subscribe(Collections.singletonList(topic))
       case (None, None, None, Some(whitelist)) =>
         consumer.subscribe(Pattern.compile(whitelist), new NoOpConsumerRebalanceListener())
       case _ =>
@@ -87,10 +75,10 @@ class NewShinyConsumer(topic: Option[String], partitionId: Option[Int], offset: 
 
   def seek(topic: String, partitionId: Int, offset: Long) {
     val topicPartition = new TopicPartition(topic, partitionId)
-    consumer.assign(List(topicPartition))
+    consumer.assign(Collections.singletonList(topicPartition))
     offset match {
-      case OffsetRequest.EarliestTime => consumer.seekToBeginning(List(topicPartition))
-      case OffsetRequest.LatestTime => consumer.seekToEnd(List(topicPartition))
+      case OffsetRequest.EarliestTime => consumer.seekToBeginning(Collections.singletonList(topicPartition))
+      case OffsetRequest.LatestTime => consumer.seekToEnd(Collections.singletonList(topicPartition))
       case _ => consumer.seek(topicPartition, offset)
     }
   }

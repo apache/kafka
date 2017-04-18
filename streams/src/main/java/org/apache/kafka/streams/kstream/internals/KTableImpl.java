@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -33,8 +32,9 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import java.util.Set;
 
@@ -55,17 +55,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     public static final String JOINOTHER_NAME = "KTABLE-JOINOTHER-";
 
-    public static final String LEFTTHIS_NAME = "KTABLE-LEFTTHIS-";
-
-    public static final String LEFTOTHER_NAME = "KTABLE-LEFTOTHER-";
-
     private static final String MAPVALUES_NAME = "KTABLE-MAPVALUES-";
 
     public static final String MERGE_NAME = "KTABLE-MERGE-";
-
-    public static final String OUTERTHIS_NAME = "KTABLE-OUTERTHIS-";
-
-    public static final String OUTEROTHER_NAME = "KTABLE-OUTEROTHER-";
 
     private static final String PRINTING_NAME = "KSTREAM-PRINTER-";
 
@@ -75,10 +67,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
-    public final ProcessorSupplier<?, ?> processorSupplier;
+    private final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
     private final String storeName;
 
     private boolean sendOldValues = false;
@@ -89,20 +79,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
                       final String storeName) {
-        this(topology, name, processorSupplier, sourceNodes, null, null, storeName);
-    }
-
-    public KTableImpl(KStreamBuilder topology,
-                      String name,
-                      ProcessorSupplier<?, ?> processorSupplier,
-                      Set<String> sourceNodes,
-                      Serde<K> keySerde,
-                      Serde<V> valSerde,
-                      final String storeName) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
-        this.keySerde = keySerde;
-        this.valSerde = valSerde;
         this.storeName = storeName;
     }
 
@@ -112,7 +90,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> filter(Predicate<K, V> predicate) {
+    public KTable<K, V> filter(Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false);
@@ -122,7 +100,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> filterNot(final Predicate<K, V> predicate) {
+    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true);
@@ -133,7 +111,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <V1> KTable<K, V1> mapValues(ValueMapper<V, V1> mapper) {
+    public <V1> KTable<K, V1> mapValues(ValueMapper<? super V, ? extends V1> mapper) {
         Objects.requireNonNull(mapper);
         String name = topology.newName(MAPVALUES_NAME);
         KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper);
@@ -193,16 +171,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
         try {
-            PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
-            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde, streamName), this.name);
-        } catch (FileNotFoundException e) {
+            PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+            topology.addProcessor(name, new KeyValuePrinter<>(printWriter, keySerde, valSerde, streamName), this.name);
+        } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
         }
     }
 
     @Override
-    public void foreach(final ForeachAction<K, V> action) {
+    public void foreach(final ForeachAction<? super K, ? super V> action) {
         Objects.requireNonNull(action, "action can't be null");
         String name = topology.newName(FOREACH_NAME);
         KStreamForeach<K, Change<V>> processorSupplier = new KStreamForeach<>(new ForeachAction<K, Change<V>>() {
@@ -217,7 +195,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public KTable<K, V> through(Serde<K> keySerde,
                                 Serde<V> valSerde,
-                                StreamPartitioner<K, V> partitioner,
+                                StreamPartitioner<? super K, ? super V> partitioner,
                                 String topic,
                                 final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
@@ -232,7 +210,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> through(StreamPartitioner<K, V> partitioner, String topic, final String storeName) {
+    public KTable<K, V> through(StreamPartitioner<? super K, ? super V> partitioner, String topic, final String storeName) {
         return through(null, null, partitioner, topic, storeName);
     }
 
@@ -247,7 +225,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public void to(StreamPartitioner<K, V> partitioner, String topic) {
+    public void to(StreamPartitioner<? super K, ? super V> partitioner, String topic) {
         to(null, null, partitioner, topic);
     }
 
@@ -257,7 +235,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<K, V> partitioner, String topic) {
+    public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, String topic) {
         this.toStream().to(keySerde, valSerde, partitioner, topic);
     }
 
@@ -276,27 +254,29 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1> KStream<K1, V> toStream(KeyValueMapper<K, V, K1> mapper) {
+    public <K1> KStream<K1, V> toStream(KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
         return toStream().selectKey(mapper);
     }
 
     @Override
-    public <V1, R> KTable<K, R> join(final KTable<K, V1> other, final ValueJoiner<V, V1, R> joiner) {
+    public <V1, R> KTable<K, R> join(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return doJoin(other, joiner, false, false);
     }
 
+
+
     @Override
-    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other, final ValueJoiner<V, V1, R> joiner) {
+    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return doJoin(other, joiner, true, true);
     }
 
     @Override
-    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<V, V1, R> joiner) {
+    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
         return doJoin(other, joiner, true, false);
     }
 
     @SuppressWarnings("unchecked")
-    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other, ValueJoiner<V, V1, R> joiner, final boolean leftOuter, final boolean rightOuter) {
+    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner, final boolean leftOuter, final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
@@ -342,14 +322,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector,
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector,
                                                   Serde<K1> keySerde,
                                                   Serde<V1> valueSerde) {
 
         Objects.requireNonNull(selector, "selector can't be null");
         String selectName = topology.newName(SELECT_NAME);
 
-        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<K, V, K1, V1>(this, selector);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
         topology.addProcessor(selectName, selectSupplier, this.name);
@@ -359,7 +339,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<K, V, KeyValue<K1, V1>> selector) {
+    public <K1, V1> KGroupedTable<K1, V1> groupBy(KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> selector) {
         return this.groupBy(selector, null, null);
     }
 

@@ -27,7 +27,7 @@ import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.{Total, Rate, Avg}
 import org.apache.kafka.common.utils.Time
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 /**
  * Represents the sensors aggregated per client
@@ -129,7 +129,7 @@ case class QuotaEntity(quotaId: QuotaId, sanitizedUser: String, clientId: String
  * @param apiKey API Key for the request
  * @param time @Time object to use
  */
-class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
+final class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val apiKey: QuotaType,
                          private val time: Time) extends Logging {
@@ -442,7 +442,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
             metric.config(getQuotaMetricConfig(newQuota))
           }
       } else {
-          allMetrics.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
+          allMetrics.asScala.filterKeys(n => n.name == quotaMetricName.name && n.group == quotaMetricName.group).foreach {
             case (metricName, metric) =>
               val userTag = if (metricName.tags.containsKey("user")) metricName.tags.get("user") else ""
               val clientIdTag = if (metricName.tags.containsKey("client-id")) metricName.tags.get("client-id") else ""

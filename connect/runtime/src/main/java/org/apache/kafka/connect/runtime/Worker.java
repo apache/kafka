@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -25,7 +24,9 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
@@ -40,10 +41,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -72,8 +74,8 @@ public class Worker {
     private final OffsetBackingStore offsetBackingStore;
     private final Map<String, Object> producerProps;
 
-    private HashMap<String, WorkerConnector> connectors = new HashMap<>();
-    private HashMap<ConnectorTaskId, WorkerTask> tasks = new HashMap<>();
+    private final ConcurrentMap<String, WorkerConnector> connectors = new ConcurrentHashMap<>();
+    private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
 
     public Worker(String workerId, Time time, ConnectorFactory connectorFactory, WorkerConfig config, OffsetBackingStore offsetBackingStore) {
@@ -100,15 +102,18 @@ public class Worker {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         // These settings are designed to ensure there is no data loss. They *may* be overridden via configs passed to the
         // worker, but this may compromise the delivery guarantees of Kafka Connect.
-        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, ((Integer) Integer.MAX_VALUE).toString());
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, ((Integer) Integer.MAX_VALUE).toString());
-        producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, ((Long) Long.MAX_VALUE).toString());
+        producerProps.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
     }
 
+    /**
+     * Start worker.
+     */
     public void start() {
         log.info("Worker starting");
 
@@ -118,6 +123,9 @@ public class Worker {
         log.info("Worker started");
     }
 
+    /**
+     * Stop worker.
+     */
     public void stop() {
         log.info("Worker stopping");
 
@@ -142,6 +150,16 @@ public class Worker {
         log.info("Worker stopped");
     }
 
+    /**
+     * Start a connector managed by this worker.
+     *
+     * @param connName the connector name.
+     * @param connProps the properties of the connector.
+     * @param ctx the connector runtime context.
+     * @param statusListener a listener for the runtime status transitions of the connector.
+     * @param initialState the initial state of the connector.
+     * @return true if the connector started successfully.
+     */
     public boolean startConnector(
             String connName,
             Map<String, String> connProps,
@@ -168,18 +186,36 @@ public class Worker {
             return false;
         }
 
-        connectors.put(connName, workerConnector);
+        WorkerConnector existing = connectors.putIfAbsent(connName, workerConnector);
+        if (existing != null)
+            throw new ConnectException("Connector with name " + connName + " already exists");
 
         log.info("Finished creating connector {}", connName);
         return true;
     }
 
-    /* Now that the configuration doesn't contain the actual class name, we need to be able to tell the herder whether a connector is a Sink */
+    /**
+     * Return true if the connector associated with this worker is a sink connector.
+     *
+     * @param connName the connector name.
+     * @return true if the connector belongs to the worker and is a sink connector.
+     * @throws ConnectException if the worker does not manage a connector with the given name.
+     */
     public boolean isSinkConnector(String connName) {
         WorkerConnector workerConnector = connectors.get(connName);
+        if (workerConnector == null)
+            throw new ConnectException("Connector " + connName + " not found in this worker.");
         return workerConnector.isSinkConnector();
     }
 
+    /**
+     * Get a list of updated task properties for the tasks of this connector.
+     *
+     * @param connName the connector name.
+     * @param maxTasks the maxinum number of tasks.
+     * @param sinkTopics a list of sink topics.
+     * @return a list of updated tasks properties.
+     */
     public List<Map<String, String>> connectorTaskConfigs(String connName, int maxTasks, List<String> sinkTopics) {
         log.trace("Reconfiguring connector tasks for {}", connName);
 
@@ -200,31 +236,29 @@ public class Worker {
         return result;
     }
 
-    public void stopConnectors() {
-        stopConnectors(new HashSet<>(connectors.keySet()));
+    private void stopConnectors() {
+        // Herder is responsible for stopping connectors. This is an internal method to sequentially
+        // stop connectors that have not explicitly been stopped.
+        for (String connector: connectors.keySet())
+            stopConnector(connector);
     }
 
-    public Collection<String> stopConnectors(Collection<String> connectors) {
-        final List<String> stopped = new ArrayList<>(connectors.size());
-        for (String connector: connectors) {
-            if (stopConnector(connector)) {
-                stopped.add(connector);
-            }
-        }
-        return stopped;
-    }
-
+    /**
+     * Stop a connector managed by this worker.
+     *
+     * @param connName the connector name.
+     * @return true if the connector belonged to this worker and was successfully stopped.
+     */
     public boolean stopConnector(String connName) {
         log.info("Stopping connector {}", connName);
 
-        WorkerConnector connector = connectors.get(connName);
+        WorkerConnector connector = connectors.remove(connName);
         if (connector == null) {
             log.warn("Ignoring stop request for unowned connector {}", connName);
             return false;
         }
 
         connector.shutdown();
-        connectors.remove(connName);
 
         log.info("Stopped connector {}", connName);
         return true;
@@ -232,16 +266,34 @@ public class Worker {
 
     /**
      * Get the IDs of the connectors currently running in this worker.
+     *
+     * @return the set of connector IDs.
      */
     public Set<String> connectorNames() {
         return connectors.keySet();
     }
 
+    /**
+     * Return true if a connector with the given name is managed by this worker and is currently running.
+     *
+     * @param connName the connector name.
+     * @return true if the connector is running, false if the connector is not running or is not manages by this worker.
+     */
     public boolean isRunning(String connName) {
         WorkerConnector connector = connectors.get(connName);
         return connector != null && connector.isRunning();
     }
 
+    /**
+     * Start a task managed by this worker.
+     *
+     * @param id the task ID.
+     * @param connProps the connector properties.
+     * @param taskProps the tasks properties.
+     * @param statusListener a listener for the runtime status transitions of the task.
+     * @param initialState the initial state of the connector.
+     * @return true if the task started successfully.
+     */
     public boolean startTask(
             ConnectorTaskId id,
             Map<String, String> connProps,
@@ -274,7 +326,7 @@ public class Worker {
             else
                 valueConverter = defaultValueConverter;
 
-            workerTask = buildWorkerTask(id, task, statusListener, initialState, keyConverter, valueConverter);
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter);
             workerTask.initialize(taskConfig);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
@@ -282,15 +334,19 @@ public class Worker {
             return false;
         }
 
+        WorkerTask existing = tasks.putIfAbsent(id, workerTask);
+        if (existing != null)
+            throw new ConnectException("Task already exists in this worker: " + id);
+
         executor.submit(workerTask);
         if (workerTask instanceof WorkerSourceTask) {
             sourceTaskOffsetCommitter.schedule(id, (WorkerSourceTask) workerTask);
         }
-        tasks.put(id, workerTask);
         return true;
     }
 
-    private WorkerTask buildWorkerTask(ConnectorTaskId id,
+    private WorkerTask buildWorkerTask(ConnectorConfig connConfig,
+                                       ConnectorTaskId id,
                                        Task task,
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
@@ -298,50 +354,56 @@ public class Worker {
                                        Converter valueConverter) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
+            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                     valueConverter, producer, offsetReader, offsetWriter, config, time);
+                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, time);
         } else if (task instanceof SinkTask) {
+            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
-                    valueConverter, time);
+                    valueConverter, transformationChain, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
         }
     }
 
-    public boolean stopAndAwaitTask(ConnectorTaskId id) {
-        return !stopAndAwaitTasks(Collections.singleton(id)).isEmpty();
-    }
-
-    public void stopAndAwaitTasks() {
-        stopAndAwaitTasks(new HashSet<>(tasks.keySet()));
-    }
-
-    public Collection<ConnectorTaskId> stopAndAwaitTasks(Collection<ConnectorTaskId> ids) {
-        final List<ConnectorTaskId> stoppable = new ArrayList<>(ids.size());
-        for (ConnectorTaskId taskId : ids) {
-            final WorkerTask task = tasks.get(taskId);
-            if (task == null) {
-                log.warn("Ignoring stop request for unowned task {}", taskId);
-                continue;
-            }
-            stopTask(task);
-            stoppable.add(taskId);
+    private void stopTask(ConnectorTaskId taskId) {
+        WorkerTask task = tasks.get(taskId);
+        if (task == null) {
+            log.warn("Ignoring stop request for unowned task {}", taskId);
+            return;
         }
-        awaitStopTasks(stoppable);
-        return stoppable;
-    }
 
-    private void stopTask(WorkerTask task) {
         log.info("Stopping task {}", task.id());
         if (task instanceof WorkerSourceTask)
             sourceTaskOffsetCommitter.remove(task.id());
         task.stop();
+    }
+
+    private void stopTasks(Collection<ConnectorTaskId> ids) {
+        // Herder is responsible for stopping tasks. This is an internal method to sequentially
+        // stop the tasks that have not explicitly been stopped.
+        for (ConnectorTaskId taskId : ids) {
+            stopTask(taskId);
+        }
+    }
+
+    private void awaitStopTask(ConnectorTaskId taskId, long timeout) {
+        WorkerTask task = tasks.remove(taskId);
+        if (task == null) {
+            log.warn("Ignoring await stop request for non-present task {}", taskId);
+            return;
+        }
+
+        if (!task.awaitStop(timeout)) {
+            log.error("Graceful stop of task {} failed.", task.id());
+            task.cancel();
+        }
     }
 
     private void awaitStopTasks(Collection<ConnectorTaskId> ids) {
@@ -349,16 +411,35 @@ public class Worker {
         long deadline = now + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         for (ConnectorTaskId id : ids) {
             long remaining = Math.max(0, deadline - time.milliseconds());
-            awaitStopTask(tasks.get(id), remaining);
+            awaitStopTask(id, remaining);
         }
     }
 
-    private void awaitStopTask(WorkerTask task, long timeout) {
-        if (!task.awaitStop(timeout)) {
-            log.error("Graceful stop of task {} failed.", task.id());
-            task.cancel();
-        }
-        tasks.remove(task.id());
+    /**
+     * Stop asynchronously all the worker's tasks and await their termination.
+     */
+    public void stopAndAwaitTasks() {
+        stopAndAwaitTasks(new ArrayList<>(tasks.keySet()));
+    }
+
+    /**
+     * Stop asynchronously a collection of tasks that belong to this worker and await their termination.
+     *
+     * @param ids the collection of tasks to be stopped.
+     */
+    public void stopAndAwaitTasks(Collection<ConnectorTaskId> ids) {
+        stopTasks(ids);
+        awaitStopTasks(ids);
+    }
+
+    /**
+     * Stop a task that belongs to this worker and await its termination.
+     *
+     * @param taskId the ID of the task to be stopped.
+     */
+    public void stopAndAwaitTask(ConnectorTaskId taskId) {
+        stopTask(taskId);
+        awaitStopTasks(Collections.singletonList(taskId));
     }
 
     /**

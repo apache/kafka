@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -21,14 +21,15 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.DelayedReceive;
 import org.apache.kafka.test.MockSelector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -45,32 +46,48 @@ import static org.junit.Assert.assertTrue;
 
 public class NetworkClientTest {
 
-    private final int requestTimeoutMs = 1000;
-    private MockTime time = new MockTime();
-    private MockSelector selector = new MockSelector(time);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
-    private int nodeId = 1;
-    private Cluster cluster = TestUtils.singletonCluster("test", nodeId);
-    private Node node = cluster.nodes().get(0);
-    private long reconnectBackoffMsTest = 10 * 1000;
-    private NetworkClient client = new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest, 
-            64 * 1024, 64 * 1024, requestTimeoutMs, time);
-    
-    private NetworkClient clientWithStaticNodes = new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-            "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs, time);
+    protected final int requestTimeoutMs = 1000;
+    protected final MockTime time = new MockTime();
+    protected final MockSelector selector = new MockSelector(time);
+    protected final Metadata metadata = new Metadata(0, Long.MAX_VALUE);
+    protected final int nodeId = 1;
+    protected final Cluster cluster = TestUtils.singletonCluster("test", nodeId);
+    protected final Node node = cluster.nodes().get(0);
+    protected final long reconnectBackoffMsTest = 10 * 1000;
+    protected final NetworkClient client = createNetworkClient();
+
+    private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
+
+    private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
+
+    private NetworkClient createNetworkClient() {
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+                64 * 1024, 64 * 1024, requestTimeoutMs, time, true, new ApiVersions());
+    }
+
+    private NetworkClient createNetworkClientWithStaticNodes() {
+        return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
+                "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs,
+                time, true, new ApiVersions());
+    }
+
+    private NetworkClient createNetworkClientWithNoVersionDiscovery() {
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+                64 * 1024, 64 * 1024, requestTimeoutMs, time, false, new ApiVersions());
+    }
 
     @Before
     public void setup() {
-        metadata.update(cluster, time.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
     }
 
     @Test(expected = IllegalStateException.class)
     public void testSendToUnreadyNode() {
-        RequestSend send = new RequestSend("5",
-                                           client.nextRequestHeader(ApiKeys.METADATA),
-                                           new MetadataRequest(Arrays.asList("test")).toStruct());
-        ClientRequest request = new ClientRequest(time.milliseconds(), false, send, null);
-        client.send(request, time.milliseconds());
+        MetadataRequest.Builder builder =
+                new MetadataRequest.Builder(Arrays.asList("test"));
+        long now = time.milliseconds();
+        ClientRequest request = client.newClientRequest("5", builder, now, false);
+        client.send(request, now);
         client.poll(1, time.milliseconds());
     }
 
@@ -85,40 +102,50 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testSimpleRequestResponseWithNoBrokerDiscovery() {
+        checkSimpleRequestResponse(clientWithNoVersionDiscovery);
+    }
+
+    @Test
     public void testClose() {
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
 
-        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
-        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, null);
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
+                Collections.<TopicPartition, MemoryRecords>emptyMap());
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
         client.send(request, time.milliseconds());
-        assertEquals("There should be 1 in-flight request after send", 1, client.inFlightRequestCount(node.idString()));
+        assertEquals("There should be 1 in-flight request after send", 1,
+                client.inFlightRequestCount(node.idString()));
+        assertTrue(client.hasInFlightRequests(node.idString()));
+        assertTrue(client.hasInFlightRequests());
 
         client.close(node.idString());
         assertEquals("There should be no in-flight request after close", 0, client.inFlightRequestCount(node.idString()));
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        assertFalse(client.hasInFlightRequests());
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
-        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
-        RequestHeader reqHeader = networkClient.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
+        awaitReady(networkClient, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1, 1000,
+                        Collections.<TopicPartition, MemoryRecords>emptyMap());
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
-        awaitReady(networkClient, node);
+        ClientRequest request = networkClient.newClientRequest(
+                node.idString(), builder, time.milliseconds(), true, handler);
         networkClient.send(request, time.milliseconds());
         networkClient.poll(1, time.milliseconds());
         assertEquals(1, networkClient.inFlightRequestCount());
-        ResponseHeader respHeader = new ResponseHeader(reqHeader.correlationId());
-        Struct resp = new Struct(ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id));
+        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
+        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
         resp.set("responses", new Object[0]);
-        int size = respHeader.sizeOf() + resp.sizeOf();
+        Struct responseHeaderStruct = respHeader.toStruct();
+        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
         ByteBuffer buffer = ByteBuffer.allocate(size);
-        respHeader.writeTo(buffer);
+        responseHeaderStruct.writeTo(buffer);
         resp.writeTo(buffer);
         buffer.flip();
         selector.completeReceive(new NetworkReceive(node.idString(), buffer));
@@ -126,23 +153,33 @@ public class NetworkClientTest {
         assertEquals(1, responses.size());
         assertTrue("The handler should have executed.", handler.executed);
         assertTrue("Should have a response body.", handler.response.hasResponse());
-        assertEquals("Should be correlated to the original request", request, handler.response.request());
+        assertEquals("Should be correlated to the original request",
+                request.correlationId(), handler.response.requestHeader().correlationId());
+    }
+
+    private void maybeSetExpectedApiVersionsResponse() {
+        ByteBuffer buffer = ApiVersionsResponse.API_VERSIONS_RESPONSE.serialize((short) 0, new ResponseHeader(0));
+        selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
     }
 
     private void awaitReady(NetworkClient client, Node node) {
+        if (client.discoverBrokerVersions()) {
+            maybeSetExpectedApiVersionsResponse();
+        }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
+        selector.clear();
     }
 
     @Test
     public void testRequestTimeout() {
-        ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
-        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
+        awaitReady(client, node); // has to be before creating any request, as it may send ApiVersionsRequest and its response is mocked with correlation id 0
+        ProduceRequest.Builder builder = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, (short) 1,
+                1000, Collections.<TopicPartition, MemoryRecords>emptyMap());
         TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
-        awaitReady(client, node);
         long now = time.milliseconds();
+        ClientRequest request = client.newClientRequest(
+                node.idString(), builder, now, true, handler);
         client.send(request, now);
         // sleeping to make sure that the time since last send is greater than requestTimeOut
         time.sleep(3000);
@@ -209,14 +246,16 @@ public class NetworkClientTest {
         // this test ensures that the default metadata updater does not intercept a user-initiated
         // metadata request when the remote node disconnects with the request in-flight.
         awaitReady(client, node);
-        RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.METADATA);
 
-        Struct req = new MetadataRequest(Collections.<String>emptyList()).toStruct();
-        RequestSend send = new RequestSend(node.idString(), reqHeader, req);
-        ClientRequest request = new ClientRequest(time.milliseconds(), true, send, null);
-        client.send(request, time.milliseconds());
-        client.poll(requestTimeoutMs, time.milliseconds());
+        MetadataRequest.Builder builder =
+                new MetadataRequest.Builder(Collections.<String>emptyList());
+        long now = time.milliseconds();
+        ClientRequest request = client.newClientRequest(node.idString(), builder, now, true);
+        client.send(request, now);
+        client.poll(requestTimeoutMs, now);
         assertEquals(1, client.inFlightRequestCount(node.idString()));
+        assertTrue(client.hasInFlightRequests(node.idString()));
+        assertTrue(client.hasInFlightRequests());
 
         selector.close(node.idString());
         List<ClientResponse> responses = client.poll(requestTimeoutMs, time.milliseconds());

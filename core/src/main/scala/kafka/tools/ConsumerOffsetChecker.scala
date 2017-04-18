@@ -32,6 +32,7 @@ import kafka.client.ClientUtils
 import kafka.network.BlockingChannel
 import kafka.api.PartitionOffsetRequestInfo
 import org.I0Itec.zkclient.exception.ZkNoNodeException
+import org.apache.kafka.common.network.ListenerName
 
 object ConsumerOffsetChecker extends Logging {
 
@@ -42,7 +43,7 @@ object ConsumerOffsetChecker extends Logging {
   private def getConsumer(zkUtils: ZkUtils, bid: Int): Option[SimpleConsumer] = {
     try {
       zkUtils.getBrokerInfo(bid)
-        .map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+        .map(_.getBrokerEndPoint(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)))
         .map(endPoint => new SimpleConsumer(endPoint.host, endPoint.port, 10000, 100000, "ConsumerOffsetChecker"))
         .orElse(throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid)))
     } catch {
@@ -125,7 +126,7 @@ object ConsumerOffsetChecker extends Logging {
 
     if (options.has("help")) {
        parser.printHelpOn(System.out)
-       System.exit(0)
+       Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, groupOpt, zkConnectOpt)
@@ -155,7 +156,7 @@ object ConsumerOffsetChecker extends Logging {
 
       topicPidMap = immutable.Map(zkUtils.getPartitionsForTopics(topicList).toSeq:_*)
       val topicPartitions = topicPidMap.flatMap { case(topic, partitionSeq) => partitionSeq.map(TopicAndPartition(topic, _)) }.toSeq
-      val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
+      channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
 
       debug("Sending offset fetch request to coordinator %s:%d.".format(channel.host, channel.port))
       channel.send(OffsetFetchRequest(group, topicPartitions))
@@ -178,13 +179,14 @@ object ConsumerOffsetChecker extends Logging {
                 throw z
           }
         }
-        else if (offsetAndMetadata.error == Errors.NONE.code)
+        else if (offsetAndMetadata.error == Errors.NONE)
           offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
         else {
-          println("Could not fetch offset for %s due to %s.".format(topicAndPartition, Errors.forCode(offsetAndMetadata.error).exception))
+          println("Could not fetch offset for %s due to %s.".format(topicAndPartition, offsetAndMetadata.error.exception))
         }
       }
       channel.disconnect()
+      channel = null
 
       println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format("Group", "Topic", "Pid", "Offset", "logSize", "Lag", "Owner"))
       topicList.sorted.foreach {

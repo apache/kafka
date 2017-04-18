@@ -28,6 +28,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
 import kafka.common._
 import kafka.admin.{AdminOperationException, AdminUtils}
+import org.apache.kafka.common.TopicPartition
 
 import scala.collection.Map
 
@@ -40,7 +41,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic))
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
-    val tp = TopicAndPartition("test", 0)
+    val tp = new TopicPartition("test", 0)
     val logProps = new Properties()
     logProps.put(FlushMessagesProp, oldVal.toString)
     AdminUtils.createTopic(zkUtils, tp.topic, 1, 1, logProps)
@@ -147,7 +148,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     AdminUtils.changeUserOrUserClientIdConfig(zkUtils, "ANONYMOUS/clients/overriddenUserClientId", userClientIdProps)
 
     // Remove config change znodes to force quota initialization only through loading of user/client quotas
-    zkUtils.getChildren(ZkUtils.EntityConfigChangesPath).foreach { p => zkUtils.deletePath(ZkUtils.EntityConfigChangesPath + "/" + p) }
+    zkUtils.getChildren(ZkUtils.ConfigChangesPath).foreach { p => zkUtils.deletePath(ZkUtils.ConfigChangesPath + "/" + p) }
     server.startup()
     val quotaManagers = server.apis.quotas
 

@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Map;
 
@@ -30,34 +29,59 @@ import java.util.Map;
  *
  * @param <K> the type of keys
  * @param <V> the type of values
- *
  * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 
-public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V>  {
+public class RocksDBKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
 
-    private final boolean enableCaching;
+    private static final String METRICS_SCOPE = "rocksdb-state";
+    private final boolean cached;
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
-        this(name, keySerde, valueSerde, null, logged, logConfig, enableCaching);
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig, boolean cached) {
+        this(name, keySerde, valueSerde, null, logged, logConfig, cached);
     }
 
-    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean enableCaching) {
+    public RocksDBKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, Time time, boolean logged, Map<String, String> logConfig, boolean cached) {
         super(name, keySerde, valueSerde, time, logged, logConfig);
-        this.enableCaching = enableCaching;
+        this.cached = cached;
     }
 
-    public StateStore get() {
-        if (!enableCaching) {
-            RocksDBStore<K, V> store = new RocksDBStore<>(name, keySerde, valueSerde);
-            return new MeteredKeyValueStore<>(logged ? store.enableLogging() : store, "rocksdb-state", time);
+    public KeyValueStore get() {
+        if (!cached && !logged) {
+            return new MeteredKeyValueStore<>(
+                    new RocksDBStore<>(name, keySerde, valueSerde), METRICS_SCOPE, time);
         }
 
-        final RocksDBStore<Bytes, byte[]> store = new RocksDBStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
-        return new CachingKeyValueStore<>(new MeteredKeyValueStore<>(logged ? store.enableLogging() : store,
-                                                                     "rocksdb-state",
-                                                                     time),
-                                          keySerde,
-                                          valueSerde);
+        // when cached, logged, or both we use a bytes store as the inner most store
+        final RocksDBStore<Bytes, byte[]> rocks = new RocksDBStore<>(name,
+                                                                     Serdes.Bytes(),
+                                                                     Serdes.ByteArray());
+
+        if (cached && logged) {
+            return new CachingKeyValueStore<>(
+                    new MeteredKeyValueStore<>(
+                            new ChangeLoggingKeyValueBytesStore(rocks),
+                            METRICS_SCOPE,
+                            time),
+                    keySerde,
+                    valueSerde);
+        }
+
+        if (cached) {
+            return new CachingKeyValueStore<>(
+                    new MeteredKeyValueStore<>(rocks, METRICS_SCOPE, time),
+                    keySerde,
+                    valueSerde);
+
+        } else {
+            // logged
+            return new MeteredKeyValueStore<>(
+                    new ChangeLoggingKeyValueStore<>(rocks, keySerde, valueSerde),
+                    METRICS_SCOPE,
+                    time);
+        }
+
     }
+
+
 }

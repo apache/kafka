@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
@@ -349,7 +348,7 @@ public class KTableImplTest {
 
         KTableImpl<String, String, String> table1Aggregated = (KTableImpl<String, String, String>) table1
                 .groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
-                .aggregate(MockInitializer.STRING_INIT, MockAggregator.STRING_ADDER, MockAggregator.STRING_REMOVER, "mock-result1");
+                .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, "mock-result1");
 
 
         KTableImpl<String, String, String> table1Reduced = (KTableImpl<String, String, String>) table1
@@ -436,7 +435,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnJoin() throws Exception {
-        table.join(null, MockValueJoiner.STRING_JOINER);
+        table.join(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
@@ -446,7 +445,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnOuterJoin() throws Exception {
-        table.outerJoin(null, MockValueJoiner.STRING_JOINER);
+        table.outerJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
     @Test(expected = NullPointerException.class)
@@ -461,7 +460,7 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullOtherTableOnLeftJoin() throws Exception {
-        table.leftJoin(null, MockValueJoiner.STRING_JOINER);
+        table.leftJoin(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
 }

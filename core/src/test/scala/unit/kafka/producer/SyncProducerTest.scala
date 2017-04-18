@@ -27,7 +27,9 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.message._
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.record.{DefaultRecordBatch, DefaultRecord}
 import org.junit.Test
 import org.junit.Assert._
 
@@ -51,11 +53,11 @@ class SyncProducerTest extends KafkaServerTestHarness {
   def testReachableServer() {
     val server = servers.head
 
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    val firstStart = SystemTime.milliseconds
+    val firstStart = Time.SYSTEM.milliseconds
     try {
       val response = producer.send(produceRequest("test", 0,
         new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
@@ -63,9 +65,9 @@ class SyncProducerTest extends KafkaServerTestHarness {
     } catch {
       case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
     }
-    val firstEnd = SystemTime.milliseconds
+    val firstEnd = Time.SYSTEM.milliseconds
     assertTrue((firstEnd-firstStart) < 2000)
-    val secondStart = SystemTime.milliseconds
+    val secondStart = Time.SYSTEM.milliseconds
     try {
       val response = producer.send(produceRequest("test", 0,
         new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
@@ -73,7 +75,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     } catch {
       case e: Exception => fail("Unexpected failure sending message to broker. " + e.getMessage)
     }
-    val secondEnd = SystemTime.milliseconds
+    val secondEnd = Time.SYSTEM.milliseconds
     assertTrue((secondEnd-secondStart) < 2000)
     try {
       val response = producer.send(produceRequest("test", 0,
@@ -87,7 +89,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testEmptyProduceRequest() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
 
     val correlationId = 0
@@ -105,7 +107,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testMessageSizeTooLarge() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     TestUtils.createTopic(zkUtils, "test", numPartitions = 1, replicationFactor = 1, servers = servers)
@@ -114,25 +116,24 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
     val response1 = producer.send(produceRequest("test", 0, messageSet1, acks = 1))
 
-    assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
-    assertEquals(Errors.MESSAGE_TOO_LARGE.code, response1.status(TopicAndPartition("test", 0)).error)
+    assertEquals(1, response1.status.count(_._2.error != Errors.NONE))
+    assertEquals(Errors.MESSAGE_TOO_LARGE, response1.status(TopicAndPartition("test", 0)).error)
     assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val safeSize = configs.head.messageMaxBytes - Message.MinMessageOverhead - Message.TimestampLength - MessageSet.LogOverhead - 1
+    val safeSize = configs.head.messageMaxBytes - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(produceRequest("test", 0, messageSet2, acks = 1))
 
-    assertEquals(1, response1.status.count(_._2.error != Errors.NONE.code))
-    assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("test", 0)).error)
+    assertEquals(1, response1.status.count(_._2.error != Errors.NONE))
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("test", 0)).error)
     assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
-
 
   @Test
   def testMessageSizeTooLargeWithAckZero() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     props.put("request.required.acks", "0")
 
@@ -158,7 +159,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   @Test
   def testProduceCorrectlyReceivesResponse() {
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -173,7 +174,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(3, response.status.size)
     response.status.values.foreach {
       case ProducerResponseStatus(error, nextOffset, timestamp) =>
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, error)
+        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
         assertEquals(-1L, nextOffset)
         assertEquals(Message.NoTimestamp, timestamp)
     }
@@ -190,13 +191,13 @@ class SyncProducerTest extends KafkaServerTestHarness {
     assertEquals(3, response2.status.size)
 
     // the first and last message should have been accepted by broker
-    assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic1", 0)).error)
-    assertEquals(Errors.NONE.code, response2.status(TopicAndPartition("topic3", 0)).error)
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("topic1", 0)).error)
+    assertEquals(Errors.NONE, response2.status(TopicAndPartition("topic3", 0)).error)
     assertEquals(0, response2.status(TopicAndPartition("topic1", 0)).offset)
     assertEquals(0, response2.status(TopicAndPartition("topic3", 0)).offset)
 
     // the middle message should have been rejected because broker doesn't lead partition
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
                         response2.status(TopicAndPartition("topic2", 0)).error)
     assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).offset)
   }
@@ -206,7 +207,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val timeoutMs = 500
 
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -216,14 +217,14 @@ class SyncProducerTest extends KafkaServerTestHarness {
     // any requests should be accepted and queue up, but not handled
     server.requestHandlerPool.shutdown()
 
-    val t1 = SystemTime.milliseconds
+    val t1 = Time.SYSTEM.milliseconds
     try {
       producer.send(request)
       fail("Should have received timeout exception since request handling is stopped.")
     } catch {
       case _: SocketTimeoutException => /* success */
     }
-    val t2 = SystemTime.milliseconds
+    val t2 = Time.SYSTEM.milliseconds
     // make sure we don't wait fewer than timeoutMs for a response
     assertTrue((t2-t1) >= timeoutMs)
   }
@@ -232,7 +233,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   def testProduceRequestWithNoResponse() {
     val server = servers.head
 
-    val port = server.socketServer.boundPort(SecurityProtocol.PLAINTEXT)
+    val port = TestUtils.boundPort(server)
     val props = TestUtils.getSyncProducerConfig(port)
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
@@ -248,7 +249,7 @@ class SyncProducerTest extends KafkaServerTestHarness {
   def testNotEnoughReplicas()  {
     val topicName = "minisrtest"
     val server = servers.head
-    val props = TestUtils.getSyncProducerConfig(server.socketServer.boundPort())
+    val props = TestUtils.getSyncProducerConfig(boundPort(server))
 
     props.put("request.required.acks", "-1")
 
@@ -261,6 +262,6 @@ class SyncProducerTest extends KafkaServerTestHarness {
     val response = producer.send(produceRequest(topicName, 0,
       new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))
 
-    assertEquals(Errors.NOT_ENOUGH_REPLICAS.code, response.status(TopicAndPartition(topicName, 0)).error)
+    assertEquals(Errors.NOT_ENOUGH_REPLICAS, response.status(TopicAndPartition(topicName, 0)).error)
   }
 }

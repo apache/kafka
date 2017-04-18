@@ -15,6 +15,7 @@
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix, parametrize
+from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
@@ -124,6 +125,7 @@ class QuotaTest(Test):
         """Override this since we're adding services outside of the constructor"""
         return super(QuotaTest, self).min_cluster_size() + self.num_producers + self.num_consumers
 
+    @cluster(num_nodes=5)
     @matrix(quota_type=[QuotaConfig.CLIENT_ID, QuotaConfig.USER, QuotaConfig.USER_CLIENT], override_quota=[True, False])
     @parametrize(quota_type=QuotaConfig.CLIENT_ID, consumer_num=2)
     def test_quota(self, quota_type, override_quota=True, producer_num=1, consumer_num=1):
@@ -141,7 +143,6 @@ class QuotaTest(Test):
 
         # Consume all messages
         consumer = ConsoleConsumer(self.test_context, consumer_num, self.kafka, self.topic,
-            new_consumer=True,
             consumer_timeout_ms=60000, client_id=consumer_client_id,
             jmx_object_names=['kafka.consumer:type=consumer-fetch-manager-metrics,client-id=%s' % consumer_client_id],
             jmx_attributes=['bytes-consumed-rate'])

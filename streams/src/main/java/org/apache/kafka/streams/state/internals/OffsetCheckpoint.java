@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
@@ -24,11 +23,14 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -55,10 +57,7 @@ public class OffsetCheckpoint {
     private final File file;
     private final Object lock;
 
-    /**
-     * @throws IOException
-     */
-    public OffsetCheckpoint(File file) throws IOException {
+    public OffsetCheckpoint(File file) {
         this.file = file;
         this.lock = new Object();
     }
@@ -72,8 +71,8 @@ public class OffsetCheckpoint {
             File temp = new File(file.getAbsolutePath() + ".tmp");
 
             FileOutputStream fileOutputStream = new FileOutputStream(temp);
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream));
-            try {
+            try (BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
 
@@ -82,8 +81,6 @@ public class OffsetCheckpoint {
 
                 writer.flush();
                 fileOutputStream.getFD().sync();
-            } finally {
-                writer.close();
             }
 
             Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
@@ -119,7 +116,7 @@ public class OffsetCheckpoint {
         synchronized (lock) {
             BufferedReader reader;
             try {
-                reader = new BufferedReader(new FileReader(file));
+                reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
             } catch (FileNotFoundException e) {
                 return Collections.emptyMap();
             }
@@ -172,7 +169,7 @@ public class OffsetCheckpoint {
      * @throws IOException if there is any IO exception during delete
      */
     public void delete() throws IOException {
-        file.delete();
+        Files.delete(file.toPath());
     }
 
     @Override

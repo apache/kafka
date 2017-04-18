@@ -14,45 +14,55 @@ Java 7 should be used for building in order to support both Java 7 and Java 8 at
 
 Now everything else will work.
 
-### Building a jar and running it ###
+### Build a jar and run it ###
     ./gradlew jar
 
 Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 
-### Building source jar ###
+### Build source jar ###
     ./gradlew srcJar
 
-### Building aggregated javadoc ###
+### Build aggregated javadoc ###
     ./gradlew aggregatedJavadoc
 
-### Building javadoc and scaladoc ###
+### Build javadoc and scaladoc ###
     ./gradlew javadoc
     ./gradlew javadocJar # builds a javadoc jar for each module
     ./gradlew scaladoc
     ./gradlew scaladocJar # builds a scaladoc jar for each module
     ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
 
-### Running unit tests ###
-    ./gradlew test
-
-### Forcing re-running unit tests w/o code change ###
+### Run unit/integration tests ###
+    ./gradlew test # runs both unit and integration tests
+    ./gradlew unitTest
+    ./gradlew integrationTest
+    
+### Force re-running tests without code change ###
     ./gradlew cleanTest test
+    ./gradlew cleanTest unitTest
+    ./gradlew cleanTest integrationTest
 
-### Running a particular unit test ###
+### Running a particular unit/integration test ###
     ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
-### Running a particular test method within a unit test ###
+### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
 
-### Running a particular unit test with log4j output ###
+### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
 
     ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
 
 ### Generating test coverage reports ###
+Generate coverage reports for the whole project:
+
     ./gradlew reportCoverage
 
+Generate coverage for a single module, i.e.: 
+
+    ./gradlew clients:reportCoverage
+    
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean
     ./gradlew releaseTarGz
@@ -67,7 +77,7 @@ The release file can be found inside `./core/build/distributions/`.
     ./gradlew clean
 
 ### Running a task on a particular version of Scala (either 2.10.6 or 2.11.8) ###
-*Note that if building the jars with a version other than 2.10, you need to set the `SCALA_BINARY_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+*Note that if building the jars with a version other than 2.10.6, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
 You can pass either the major version (eg 2.11) or the full version (eg 2.11.8):
 
@@ -90,10 +100,14 @@ This is for `core`, `examples` and `clients`
     ./gradlew eclipse
     ./gradlew idea
 
+The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
+build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
+to avoid known issues with this configuration.
+
 ### Building the jar for all scala versions and for all projects ###
     ./gradlew jarAll
 
-### Running unit tests for all scala versions and for all projects ###
+### Running unit/integration tests for all scala versions and for all projects ###
     ./gradlew testAll
 
 ### Building a binary release gzipped tar ball for all scala versions ###
@@ -123,15 +137,30 @@ Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradl
 ### Determining if any dependencies could be updated ###
     ./gradlew dependencyUpdates
 
-### Running checkstyle on the java code ###
+### Running code quality checks ###
+There are two code quality analysis tools that we regularly run, findbugs and checkstyle.
+
+#### Checkstyle ####
+Checkstyle enforces a consistent coding style in Kafka.
+You can run checkstyle using:
+
     ./gradlew checkstyleMain checkstyleTest
 
-This will most commonly be useful for automated builds where the full resources of the host running the build and tests
-may not be dedicated to Kafka's build.
+The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
+subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
+
+#### Findbugs ####
+Findbugs uses static analysis to look for bugs in the code.
+You can run findbugs using:
+
+    ./gradlew findbugsMain findbugsTest -x test
+
+The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
+directories. Currently, findbugs warnings do not cause the build to fail.
 
 ### Common build options ###
 
-The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForms=1 test`.
+The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
 
 * `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
 * `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.

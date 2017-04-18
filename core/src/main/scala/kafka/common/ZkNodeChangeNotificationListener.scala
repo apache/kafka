@@ -18,10 +18,12 @@ package kafka.common
 
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.utils.{Time, SystemTime, ZkUtils, Logging}
+import kafka.utils.{Logging, ZkUtils}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.exception.ZkInterruptedException
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener}
+import org.I0Itec.zkclient.{IZkChildListener, IZkStateListener}
+import org.apache.kafka.common.utils.Time
+
 import scala.collection.JavaConverters._
 
 /**
@@ -53,7 +55,7 @@ class ZkNodeChangeNotificationListener(private val zkUtils: ZkUtils,
                                        private val seqNodePrefix: String,
                                        private val notificationHandler: NotificationHandler,
                                        private val changeExpirationMs: Long = 15 * 60 * 1000,
-                                       private val time: Time = SystemTime) extends Logging {
+                                       private val time: Time = Time.SYSTEM) extends Logging {
   private var lastExecutedChange = -1L
   private val isClosed = new AtomicBoolean(false)
 

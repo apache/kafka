@@ -28,6 +28,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -120,10 +121,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic10, servers.size, numServers, servers, topicConfig)
 
     // send a record that is too large for replication, but within the broker max message limit
-    val record = new ProducerRecord(topic10, null, "key".getBytes, new Array[Byte](maxMessageSize - 50))
+    val value = new Array[Byte](maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic10, null, value)
     val recordMetadata = producer3.send(record).get
 
-    assertEquals(topic10, recordMetadata.topic())
+    assertEquals(topic10, recordMetadata.topic)
   }
 
   /** This should succeed as the replica fetcher thread can handle oversized messages since KIP-74 */
@@ -176,8 +178,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-    * Send with invalid partition id should throw KafkaException when partition is higher than the
-    * upper bound of partitions and IllegalArgumentException when partition is negative
+    * Send with invalid partition id should throw KafkaException when partition is higher than the upper bound of
+    * partitions.
     */
   @Test
   def testInvalidPartition() {
@@ -185,14 +187,14 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
-    val higherRecord = new ProducerRecord[Array[Byte], Array[Byte]](topic1, 1, "key".getBytes, "value".getBytes)
+    val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)
     intercept[KafkaException] {
       producer1.send(higherRecord)
     }
   }
 
   /**
-   * The send call after producer closed should throw KafkaException cased by IllegalStateException
+   * The send call after producer closed should throw IllegalStateException
    */
   @Test
   def testSendAfterClosed() {
@@ -218,14 +220,13 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       producer3.close()
       producer3.send(record)
     }
-
-    // re-close producer is fine
   }
 
   @Test
   def testCannotSendToInternalTopic() {
+    TestUtils.createOffsetsTopic(zkUtils, servers)
     val thrown = intercept[ExecutionException] {
-      producer2.send(new ProducerRecord[Array[Byte],Array[Byte]](Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
+      producer2.send(new ProducerRecord(Topic.GroupMetadataTopicName, "test".getBytes, "test".getBytes)).get
     }
     assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }

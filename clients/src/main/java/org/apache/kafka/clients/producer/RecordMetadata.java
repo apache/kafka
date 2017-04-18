@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 
 /**
  * The metadata for a record that has been acknowledged by the server
@@ -54,7 +54,7 @@ public final class RecordMetadata {
 
     @Deprecated
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
-        this(topicPartition, baseOffset, relativeOffset, Record.NO_TIMESTAMP, -1, -1, -1);
+        this(topicPartition, baseOffset, relativeOffset, RecordBatch.NO_TIMESTAMP, -1, -1, -1);
     }
 
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,

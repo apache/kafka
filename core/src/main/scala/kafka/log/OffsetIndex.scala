@@ -114,7 +114,7 @@ class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
       OffsetPosition(relativeOffset(idx, n), physical(idx, n))
     }
   }
-  
+
   /**
    * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
    */
