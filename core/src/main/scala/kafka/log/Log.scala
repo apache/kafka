@@ -436,19 +436,40 @@ class Log(@volatile var dir: File,
     }
   }
 
+
   /**
-   * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
-   *
-   * This method will generally be responsible for assigning offsets to the messages,
-   * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
-   *
-   * @param records The log records to append
-   * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
-   * @param leaderEpochCache Optional cache of Leader Epoch Offsets.
-   * @throws KafkaStorageException If the append fails due to an I/O error.
-   * @return Information about the appended messages including the first and last offset.
-   */
-  def append(records: MemoryRecords, assignOffsets: Boolean = true, leaderEpochCache: LeaderEpochCache = leaderEpochCache): LogAppendInfo = {
+    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
+    * @param records The records to append
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended messages including the first and last offset.
+    */
+  def appendAsLeader(records: MemoryRecords, leaderEpoch: Int): LogAppendInfo = {
+    append(records, assignOffsets = true, leaderEpoch)
+  }
+
+  /**
+    * Append this message set to the active segment of the log without assigning offsets or Partition Leader Epochs
+    * @param records The records to append
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended messages including the first and last offset.
+    */
+  def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
+    append(records, assignOffsets = false, leaderEpoch = -1)
+  }
+
+  /**
+    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
+    *
+    * This method will generally be responsible for assigning offsets to the messages,
+    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
+    *
+    * @param records The log records to append
+    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+    * @throws KafkaStorageException If the append fails due to an I/O error.
+    * @return Information about the appended messages including the first and last offset.
+    */
+  private def append(records: MemoryRecords, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -468,7 +489,6 @@ class Log(@volatile var dir: File,
           appendInfo.firstOffset = offset.value
           val now = time.milliseconds
           val validateAndOffsetAssignResult = try {
-            leaderEpochCache.maybeAssignLatestCachedEpochToLeo()
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
                                                           offset,
                                                           now,
@@ -478,7 +498,7 @@ class Log(@volatile var dir: File,
                                                           config.messageFormatVersion.messageFormatVersion,
                                                           config.messageTimestampType,
                                                           config.messageTimestampDifferenceMaxMs,
-                                                          leaderEpochCache.latestUsedEpoch())
+                                                          leaderEpoch)
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
@@ -504,15 +524,15 @@ class Log(@volatile var dir: File,
             }
           }
         } else {
-          //Update the epoch cache with the epoch stamped by the leader
-          records.batches().asScala.map { batch =>
-            if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-              leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
-          }
-
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
+        }
+
+        //Update the epoch cache with the epoch stamped onto the message by the leader
+        validRecords.batches().asScala.map { batch =>
+          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
         }
 
         // check messages set size may be exceed config.segmentSize

@@ -208,7 +208,7 @@ object TestLinearWriteSpeed {
     Utils.delete(dir)
     val log = new Log(dir, config, 0L, 0L, scheduler, Time.SYSTEM)
     def write(): Int = {
-      log.append(messages, true)
+      log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes
     }
     def close() {
