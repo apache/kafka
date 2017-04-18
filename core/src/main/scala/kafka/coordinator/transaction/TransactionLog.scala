@@ -35,7 +35,7 @@ import scala.collection.mutable
  * versions are used to evolve the message formats:
  *
  * key version 0:               [transactionalId]
- *    -> value version 0:       [pid, epoch, expire_timestamp, status, [topic [partition] ]
+ *    -> value version 0:       [pid, epoch, expire_timestamp, status, [topic [partition], timestamp ]
  */
 object TransactionLog {
 
@@ -74,12 +74,14 @@ object TransactionLog {
   private val PARTITIONS_SCHEMA_TOPIC_FIELD = VALUE_PARTITIONS_SCHEMA.get(TOPIC_KEY)
   private val PARTITIONS_SCHEMA_PARTITION_IDS_FIELD = VALUE_PARTITIONS_SCHEMA.get(PARTITION_IDS_KEY)
 
-  private val VALUE_SCHEMA_V0 = new Schema(new Field(PID_KEY, INT64),
-                                           new Field(EPOCH_KEY, INT16),
-                                           new Field(TXN_TIMEOUT_KEY, INT32),
-                                           new Field(TXN_STATUS_KEY, INT8),
-                                           new Field(TXN_PARTITIONS_KEY, ArrayOf.nullable(VALUE_PARTITIONS_SCHEMA)),
-                                           new Field(TXN_TIMESTAMP_FIELD, INT64))
+  private val VALUE_SCHEMA_V0 = new Schema(new Field(PID_KEY, INT64, "Producer id in use by the transactional id."),
+                                           new Field(EPOCH_KEY, INT16, "Epoch associated with the producer id"),
+                                           new Field(TXN_TIMEOUT_KEY, INT32, "Transaction timeout in milliseconds"),
+                                           new Field(TXN_STATUS_KEY, INT8,
+                                             "TransactionState the transaction is in"),
+                                           new Field(TXN_PARTITIONS_KEY, ArrayOf.nullable(VALUE_PARTITIONS_SCHEMA),
+                                            "Set of partitions involved in the transaction"),
+                                           new Field(TXN_TIMESTAMP_FIELD, INT64, "Time the transaction was last updated"))
   private val VALUE_SCHEMA_PID_FIELD = VALUE_SCHEMA_V0.get(PID_KEY)
   private val VALUE_SCHEMA_EPOCH_FIELD = VALUE_SCHEMA_V0.get(EPOCH_KEY)
   private val VALUE_SCHEMA_TXN_TIMEOUT_FIELD = VALUE_SCHEMA_V0.get(TXN_TIMEOUT_KEY)

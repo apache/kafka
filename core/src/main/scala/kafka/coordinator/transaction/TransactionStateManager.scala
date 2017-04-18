@@ -87,7 +87,7 @@ class TransactionStateManager(brokerId: Int,
   /**
    * Get the transaction metadata associated with the given transactional id, or null if not found
    */
-  def getTransaction(transactionalId: String): Option[TransactionMetadata] = {
+  def getTransactionState(transactionalId: String): Option[TransactionMetadata] = {
     Option(transactionMetadataCache.get(transactionalId))
   }
 
@@ -387,7 +387,7 @@ class TransactionStateManager(brokerId: Int,
         }
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
-        getTransaction(transactionalId) match {
+        getTransactionState(transactionalId) match {
           case Some(metadata) =>
             metadata synchronized {
               if (metadata.pid == txnMetadata.pid &&

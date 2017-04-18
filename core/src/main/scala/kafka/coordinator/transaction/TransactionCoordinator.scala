@@ -107,7 +107,7 @@ class TransactionCoordinator(brokerId: Int,
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
       // only try to get a new pid and update the cache if the transactional id is unknown
-      txnManager.getTransaction(transactionalId) match {
+      txnManager.getTransactionState(transactionalId) match {
         case None =>
           val pid = pidManager.nextPid()
           val newMetadata: TransactionMetadata = new TransactionMetadata(pid = pid,
@@ -205,7 +205,7 @@ class TransactionCoordinator(brokerId: Int,
     else {
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid pid mapping error.
-      val (error, newMetadata) = txnManager.getTransaction(transactionalId) match {
+      val (error, newMetadata) = txnManager.getTransactionState(transactionalId) match {
         case None =>
           (Errors.INVALID_PID_MAPPING, null)
 
@@ -263,7 +263,7 @@ class TransactionCoordinator(brokerId: Int,
     if (errors != Errors.NONE)
       responseCallback(errors)
     else
-      txnManager.getTransaction(transactionalId) match {
+      txnManager.getTransactionState(transactionalId) match {
         case None =>
           responseCallback(Errors.INVALID_PID_MAPPING)
         case Some(metadata) =>
@@ -309,7 +309,7 @@ class TransactionCoordinator(brokerId: Int,
         txnManager.coordinatorEpochFor(transactionalId) match {
           case Some(coordinatorEpoch) =>
             def completionCallback(): Unit = {
-              val preparedCommitMetadata = txnManager.getTransaction(transactionalId).get
+              val preparedCommitMetadata = txnManager.getTransactionState(transactionalId).get
               val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
               val committedMetadata = new TransactionMetadata(pid,
                 epoch,

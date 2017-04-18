@@ -23,10 +23,6 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
 
 
-object InterBrokerSendThread {
-
-}
-
 /**
  *  Class for inter-broker send thread that utilize a non-blocking network client.
  */

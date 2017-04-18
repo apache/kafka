@@ -25,7 +25,7 @@ import java.util
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
 import kafka.cluster.Partition
-import kafka.common.{KafkaException, KafkaStorageException, OffsetAndMetadata, OffsetMetadata}
+import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata}
 import kafka.common.Topic.{GroupMetadataTopicName, TransactionStateTopicName, isInternal}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
@@ -50,7 +50,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import scala.util.Random
+
 
 /**
  * Logic to handle the various Kafka requests
@@ -1389,7 +1389,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Send response callback
     def sendResponseCallback(error: Errors): Unit = {
       val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(error)
-      trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: $error from client ${request.header.clientId}")
+      trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
 
@@ -1409,7 +1409,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // Send response callback
     def sendResponseCallback(error: Errors): Unit = {
       val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(error)
-      trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: $error from client ${request.header.clientId}")
+      trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: errors: $error from client ${request.header.clientId}")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
 

@@ -94,9 +94,9 @@ class TransactionStateManagerTest {
 
   @Test
   def testAddGetPids() {
-    assertEquals(None, transactionManager.getTransaction(txnId1))
+    assertEquals(None, transactionManager.getTransactionState(txnId1))
     assertEquals(txnMetadata1, transactionManager.addTransaction(txnId1, txnMetadata1))
-    assertEquals(Some(txnMetadata1), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(txnMetadata1), transactionManager.getTransactionState(txnId1))
     assertEquals(txnMetadata1, transactionManager.addTransaction(txnId1, txnMetadata2))
   }
 
@@ -161,8 +161,8 @@ class TransactionStateManagerTest {
     // let the time advance to trigger the background thread loading
     scheduler.tick()
 
-    val cachedPidMetadata1 = transactionManager.getTransaction(txnId1).getOrElse(fail(txnId1 + "'s transaction state was not loaded into the cache"))
-    val cachedPidMetadata2 = transactionManager.getTransaction(txnId2).getOrElse(fail(txnId2 + "'s transaction state was not loaded into the cache"))
+    val cachedPidMetadata1 = transactionManager.getTransactionState(txnId1).getOrElse(fail(txnId1 + "'s transaction state was not loaded into the cache"))
+    val cachedPidMetadata2 = transactionManager.getTransactionState(txnId2).getOrElse(fail(txnId2 + "'s transaction state was not loaded into the cache"))
 
     // they should be equal to the latest status of the transaction
     assertEquals(txnMetadata1, cachedPidMetadata1)
@@ -180,8 +180,8 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    assertEquals(None, transactionManager.getTransaction(txnId1))
-    assertEquals(None, transactionManager.getTransaction(txnId2))
+    assertEquals(None, transactionManager.getTransactionState(txnId1))
+    assertEquals(None, transactionManager.getTransactionState(txnId2))
   }
 
   @Test
@@ -202,7 +202,7 @@ class TransactionStateManagerTest {
     // append the new metadata into log
     transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)
 
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     // append to log again with expected failures
     val failedMetadata = newMetadata.copy()
@@ -213,41 +213,41 @@ class TransactionStateManagerTest {
 
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.REQUEST_TIMED_OUT)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     // test NOT_COORDINATOR cases
     expectedError = Errors.NOT_COORDINATOR
 
     prepareForTxnMessageAppend(Errors.NOT_LEADER_FOR_PARTITION)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     // test NOT_COORDINATOR cases
     expectedError = Errors.UNKNOWN
 
     prepareForTxnMessageAppend(Errors.MESSAGE_TOO_LARGE)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.RECORD_LIST_TOO_LARGE)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.INVALID_FETCH_SIZE)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransaction(txnId1))
+    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
   }
 
   @Test(expected = classOf[IllegalStateException])
