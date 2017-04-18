@@ -225,7 +225,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
     producerAppendInfo.append(incomingPidEntry)
     mapping.update(producerAppendInfo)
-    mapping.updateLastOffset(lastOffset + 1)
+    mapping.updateMapEndOffset(lastOffset + 1)
   }
 
   private def currentSnapshotOffsets =

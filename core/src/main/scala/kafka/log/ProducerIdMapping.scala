@@ -279,7 +279,7 @@ class ProducerIdMapping(val config: LogConfig,
     pidMap.put(appendInfo.pid, entry)
   }
 
-  def updateLastOffset(lastOffset: Long): Unit = {
+  def updateMapEndOffset(lastOffset: Long): Unit = {
     lastMapOffset = lastOffset
   }
 
@@ -290,7 +290,6 @@ class ProducerIdMapping(val config: LogConfig,
   def load(pid: Long, entry: ProducerIdEntry, currentTimeMs: Long) {
     if (pid != RecordBatch.NO_PRODUCER_ID && currentTimeMs - entry.timestamp < maxPidExpirationMs)
       pidMap.put(pid, entry)
-    lastMapOffset = entry.lastOffset + 1
   }
 
   /**

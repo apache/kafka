@@ -405,7 +405,7 @@ class Log(@volatile var dir: File,
       }
     }
     pidMap.expirePidsFrom(logStartOffset)
-    pidMap.updateLastOffset(lastOffset)
+    pidMap.updateMapEndOffset(lastOffset)
   }
 
   private[log] def activePids: Map[Long, ProducerIdEntry] = {
@@ -563,7 +563,7 @@ class Log(@volatile var dir: File,
 
         // always update the last pid map offset so that the snapshot reflects the current offset
         // even if there isn't any idempotent data being written
-        pidMap.updateLastOffset(appendInfo.lastOffset + 1)
+        pidMap.updateMapEndOffset(appendInfo.lastOffset + 1)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
