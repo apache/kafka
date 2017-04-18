@@ -127,21 +127,26 @@ class ProducerIdMappingTest extends JUnitSuite {
     checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, 70001)
   }
 
-
   @Test
   def testRemoveOldSnapshot(): Unit = {
     val epoch = 0.toShort
-    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 1L)
-    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 2L)
 
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L)
     idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(2), currentSnapshotOffsets)
 
-    checkAndUpdate(idMapping, pid, 2, epoch, 2L, 3L)
-
+    checkAndUpdate(idMapping, pid, 2, epoch, 2L)
     idMapping.maybeTakeSnapshot()
+    assertEquals(2, idMappingDir.listFiles().length)
+    assertEquals(Set(2, 3), currentSnapshotOffsets)
 
-    assertEquals(s"number of snapshot files is incorrect: ${idMappingDir.listFiles().length}",
-               1, idMappingDir.listFiles().length)
+    // we only retain two snapshot files, so the next snapshot should cause the oldest to be deleted
+    checkAndUpdate(idMapping, pid, 3, epoch, 3L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(2, idMappingDir.listFiles().length)
+    assertEquals(Set(3, 4), currentSnapshotOffsets)
   }
 
   @Test
@@ -150,12 +155,13 @@ class ProducerIdMappingTest extends JUnitSuite {
     checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0L)
 
     idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(1), currentSnapshotOffsets)
 
     // nothing changed so there should be no new snapshot
     idMapping.maybeTakeSnapshot()
-
-    assertEquals(s"number of snapshot files is incorrect: ${idMappingDir.listFiles().length}",
-      1, idMappingDir.listFiles().length)
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(1), currentSnapshotOffsets)
   }
 
   @Test
@@ -219,6 +225,10 @@ class ProducerIdMappingTest extends JUnitSuite {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
     producerAppendInfo.append(incomingPidEntry)
     mapping.update(producerAppendInfo)
+    mapping.updateLastOffset(lastOffset + 1)
   }
+
+  private def currentSnapshotOffsets =
+    idMappingDir.listFiles().map(file => Log.offsetFromFilename(file.getName)).toSet
 
 }

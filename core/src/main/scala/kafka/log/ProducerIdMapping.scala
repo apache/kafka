@@ -98,11 +98,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
 private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 object ProducerIdMapping {
-  private val DirnamePrefix = "pid-mapping"
-  private val FilenameSuffix = "snapshot"
-  private val FilenamePattern = s"^\\d{1,}.$FilenameSuffix".r
   private val PidSnapshotVersion: Short = 1
-
   private val VersionField = "version"
   private val CrcField = "crc"
   private val PidField = "pid"
@@ -192,16 +188,7 @@ object ProducerIdMapping {
     }
   }
 
-  private def verifyFileName(name: String): Boolean = FilenamePattern.findFirstIn(name).isDefined
-
-  private def offsetFromFile(file: File): Long = {
-    s"${file.getName.replace(s".$FilenameSuffix", "")}".toLong
-  }
-
-  private def formatFileName(lastOffset: Long): String = {
-    // The files will be named '$lastOffset.snapshot' and located in 'logDir/pid-mapping'
-    s"$lastOffset.$FilenameSuffix"
-  }
+  private def isSnapshotFile(name: String): Boolean = name.endsWith(Log.PidSnapshotFileSuffix)
 
 }
 
@@ -216,12 +203,9 @@ object ProducerIdMapping {
 @nonthreadsafe
 class ProducerIdMapping(val config: LogConfig,
                         val topicPartition: TopicPartition,
-                        val snapParentDir: File,
+                        val logDir: File,
                         val maxPidExpirationMs: Int) extends Logging {
   import ProducerIdMapping._
-
-  val snapDir: File = new File(snapParentDir, DirnamePrefix)
-  Files.createDirectories(snapDir.toPath)
 
   private val pidMap = mutable.Map[Long, ProducerIdEntry]()
   private var lastMapOffset = 0L
@@ -249,8 +233,9 @@ class ProducerIdMapping(val config: LogConfig,
       lastSnapshotFile(logEndOffset) match {
         case Some(file) =>
           try {
+            info(s"Loading PID mapping from snapshot file ${file.getName} for partition $topicPartition")
             loadSnapshot(file, pidMap, checkNotExpired)
-            lastSnapOffset = offsetFromFile(file)
+            lastSnapOffset = Log.offsetFromFilename(file.getName)
             lastMapOffset = lastSnapOffset
             loaded = true
           } catch {
@@ -264,7 +249,6 @@ class ProducerIdMapping(val config: LogConfig,
         case None =>
           lastSnapOffset = 0L
           lastMapOffset = 0L
-          Files.createDirectories(snapDir.toPath)
           loaded = true
       }
     }
@@ -282,8 +266,7 @@ class ProducerIdMapping(val config: LogConfig,
 
   def truncateAndReload(logEndOffset: Long, currentTime: Long) {
     truncateSnapshotFiles(logEndOffset)
-    def checkNotExpired = (producerIdEntry: ProducerIdEntry) => { isEntryValid(currentTime, producerIdEntry) }
-    loadFromSnapshot(logEndOffset, checkNotExpired)
+    loadFromSnapshot(logEndOffset, producerIdEntry => isEntryValid(currentTime, producerIdEntry))
   }
 
   /**
@@ -294,7 +277,10 @@ class ProducerIdMapping(val config: LogConfig,
       throw new IllegalArgumentException("Invalid PID passed to update")
     val entry = appendInfo.lastEntry
     pidMap.put(appendInfo.pid, entry)
-    lastMapOffset = entry.lastOffset + 1
+  }
+
+  def updateLastOffset(lastOffset: Long): Unit = {
+    lastMapOffset = lastOffset
   }
 
   /**
@@ -302,10 +288,9 @@ class ProducerIdMapping(val config: LogConfig,
    * than the current time minus the PID expiration time (i.e. if the PID has expired).
    */
   def load(pid: Long, entry: ProducerIdEntry, currentTimeMs: Long) {
-    if (pid != RecordBatch.NO_PRODUCER_ID && currentTimeMs - entry.timestamp < maxPidExpirationMs) {
+    if (pid != RecordBatch.NO_PRODUCER_ID && currentTimeMs - entry.timestamp < maxPidExpirationMs)
       pidMap.put(pid, entry)
-      lastMapOffset = entry.lastOffset + 1
-    }
+    lastMapOffset = entry.lastOffset + 1
   }
 
   /**
@@ -314,23 +299,29 @@ class ProducerIdMapping(val config: LogConfig,
   def lastEntry(pid: Long): Option[ProducerIdEntry] = pidMap.get(pid)
 
   /**
-    * Serialize and write the bytes to a file. The file name is a concatenation of:
-    *   - offset
-    *   - a ".snapshot" suffix
-    *
-    *  The snapshot files are located in the logDirectory, inside a 'pid-mapping' sub directory.
-    */
+   * Serialize and write the bytes to a file. The file name is a concatenation of the last offset
+   * included in the snapshot (exclusive) and the ".snapshot" suffix.
+   */
   def maybeTakeSnapshot() {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val file = new File(snapDir, formatFileName(lastMapOffset))
-      writeSnapshot(file, pidMap)
+      val snapshotFile = Log.pidSnapshotFilename(logDir, lastMapOffset)
+      debug(s"Writing producer snapshot for partition $topicPartition at offset $lastMapOffset")
+      writeSnapshot(snapshotFile, pidMap)
 
       // Update the last snap offset according to the serialized map
       lastSnapOffset = lastMapOffset
 
-      maybeRemove()
+      maybeRemoveOldestSnapshot()
     }
+  }
+
+  def latestSnapshotOffset: Option[Long] = {
+    val snapshotOffsets = listSnapshotFiles.map(file => Log.offsetFromFilename(file.getName))
+    if (snapshotOffsets.isEmpty)
+      None
+    else
+      Some(snapshotOffsets.max)
   }
 
   /**
@@ -341,25 +332,23 @@ class ProducerIdMapping(val config: LogConfig,
     * @param startOffset New start offset for the log associated to
     *                    this id map instance
     */
-  def cleanFrom(startOffset: Long) {
-    pidMap.retain((pid, entry) => entry.firstOffset >= startOffset)
-    if (pidMap.isEmpty)
-      lastMapOffset = -1L
+  def expirePidsFrom(startOffset: Long) {
+    pidMap.retain((pid, entry) => entry.lastOffset >= startOffset)
   }
 
-  private def maybeRemove() {
-    val list = listSnapshotFiles()
+  private def maybeRemoveOldestSnapshot() {
+    val list = listSnapshotFiles
     if (list.size > maxPidSnapshotsToRetain) {
       // Get file with the smallest offset
-      val toDelete = list.minBy(offsetFromFile)
+      val toDelete = list.minBy(file => Log.offsetFromFilename(file.getName))
       // Delete the last
       Files.deleteIfExists(toDelete.toPath)
     }
   }
 
-  private def listSnapshotFiles(): List[File] = {
-    if (snapDir.exists && snapDir.isDirectory)
-      snapDir.listFiles.filter(f => f.isFile && verifyFileName(f.getName)).toList
+  private def listSnapshotFiles: List[File] = {
+    if (logDir.exists && logDir.isDirectory)
+      logDir.listFiles.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
     else
       List.empty[File]
   }
@@ -369,18 +358,18 @@ class ProducerIdMapping(val config: LogConfig,
    * a constructor parameter for loading.
    */
   private def lastSnapshotFile(maxOffset: Long): Option[File] = {
-    val files = listSnapshotFiles()
+    val files = listSnapshotFiles
     if (files != null && files.nonEmpty) {
       val targetOffset = files.foldLeft(0L) { (accOffset, file) =>
-        val snapshotLastOffset = offsetFromFile(file)
+        val snapshotLastOffset = Log.offsetFromFilename(file.getName)
         if ((maxOffset >= snapshotLastOffset) && (snapshotLastOffset > accOffset))
           snapshotLastOffset
         else
           accOffset
       }
-      val snap = new File(snapDir, formatFileName(targetOffset))
-      if (snap.exists)
-        Some(snap)
+      val snapshotFile = Log.pidSnapshotFilename(logDir, targetOffset)
+      if (snapshotFile.exists)
+        Some(snapshotFile)
       else
         None
     } else
@@ -388,9 +377,9 @@ class ProducerIdMapping(val config: LogConfig,
   }
 
   private def truncateSnapshotFiles(maxOffset: Long) {
-    listSnapshotFiles().foreach { file =>
-      val snapshotLastOffset = offsetFromFile(file)
-      if (snapshotLastOffset >= maxOffset)
+    listSnapshotFiles.foreach { file =>
+      val snapshotLastOffset = Log.offsetFromFilename(file.getName)
+      if (snapshotLastOffset > maxOffset)
         file.delete()
     }
   }

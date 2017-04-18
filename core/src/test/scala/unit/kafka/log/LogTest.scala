@@ -62,6 +62,23 @@ class LogTest {
     }
   }
 
+  @Test
+  def testOffsetFromFilename(): Unit = {
+    val offset = 23423423L
+
+    val logFile = Log.logFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(logFile.getName))
+
+    val offsetIndexFile = Log.indexFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(offsetIndexFile.getName))
+
+    val timeIndexFile = Log.timeIndexFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(timeIndexFile.getName))
+
+    val snapshotFile = Log.pidSnapshotFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(snapshotFile.getName))
+  }
+
   /**
    * Tests for time based log roll. This test appends messages then changes the time
    * using the mock clock to force the log to roll and checks the number of segments.
@@ -142,6 +159,34 @@ class LogTest {
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = 2)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
+  }
+
+  @Test
+  def testPidMapOffsetUpdatedForNonIdempotentData() {
+    val log = createLog(2048)
+    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+    assertEquals(Some(1), log.latestPidSnapshotOffset)
+  }
+
+  @Test
+  def testPidMapTruncation() {
+    val log = createLog(2048)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes))), leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    log.truncateTo(2)
+    assertEquals(Some(2), log.latestPidSnapshotOffset)
+    assertEquals(2, log.latestPidMapOffset)
+
+    log.truncateTo(1)
+    assertEquals(None, log.latestPidSnapshotOffset)
+    assertEquals(1, log.latestPidMapOffset)
   }
 
   @Test
