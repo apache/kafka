@@ -27,11 +27,9 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
-import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
-import org.apache.kafka.common.record.{RecordBatch, _}
+import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.easymock.EasyMock
-import org.easymock.EasyMock._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
