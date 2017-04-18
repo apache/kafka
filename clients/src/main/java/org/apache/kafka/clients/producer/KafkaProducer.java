@@ -637,9 +637,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
         }
 
-        if (transactionState != null && transactionState.isInTransaction()) {
-            transactionState.maybeAddPartitionToTransaction(new TopicPartition(record.topic(), record.partition()));
-        }
 
         TopicPartition tp = null;
         try {
@@ -673,6 +670,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
+
+            if (transactionState != null && transactionState.isInTransaction()) {
+                transactionState.maybeAddPartitionToTransaction(new TopicPartition(record.topic(), record.partition()));
+            }
+
+
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
                     serializedValue, interceptCallback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {

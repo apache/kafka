@@ -1085,11 +1085,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private boolean containsAbortMarker(RecordBatch batch) {
             Iterator<Record> batchIterator = batch.iterator();
             Record firstRecord = batchIterator.hasNext() ? batchIterator.next() : null;
-            if (firstRecord != null && batchIterator.hasNext())
-                throw new CorruptRecordException("A RecordBatch containing a control message contained more than one message.");
-            return firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+            boolean containsAbortMarker = firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+            if (containsAbortMarker && batchIterator.hasNext())
+                throw new CorruptRecordException("A record batch containing a control message contained more than one record.");
+            return containsAbortMarker;
         }
-
     }
 
     private static class ExceptionMetadata {
