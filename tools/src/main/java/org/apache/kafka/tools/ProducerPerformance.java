@@ -17,17 +17,17 @@
 package org.apache.kafka.tools;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -59,6 +59,7 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
+            boolean shouldPrintMetrics = res.getBoolean("printMetrics");
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -127,10 +128,14 @@ public class ProducerPerformance {
                     throttler.throttle();
                 }
             }
-
             /* print final results */
-            producer.close();
             stats.printTotal();
+
+            /* print out metrics */
+            if (shouldPrintMetrics) {
+                ToolsUtils.printMetrics(producer.metrics());
+            }
+            producer.close();
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
@@ -222,6 +227,13 @@ public class ProducerPerformance {
                 .metavar("CONFIG-FILE")
                 .dest("producerConfigFile")
                 .help("producer config properties file.");
+
+        parser.addArgument("--print-metrics")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("PRINT-METRICS")
+                .dest("printMetrics")
+                .help("print out metrics at the end of the test.");
 
         return parser;
     }
