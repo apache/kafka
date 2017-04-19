@@ -266,14 +266,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     info("starting the controller scheduler")
     kafkaScheduler.startup()
     kafkaScheduler.schedule("controller-metric-task", () => controllerEventQueue.put(UpdateMetrics), period = 10, unit = TimeUnit.SECONDS)
-    if (config.deleteTopicEnable) {
-      kafkaScheduler.schedule("topic-deletion-progress-check-task", () => controllerEventQueue.put(TopicDeletionProgressCheck),
-        period = 5, unit = TimeUnit.SECONDS)
-    }
     if (config.autoLeaderRebalanceEnable) {
       kafkaScheduler.schedule("auto-leader-rebalance-task", () => controllerEventQueue.put(AutoPreferredReplicaLeaderElection),
         delay = 5, period = config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
     }
+    topicDeletionManager.start()
   }
 
   /**
@@ -1464,50 +1461,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
         }.keys
       }
       replicatedPartitionsBrokerLeads().toSet
-    }
-  }
-
-  case object TopicDeletionProgressCheck extends ControllerEvent {
-    override def process(): Unit = {
-      if (!isActive) return
-      val topicsQueuedForDeletion = Set.empty[String] ++ topicDeletionManager.topicsToBeDeleted
-
-      if(topicsQueuedForDeletion.nonEmpty)
-        info("Handling deletion for topics " + topicsQueuedForDeletion.mkString(","))
-
-      topicsQueuedForDeletion.foreach { topic =>
-        // if all replicas are marked as deleted successfully, then topic deletion is done
-        if(replicaStateMachine.areAllReplicasForTopicDeleted(topic)) {
-          // clear up all state for this topic from controller cache and zookeeper
-          topicDeletionManager.completeDeleteTopic(topic)
-          info("Deletion of topic %s successfully completed".format(topic))
-        } else {
-          if(replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)) {
-            // ignore since topic deletion is in progress
-            val replicasInDeletionStartedState = replicaStateMachine.replicasInState(topic, ReplicaDeletionStarted)
-            val replicaIds = replicasInDeletionStartedState.map(_.replica)
-            val partitions = replicasInDeletionStartedState.map(r => TopicAndPartition(r.topic, r.partition))
-            info("Deletion for replicas %s for partition %s of topic %s in progress".format(replicaIds.mkString(","),
-              partitions.mkString(","), topic))
-          } else {
-            // if you come here, then no replica is in TopicDeletionStarted and all replicas are not in
-            // TopicDeletionSuccessful. That means, that either given topic haven't initiated deletion
-            // or there is at least one failed replica (which means topic deletion should be retried).
-            if(replicaStateMachine.isAnyReplicaInState(topic, ReplicaDeletionIneligible)) {
-              // mark topic for deletion retry
-              topicDeletionManager.markTopicForDeletionRetry(topic)
-            }
-          }
-        }
-        // Try delete topic if it is eligible for deletion.
-        if(topicDeletionManager.isTopicEligibleForDeletion(topic)) {
-          info("Deletion of topic %s (re)started".format(topic))
-          // topic deletion will be kicked off
-          topicDeletionManager.onTopicDeletion(Set(topic))
-        } else if(topicDeletionManager.isTopicIneligibleForDeletion(topic)) {
-          info("Not retrying deletion of topic %s at this time since it is marked ineligible for deletion".format(topic))
-        }
-      }
     }
   }
 
