@@ -169,7 +169,7 @@ class LogTest {
   }
 
   @Test
-  def testPidMapTruncate() {
+  def testPidMapTruncateTo() {
     val log = createLog(2048)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
@@ -202,14 +202,34 @@ class LogTest {
     assertEquals(3, log.latestPidMapOffset)
     assertEquals(Some(3), log.latestPidSnapshotOffset)
 
-    log.deleteOldSegments()
-    assertEquals(2, log.logSegments.size)
-
-    // truncate to an offset which is earlier than the offset of the first segment
-    log.truncateTo(0)
+    log.truncateFullyAndStartAt(29)
     assertEquals(1, log.logSegments.size)
     assertEquals(None, log.latestPidSnapshotOffset)
-    assertEquals(0, log.latestPidMapOffset)
+    assertEquals(29, log.latestPidMapOffset)
+  }
+
+  @Test
+  def testPidExpirationOnSegmentDeletion() {
+    val pid1 = 1L
+    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, epoch = 0, sequence = 0)
+    val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    val pid2 = 2L
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, epoch = 0, sequence = 0),
+      leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, epoch = 0, sequence = 1),
+      leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    assertEquals(3, log.logSegments.size)
+    assertEquals(Set(pid1, pid2), log.activePids.keySet)
+
+    log.deleteOldSegments()
+
+    assertEquals(2, log.logSegments.size)
+    assertEquals(Set(pid2), log.activePids.keySet)
   }
 
   @Test

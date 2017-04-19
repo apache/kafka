@@ -150,6 +150,55 @@ class ProducerIdMappingTest extends JUnitSuite {
   }
 
   @Test
+  def testTruncate(): Unit = {
+    val epoch = 0.toShort
+
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(2), currentSnapshotOffsets)
+
+    checkAndUpdate(idMapping, pid, 2, epoch, 2L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(2, idMappingDir.listFiles().length)
+    assertEquals(Set(2, 3), currentSnapshotOffsets)
+
+    idMapping.truncate()
+
+    assertEquals(0, idMappingDir.listFiles().length)
+    assertEquals(Set(), currentSnapshotOffsets)
+
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(1), currentSnapshotOffsets)
+  }
+
+  @Test
+  def testExpirePidsBefore(): Unit = {
+    val epoch = 0.toShort
+
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L)
+    idMapping.maybeTakeSnapshot()
+
+    val anotherPid = 2L
+    checkAndUpdate(idMapping, anotherPid, 0, epoch, 2L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(Set(2, 3), currentSnapshotOffsets)
+
+    idMapping.expirePids(2)
+    assertEquals(Set(3), currentSnapshotOffsets)
+    assertEquals(Set(anotherPid), idMapping.activePids.keySet)
+    assertEquals(None, idMapping.lastEntry(pid))
+
+    val maybeEntry = idMapping.lastEntry(anotherPid)
+    assertTrue(maybeEntry.isDefined)
+    assertEquals(2L, maybeEntry.get.lastOffset)
+  }
+
+  @Test
   def testSkipSnapshotIfOffsetUnchanged(): Unit = {
     val epoch = 0.toShort
     checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0L)

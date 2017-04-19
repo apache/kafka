@@ -369,7 +369,7 @@ class Log(@volatile var dir: File,
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
         warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
-        unflushed.foreach(deleteSegment(_))
+        unflushed.foreach(deleteSegment)
       }
     }
   }
@@ -403,9 +403,9 @@ class Log(@volatile var dir: File,
           }
         }
       }
+      pidMap.expirePids(logStartOffset)
+      pidMap.updateMapEndOffset(lastOffset)
     }
-    pidMap.expirePidsFrom(logStartOffset)
-    pidMap.updateMapEndOffset(lastOffset)
   }
 
   private[log] def activePids: Map[Long, ProducerIdEntry] = {
@@ -529,7 +529,7 @@ class Log(@volatile var dir: File,
         }
 
         // update the epoch cache with the epoch stamped onto the message by the leader
-        validRecords.batches.asScala.map { batch =>
+        validRecords.batches.asScala.foreach { batch =>
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
             leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
         }
@@ -863,9 +863,10 @@ class Log(@volatile var dir: File,
         roll()
       lock synchronized {
         // remove the segments for lookups
-        deletable.foreach(deleteSegment(_))
+        deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearEarliest(logStartOffset)
+        pidMap.expirePids(logStartOffset)
       }
     }
     numToDelete
@@ -1135,7 +1136,7 @@ class Log(@volatile var dir: File,
       updateLogEndOffset(newOffset)
       leaderEpochCache.clear()
 
-      pidMap.clear()
+      pidMap.truncate()
       pidMap.updateMapEndOffset(newOffset)
 
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
