@@ -36,9 +36,14 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
     val correlationId = response.requestHeader.correlationId
     if (response.wasDisconnected) {
       trace(s"Cancelled request $response due to node ${response.destination} being disconnected")
-
       // re-enqueue the markers
-      transactionMarkerChannel.addRequestForBroker(brokerId, epochAndMarkers)
+      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntry) {
+        transactionMarkerChannel.addRequestToSend(txnMarker.producerId(),
+          txnMarker.producerEpoch(),
+          txnMarker.transactionResult(),
+          epochAndMarkers.coordinatorEpoch,
+          txnMarker.partitions().toSet)
+      }
     } else {
       trace(s"Received response $response from node ${response.destination} with correlation id $correlationId")
 
@@ -66,7 +71,11 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
 
           if (retryPartitions.nonEmpty) {
             // re-enqueue with possible new leaders of the partitions
-            transactionMarkerChannel.addRequestToSend(txnMarker.producerId(), txnMarker.producerEpoch(), txnMarker.transactionResult, epochAndMarkers.coordinatorEpoch, retryPartitions.toSet)
+            transactionMarkerChannel.addRequestToSend(txnMarker.producerId(),
+              txnMarker.producerEpoch(),
+              txnMarker.transactionResult,
+              epochAndMarkers.coordinatorEpoch,
+              retryPartitions.toSet)
           }
           val completed = txnMarkerPurgatory.checkAndComplete(txnMarker.producerId())
           trace(s"Competed $completed transactions for producerId ${txnMarker.producerId()}")

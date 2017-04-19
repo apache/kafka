@@ -47,8 +47,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val handler = new TransactionMarkerRequestCompletionHandler(markerChannel, purgatory, epochAndMarkers,  0)
 
   @Test
-  def shouldReEnqueueBrokerRequestWhenResponseIsDisconnected(): Unit = {
-    EasyMock.expect(markerChannel.addRequestForBroker(0, epochAndMarkers))
+  def shouldReEnqueuePartitionsWhenBrokerDisconnected(): Unit = {
+    EasyMock.expect(markerChannel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, true, null, null))
