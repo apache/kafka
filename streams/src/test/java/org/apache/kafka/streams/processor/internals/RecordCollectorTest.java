@@ -206,4 +206,18 @@ public class RecordCollectorTest {
         collector.close();
     }
 
+    @SuppressWarnings("unchecked")
+    @Test(expected = StreamsException.class)
+    public void shouldThrowIfTopicIsUnknown() {
+        final RecordCollector collector = new RecordCollectorImpl(
+            new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
+                @Override
+                public List<PartitionInfo> partitionsFor(final String topic) {
+                    return Collections.EMPTY_LIST;
+                }
+
+            },
+            "test");
+        collector.send("topic1", "3", "0", null, stringSerializer, stringSerializer, streamPartitioner);
+    }
 }

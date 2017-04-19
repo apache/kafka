@@ -90,7 +90,9 @@ public class RecordCollectorImpl implements RecordCollector {
         final ProducerRecord<byte[], byte[]> serializedRecord =
                 new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
 
-        for (int attempt = 1; attempt <= MAX_SEND_ATTEMPTS; attempt++) {
+        // counting from 1 to make check further down more natural
+        // -> `if (attempt == MAX_SEND_ATTEMPTS)`
+        for (int attempt = 1; attempt <= MAX_SEND_ATTEMPTS; ++attempt) {
             try {
                 producer.send(serializedRecord, new Callback() {
                     @Override
