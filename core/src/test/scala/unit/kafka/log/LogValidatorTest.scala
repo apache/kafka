@@ -790,6 +790,40 @@ class LogValidatorTest {
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH).validatedRecords
   }
 
+  @Test(expected = classOf[InvalidRecordException])
+  def testNullKeyForCompactedTopicWithProduceRequestV1() {
+    val now = System.currentTimeMillis()
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V0, timestamp = now, codec = CompressionType.NONE)
+    val offset = 1234567
+    val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(offset),
+      now = System.currentTimeMillis(),
+      sourceCodec = NoCompressionCodec,
+      targetCodec = NoCompressionCodec,
+      compactedTopic = true,
+      magic = RecordBatch.MAGIC_VALUE_V0,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH).validatedRecords
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testNullKeyForCompactedTopicWithProduceRequestV2() {
+    val now = System.currentTimeMillis()
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V1, timestamp = now, codec = CompressionType.NONE)
+    val offset = 1234567
+    val messageWithOffset = LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(offset),
+      now = System.currentTimeMillis(),
+      sourceCodec = NoCompressionCodec,
+      targetCodec = NoCompressionCodec,
+      compactedTopic = true,
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH).validatedRecords
+  }
+
   private def createRecords(magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
                             timestamp: Long = RecordBatch.NO_TIMESTAMP,
                             codec: CompressionType = CompressionType.NONE): MemoryRecords = {
