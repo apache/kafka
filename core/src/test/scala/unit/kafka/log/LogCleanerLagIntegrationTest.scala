@@ -49,13 +49,14 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
   val logName = "log"
   val logDir = TestUtils.tempDir()
   var counter = 0
-  val topics = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
+  val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
   val compressionCodec = CompressionType.forName(compressionCodecName)
+  var cleaner: LogCleaner = _
 
   @Test
   def cleanerTest(): Unit = {
-    val cleaner = makeCleaner(parts = 3, backOffMs = cleanerBackOffMs)
-    val log = cleaner.logs.get(topics(0))
+    cleaner = makeCleaner(parts = 3, backOffMs = cleanerBackOffMs)
+    val log = cleaner.logs.get(topicPartitions(0))
 
     // t = T0
     val T0 = time.milliseconds
@@ -98,9 +99,6 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
     assertTrue(s"log cleaner should have processed up to offset $firstBlock1SegmentBaseOffset, but lastCleaned=$lastCleaned", lastCleaned >= firstBlock1SegmentBaseOffset)
     assertTrue(s"log should have been compacted: size up to offset of active segment at T0=$sizeUpToActiveSegmentAtT0 compacted size=$compactedSize",
       sizeUpToActiveSegmentAtT0 > compactedSize)
-
-    cleaner.logs.remove(topics(0))
-    cleaner.shutdown()
   }
 
   private def readFromLog(log: Log): Iterable[(Int, Int)] = {
@@ -124,17 +122,22 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
 
   @After
   def teardown(): Unit = {
+    for (log <- cleaner.logs.values.toList) {
+      cleaner.logs.remove(log.topicPartition)
+      log.close()
+    }
+    cleaner.shutdown()
     time.scheduler.shutdown()
     Utils.delete(logDir)
   }
 
   /* create a cleaner instance and logs with the given parameters */
   private def makeCleaner(parts: Int,
-                  minCleanableDirtyRatio: Float = 0.0F,
-                  numThreads: Int = 1,
-                  backOffMs: Long = 200L,
-                  defaultPolicy: String = "compact",
-                  policyOverrides: Map[String, String] = Map()): LogCleaner = {
+                          minCleanableDirtyRatio: Float = 0.0F,
+                          numThreads: Int = 1,
+                          backOffMs: Long = 200L,
+                          defaultPolicy: String = "compact",
+                          policyOverrides: Map[String, String] = Map()): LogCleaner = {
 
     // create partitions and add them to the pool
     val logs = new Pool[TopicPartition, Log]()

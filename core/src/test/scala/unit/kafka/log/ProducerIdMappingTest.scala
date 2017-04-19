@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -53,7 +53,7 @@ class ProducerIdMappingTest extends JUnitSuite {
   @After
   def tearDown(): Unit = {
     idMappingDir.listFiles().foreach(f => f.delete())
-    idMappingDir.deleteOnExit()
+    Utils.delete(idMappingDir)
   }
 
   @Test

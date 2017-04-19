@@ -51,7 +51,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   val logDir = TestUtils.tempDir()
   var counter = 0
   var cleaner: LogCleaner = _
-  val topics = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
+  val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @Test
   def cleanerTest() {
@@ -60,7 +60,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val maxMessageSize = largeMessageSet.sizeInBytes
 
     cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
-    val log = cleaner.logs.get(topics(0))
+    val log = cleaner.logs.get(topicPartitions(0))
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
     val startSize = log.size
@@ -86,11 +86,13 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     // simulate deleting a partition, by removing it from logs
     // force a checkpoint
     // and make sure its gone from checkpoint file
-    cleaner.logs.remove(topics(0))
+    val removedLog = cleaner.logs.remove(topicPartitions(0))
+    removedLog.close()
+
     cleaner.updateCheckpoints(logDir)
-    val checkpoints = new OffsetCheckpointFile(new File(logDir,cleaner.cleanerManager.offsetCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile)).read()
     // we expect partition 0 to be gone
-    assertFalse(checkpoints.contains(topics(0)))
+    assertFalse(checkpoints.contains(topicPartitions(0)))
   }
 
   @Test
@@ -102,7 +104,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String, Long)]) = {
       cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = 100L)
-      val log = cleaner.logs.get(topics(0))
+      val log = cleaner.logs.get(topicPartitions(0))
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
       val startSize = log.size
@@ -160,7 +162,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
     cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
 
-    val log = cleaner.logs.get(topics(0))
+    val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
     log.config = new LogConfig(props)
@@ -199,7 +201,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val maxMessageSize = 192
     cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
 
-    val log = cleaner.logs.get(topics(0))
+    val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
     log.config = new LogConfig(props)
@@ -291,6 +293,10 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
 
   @After
   def tearDown(): Unit = {
+    for (log <- cleaner.logs.values.toList) {
+      cleaner.logs.remove(log.topicPartition)
+      log.close()
+    }
     cleaner.shutdown()
     time.scheduler.shutdown()
     Utils.delete(logDir)
