@@ -315,15 +315,10 @@ class ProducerIdMapping(val config: LogConfig,
     }
   }
 
-  def latestSnapshotOffset: Option[Long] =
-
-  {
-    val snapshotOffsets = listSnapshotFiles.map(file => Log.offsetFromFilename(file.getName))
-    if (snapshotOffsets.isEmpty)
-      None
-    else
-      Some(snapshotOffsets.max)
-  }
+  /**
+   * Get the last offset (exclusive) of the latest snapshot file.
+   */
+  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
 
   /**
     * When we remove the head of the log due to retention, we need to
@@ -363,10 +358,6 @@ class ProducerIdMapping(val config: LogConfig,
       List.empty[File]
   }
 
-  /**
-   * Returns the last valid snapshot with offset smaller than the base offset provided as
-   * a constructor parameter for loading.
-   */
   private def latestSnapshotFile: Option[File] = {
     val files = listSnapshotFiles
     if (files.nonEmpty)
