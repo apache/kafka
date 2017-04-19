@@ -43,7 +43,7 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
-
+import org.rocksdb.BloomFilter;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -115,6 +115,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
+        tableConfig.setFilter(new BloomFilter(10));
 
         options = new Options();
         options.setTableFormatConfig(tableConfig);
