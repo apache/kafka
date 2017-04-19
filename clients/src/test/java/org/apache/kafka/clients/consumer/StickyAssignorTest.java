@@ -318,29 +318,44 @@ public class StickyAssignorTest {
         subscriptions.put(consumer2, topics(topic));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(Arrays.asList(new TopicPartition(topic, 0), new TopicPartition(topic, 2)), assignment.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic, 1)), assignment.get(consumer2));
+        // verify balance
         assertTrue(isFullyBalanced(assignment));
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
+        // verify stickiness
+        List<TopicPartition> consumer1Assignment1 = assignment.get(consumer1);
+        List<TopicPartition> consumer2Assignment1 = assignment.get(consumer2);
+        assertTrue((consumer1Assignment1.size() == 1 && consumer2Assignment1.size() == 2) ||
+                   (consumer1Assignment1.size() == 2 && consumer2Assignment1.size() == 1));
 
         String topic2 = "topic2";
         partitionsPerTopic.put(topic2, 3);
         subscriptions.put(consumer1, topics(topic, topic2));
         subscriptions.put(consumer2, topics(topic, topic2));
         Map<String, List<TopicPartition>> assignment2 = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(Arrays.asList(new TopicPartition(topic, 0), new TopicPartition(topic, 2), new TopicPartition(topic2, 1)), assignment2.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic, 1), new TopicPartition(topic2, 2), new TopicPartition(topic2, 0)), assignment2.get(consumer2));
+        // verify balance
         assertTrue(isFullyBalanced(assignment2));
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
+        // verify stickiness
+        List<TopicPartition> consumer1Assignment2 = assignment2.get(consumer1);
+        List<TopicPartition> consumer2Assignment2 = assignment2.get(consumer2);
+        assertTrue(consumer1Assignment2.size() == 3 && consumer2Assignment2.size() == 3);
+        assertTrue(consumer1Assignment2.containsAll(consumer1Assignment1));
+        assertTrue(consumer2Assignment2.containsAll(consumer2Assignment1));
 
         partitionsPerTopic.remove(topic);
         subscriptions.put(consumer1, topics(topic2));
         subscriptions.put(consumer2, topics(topic2));
         Map<String, List<TopicPartition>> assignment3 = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(Arrays.asList(new TopicPartition(topic2, 1)), assignment3.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic2, 2), new TopicPartition(topic2, 0)), assignment3.get(consumer2));
+        // verify balance
         assertTrue(isFullyBalanced(assignment3));
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
+        // verify stickiness
+        List<TopicPartition> consumer1Assignment3 = assignment3.get(consumer1);
+        List<TopicPartition> consumer2Assignment3 = assignment3.get(consumer2);
+        assertTrue((consumer1Assignment3.size() == 1 && consumer2Assignment3.size() == 2) ||
+                   (consumer1Assignment3.size() == 2 && consumer2Assignment3.size() == 1));
+        assertTrue(consumer1Assignment2.containsAll(consumer1Assignment3));
+        assertTrue(consumer2Assignment2.containsAll(consumer2Assignment3));
     }
 
     @Test
