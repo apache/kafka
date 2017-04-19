@@ -284,7 +284,7 @@ public class IntegrationTestUtils {
                 }
                 return true;
             }
-        }, timeout, "metatadata for topic=" + topic + " partition=" + partition + " not propogated to all brokers");
+        }, timeout, "metadata for topic=" + topic + " partition=" + partition + " not propagated to all brokers");
 
     }
 }
