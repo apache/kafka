@@ -28,6 +28,7 @@ import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 
@@ -61,7 +62,7 @@ class LogTest {
   }
 
   @Test
-  def testOffsetFromFilename(): Unit = {
+  def testOffsetFromFilename() {
     val offset = 23423423L
 
     val logFile = Log.logFilename(tmpDir, offset)
@@ -166,6 +167,84 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
     log.maybeTakePidSnapshot()
     assertEquals(Some(1), log.latestPidSnapshotOffset)
+  }
+
+  @Test
+  def testRebuildPidMapWithCompactedData() {
+    val log = createLog(2048)
+    val pid = 1L
+    val epoch = 0.toShort
+    val seq = 0
+    val baseOffset = 23L
+
+    // create a batch with a couple gaps to simulate compaction
+    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "d".getBytes)))
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+
+    val filtered = ByteBuffer.allocate(2048)
+    records.filterTo(new RecordFilter {
+      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+    }, filtered)
+    filtered.flip()
+    val filteredRecords = MemoryRecords.readableRecords(filtered)
+
+    log.appendAsFollower(filteredRecords)
+
+    // append some more data and then truncate to force rebuilding of the PID map
+    val moreRecords = TestUtils.records(baseOffset = baseOffset + 4, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "e".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "f".getBytes)))
+    moreRecords.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+    log.appendAsFollower(moreRecords)
+
+    log.truncateTo(baseOffset + 4)
+
+    val activePids = log.activePids
+    assertTrue(activePids.contains(pid))
+
+    val entry = activePids(pid)
+    assertEquals(0, entry.firstSeq)
+    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(3, entry.lastSeq)
+    assertEquals(baseOffset + 3, entry.lastOffset)
+  }
+
+  @Test
+  def testUpdatePidMapWithCompactedData() {
+    val log = createLog(2048)
+    val pid = 1L
+    val epoch = 0.toShort
+    val seq = 0
+    val baseOffset = 23L
+
+    // create a batch with a couple gaps to simulate compaction
+    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "d".getBytes)))
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+
+    val filtered = ByteBuffer.allocate(2048)
+    records.filterTo(new RecordFilter {
+      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+    }, filtered)
+    filtered.flip()
+    val filteredRecords = MemoryRecords.readableRecords(filtered)
+
+    log.appendAsFollower(filteredRecords)
+    val activePids = log.activePids
+    assertTrue(activePids.contains(pid))
+
+    val entry = activePids(pid)
+    assertEquals(0, entry.firstSeq)
+    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(3, entry.lastSeq)
+    assertEquals(baseOffset + 3, entry.lastOffset)
   }
 
   @Test

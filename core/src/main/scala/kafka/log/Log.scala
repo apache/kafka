@@ -392,12 +392,8 @@ class Log(@volatile var dir: File,
         if (fetchDataInfo != null) {
           fetchDataInfo.records.batches.asScala.foreach { batch =>
             if (batch.hasProducerId) {
-              // TODO: Currently accessing any of the batch-level headers other than the offset
-              // or magic causes us to load the full entry into memory. It would be better if we
-              // only loaded the header
-              val numRecords = (batch.lastOffset - batch.baseOffset + 1).toInt
               val pidEntry = ProducerIdEntry(batch.producerEpoch, batch.lastSequence, batch.lastOffset,
-                numRecords, batch.maxTimestamp)
+                batch.lastSequence - batch.baseSequence, batch.maxTimestamp)
               pidMap.load(batch.producerId, pidEntry, currentTimeMs)
             }
           }
@@ -434,7 +430,6 @@ class Log(@volatile var dir: File,
       logSegments.foreach(_.close())
     }
   }
-
 
   /**
     * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
@@ -681,7 +676,7 @@ class Log(@volatile var dir: File,
               firstOffset = lastEntry.firstOffset
               lastOffset = lastEntry.lastOffset
               maxTimestamp = lastEntry.timestamp
-              info(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). " +
+              debug(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): ($firstOffset, $lastOffset). " +
                 "Ignoring the incoming record.")
             } else {
               val producerAppendInfo = new ProducerAppendInfo(pid, lastEntry)

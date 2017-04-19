@@ -35,9 +35,9 @@ private[log] object ProducerIdEntry {
     -1, 0, RecordBatch.NO_TIMESTAMP)
 }
 
-private[log] case class ProducerIdEntry(epoch: Short, lastSeq: Int, lastOffset: Long, numRecords: Int, timestamp: Long) {
-  def firstSeq: Int = lastSeq - numRecords + 1
-  def firstOffset: Long = lastOffset - numRecords + 1
+private[log] case class ProducerIdEntry(epoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
+  def firstSeq: Int = lastSeq - offsetDelta
+  def firstOffset: Long = lastOffset - offsetDelta
 
   def isDuplicate(batch: RecordBatch): Boolean = {
     batch.producerEpoch == epoch &&
@@ -92,7 +92,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     append(entry.epoch, entry.firstSeq, entry.lastSeq, entry.timestamp, entry.lastOffset)
 
   def lastEntry: ProducerIdEntry =
-    ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq + 1, maxTimestamp)
+    ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp)
 }
 
 private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
@@ -105,7 +105,7 @@ object ProducerIdMapping {
   private val LastSequenceField = "last_sequence"
   private val EpochField = "epoch"
   private val LastOffsetField = "last_offset"
-  private val NumRecordsField = "num_records"
+  private val OffsetDeltaField = "offset_delta"
   private val TimestampField = "timestamp"
   private val PidEntriesField = "pid_entries"
 
@@ -120,7 +120,7 @@ object ProducerIdMapping {
     new Field(EpochField, Type.INT16, "Current epoch of the producer"),
     new Field(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
     new Field(LastOffsetField, Type.INT64, "Last written offset of the producer"),
-    new Field(NumRecordsField, Type.INT32, "The number of records written in the last log entry"),
+    new Field(OffsetDeltaField, Type.INT32, "The difference of the last sequence and first sequence in the last written batch"),
     new Field(TimestampField, Type.INT64, "Max timestamp from the last written entry"))
   val PidSnapshotMapSchema = new Schema(
     new Field(VersionField, Type.INT16, "Version of the snapshot file"),
@@ -148,8 +148,8 @@ object ProducerIdMapping {
       val seq = pidEntryStruct.getInt(LastSequenceField)
       val offset = pidEntryStruct.getLong(LastOffsetField)
       val timestamp = pidEntryStruct.getLong(TimestampField)
-      val numRecords = pidEntryStruct.getInt(NumRecordsField)
-      val newEntry = ProducerIdEntry(epoch, seq, offset, numRecords, timestamp)
+      val offsetDelta = pidEntryStruct.getInt(OffsetDeltaField)
+      val newEntry = ProducerIdEntry(epoch, seq, offset, offsetDelta, timestamp)
       if (checkNotExpired(newEntry))
         pidMap.put(pid, newEntry)
     }
@@ -166,7 +166,7 @@ object ProducerIdMapping {
           .set(EpochField, entry.epoch)
           .set(LastSequenceField, entry.lastSeq)
           .set(LastOffsetField, entry.lastOffset)
-          .set(NumRecordsField, entry.numRecords)
+          .set(OffsetDeltaField, entry.offsetDelta)
           .set(TimestampField, entry.timestamp)
         pidEntryStruct
     }.toArray
@@ -265,8 +265,10 @@ class ProducerIdMapping(val config: LogConfig,
   }
 
   def truncateAndReload(logEndOffset: Long, currentTime: Long) {
-    deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) > logEndOffset)
-    loadFromSnapshot(producerIdEntry => isEntryValid(currentTime, producerIdEntry))
+    if (logEndOffset != mapEndOffset) {
+      deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) > logEndOffset)
+      loadFromSnapshot(producerIdEntry => isEntryValid(currentTime, producerIdEntry))
+    }
   }
 
   /**

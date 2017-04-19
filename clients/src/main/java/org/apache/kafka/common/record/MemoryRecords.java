@@ -176,10 +176,17 @@ public class MemoryRecords extends AbstractRecords {
                 TimestampType timestampType = batch.timestampType();
                 long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
                 MemoryRecordsBuilder builder = builder(slice, batch.magic(), batch.compressionType(), timestampType,
-                        firstOffset, logAppendTime);
+                        firstOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
+                        batch.partitionLeaderEpoch());
 
                 for (Record record : retainedRecords)
                     builder.append(record);
+
+                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
+                    // we must preserve the last offset from the initial batch in order to ensure that the
+                    // last sequence number from the batch remains even after compaction. Otherwise, the producer
+                    // could incorrectly see an out of sequence error.
+                    builder.overrideLastOffset(batch.lastOffset());
 
                 MemoryRecords records = builder.build();
                 destinationBuffer.position(destinationBuffer.position() + slice.position());
