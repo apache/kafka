@@ -14,13 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.log
+package kafka.log
 
 import java.io.File
 import java.util.Properties
 
-import kafka.log.{CleanerConfig, Log, LogCleaner, LogConfig}
-import kafka.server.Defaults
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
@@ -48,7 +46,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   def logConfigProperties(propertyOverrides: Properties = new Properties(),
                           maxMessageSize: Int,
                           minCleanableDirtyRatio: Float = 0.0F,
-                          compactionLag: Long = Defaults.LogCleanerMinCompactionLagMs,
+                          compactionLag: Long = 0L,
                           deleteDelay: Int = 1000,
                           segmentSize: Int = 256): Properties = {
     val props = new Properties()
@@ -69,7 +67,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   numThreads: Int = 1,
                   backOffMs: Long = 15000L,
                   maxMessageSize: Int = 128,
-                  compactionLag: Long = Defaults.LogCleanerMinCompactionLagMs,
+                  compactionLag: Long = 0L,
                   deleteDelay: Int = 1000,
                   segmentSize: Int = 256,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {

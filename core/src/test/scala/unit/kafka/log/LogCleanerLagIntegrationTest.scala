@@ -25,7 +25,6 @@ import org.junit._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import unit.kafka.log.AbstractLogCleanerIntegrationTest
 
 import scala.collection._
 
