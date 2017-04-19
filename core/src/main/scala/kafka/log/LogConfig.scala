@@ -100,6 +100,8 @@ object LogConfig {
     println(configDef.toHtmlTable)
   }
 
+  val MetadataNameSpace = "metadata."
+
   val Delete = "delete"
   val Compact = "compact"
 
@@ -320,7 +322,7 @@ object LogConfig {
   def validateNames(props: Properties) {
     val names = configNames
     for(name <- props.asScala.keys)
-      if (!names.contains(name))
+      if (!names.contains(name) && !name.startsWith(MetadataNameSpace))
         throw new InvalidConfigurationException(s"Unknown Log configuration $name.")
   }
 
