@@ -55,13 +55,11 @@ public class StoreChangeLoggerTest {
                 public <K1, V1> void send(final String topic,
                                            K1 key,
                                            V1 value,
-                                           Integer partition,
                                            Long timestamp,
                                            Serializer<K1> keySerializer,
                                            Serializer<V1> valueSerializer,
                                            StreamPartitioner<? super K1, ? super V1> partitioner) {
-                    // ignore partitioner
-                    send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+                    throw new UnsupportedOperationException();
                 }
             }
     );

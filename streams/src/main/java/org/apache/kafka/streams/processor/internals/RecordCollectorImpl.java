@@ -56,11 +56,23 @@ public class RecordCollectorImpl implements RecordCollector {
     public <K, V> void send(final String topic,
                             K key,
                             V value,
-                            Integer partition,
                             Long timestamp,
                             Serializer<K> keySerializer,
-                            Serializer<V> valueSerializer) {
-        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer, null);
+                            Serializer<V> valueSerializer,
+                            StreamPartitioner<? super K, ? super V> partitioner) {
+        Integer partition = null;
+
+        if (partitioner != null) {
+            final List<PartitionInfo> partitions = producer.partitionsFor(topic);
+            if (partitions.size() > 0) {
+                partition = partitioner.partition(key, value, partitions.size());
+            } else {
+                throw new StreamsException("Could not get partition information for topic '" + topic + "'." +
+                    " This can happen if the topic does not exist.");
+            }
+        }
+
+        send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
     }
 
     @Override
@@ -70,16 +82,10 @@ public class RecordCollectorImpl implements RecordCollector {
                              Integer partition,
                              Long timestamp,
                              Serializer<K> keySerializer,
-                             Serializer<V> valueSerializer,
-                             StreamPartitioner<? super K, ? super V> partitioner) {
+                             Serializer<V> valueSerializer) {
         checkForException();
         byte[] keyBytes = keySerializer.serialize(topic, key);
         byte[] valBytes = valueSerializer.serialize(topic, value);
-        if (partition == null && partitioner != null) {
-            List<PartitionInfo> partitions = this.producer.partitionsFor(topic);
-            if (partitions != null && partitions.size() > 0)
-                partition = partitioner.partition(key, value, partitions.size());
-        }
 
         ProducerRecord<byte[], byte[]> serializedRecord =
                 new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);

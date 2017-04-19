@@ -44,7 +44,6 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         public <K, V> void send(final String topic,
                                 K key,
                                 V value,
-                                Integer partition,
                                 Long timestamp,
                                 Serializer<K> keySerializer,
                                 Serializer<V> valueSerializer,
