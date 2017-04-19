@@ -17,18 +17,15 @@
 
 package kafka.log
 
-import java.io.File
-import java.util.Properties
-
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
+import unit.kafka.log.AbstractLogCleanerIntegrationTest
 
 import scala.collection._
 
@@ -36,7 +33,7 @@ import scala.collection._
   * This is an integration test that tests the fully integrated log cleaner
   */
 @RunWith(value = classOf[Parameterized])
-class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging {
+class LogCleanerLagIntegrationTest(compressionCodecName: String) extends AbstractLogCleanerIntegrationTest with Logging {
   val msPerHour = 60 * 60 * 1000
 
   val compactionLag = 1 * msPerHour
@@ -45,17 +42,16 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val cleanerBackOffMs = 200L
   val segmentSize = 512
-  val deleteDelay = 1000
-  val logName = "log"
-  val logDir = TestUtils.tempDir()
   var counter = 0
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
   val compressionCodec = CompressionType.forName(compressionCodecName)
-  var cleaner: LogCleaner = _
 
   @Test
   def cleanerTest(): Unit = {
-    cleaner = makeCleaner(parts = 3, backOffMs = cleanerBackOffMs)
+    cleaner = makeCleaner(partitions = topicPartitions,
+      backOffMs = cleanerBackOffMs,
+      compactionLag = compactionLag,
+      segmentSize = segmentSize)
     val log = cleaner.logs.get(topicPartitions(0))
 
     // t = T0
@@ -118,53 +114,6 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Logging
       counter += 1
       (key, count)
     }
-  }
-
-  @After
-  def teardown(): Unit = {
-    for (log <- cleaner.logs.values.toList) {
-      cleaner.logs.remove(log.topicPartition)
-      log.close()
-    }
-    cleaner.shutdown()
-    time.scheduler.shutdown()
-    Utils.delete(logDir)
-  }
-
-  /* create a cleaner instance and logs with the given parameters */
-  private def makeCleaner(parts: Int,
-                          minCleanableDirtyRatio: Float = 0.0F,
-                          numThreads: Int = 1,
-                          backOffMs: Long = 200L,
-                          defaultPolicy: String = "compact",
-                          policyOverrides: Map[String, String] = Map()): LogCleaner = {
-
-    // create partitions and add them to the pool
-    val logs = new Pool[TopicPartition, Log]()
-    for(i <- 0 until parts) {
-      val dir = new File(logDir, "log-" + i)
-      dir.mkdirs()
-      val logProps = new Properties()
-      logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
-      logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
-      logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
-      logProps.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Integer)
-      logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-      logProps.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
-
-      val log = new Log(dir,
-        LogConfig(logProps),
-        logStartOffset = 0L,
-        recoveryPoint = 0L,
-        scheduler = time.scheduler,
-        time = time)
-      logs.put(new TopicPartition("log", i), log)
-    }
-
-    new LogCleaner(CleanerConfig(numThreads = numThreads, backOffMs = backOffMs),
-      logDirs = Array(logDir),
-      logs = logs,
-      time = time)
   }
 
 }

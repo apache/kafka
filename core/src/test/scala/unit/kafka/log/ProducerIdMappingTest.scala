@@ -52,7 +52,6 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @After
   def tearDown(): Unit = {
-    idMappingDir.listFiles().foreach(f => f.delete())
     Utils.delete(idMappingDir)
   }
 

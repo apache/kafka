@@ -26,12 +26,12 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
+import unit.kafka.log.AbstractLogCleanerIntegrationTest
 
 import scala.Seq
 import scala.collection._
@@ -41,16 +41,11 @@ import scala.util.Random
  * This is an integration test that tests the fully integrated log cleaner
  */
 @RunWith(value = classOf[Parameterized])
-class LogCleanerIntegrationTest(compressionCodec: String) {
+class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCleanerIntegrationTest {
 
   val codec = CompressionType.forName(compressionCodec)
   val time = new MockTime()
-  val segmentSize = 256
-  val deleteDelay = 1000
-  val logName = "log"
-  val logDir = TestUtils.tempDir()
   var counter = 0
-  var cleaner: LogCleaner = _
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
 
   @Test
@@ -59,7 +54,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val (largeMessageValue, largeMessageSet) = createLargeSingleMessageSet(largeMessageKey, RecordBatch.CURRENT_MAGIC_VALUE)
     val maxMessageSize = largeMessageSet.sizeInBytes
 
-    cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
     val log = cleaner.logs.get(topicPartitions(0))
 
     val appends = writeDups(numKeys = 100, numDups = 3, log = log, codec = codec)
@@ -86,9 +81,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     // simulate deleting a partition, by removing it from logs
     // force a checkpoint
     // and make sure its gone from checkpoint file
-    val removedLog = cleaner.logs.remove(topicPartitions(0))
-    removedLog.close()
-
+    cleaner.logs.remove(topicPartitions(0))
     cleaner.updateCheckpoints(logDir)
     val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile)).read()
     // we expect partition 0 to be gone
@@ -103,7 +96,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String, Long)]) = {
-      cleaner = makeCleaner(parts = 1, propertyOverrides = logProps, logCleanerBackOffMillis = 100L)
+      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L)
       val log = cleaner.logs.get(topicPartitions(0))
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
@@ -160,7 +153,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
         largeMessageSet.sizeInBytes + 5
     }
 
-    cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
 
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
@@ -199,7 +192,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
   @Test
   def testCleaningNestedMessagesWithMultipleVersions(): Unit = {
     val maxMessageSize = 192
-    cleaner = makeCleaner(parts = 3, maxMessageSize = maxMessageSize)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
 
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
@@ -289,59 +282,6 @@ class LogCleanerIntegrationTest(compressionCodec: String) {
     val offsets = appendInfo.firstOffset to appendInfo.lastOffset
 
     kvs.zip(offsets).map { case (kv, offset) => (kv._1, kv._2, offset) }
-  }
-
-  @After
-  def tearDown(): Unit = {
-    for (log <- cleaner.logs.values.toList) {
-      cleaner.logs.remove(log.topicPartition)
-      log.close()
-    }
-    cleaner.shutdown()
-    time.scheduler.shutdown()
-    Utils.delete(logDir)
-  }
-
-  private def logConfigProperties(propertyOverrides: Properties = new Properties(), maxMessageSize: Int, minCleanableDirtyRatio: Float = 0.0F): Properties = {
-    val props = new Properties()
-    props.put(LogConfig.MaxMessageBytesProp, maxMessageSize: java.lang.Integer)
-    props.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
-    props.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
-    props.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
-    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-    props.put(LogConfig.MinCleanableDirtyRatioProp, minCleanableDirtyRatio: java.lang.Float)
-    props.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
-    props.putAll(propertyOverrides)
-    props
-  }
-  
-  /* create a cleaner instance and logs with the given parameters */
-  private def makeCleaner(parts: Int,
-                          minCleanableDirtyRatio: Float = 0.0F,
-                          numThreads: Int = 1,
-                          maxMessageSize: Int = 128,
-                          logCleanerBackOffMillis: Long = 15000L,
-                          propertyOverrides: Properties = new Properties()): LogCleaner = {
-    
-    // create partitions and add them to the pool
-    val logs = new Pool[TopicPartition, Log]()
-    for(i <- 0 until parts) {
-      val dir = new File(logDir, "log-" + i)
-      dir.mkdirs()
-
-      val log = new Log(dir,
-                        LogConfig(logConfigProperties(propertyOverrides, maxMessageSize, minCleanableDirtyRatio)),
-                        logStartOffset = 0L,
-                        recoveryPoint = 0L,
-                        scheduler = time.scheduler,
-                        time = time)
-      logs.put(new TopicPartition("log", i), log)
-    }
-  
-    new LogCleaner(CleanerConfig(numThreads = numThreads, ioBufferSize = maxMessageSize / 2, maxMessageSize = maxMessageSize, backOffMs = logCleanerBackOffMillis),
-                   logDirs = Array(logDir),
-                   logs = logs,
-                   time = time)
   }
 
 }
