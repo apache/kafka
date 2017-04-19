@@ -47,8 +47,8 @@ public class ToolsUtils {
             String outputFormat = "%-" + maxLengthOfDisplayName + "s : %.3f";
             System.out.println(String.format("\n%-" + maxLengthOfDisplayName + "s   %s", "Metric Name", "Value"));
 
-            for (String key : sortedMetrics.keySet()) {
-                System.out.println(String.format(outputFormat, key, sortedMetrics.get(key)));
+            for (Map.Entry<String, Double> entry : sortedMetrics.entrySet()) {
+                System.out.println(String.format(outputFormat, entry.getKey(), entry.getValue()));
             }
         }
     }
