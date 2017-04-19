@@ -883,21 +883,19 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
+  def reverse(m: Map[Long, Set[TopicPartition]]) =
+    m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
+
   /**
    * This test runs the following scenario to verify sticky assignor behavior.
-   * Topics: topic0 (0), topic1 (0, 1), topic2 (0, 1, 2) (numbers indicate partitions of each topic)
-   * Consumers:
-   *  - C0: subscribed to topic0
-   *  - C1: subscribed to topic0 and topic1
-   *  - C2: subscribed to topic0, topic1, and topic2
-   * Expected initial assignment:
-   *  - C0: topic0-0
-   *  - C1: topic1-0, topic1-1
-   *  - C2: topic2-0, topic2-1, topic2-2
-   * Then C0 unsubscribes from topic0.
+   * Topics: single-topic, with random number of partitions, where #par is 10, 20, 30, 40, 50, 60, 70, 80, 90, or 100
+   * Consumers: 9 consumers subscribed to the single topic
+   * Expected initial assignment: partitions are assigned to consumers in a round robin fashion.
+   *  - (#par mod 9) consumers will get (#par / 9 + 1) partitions, and the rest get (#par / 9) partitions
+   * Then consumer #10 is added to the list (subscribing to the same single topic)
    * Expected new assignment:
-   *  - C1: topic1-0, topic1-1, topic0-0
-   *  - C2: topic2-0, topic2-1, topic2-2
+   *  - (#par / 10) partition per consumer, where one partition from each of the early (#par mod 9) consumers
+   *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
    */
   @Test
   def testMultiConsumerStickyAssignment() {
@@ -905,49 +903,36 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
 
-    // create one new topics
-    val topic0 = "topic0"
-    val subscriptions0 = createTopicAndSendRecords(topic0, 1, 100)
-    val tp00 = new TopicPartition(topic0, 0)
+    // create one new topic
+    val topic = "single-topic"
+    val rand = 1 + scala.util.Random.nextInt(10)
+    val partitions = createTopicAndSendRecords(topic, rand * 10, 100)
 
-    val (_, consumerPollers) = createConsumerGroupAndWaitForAssignment(1, List(topic0), subscriptions0)
-    validateGroupAssignment(consumerPollers, subscriptions0, s"Did not get valid initial assignment for partitions ${subscriptions0.asJava}")
+    // create a group of consumers, subscribe the consumers to the single topic and start polling
+    // for the topic partition assignment
+    val (_, consumerPollers) = createConsumerGroupAndWaitForAssignment(9, List(topic), partitions)
+    validateGroupAssignment(consumerPollers, partitions, s"Did not get valid initial assignment for partitions ${partitions.asJava}")
+    val prePartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
 
-    // create another new topics
-    val topic1 = "topic1"
-    val subscriptions1 = createTopicAndSendRecords(topic1, 2, 100) ++ subscriptions0
-    val tp10 = new TopicPartition(topic1, 0)
-    val tp11 = new TopicPartition(topic1, 1)
     // add one more consumer and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic0, topic1), subscriptions1)
+    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic), partitions)
 
-    // create another new topics
-    val topic2 = "topic2"
-    val subscriptions2 = createTopicAndSendRecords(topic2, 3, 100) ++ subscriptions1
-    val tp20 = new TopicPartition(topic2, 0)
-    val tp21 = new TopicPartition(topic2, 1)
-    val tp22 = new TopicPartition(topic2, 2)
-    // add one more consumer and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(1, consumers, consumerPollers, List(topic0, topic1, topic2), subscriptions2)
+    val postPartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
+    val keys = prePartition2PollerId.keySet.union(postPartition2PollerId.keySet)
+    var changes = 0
+    keys.foreach { key =>
+      val preVal = prePartition2PollerId.get(key)
+      val postVal = postPartition2PollerId.get(key)
+      if (preVal.nonEmpty && postVal.nonEmpty) {
+        if (preVal.get != postVal.get)
+          changes += 1
+      } else
+        changes += 1
+    }
 
-    val expectedAssignments = Set(Set(tp00), Set(tp10, tp11), Set(tp20, tp21, tp22))
-    var actualAssignmnets = Set[Set[TopicPartition]]()
-    consumerPollers.foreach { cp => actualAssignmnets = actualAssignmnets + cp.consumerAssignment() }
-    assertEquals(expectedAssignments, actualAssignmnets)
-
-    consumerPollers.head.subscribe(List())
-    val removedConsumerPoller = consumerPollers.remove(0)
-    val expectedNewAssignments = Set(Set(tp10, tp11, tp00), Set(tp20, tp21, tp22))
-
-    var actualNewAssignments = scala.collection.mutable.Set[Set[TopicPartition]]()
-    TestUtils.waitUntilTrue(() => {
-      actualNewAssignments.clear
-      consumerPollers.foreach { cp => actualNewAssignments = actualNewAssignments + cp.consumerAssignment() }
-      expectedNewAssignments == actualNewAssignments
-    }, s"Expected assignments ${expectedNewAssignments.asJava} but actually got ${actualNewAssignments.asJava}")
-
-    removedConsumerPoller.shutdown()
     consumerPollers.foreach(_.shutdown())
+
+    assertEquals("Expected only two topic partitions that have switched to other consumers.", rand, changes)
   }
 
   /**
@@ -1544,8 +1529,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
    * consumer poller and starts polling.
    * Assumes that the consumer is not subscribed to any topics yet
-    *
-    * @param consumer consumer
+   *
+   * @param consumer consumer
    * @param topicsToSubscribe topics that this consumer will subscribe to
    * @return consumer poller for the given consumer
    */

@@ -329,7 +329,7 @@ public class StickyAssignorTest {
         subscriptions.put(consumer2, topics(topic, topic2));
         Map<String, List<TopicPartition>> assignment2 = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Arrays.asList(new TopicPartition(topic, 0), new TopicPartition(topic, 2), new TopicPartition(topic2, 1)), assignment2.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic, 1), new TopicPartition(topic2, 0), new TopicPartition(topic2, 2)), assignment2.get(consumer2));
+        assertEquals(Arrays.asList(new TopicPartition(topic, 1), new TopicPartition(topic2, 2), new TopicPartition(topic2, 0)), assignment2.get(consumer2));
         assertTrue(isFullyBalanced(assignment2));
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
 
@@ -338,7 +338,7 @@ public class StickyAssignorTest {
         subscriptions.put(consumer2, topics(topic2));
         Map<String, List<TopicPartition>> assignment3 = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Arrays.asList(new TopicPartition(topic2, 1)), assignment3.get(consumer1));
-        assertEquals(Arrays.asList(new TopicPartition(topic2, 0), new TopicPartition(topic2, 2)), assignment3.get(consumer2));
+        assertEquals(Arrays.asList(new TopicPartition(topic2, 2), new TopicPartition(topic2, 0)), assignment3.get(consumer2));
         assertTrue(isFullyBalanced(assignment3));
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
     }
@@ -361,6 +361,23 @@ public class StickyAssignorTest {
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
 
         subscriptions.remove("consumer10");
+        assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        verifyBalance(assignment, subscriptions, partitionsPerTopic);
+    }
+
+    @Test
+    public void testReassignmentAfterOneConsumerAdded() {
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put("topic", 20);
+
+        Map<String, List<String>> subscriptions = new HashMap<>();
+        for (int i = 1; i < 10; i++)
+            subscriptions.put(String.format("consumer%02d", i), Collections.singletonList("topic"));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        verifyBalance(assignment, subscriptions, partitionsPerTopic);
+
+        subscriptions.put("consumer10", Collections.singletonList("topic"));
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyBalance(assignment, subscriptions, partitionsPerTopic);
     }
