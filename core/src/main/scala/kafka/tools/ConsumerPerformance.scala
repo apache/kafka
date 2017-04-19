@@ -28,7 +28,7 @@ import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsum
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
-import kafka.utils.CommandLineUtils
+import kafka.utils.{CommandLineUtils, ToolsUtils}
 import java.util.{Collections, Properties, Random}
 
 import kafka.consumer.Consumer
@@ -105,20 +105,7 @@ object ConsumerPerformance {
     }
 
     if (metrics != null) {
-      var maxLengthOfDisplayName = 0
-      metrics.foreach {
-        case (mName, _) =>
-          val key = Array(mName.group(), mName.name(), mName.tags()).mkString(":")
-          if (maxLengthOfDisplayName < key.length) {
-            maxLengthOfDisplayName = key.length
-          }
-      }
-      println(s"\n%-${maxLengthOfDisplayName}s   %s".format("Metric Name", "Value"))
-      metrics.foreach {
-        case (mName, metric) =>
-          val key = Array(mName.group(), mName.name(), mName.tags()).mkString(":")
-          println(s"%-${maxLengthOfDisplayName}s : %.3f".format(key, metric.value()))
-      }
+      ToolsUtils.printMetrics(metrics)
     }
 
   }

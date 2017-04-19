@@ -23,13 +23,11 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Map;
+import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -42,8 +40,6 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
@@ -137,7 +133,7 @@ public class ProducerPerformance {
 
             /* print out metrics */
             if (shouldPrintMetrics) {
-                printMetrics(producer);
+                ToolsUtils.printMetrics(producer.metrics());
             }
             producer.close();
         } catch (ArgumentParserException e) {
@@ -232,7 +228,7 @@ public class ProducerPerformance {
                 .dest("producerConfigFile")
                 .help("producer config properties file.");
 
-        parser.addArgument("--print.metrics")
+        parser.addArgument("--print-metrics")
                 .action(storeTrue())
                 .type(Boolean.class)
                 .metavar("PRINT-METRICS")
@@ -240,22 +236,6 @@ public class ProducerPerformance {
                 .help("print out metrics at the end of the test.");
 
         return parser;
-    }
-
-    private static void printMetrics(KafkaProducer producer) {
-        Map<MetricName, ? extends Metric> metrics = producer.metrics();
-        int maxLengthOfDisplayName = 0;
-        for (Metric metric : metrics.values()) {
-            MetricName mName = metric.metricName();
-            String mergedName = mName.group() + ":" + mName.name() + ":" + mName.tags();
-            maxLengthOfDisplayName = maxLengthOfDisplayName < mergedName.length() ? mergedName.length() : maxLengthOfDisplayName;
-        }
-        String outputFormat = "%-" + maxLengthOfDisplayName + "s : %.3f";
-        System.out.println(String.format("\n%-" + maxLengthOfDisplayName + "s   %s", "Metric Name", "Value"));
-        for (Metric metric : metrics.values()) {
-            MetricName mName = metric.metricName();
-            System.out.println(String.format(outputFormat, mName.group() + ":" + mName.name() + ":" + mName.tags(), metric.value()));
-        }
     }
 
     private static class Stats {
