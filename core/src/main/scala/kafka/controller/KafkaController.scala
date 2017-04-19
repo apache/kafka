@@ -643,7 +643,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   private def registerSessionExpirationListener() = {
-    zkUtils.zkClient.subscribeStateChanges(new SessionExpirationListener())
+    zkUtils.zkClient.subscribeStateChanges(new SessionExpirationListener(this, controllerEventQueue))
   }
 
   private def registerControllerChangeListener() = {
@@ -1100,30 +1100,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       }
     }
     finalLeaderIsrAndControllerEpoch
-  }
-
-  class SessionExpirationListener() extends IZkStateListener with Logging {
-    this.logIdent = "[SessionExpirationListener on " + config.brokerId + "], "
-
-    def handleStateChanged(state: KeeperState) {
-      // do nothing, since zkclient will do reconnect for us.
-    }
-
-    /**
-     * Called after the zookeeper session has expired and a new session has been created. You would have to re-create
-     * any ephemeral nodes here.
-     *
-     * @throws Exception On any error.
-     */
-    @throws[Exception]
-    def handleNewSession(): Unit = {
-      controllerEventQueue.put(Resign(getControllerID()))
-      controllerEventQueue.put(Elect)
-    }
-
-    def handleSessionEstablishmentError(error: Throwable): Unit = {
-      //no-op handleSessionEstablishmentError in KafkaHealthCheck should handle this error in its handleSessionEstablishmentError
-    }
   }
 
   private def checkAndTriggerPartitionRebalance(): Unit = {
@@ -1741,6 +1717,29 @@ class ControllerChangeListener(protected val controller: KafkaController, contro
     controllerEventQueue.put(controller.Elect)
   }
 }
+
+class SessionExpirationListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkStateListener with Logging {
+  override def handleStateChanged(state: KeeperState) {
+    // do nothing, since zkclient will do reconnect for us.
+  }
+
+  /**
+    * Called after the zookeeper session has expired and a new session has been created. You would have to re-create
+    * any ephemeral nodes here.
+    *
+    * @throws Exception On any error.
+    */
+  @throws[Exception]
+  override def handleNewSession(): Unit = {
+    controllerEventQueue.put(controller.Resign(controller.getControllerID()))
+    controllerEventQueue.put(controller.Elect)
+  }
+
+  override def handleSessionEstablishmentError(error: Throwable): Unit = {
+    //no-op handleSessionEstablishmentError in KafkaHealthCheck should handle this error in its handleSessionEstablishmentError
+  }
+}
+
 case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
                                        var isrChangeListener: PartitionReassignmentIsrChangeListener = null)
 
