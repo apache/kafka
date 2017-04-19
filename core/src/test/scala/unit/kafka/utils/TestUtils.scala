@@ -1147,9 +1147,7 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Verifies that this ACL is the secure one. The
-   * values are based on the constants used in the
-   * ZooKeeper code base.
+   * Verifies that this ACL is the secure one.
    */
   def isAclSecure(acl: ACL, sensitive: Boolean): Boolean = {
     debug(s"ACL $acl")
@@ -1173,9 +1171,9 @@ object TestUtils extends Logging {
   }
 
   private def secureZkPaths(zkUtils: ZkUtils) = {
-    def subPaths(path: String) = {
+    def subPaths(path: String): Seq[String] = {
       if (zkUtils.pathExists(path))
-        zkUtils.getChildren(path).map(c => path + "/" + c)
+        path +: zkUtils.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
       else
         Seq.empty
     }

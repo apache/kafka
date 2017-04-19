@@ -19,10 +19,11 @@ import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.network.ListenerName
-import org.junit.{Before, Test}
+import org.junit.Test
 
 class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarness {
   override protected val zkSaslEnabled = true
+  override protected val zkAclsEnabled = Some(false)
   override protected def listenerName = new ListenerName("CLIENT")
   override protected val kafkaClientSaslMechanism = "PLAIN"
   override protected val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
@@ -33,11 +34,6 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarne
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-
-  @Before
-  override def setUp {
-    super.setUp
-  }
 
   /**
    * Checks that everyone can access ZkUtils.SecureZkRootPaths and ZkUtils.SensitiveZkRootPaths

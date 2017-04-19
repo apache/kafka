@@ -31,6 +31,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   val zkConnectionTimeout = 10000
   val zkSessionTimeout = 6000
+  protected val zkAclsEnabled: Option[Boolean] = None
 
   var zkUtils: ZkUtils = null
   var zookeeper: EmbeddedZookeeper = null
@@ -41,7 +42,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, JaasUtils.isZkSecurityEnabled())
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
   }
 
   @After
