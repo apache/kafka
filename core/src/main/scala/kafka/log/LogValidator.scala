@@ -78,7 +78,7 @@ private[kafka] object LogValidator extends Logging {
       throw new InvalidRecordException(s"Log record magic does not match outer magic ${batch.magic}")
     record.ensureValid()
     ensureNotControlRecord(record)
-    validateKey(record, compactedTopic)
+    validateKey(record, compactedTopic, batch)
     validateTimestamp(batch, record, now, timestampType, timestampDiffMaxMs)
   }
 
@@ -301,9 +301,15 @@ private[kafka] object LogValidator extends Logging {
       throw new InvalidRecordException("Control messages are not currently supported")
   }
 
-  private def validateKey(record: Record, compactedTopic: Boolean) {
-    if (compactedTopic && !record.hasKey)
-      throw new InvalidRecordException("Compacted topic cannot accept message without key.")
+  private def validateKey(record: Record, compactedTopic: Boolean, recordBatch: RecordBatch) {
+    if (compactedTopic && !record.hasKey) {
+      // throw a non retriable exception only if the produce request is V3 or higher
+      if (record.hasMagic(recordBatch.magic)) {
+        throw new InvalidRecordKeyException("Compacted topic cannot accept message without key.")
+      } else {
+        throw new InvalidRecordException("Compacted topic cannot accept message without key.")
+      }
+    }
   }
 
   /**

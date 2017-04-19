@@ -69,6 +69,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.record.InvalidRecordKeyException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -186,7 +187,8 @@ public enum Errors {
         new InvalidPidMappingException("The PID mapping is invalid")),
     INVALID_TRANSACTION_TIMEOUT(50,
         new InvalidTxnTimeoutException("The transaction timeout is larger than the maximum value allowed by the broker " +
-            "(as configured by max.transaction.timeout.ms)."));
+            "(as configured by max.transaction.timeout.ms).")),
+    INVALID_RECORD_KEY(51, new InvalidRecordKeyException("Message key is invalid."));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
