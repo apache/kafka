@@ -72,10 +72,9 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
     }
   }
 
-  def maybeAddPendingRequest(metadata: TransactionMetadata): Unit = {
+  def maybeAddPendingRequest(metadata: TransactionMetadata): Boolean = {
     val existingMetadataToWrite = pendingTxnMap.putIfAbsent(metadata.pid, metadata)
-    if (existingMetadataToWrite.isDefined)
-      throw new IllegalStateException(s"There is already a pending txn to write its markers ${existingMetadataToWrite.get}; this should not happen")
+    existingMetadataToWrite.isEmpty
   }
 
   def removeCompletedTxn(pid: Long): Unit = {

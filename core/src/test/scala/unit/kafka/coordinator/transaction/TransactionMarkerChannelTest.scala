@@ -61,12 +61,7 @@ class TransactionMarkerChannelTest {
   @Test
   def shouldNotAddPendingTxnIfOneAlreadyExistsForPid(): Unit = {
     channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-    try {
-      channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-      fail("Should have throw IllegalStateException")
-    } catch {
-      case e: IllegalStateException => // ok
-    }
+    assertFalse(channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0)))
   }
 
   @Test

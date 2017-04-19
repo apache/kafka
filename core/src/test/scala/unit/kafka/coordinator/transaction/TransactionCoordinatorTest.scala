@@ -38,7 +38,6 @@ class TransactionCoordinatorTest {
   val transactionMarkerChannelManager: TransactionMarkerChannelManager = EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
   val capturedTxn: Capture[TransactionMetadata] = EasyMock.newCapture()
   val capturedErrorsCallback: Capture[Errors => Unit] = EasyMock.newCapture()
-  val capturedNoArgCallback: Capture[() => Unit] = EasyMock.newCapture()
   val brokerId = 0
 
   private val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("test", new MockTimer, reaperEnabled = false)
@@ -704,10 +703,10 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
       EasyMock.anyObject(),
       EasyMock.anyInt(),
-      EasyMock.capture(capturedNoArgCallback)
+      EasyMock.capture(capturedErrorsCallback)
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
-        capturedNoArgCallback.getValue.apply()
+        capturedErrorsCallback.getValue.apply(Errors.NONE)
       }
     })
 

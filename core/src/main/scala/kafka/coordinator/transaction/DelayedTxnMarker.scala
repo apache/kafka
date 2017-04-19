@@ -17,12 +17,13 @@
 package kafka.coordinator.transaction
 
 import kafka.server.DelayedOperation
+import org.apache.kafka.common.protocol.Errors
 
 /**
   * Delayed transaction state change operations that are added to the purgatory without timeout (i.e. these operations should never time out)
   */
 private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
-                                           completionCallback: () => Unit)
+                                           completionCallback: Errors => Unit)
   extends DelayedOperation(Long.MaxValue) { // TODO: if we set a timeout value, what should happen when it gets expired?
 
   // overridden since tryComplete already synchronizes on the existing txn metadata. This makes it safe to
@@ -41,6 +42,6 @@ private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
     // this should never happen
     throw new IllegalStateException(s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen.")
   }
-  override def onComplete(): Unit = completionCallback()
+  override def onComplete(): Unit = completionCallback(Errors.NONE)
 
 }

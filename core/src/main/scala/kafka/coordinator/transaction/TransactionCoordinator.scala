@@ -169,8 +169,11 @@ class TransactionCoordinator(brokerId: Int,
           })
       } else if (metadata.state == PrepareAbort || metadata.state == PrepareCommit) {
         // wait for the commit to complete and then init pid again
-        txnMarkerPurgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, () => {
-          handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
+        txnMarkerPurgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, (errors: Errors) => {
+          if (errors != Errors.NONE)
+            responseCallback(initTransactionError(errors))
+          else
+            handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
         }), Seq(metadata.pid))
       } else {
         metadata.epoch = (metadata.epoch + 1).toShort
@@ -308,22 +311,25 @@ class TransactionCoordinator(brokerId: Int,
       else {
         txnManager.coordinatorEpochFor(transactionalId) match {
           case Some(coordinatorEpoch) =>
-            def completionCallback(): Unit = {
-              txnManager.getTransactionState(transactionalId) match {
-                case Some(preparedCommitMetadata) =>
-                  val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
-                  val committedMetadata = new TransactionMetadata(pid,
-                    epoch,
-                    newMetadata.txnTimeoutMs,
-                    completedState,
-                    metadata.topicPartitions,
-                    newMetadata.timestamp)
-                  preparedCommitMetadata.prepareTransitionTo(completedState)
-                  txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
-                  txnMarkerChannelManager.removeCompleted(pid)
-                case None =>
-                  responseCallback(Errors.NOT_COORDINATOR)
-              }
+            def completionCallback(error:Errors): Unit = {
+              if (errors != Errors.NONE)
+                responseCallback(errors)
+              else
+                txnManager.getTransactionState(transactionalId) match {
+                  case Some(preparedCommitMetadata) =>
+                    val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
+                    val committedMetadata = new TransactionMetadata(pid,
+                      epoch,
+                      newMetadata.txnTimeoutMs,
+                      completedState,
+                      metadata.topicPartitions,
+                      newMetadata.timestamp)
+                    preparedCommitMetadata.prepareTransitionTo(completedState)
+                    txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
+                    txnMarkerChannelManager.removeCompleted(pid)
+                  case None =>
+                    responseCallback(Errors.NOT_COORDINATOR)
+                }
             }
             txnMarkerChannelManager.addTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
           case None =>

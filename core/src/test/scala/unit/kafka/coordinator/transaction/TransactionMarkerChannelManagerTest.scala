@@ -23,7 +23,7 @@ import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
 import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -202,6 +202,6 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.verify(interBrokerSendThread)
   }
 
-  def completionCallback(): Unit = {
+  def completionCallback(errors: Errors): Unit = {
   }
 }

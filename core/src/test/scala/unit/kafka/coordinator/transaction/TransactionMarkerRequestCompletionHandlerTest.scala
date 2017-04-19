@@ -91,7 +91,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
     var completed = false
 
-    purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, () => {
+    purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, (errors:Errors) => {
       completed = true
     }), Seq(0L))
 

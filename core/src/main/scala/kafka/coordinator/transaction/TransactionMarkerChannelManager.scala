@@ -32,6 +32,8 @@ import org.apache.kafka.common.Node
 import scala.collection.mutable
 import java.util.concurrent.BlockingQueue
 
+import org.apache.kafka.common.protocol.Errors
+
 import collection.JavaConverters._
 import collection.JavaConversions._
 
@@ -122,7 +124,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                                       interBrokerSendThread: InterBrokerSendThread,
                                       transactionMarkerChannel: TransactionMarkerChannel) extends Logging {
 
-  type WriteTxnMarkerCallback = () => Unit
+  type WriteTxnMarkerCallback = Errors => Unit
 
   def start(): Unit = {
     interBrokerSendThread.start()
@@ -137,17 +139,20 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   def addTxnMarkerRequest(metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
     val metadataToWrite = metadata synchronized metadata.copy()
 
-    transactionMarkerChannel.maybeAddPendingRequest(metadata)
+    if (!transactionMarkerChannel.maybeAddPendingRequest(metadata))
+      // TODO: Not sure this is the correct response here?
+      completionCallback(Errors.INVALID_TXN_STATE)
+    else {
+      val delayedTxnMarker = new DelayedTxnMarker(metadataToWrite, completionCallback)
+      txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(metadata.pid))
 
-    val delayedTxnMarker = new DelayedTxnMarker(metadataToWrite, completionCallback)
-    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(metadata.pid))
-
-    val result = metadataToWrite.state match {
-      case PrepareCommit => TransactionResult.COMMIT
-      case PrepareAbort => TransactionResult.ABORT
-      case s => throw new IllegalStateException("Unexpected txn metadata state while writing markers: " + s)
+      val result = metadataToWrite.state match {
+        case PrepareCommit => TransactionResult.COMMIT
+        case PrepareAbort => TransactionResult.ABORT
+        case s => throw new IllegalStateException("Unexpected txn metadata state while writing markers: " + s)
+      }
+      transactionMarkerChannel.addRequestToSend(metadataToWrite.pid, metadataToWrite.epoch, result, coordinatorEpoch, metadataToWrite.topicPartitions.toSet)
     }
-    transactionMarkerChannel.addRequestToSend(metadataToWrite.pid, metadataToWrite.epoch, result, coordinatorEpoch, metadataToWrite.topicPartitions.toSet)
   }
 
   def removeCompleted(pid: Long): Unit = {
