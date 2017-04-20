@@ -717,7 +717,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
         // the following call can still fail if another controller gets elected between checking if the path exists and
         // trying to create the controller epoch path
         try {
-          zkClient.createPersistent(ZkUtils.ControllerEpochPath, KafkaController.InitialControllerEpoch.toString)
+          zkUtils.createPersistentPath(ZkUtils.ControllerEpochPath, KafkaController.InitialControllerEpoch.toString)
           controllerContext.epoch = KafkaController.InitialControllerEpoch
           controllerContext.epochZkVersion = KafkaController.InitialControllerEpochZkVersion
         } catch {
