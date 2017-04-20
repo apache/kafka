@@ -71,7 +71,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -227,10 +226,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @param partitions the partitions to reset
      */
     public void resetOffsetsIfNeeded(Set<TopicPartition> partitions) {
+        final Set<TopicPartition> needsOffsetReset = new HashSet<>();
         for (TopicPartition tp : partitions) {
-            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
             if (subscriptions.isAssigned(tp) && subscriptions.isOffsetResetNeeded(tp))
-                resetOffset(tp);
+                needsOffsetReset.add(tp);
+        }
+        if (!needsOffsetReset.isEmpty()) {
+            resetOffsets(needsOffsetReset);
         }
     }
 
@@ -240,22 +242,27 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @throws NoOffsetForPartitionException If no offset is stored for a given partition and no reset policy is available
      */
     public void updateFetchPositions(Set<TopicPartition> partitions) {
+        final Set<TopicPartition> needsOffsetReset = new HashSet<>();
         // reset the fetch position to the committed position
         for (TopicPartition tp : partitions) {
             if (!subscriptions.isAssigned(tp) || subscriptions.hasValidPosition(tp))
                 continue;
 
             if (subscriptions.isOffsetResetNeeded(tp)) {
-                resetOffset(tp);
+                needsOffsetReset.add(tp);
             } else if (subscriptions.committed(tp) == null) {
                 // there's no committed position, so we need to reset with the default strategy
                 subscriptions.needOffsetReset(tp);
-                resetOffset(tp);
+                needsOffsetReset.add(tp);
             } else {
                 long committed = subscriptions.committed(tp).offset();
                 log.debug("Resetting offset for partition {} to the committed offset {}", tp, committed);
                 subscriptions.seek(tp, committed);
             }
+        }
+        
+        if (!needsOffsetReset.isEmpty()) {
+            resetOffsets(needsOffsetReset);
         }
     }
 
@@ -357,15 +364,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return client.send(node, request);
     }
 
-    /**
-     * Reset offsets for the given partition using the offset reset strategy.
-     *
-     * @param partition The given partition that needs reset offset
-     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
-     */
-    private void resetOffset(TopicPartition partition) {
+    private long offsetResetStrategyTimestamp(final TopicPartition partition) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase(Locale.ROOT));
         final long timestamp;
         if (strategy == OffsetResetStrategy.EARLIEST)
             timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
@@ -373,15 +373,32 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             timestamp = ListOffsetRequest.LATEST_TIMESTAMP;
         else
             throw new NoOffsetForPartitionException(partition);
-        Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(
-                Collections.singletonMap(partition, timestamp), Long.MAX_VALUE, false);
-        OffsetData offsetData = offsetsByTimes.get(partition);
-        if (offsetData == null)
-            throw new NoOffsetForPartitionException(partition);
-        long offset = offsetData.offset;
-        // we might lose the assignment while fetching the offset, so check it is still active
-        if (subscriptions.isAssigned(partition))
-            this.subscriptions.seek(partition, offset);
+        return timestamp;
+    }
+
+    /**
+     * Reset offsets for the given partition using the offset reset strategy.
+     *
+     * @param partitions  The partitions that need offsets reset
+     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
+     */
+    private void resetOffsets(final Set<TopicPartition> partitions) {
+        final Map<TopicPartition, Long> offsetResets = new HashMap<>();
+        for (final TopicPartition partition : partitions) {
+            offsetResets.put(partition, offsetResetStrategyTimestamp(partition));
+        }
+        final Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(offsetResets, Long.MAX_VALUE, false);
+        for (final TopicPartition partition : partitions) {
+            final OffsetData offsetData = offsetsByTimes.get(partition);
+            if (offsetData == null) {
+                throw new NoOffsetForPartitionException(partition);
+            }
+            // we might lose the assignment while fetching the offset, so check it is still active
+            if (subscriptions.isAssigned(partition)) {
+                log.debug("Resetting offset for partition {} to {} offset.", partition, offsetData.offset);
+                this.subscriptions.seek(partition, offsetData.offset);
+            }
+        }
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> getOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
