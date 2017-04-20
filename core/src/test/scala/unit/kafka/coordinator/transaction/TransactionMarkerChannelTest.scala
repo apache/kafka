@@ -60,8 +60,8 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldNotAddPendingTxnIfOneAlreadyExistsForPid(): Unit = {
-    channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-    assertFalse(channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0)))
+    channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0))
+    assertFalse(channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0)))
   }
 
   @Test
@@ -102,17 +102,17 @@ class TransactionMarkerChannelTest {
   @Test
   def shouldGetPendingTxnMetadataByPid(): Unit = {
     val metadataPartition = 0
-    val transaction = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0)
+    val transaction = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0)
     channel.maybeAddPendingRequest(metadataPartition, transaction)
-    channel.maybeAddPendingRequest(metadataPartition, new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0))
+    channel.maybeAddPendingRequest(metadataPartition, new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0))
     assertEquals(Some(transaction), channel.pendingTxnMetadata(metadataPartition, 1))
   }
 
   @Test
   def shouldRemovePendingRequestsForPartitionWhenPartitionEmigrated(): Unit = {
-    channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-    channel.maybeAddPendingRequest(0, new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-    val metadata = new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0)
+    channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0))
+    channel.maybeAddPendingRequest(0, new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0))
+    val metadata = new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0)
     channel.maybeAddPendingRequest(1, metadata)
 
     channel.removeStateForPartition(0)

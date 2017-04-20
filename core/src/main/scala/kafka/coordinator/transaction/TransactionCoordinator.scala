@@ -115,7 +115,8 @@ class TransactionCoordinator(brokerId: Int,
             txnTimeoutMs = transactionTimeoutMs,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            timestamp = time.milliseconds())
+            transactionStartTime = time.milliseconds(),
+            entryTimestamp = time.milliseconds())
 
           val metadata = txnManager.addTransaction(transactionalId, newMetadata)
 
@@ -179,7 +180,8 @@ class TransactionCoordinator(brokerId: Int,
         metadata.epoch = (metadata.epoch + 1).toShort
         metadata.txnTimeoutMs = transactionTimeoutMs
         metadata.topicPartitions.clear()
-        metadata.timestamp = time.milliseconds()
+        metadata.entryTimestamp = time.milliseconds()
+        metadata.transactionStartTime = time.milliseconds()
         metadata.state = Empty
         appendMetadataToLog(transactionalId, metadata, responseCallback)
       }
@@ -228,12 +230,14 @@ class TransactionCoordinator(brokerId: Int,
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
               (Errors.NONE, null)
             } else {
+              val now = time.milliseconds()
               val newMetadata = new TransactionMetadata(pid,
                 epoch,
                 metadata.txnTimeoutMs,
                 Ongoing,
                 metadata.topicPartitions ++ partitions,
-                time.milliseconds())
+                now,
+                now)
               metadata.prepareTransitionTo(Ongoing)
               (Errors.NONE, newMetadata)
             }
@@ -303,7 +307,13 @@ class TransactionCoordinator(brokerId: Int,
                             responseCallback: EndTxnCallback,
                             metadata: TransactionMetadata) = {
     val nextState = if (command == TransactionResult.COMMIT) PrepareCommit else PrepareAbort
-    val newMetadata = new TransactionMetadata(pid, epoch, metadata.txnTimeoutMs, nextState, metadata.topicPartitions, time.milliseconds())
+    val newMetadata = new TransactionMetadata(pid,
+      epoch,
+      metadata.txnTimeoutMs,
+      nextState,
+      metadata.topicPartitions,
+      metadata.transactionStartTime,
+      time.milliseconds())
     metadata.prepareTransitionTo(nextState)
 
     def logAppendCallback(errors: Errors): Unit = {
@@ -324,7 +334,8 @@ class TransactionCoordinator(brokerId: Int,
                       newMetadata.txnTimeoutMs,
                       completedState,
                       metadata.topicPartitions,
-                      newMetadata.timestamp)
+                      newMetadata.transactionStartTime,
+                      newMetadata.entryTimestamp)
                     preparedCommitMetadata.prepareTransitionTo(completedState)
                     txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
                     txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionalId), pid)

@@ -70,9 +70,9 @@ private[coordinator] case object CompleteCommit extends TransactionState { val b
 private[coordinator] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
 private[coordinator] object TransactionMetadata {
-  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp)
+  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp)
+  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def byteToState(byte: Byte): TransactionState = {
     byte match {
@@ -103,7 +103,8 @@ private[coordinator] class TransactionMetadata(val pid: Long,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
-                                               var timestamp: Long) {
+                                               var transactionStartTime: Long,
+                                               var entryTimestamp: Long) {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -139,12 +140,7 @@ private[coordinator] class TransactionMetadata(val pid: Long,
   }
 
   def copy(): TransactionMetadata =
-    new TransactionMetadata(pid,
-      epoch,
-      txnTimeoutMs,
-      state,
-      collection.mutable.Set.empty[TopicPartition] ++ topicPartitions,
-      timestamp)
+    new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, entryTimestamp)
 
   override def toString: String =
     s"(pid: $pid, epoch: $epoch, transactionTimeoutMs: $txnTimeoutMs, transactionState: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
@@ -161,7 +157,7 @@ private[coordinator] class TransactionMetadata(val pid: Long,
 
 
   override def hashCode(): Int = {
-    val state = Seq(pid, txnTimeoutMs, topicPartitions, timestamp)
+    val state = Seq(pid, txnTimeoutMs, topicPartitions, entryTimestamp)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

@@ -62,7 +62,8 @@ object TransactionLog {
   private val TXN_TIMEOUT_KEY = "transaction_timeout"
   private val TXN_STATUS_KEY = "transaction_status"
   private val TXN_PARTITIONS_KEY = "transaction_partitions"
-  private val TXN_TIMESTAMP_FIELD = "transaction_timestamp"
+  private val TXN_ENTRY_TIMESTAMP_FIELD = "transaction_entry_timestamp"
+  private val TXN_START_TIMESTAMP_FIELD = "transaction_start_timestamp"
   private val TOPIC_KEY = "topic"
   private val PARTITION_IDS_KEY = "partition_ids"
 
@@ -81,13 +82,15 @@ object TransactionLog {
                                              "TransactionState the transaction is in"),
                                            new Field(TXN_PARTITIONS_KEY, ArrayOf.nullable(VALUE_PARTITIONS_SCHEMA),
                                             "Set of partitions involved in the transaction"),
-                                           new Field(TXN_TIMESTAMP_FIELD, INT64, "Time the transaction was last updated"))
+                                           new Field(TXN_ENTRY_TIMESTAMP_FIELD, INT64, "Time the transaction was last updated"),
+                                           new Field(TXN_START_TIMESTAMP_FIELD, INT64, "Time the transaction was started"))
   private val VALUE_SCHEMA_PID_FIELD = VALUE_SCHEMA_V0.get(PID_KEY)
   private val VALUE_SCHEMA_EPOCH_FIELD = VALUE_SCHEMA_V0.get(EPOCH_KEY)
   private val VALUE_SCHEMA_TXN_TIMEOUT_FIELD = VALUE_SCHEMA_V0.get(TXN_TIMEOUT_KEY)
   private val VALUE_SCHEMA_TXN_STATUS_FIELD = VALUE_SCHEMA_V0.get(TXN_STATUS_KEY)
   private val VALUE_SCHEMA_TXN_PARTITIONS_FIELD = VALUE_SCHEMA_V0.get(TXN_PARTITIONS_KEY)
-  private val VALUE_SCHEMA_TXN_TIMESTAMP_FIELD = VALUE_SCHEMA_V0.get(TXN_TIMESTAMP_FIELD)
+  private val VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD = VALUE_SCHEMA_V0.get(TXN_ENTRY_TIMESTAMP_FIELD)
+  private val VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD = VALUE_SCHEMA_V0.get(TXN_START_TIMESTAMP_FIELD)
 
   private val KEY_SCHEMAS = Map(
     0 -> KEY_SCHEMA_V0)
@@ -144,7 +147,8 @@ object TransactionLog {
     value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.epoch)
     value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, txnMetadata.txnTimeoutMs)
     value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.state.byte)
-    value.set(VALUE_SCHEMA_TXN_TIMESTAMP_FIELD, txnMetadata.timestamp)
+    value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.entryTimestamp)
+    value.set(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD, txnMetadata.transactionStartTime)
 
     if (txnMetadata.state == Empty) {
       if (txnMetadata.topicPartitions.nonEmpty)
@@ -212,9 +216,10 @@ object TransactionLog {
 
         val stateByte = value.getByte(VALUE_SCHEMA_TXN_STATUS_FIELD)
         val state = TransactionMetadata.byteToState(stateByte)
-        val timestamp = value.get(VALUE_SCHEMA_TXN_TIMESTAMP_FIELD).asInstanceOf[Long]
+        val entryTimestamp = value.get(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD).asInstanceOf[Long]
+        val startTimestamp = value.get(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD).asInstanceOf[Long]
 
-        val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state, mutable.Set.empty[TopicPartition], timestamp)
+        val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
 
         if (!state.equals(Empty)) {
           val topicPartitionArray = value.getArray(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)

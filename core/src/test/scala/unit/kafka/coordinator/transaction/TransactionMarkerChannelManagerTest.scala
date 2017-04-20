@@ -140,7 +140,7 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldAddPendingTxnRequest(): Unit = {
-    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0L)
+    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0, 0L)
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
 
@@ -160,7 +160,7 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldAddRequestToBrokerQueue(): Unit = {
-    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L)
+    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0, 0L)
 
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
@@ -174,7 +174,7 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldAddDelayedTxnMarkerToPurgatory(): Unit = {
-    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L)
+    val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0, 0L)
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
 

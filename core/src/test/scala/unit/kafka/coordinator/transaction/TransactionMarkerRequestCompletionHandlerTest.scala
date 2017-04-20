@@ -75,7 +75,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   def shouldRemoveCompletedPartitionsFromMetadataWhenNoErrors(): Unit = {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
 
-    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
+    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
     EasyMock.expect(markerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, 0))
       .andReturn(Some(metadata))
     EasyMock.replay(markerChannel)
@@ -89,7 +89,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   def shouldTryCompleteDelayedTxnOperation(): Unit = {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
 
-    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
+    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
     var completed = false
 
     purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, (errors:Errors) => {
@@ -128,7 +128,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   @Test
   def shouldThrowIllegalStateExceptionWhenErrorNotHandled(): Unit = {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.UNKNOWN))
-    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
+    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
     EasyMock.replay(markerChannel)
 
     try {
@@ -142,7 +142,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   private def verifyRetriesPartitionOnError(errors: Errors) = {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.UNKNOWN_TOPIC_OR_PARTITION))
-    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
+    val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
 
     EasyMock.expect(markerChannel.addRequestToSend(epochAndMarkers.metadataPartition, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)

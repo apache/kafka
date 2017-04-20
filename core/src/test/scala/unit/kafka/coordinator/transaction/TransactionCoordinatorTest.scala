@@ -222,7 +222,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(new TransactionMetadata(0, 0, 0, state, mutable.Set.empty, 0)))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, state, mutable.Set.empty, 0, 0)))
 
     EasyMock.replay(transactionManager)
 
@@ -236,7 +236,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(new TransactionMetadata(0, 10, 0, PrepareCommit, mutable.Set.empty, 0)))
+      .andReturn(Some(new TransactionMetadata(0, 10, 0, PrepareCommit, mutable.Set.empty, 0, 0)))
 
     EasyMock.replay(transactionManager)
 
@@ -250,11 +250,11 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, mutable.Set.empty, 0)))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, mutable.Set.empty, 0, 0)))
 
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
-      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, time.milliseconds())),
+      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, 0, time.milliseconds())),
       EasyMock.capture(capturedErrorsCallback),
       EasyMock.anyObject()
     ))
@@ -272,7 +272,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, partitions, 0)))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, partitions, 0, 0)))
 
     EasyMock.replay(transactionManager)
 
@@ -301,7 +301,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(10, 0, 0, Ongoing, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(10, 0, 0, Ongoing, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, 0, 0, TransactionResult.COMMIT, errorsCallback)
@@ -316,7 +316,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, Ongoing, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, Ongoing, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 0, TransactionResult.COMMIT, errorsCallback)
@@ -331,7 +331,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 1, TransactionResult.COMMIT, errorsCallback)
@@ -346,7 +346,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 1, TransactionResult.ABORT, errorsCallback)
@@ -361,7 +361,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 1, TransactionResult.COMMIT, errorsCallback)
@@ -376,7 +376,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 1, TransactionResult.ABORT, errorsCallback)
@@ -391,7 +391,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 1, TransactionResult.COMMIT, errorsCallback)
@@ -406,7 +406,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
-      .andReturn(Some(new TransactionMetadata(pid, 1, 1, PrepareAbort, collection.mutable.Set.empty[TopicPartition], time.milliseconds())))
+      .andReturn(Some(new TransactionMetadata(pid, 1, 1, PrepareAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds())))
     EasyMock.replay(transactionManager)
 
     coordinator.handleEndTransaction(transactionId, pid, 1, TransactionResult.COMMIT, errorsCallback)
@@ -543,7 +543,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
 
-    val metadata = new TransactionMetadata(0, 0, 0, Ongoing, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0)
+    val metadata = new TransactionMetadata(0, 0, 0, Ongoing, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0, 0)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
       .andReturn(Some(metadata))
       .once()
@@ -555,7 +555,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
 
-    val completedMetadata = new TransactionMetadata(0, 0, 0, CompleteAbort, mutable.Set.empty[TopicPartition], 0)
+    val completedMetadata = new TransactionMetadata(0, 0, 0, CompleteAbort, mutable.Set.empty[TopicPartition], 0, 0)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
       .andReturn(Some(completedMetadata))
       .once()
@@ -597,7 +597,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true).anyTimes()
 
-    val metadata = new TransactionMetadata(0, 0, 0, state, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0)
+    val metadata = new TransactionMetadata(0, 0, 0, state, mutable.Set[TopicPartition](new TopicPartition("topic", 1)), 0, 0)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
       .andReturn(Some(metadata)).anyTimes()
 
@@ -623,7 +623,7 @@ class TransactionCoordinatorTest {
     txnMarkerPurgatory.checkAndComplete(0L)
 
     assertEquals(InitPidResult(0, 1, Errors.NONE), result)
-    assertEquals(new TransactionMetadata(0, 1, 10, Empty, mutable.Set.empty, time.milliseconds()), metadata)
+    assertEquals(new TransactionMetadata(0, 1, 10, Empty, mutable.Set.empty, 0, time.milliseconds()), metadata)
   }
 
   private def validateIncrementEpochAndUpdateMetadata(state: TransactionState) = {
@@ -633,7 +633,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
       .andReturn(true)
 
-    val metadata = new TransactionMetadata(0, 0, 0, state, mutable.Set.empty[TopicPartition], 0)
+    val metadata = new TransactionMetadata(0, 0, 0, state, mutable.Set.empty[TopicPartition], 0, 0)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
       .andReturn(Some(metadata))
 
@@ -654,7 +654,7 @@ class TransactionCoordinatorTest {
 
     assertEquals(InitPidResult(0, 1, Errors.NONE), result)
     assertEquals(10, metadata.txnTimeoutMs)
-    assertEquals(time.milliseconds(), metadata.timestamp)
+    assertEquals(time.milliseconds(), metadata.entryTimestamp)
     assertEquals(1, metadata.epoch)
     assertEquals(0, metadata.pid)
   }
@@ -670,13 +670,16 @@ class TransactionCoordinatorTest {
       txnTimeoutMs,
       Ongoing,
       collection.mutable.Set.empty[TopicPartition],
+      0,
       time.milliseconds())
 
     val prepareCommitMetadata = new TransactionMetadata(pid,
       epoch,
       txnTimeoutMs,
       transactionState,
-      collection.mutable.Set.empty[TopicPartition], time.milliseconds())
+      collection.mutable.Set.empty[TopicPartition],
+      0,
+      time.milliseconds())
 
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true)
@@ -729,7 +732,8 @@ class TransactionCoordinatorTest {
       txnTimeoutMs,
       finalState,
       prepareMetadata.topicPartitions,
-      prepareMetadata.timestamp)
+      prepareMetadata.transactionStartTime,
+      prepareMetadata.entryTimestamp)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionId),
       EasyMock.eq(completedMetadata),
