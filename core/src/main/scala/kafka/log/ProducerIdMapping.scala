@@ -197,6 +197,14 @@ object ProducerIdMapping {
  * The sequence number is the last number successfully appended to the partition for the given identifier.
  * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
  * appended to the partition.
+ *
+ * As long as a PID is contained in the map, the corresponding producer can continue to write data.
+ * However, PIDs can be expired due to lack of recent use or if the last written entry has been deleted from
+ * the log (e.g. if the retention policy is "delete"). For compacted topics, the log cleaner will ensure
+ * that the most recent entry from a given PID is retained in the log provided it hasn't expired due to
+ * age. This ensures that PIDs will not be expired until either the max expiration time has been reached,
+ * or if the topic also is configured for deletion, the segment containing the last written offset has
+ * been deleted.
  */
 @nonthreadsafe
 class ProducerIdMapping(val config: LogConfig,
@@ -219,10 +227,6 @@ class ProducerIdMapping(val config: LogConfig,
    */
   def activePids: immutable.Map[Long, ProducerIdEntry] = pidMap.toMap
 
-  /**
-   * Load a snapshot of the id mapping or return empty maps
-   * in the case the snapshot doesn't exist (first time).
-   */
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
     pidMap.clear()
 
@@ -252,23 +256,29 @@ class ProducerIdMapping(val config: LogConfig,
     }
   }
 
-  def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry) : Boolean = {
+  private def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry) : Boolean =
     currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
-  }
 
-  def checkForExpiredPids(currentTimeMs: Long) {
+
+  def removeExpiredPids(currentTimeMs: Long) {
     pidMap.retain { case (pid, lastEntry) =>
       !isExpired(currentTimeMs, lastEntry)
     }
   }
 
-  def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTime: Long) {
+  /**
+   * Truncate the PID mapping to the given offset range and reload the entries from the most recent
+   * snapshot in range (if there is one).
+   */
+  def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     if (logEndOffset != mapEndOffset) {
       deleteSnapshotFiles { file =>
         val offset = Log.offsetFromFilename(file.getName)
         offset > logEndOffset || offset <= logStartOffset
       }
-      loadFromSnapshot(logStartOffset, currentTime)
+      loadFromSnapshot(logStartOffset, currentTimeMs)
+    } else {
+      expirePids(logStartOffset)
     }
   }
 
@@ -291,7 +301,7 @@ class ProducerIdMapping(val config: LogConfig,
    * than the current time minus the PID expiration time (i.e. if the PID has expired).
    */
   def load(pid: Long, entry: ProducerIdEntry, currentTimeMs: Long) {
-    if (pid != RecordBatch.NO_PRODUCER_ID && currentTimeMs - entry.timestamp < maxPidExpirationMs)
+    if (pid != RecordBatch.NO_PRODUCER_ID && !isExpired(currentTimeMs, entry))
       pidMap.put(pid, entry)
   }
 
@@ -301,8 +311,7 @@ class ProducerIdMapping(val config: LogConfig,
   def lastEntry(pid: Long): Option[ProducerIdEntry] = pidMap.get(pid)
 
   /**
-   * Serialize and write the bytes to a file. The file name is a concatenation of the last offset
-   * included in the snapshot (exclusive) and the ".snapshot" suffix.
+   * Write a new snapshot if there have been updates since the last one.
    */
   def maybeTakeSnapshot() {
     // If not a new offset, then it is not worth taking another snapshot
@@ -325,9 +334,7 @@ class ProducerIdMapping(val config: LogConfig,
 
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and expires all ids that have a smaller offset.
-   *
-   * @param logStartOffset New start offset for the log associated to this id map instance
+   * the new start offset and expires all pids which have a smaller last written offset.
    */
   def expirePids(logStartOffset: Long) {
     pidMap.retain((pid, entry) => entry.lastOffset >= logStartOffset)

@@ -191,7 +191,7 @@ class Log(@volatile var dir: File,
 
   scheduler.schedule(name = "PeriodicPidExpirationCheck", fun = () => {
     lock synchronized {
-      pidMap.checkForExpiredPids(time.milliseconds)
+      pidMap.removeExpiredPids(time.milliseconds)
     }
   }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 

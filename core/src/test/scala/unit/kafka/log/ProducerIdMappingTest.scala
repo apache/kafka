@@ -245,7 +245,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val sequence = 37
     checkAndUpdate(idMapping, pid, sequence, epoch, 1L)
     time.sleep(maxPidExpirationMs + 1)
-    idMapping.checkForExpiredPids(time.milliseconds)
+    idMapping.removeExpiredPids(time.milliseconds)
     checkAndUpdate(idMapping, pid, sequence + 1, epoch, 1L)
   }
 
