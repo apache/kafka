@@ -265,7 +265,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     maybeTriggerPreferredReplicaElection()
     info("starting the controller scheduler")
     kafkaScheduler.startup()
-    kafkaScheduler.schedule("controller-metric-task", () => addToControllerEventQueue(UpdateMetrics), period = 10, unit = TimeUnit.SECONDS)
     if (config.autoLeaderRebalanceEnable) {
       scheduleAutoLeaderRebalanceTask(delay = 5, unit = TimeUnit.SECONDS)
     }
@@ -1162,6 +1161,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       } catch {
         case e: Throwable => error("Error processing event " + controllerEvent, e)
       }
+      updateMetrics()
     }
   }
 
@@ -1522,26 +1522,24 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     }
   }
 
-  case object UpdateMetrics extends ControllerEvent {
-    override def process(): Unit = {
-      val opc = if (!isActive)
-        0
-      else
-        controllerContext.partitionLeadershipInfo.count(p =>
-          !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader) &&
-            !topicDeletionManager.isTopicQueuedUpForDeletion(p._1.topic)
-        )
-      offlinePartitionCount.set(opc)
+  private def updateMetrics(): Unit = {
+    val opc = if (!isActive)
+      0
+    else
+      controllerContext.partitionLeadershipInfo.count(p =>
+        !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader) &&
+          !topicDeletionManager.isTopicQueuedUpForDeletion(p._1.topic)
+      )
+    offlinePartitionCount.set(opc)
 
-      val pric = if (!isActive)
-        0
-      else
-        controllerContext.partitionReplicaAssignment.count { case (topicPartition, replicas) =>
-          controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head &&
-            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
-        }
-      preferredReplicaImbalanceCount.set(pric)
-    }
+    val pric = if (!isActive)
+      0
+    else
+      controllerContext.partitionReplicaAssignment.count { case (topicPartition, replicas) =>
+        controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head &&
+          !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
+      }
+    preferredReplicaImbalanceCount.set(pric)
   }
 
   private def triggerControllerMove(): Unit = {
