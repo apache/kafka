@@ -17,13 +17,18 @@
 
 package kafka.server
 
+import java.util.Properties
+
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.Json
 import kafka.utils.Logging
 import kafka.utils.ZkUtils
 
 import scala.collection._
+import scala.collection.JavaConverters._
 import kafka.admin.AdminUtils
+import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.security.scram.ScramMechanism
 import org.apache.kafka.common.utils.Time
 
 /**
@@ -141,8 +146,12 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
               " Received: " + json)
       val fullSanitizedEntityName = entityPath.substring(index + 1)
 
+      def loggableConfig(entityConfig: Properties) = entityConfig.asScala.map {
+        case (k, v) => (k, if (ScramMechanism.isScram(k)) Password.HIDDEN else v)
+      }
+
       val entityConfig = AdminUtils.fetchEntityConfig(zkUtils, rootEntityType, fullSanitizedEntityName)
-      logger.info(s"Processing override for entityPath: $entityPath with config: $entityConfig")
+      logger.info(s"Processing override for entityPath: $entityPath with config: ${loggableConfig(entityConfig)}")
       configHandlers(rootEntityType).processConfigChanges(fullSanitizedEntityName, entityConfig)
 
     }
