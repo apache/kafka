@@ -344,16 +344,18 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     }
 
     public <T> KCogroupedStream<K, T> cogroup(final Initializer<T> initializer,
-                                              final Aggregator<K, V, T> aggregator,
+                                              final Aggregator<? super K, ? super V, T> aggregator,
                                               final Serde<T> aggValueSerde,
                                               final String storeName) {
         return cogroup(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, storeName));
     }
 
-    @SuppressWarnings("rawtypes")
     public <T> KCogroupedStream<K, T> cogroup(final Initializer<T> initializer,
-                                              final Aggregator<K, V, T> aggregator,
-                                              final StateStoreSupplier storeSupplier) {
+                                              final Aggregator<? super K, ? super V, T> aggregator,
+                                              final StateStoreSupplier<?> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         return new KCogroupedStreamImpl<>(topology, this, initializer, aggregator, storeSupplier);
     }
 

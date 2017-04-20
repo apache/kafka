@@ -16,72 +16,46 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
 
-public class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
+public class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V>, V> {
 
-    private final String storeName;
-    private final List<KStreamAggregate> aggregates;
+    private final List<KStreamAggregate<K, ?, V>> parents;
+    private boolean sendOldValues = false;
 
-    public KStreamCogroup(String storeName, KStreamAggregate... aggregates) {
-        this.storeName = storeName;
-        this.aggregates = Arrays.asList(aggregates);
+    public KStreamCogroup(Collection<KStreamAggregate<K, ?, V>> parents) {
+        this.parents = new ArrayList<>(parents);
     }
 
     @Override
-    public Processor<K, V> get() {
-        return new KStreamPassThroughProcessor<>();
+    public Processor<K, Change<V>> get() {
+        return new KStreamCogroupProcessor<>();
     }
     
-    private static final class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
+    private static final class KStreamCogroupProcessor<K, V> extends AbstractProcessor<K, Change<V>> {
         @Override
-        public void process(K key, V value) {
+        public void process(K key, Change<V> value) {
             context().forward(key, value);
         }
     }
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-        return new KTableValueGetterSupplier<K, V>() {
-
-            public KTableValueGetter<K, V> get() {
-                return new KStreamAggregateValueGetter();
-            }
-
-            @Override
-            public String[] storeNames() {
-                return new String[]{storeName};
-            }
-        };
-    }
-    
-    private class KStreamAggregateValueGetter implements KTableValueGetter<K, V> {
-
-        private KeyValueStore<K, V> store;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-        }
-
-        @Override
-        public V get(K key) {
-            return store.get(key);
-        }
+        return parents.get(0).view();
     }
 
     @Override
     public void enableSendingOldValues() {
-        for (KStreamAggregate aggregate : aggregates) {
-            aggregate.enableSendingOldValues();
+        if (!sendOldValues) {
+            for (KStreamAggProcessorSupplier<?, ?, ?, ?> parent : parents) {
+                parent.enableSendingOldValues();
+            }
         }
+        sendOldValues = true;
     }
-
 }

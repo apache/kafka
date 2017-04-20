@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -30,37 +32,50 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 
-public class KCogroupedStreamImpl<K, V> extends AbstractStream<K> implements KCogroupedStream<K, V> {
+public class KCogroupedStreamImpl<K, V> implements KCogroupedStream<K, V> {
 
     private static final String COGROUP_AGGREGATE_NAME = "KSTREAM-COGROUP-AGGREGATE-";
-    private static final String COGROUP_MERGER_NAME = "KSTREAM-COGROUP-MERGER-";
+    private static final String COGROUP_NAME = "KSTREAM-COGROUP-";
 
-    private final StateStoreSupplier storeSupplier;
+    protected final KStreamBuilder topology;
     private final Initializer<V> initializer;
-    private Map<KGroupedStream<K, ?>, KStreamAggregate<K, ?, V>> cogroups;
+    private final StateStoreSupplier<?> storeSupplier;
+    private final Map<KGroupedStream<K, ?>, KStreamAggregate<K, ?, V>> cogroups = new HashMap<>();
+    private boolean aggregated = false;
 
     <T> KCogroupedStreamImpl(final KStreamBuilder topology,
                              final KGroupedStream<K, T> groupedStream,
                              final Initializer<V> initializer,
-                             final Aggregator<K, T, V> aggregator,
-                             final StateStoreSupplier storeSupplier) {
-        super(topology, topology.newName(COGROUP_MERGER_NAME), new HashSet<String>());
+                             final Aggregator<? super K, ? super T, V> aggregator,
+                             final StateStoreSupplier<?> storeSupplier) {
+        this.topology = topology;
         this.initializer = initializer;
         this.storeSupplier = storeSupplier;
-        this.cogroups = new HashMap<>();
         cogroup(groupedStream, aggregator);
     }
 
     @Override
     public <T> KCogroupedStream<K, V> cogroup(final KGroupedStream<K, T> groupedStream,
                                               final Aggregator<? super K, ? super T, V> aggregator) {
+        Objects.requireNonNull(groupedStream, "groupedStream can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        if (aggregated) {
+            throw new IllegalStateException("can't add additional streams after aggregate has been called");
+        }
+
         cogroups.put(groupedStream, new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator));
         return this;
     }
 
     @Override
     public KTable<K, V> aggregate() {
+        if (aggregated) {
+            throw new IllegalStateException("can't call aggregate more than once");
+        }
+        aggregated = true;
+
         final List<String> processorNames = new ArrayList<>();
+        final Set<String> sourceNodes = new HashSet<>();
         for (final Map.Entry<KGroupedStream<K, ?>, KStreamAggregate<K, ?, V>> cogroup : cogroups.entrySet()) {
             final KGroupedStreamImpl<K, ?> groupedStream = (KGroupedStreamImpl<K, ?>) cogroup.getKey();
             final String processorName = topology.newName(COGROUP_AGGREGATE_NAME);
@@ -75,11 +90,12 @@ public class KCogroupedStreamImpl<K, V> extends AbstractStream<K> implements KCo
 
             topology.addProcessor(processorName, cogroup.getValue(), sourceName);
         }
-        final KStreamCogroup<K, V> cogroup = new KStreamCogroup<>(storeSupplier.name(), cogroups.values().toArray(new KStreamAggregate[0]));
-        topology.addProcessor(name, cogroup, processorNames.toArray(new String[0]));
-
-        processorNames.add(name);
-        topology.addStateStore(storeSupplier, processorNames.toArray(new String[0]));
+        final String name = topology.newName(COGROUP_NAME);
+        final KStreamCogroup<K, V> cogroup = new KStreamCogroup<>(cogroups.values());
+        final String[] processorNamesArray = processorNames.toArray(new String[processorNames.size()]);
+        topology.addProcessor(name, cogroup, processorNamesArray);
+        topology.addStateStore(storeSupplier, processorNamesArray);
+        topology.copartitionSources(sourceNodes);
         return new KTableImpl<>(topology, name, cogroup, sourceNodes, storeSupplier.name());
     }
 }
