@@ -589,7 +589,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    */
   def startup() = {
     addToControllerEventQueue(Startup)
-    addToControllerEventQueue(Elect)
     controllerEventThread.start()
   }
 
@@ -1493,57 +1492,28 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     override def process(): Unit = {
       registerSessionExpirationListener()
       registerControllerChangeListener()
+      elect()
     }
   }
 
-  case object Elect extends ControllerEvent {
-    override def process(): Unit = {
-      val timestamp = time.milliseconds
-      val electString = ZkUtils.controllerZkData(config.brokerId, timestamp)
-
-      activeControllerId.set(getControllerID())
-      /*
-       * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition,
-       * it's possible that the controller has already been elected when we get here. This check will prevent the following
-       * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
-       */
-      if(activeControllerId.get() != -1) {
-        debug("Broker %d has been elected as leader, so stopping the election process.".format(activeControllerId))
-        return
-      }
-
-      try {
-        val zkCheckedEphemeral = new ZKCheckedEphemeral(ZkUtils.ControllerPath,
-                                                        electString,
-                                                        controllerContext.zkUtils.zkConnection.getZookeeper,
-                                                        controllerContext.zkUtils.isSecure)
-        zkCheckedEphemeral.create()
-        info(config.brokerId + " successfully elected as leader")
-        activeControllerId.set(config.brokerId)
-        onControllerFailover()
-      } catch {
-        case _: ZkNodeExistsException =>
-          // If someone else has written the path, then
-          activeControllerId.set(getControllerID)
-
-          if (activeControllerId.get() != -1)
-            debug("Broker %d was elected as leader instead of broker %d".format(activeControllerId, config.brokerId))
-          else
-            warn("A leader has been elected but just resigned, this will result in another round of election")
-
-        case e2: Throwable =>
-          error("Error while electing or becoming leader on broker %d".format(config.brokerId), e2)
-          triggerControllerMove()
-      }
-    }
-  }
-
-  case class Resign(newControllerId: Int) extends ControllerEvent {
+  case class ControllerChange(newControllerId: Int) extends ControllerEvent {
     override def process(): Unit = {
       val wasActiveBeforeChange = isActive
       activeControllerId.set(newControllerId)
-      if (!wasActiveBeforeChange || newControllerId == config.brokerId) return
-      onControllerResignation()
+      if (wasActiveBeforeChange && !isActive) {
+        onControllerResignation()
+      }
+    }
+  }
+
+  case object Reelect extends ControllerEvent {
+    override def process(): Unit = {
+      val wasActiveBeforeChange = isActive
+      activeControllerId.set(getControllerID())
+      if (wasActiveBeforeChange && !isActive) {
+        onControllerResignation()
+      }
+      elect()
     }
   }
 
@@ -1572,6 +1542,46 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   private def triggerControllerMove(): Unit = {
     activeControllerId.set(-1)
     controllerContext.zkUtils.deletePath(ZkUtils.ControllerPath)
+  }
+
+  def elect(): Unit = {
+    val timestamp = time.milliseconds
+    val electString = ZkUtils.controllerZkData(config.brokerId, timestamp)
+
+    activeControllerId.set(getControllerID())
+    /*
+     * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition,
+     * it's possible that the controller has already been elected when we get here. This check will prevent the following
+     * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
+     */
+    if(activeControllerId.get() != -1) {
+      debug("Broker %d has been elected as leader, so stopping the election process.".format(activeControllerId))
+      return
+    }
+
+    try {
+      val zkCheckedEphemeral = new ZKCheckedEphemeral(ZkUtils.ControllerPath,
+                                                      electString,
+                                                      controllerContext.zkUtils.zkConnection.getZookeeper,
+                                                      controllerContext.zkUtils.isSecure)
+      zkCheckedEphemeral.create()
+      info(config.brokerId + " successfully elected as leader")
+      activeControllerId.set(config.brokerId)
+      onControllerFailover()
+    } catch {
+      case _: ZkNodeExistsException =>
+        // If someone else has written the path, then
+        activeControllerId.set(getControllerID)
+
+        if (activeControllerId.get() != -1)
+          debug("Broker %d was elected as leader instead of broker %d".format(activeControllerId, config.brokerId))
+        else
+          warn("A leader has been elected but just resigned, this will result in another round of election")
+
+      case e2: Throwable =>
+        error("Error while electing or becoming leader on broker %d".format(config.brokerId), e2)
+        triggerControllerMove()
+    }
   }
 }
 
@@ -1666,12 +1676,11 @@ class PreferredReplicaElectionListener(protected val controller: KafkaController
 
 class ControllerChangeListener(protected val controller: KafkaController) extends IZkDataListener {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
-    controller.addToControllerEventQueue(controller.Resign(KafkaController.parseControllerId(data.toString)))
+    controller.addToControllerEventQueue(controller.ControllerChange(KafkaController.parseControllerId(data.toString)))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {
-    controller.addToControllerEventQueue(controller.Resign(controller.getControllerID()))
-    controller.addToControllerEventQueue(controller.Elect)
+    controller.addToControllerEventQueue(controller.Reelect)
   }
 }
 
@@ -1688,8 +1697,7 @@ class SessionExpirationListener(protected val controller: KafkaController) exten
     */
   @throws[Exception]
   override def handleNewSession(): Unit = {
-    controller.addToControllerEventQueue(controller.Resign(controller.getControllerID()))
-    controller.addToControllerEventQueue(controller.Elect)
+    controller.addToControllerEventQueue(controller.Reelect)
   }
 
   override def handleSessionEstablishmentError(error: Throwable): Unit = {
