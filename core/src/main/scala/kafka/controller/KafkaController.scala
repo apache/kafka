@@ -267,10 +267,14 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     kafkaScheduler.startup()
     kafkaScheduler.schedule("controller-metric-task", () => addToControllerEventQueue(UpdateMetrics), period = 10, unit = TimeUnit.SECONDS)
     if (config.autoLeaderRebalanceEnable) {
-      kafkaScheduler.schedule("auto-leader-rebalance-task", () => addToControllerEventQueue(AutoPreferredReplicaLeaderElection),
-        delay = 5, period = config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
+      scheduleAutoLeaderRebalanceTask(delay = 5, unit = TimeUnit.SECONDS)
     }
     topicDeletionManager.start()
+  }
+
+  private def scheduleAutoLeaderRebalanceTask(delay: Long, unit: TimeUnit): Unit = {
+    kafkaScheduler.schedule("auto-leader-rebalance-task", () => addToControllerEventQueue(AutoPreferredReplicaLeaderElection),
+      delay = delay, unit = unit)
   }
 
   /**
@@ -1393,6 +1397,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case object AutoPreferredReplicaLeaderElection extends ControllerEvent {
     override def process(): Unit = {
+      scheduleAutoLeaderRebalanceTask(delay = config.leaderImbalanceCheckIntervalSeconds, unit = TimeUnit.SECONDS)
       if (!isActive) return
       checkAndTriggerPartitionRebalance()
     }
