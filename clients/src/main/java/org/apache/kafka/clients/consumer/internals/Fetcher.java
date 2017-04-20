@@ -489,10 +489,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                     fetchedPartition = partition;
                     if (subscriptions.isAssigned(partition)) {
                         fetchedOffsets = subscriptions.position(partition);
-                    } else {
-                        // this can happen when a rebalance happened before fetched records are returned to the consumer's poll call
-                        log.debug("Not positioning for partition {} since it is no longer assigned", partition);
-                    }
+                    } 
                     List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
                     if (!records.isEmpty()) {
                         List<ConsumerRecord<K, V>> currentRecords = drained.get(partition);
