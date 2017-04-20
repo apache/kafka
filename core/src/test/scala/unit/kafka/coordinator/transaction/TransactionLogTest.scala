@@ -88,7 +88,7 @@ class TransactionLogTest extends JUnitSuite {
           val txnMetadata = TransactionLog.readMessageValue(record.value())
 
           assertEquals(pidMappings(transactionalId), txnMetadata.pid)
-          assertEquals(epoch, txnMetadata.coordinatorEpoch)
+          assertEquals(epoch, txnMetadata.producerEpoch)
           assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
           assertEquals(transactionStates(txnMetadata.pid), txnMetadata.state)
 

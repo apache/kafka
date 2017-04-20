@@ -265,7 +265,7 @@ class TransactionStateManagerTest {
     txnMetadata1.prepareTransitionTo(Ongoing)
 
     // modify the cache while trying to append the new metadata
-    txnMetadata1.coordinatorEpoch = (txnMetadata1.coordinatorEpoch + 1).toShort
+    txnMetadata1.producerEpoch = (txnMetadata1.producerEpoch + 1).toShort
 
     // append the new metadata into log
     transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)

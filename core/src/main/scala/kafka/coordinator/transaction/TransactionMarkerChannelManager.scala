@@ -152,7 +152,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       }
       transactionMarkerChannel.addRequestToSend(metadataPartition,
         metadataToWrite.pid,
-        metadataToWrite.coordinatorEpoch,
+        metadataToWrite.producerEpoch,
         result,
         coordinatorEpoch,
         metadataToWrite.topicPartitions.toSet)

@@ -655,7 +655,7 @@ class TransactionCoordinatorTest {
     assertEquals(InitPidResult(0, 1, Errors.NONE), result)
     assertEquals(10, metadata.txnTimeoutMs)
     assertEquals(time.milliseconds(), metadata.entryTimestamp)
-    assertEquals(1, metadata.coordinatorEpoch)
+    assertEquals(1, metadata.producerEpoch)
     assertEquals(0, metadata.pid)
   }
 

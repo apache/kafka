@@ -388,7 +388,7 @@ class TransactionStateManager(brokerId: Int,
           case Some(metadata) =>
             metadata synchronized {
               if (metadata.pid == txnMetadata.pid &&
-                metadata.coordinatorEpoch == txnMetadata.coordinatorEpoch &&
+                metadata.producerEpoch == txnMetadata.producerEpoch &&
                 metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
                 completeStateTransition(metadata, txnMetadata.state)) {
                 // only topic-partition lists could possibly change (state should have transited in the above condition)
