@@ -1536,6 +1536,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       0
     else
       controllerContext.partitionReplicaAssignment.count { case (topicPartition, replicas) =>
+        controllerContext.partitionLeadershipInfo.contains(topicPartition) &&
         controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
       }
