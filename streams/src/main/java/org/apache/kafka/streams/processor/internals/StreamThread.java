@@ -570,6 +570,10 @@ public class StreamThread extends Thread {
             resetInvalidOffsets(e);
         }
 
+        if (rebalanceException != null) {
+            throw new StreamsException(logPrefix + " Failed to rebalance.", rebalanceException);
+        }
+
         return records;
     }
 
