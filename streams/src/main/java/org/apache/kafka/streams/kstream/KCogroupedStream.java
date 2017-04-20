@@ -37,7 +37,17 @@ import org.apache.kafka.streams.KeyValue;
 @InterfaceStability.Unstable
 public interface KCogroupedStream<K, V> {
 
+    /**
+     * 
+     * @param groupedStream
+     * @param aggregator
+     * @return
+     */
     <T> KCogroupedStream<K, V> cogroup(KGroupedStream<K, T> groupedStream, Aggregator<? super K, ? super T, V> aggregator);
 
+    /**
+     * 
+     * @return
+     */
     KTable<K, V> aggregate();
 }

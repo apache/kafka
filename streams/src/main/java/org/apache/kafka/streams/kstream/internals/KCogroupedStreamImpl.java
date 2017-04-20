@@ -62,7 +62,6 @@ public class KCogroupedStreamImpl<K, V> implements KCogroupedStream<K, V> {
         if (aggregated) {
             throw new IllegalStateException("can't add additional streams after aggregate has been called");
         }
-
         cogroups.put(groupedStream, new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator));
         return this;
     }

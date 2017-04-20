@@ -26,6 +26,7 @@ import org.apache.kafka.streams.processor.Processor;
 public class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V>, V> {
 
     private final List<KStreamAggregate<K, ?, V>> parents;
+
     private boolean sendOldValues = false;
 
     public KStreamCogroup(Collection<KStreamAggregate<K, ?, V>> parents) {
