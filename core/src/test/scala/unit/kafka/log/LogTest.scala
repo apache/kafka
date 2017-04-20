@@ -27,11 +27,10 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.KafkaConfig
-import kafka.server.epoch.{EpochEntry, LeaderEpochCache, LeaderEpochFileCache}
-import org.apache.kafka.common.record.{RecordBatch, _}
+import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.common.record.MemoryRecords.RecordFilter
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
-import org.easymock.EasyMock
-import org.easymock.EasyMock._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
@@ -60,6 +59,23 @@ class LogTest {
       Log.logFilename(dir, offset).createNewFile()
       Log.indexFilename(dir, offset).createNewFile()
     }
+  }
+
+  @Test
+  def testOffsetFromFilename() {
+    val offset = 23423423L
+
+    val logFile = Log.logFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(logFile.getName))
+
+    val offsetIndexFile = Log.indexFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(offsetIndexFile.getName))
+
+    val timeIndexFile = Log.timeIndexFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(timeIndexFile.getName))
+
+    val snapshotFile = Log.pidSnapshotFilename(tmpDir, offset)
+    assertEquals(offset, Log.offsetFromFilename(snapshotFile.getName))
   }
 
   /**
@@ -142,6 +158,190 @@ class LogTest {
 
     val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = 2)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
+  }
+
+  @Test
+  def testPidMapOffsetUpdatedForNonIdempotentData() {
+    val log = createLog(2048)
+    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+    assertEquals(Some(1), log.latestPidSnapshotOffset)
+  }
+
+  @Test
+  def testRebuildPidMapWithCompactedData() {
+    val log = createLog(2048, pidSnapshotIntervalMs = Int.MaxValue)
+    val pid = 1L
+    val epoch = 0.toShort
+    val seq = 0
+    val baseOffset = 23L
+
+    // create a batch with a couple gaps to simulate compaction
+    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "d".getBytes)))
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+
+    val filtered = ByteBuffer.allocate(2048)
+    records.filterTo(new RecordFilter {
+      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+    }, filtered)
+    filtered.flip()
+    val filteredRecords = MemoryRecords.readableRecords(filtered)
+
+    log.appendAsFollower(filteredRecords)
+
+    // append some more data and then truncate to force rebuilding of the PID map
+    val moreRecords = TestUtils.records(baseOffset = baseOffset + 4, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "e".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "f".getBytes)))
+    moreRecords.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+    log.appendAsFollower(moreRecords)
+
+    log.truncateTo(baseOffset + 4)
+
+    val activePids = log.activePids
+    assertTrue(activePids.contains(pid))
+
+    val entry = activePids(pid)
+    assertEquals(0, entry.firstSeq)
+    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(3, entry.lastSeq)
+    assertEquals(baseOffset + 3, entry.lastOffset)
+  }
+
+  @Test
+  def testUpdatePidMapWithCompactedData() {
+    val log = createLog(2048)
+    val pid = 1L
+    val epoch = 0.toShort
+    val seq = 0
+    val baseOffset = 23L
+
+    // create a batch with a couple gaps to simulate compaction
+    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+      new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "d".getBytes)))
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+
+    val filtered = ByteBuffer.allocate(2048)
+    records.filterTo(new RecordFilter {
+      override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
+    }, filtered)
+    filtered.flip()
+    val filteredRecords = MemoryRecords.readableRecords(filtered)
+
+    log.appendAsFollower(filteredRecords)
+    val activePids = log.activePids
+    assertTrue(activePids.contains(pid))
+
+    val entry = activePids(pid)
+    assertEquals(0, entry.firstSeq)
+    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(3, entry.lastSeq)
+    assertEquals(baseOffset + 3, entry.lastOffset)
+  }
+
+  @Test
+  def testPidMapTruncateTo() {
+    val log = createLog(2048)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes))), leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    log.truncateTo(2)
+    assertEquals(Some(2), log.latestPidSnapshotOffset)
+    assertEquals(2, log.latestPidMapOffset)
+
+    log.truncateTo(1)
+    assertEquals(None, log.latestPidSnapshotOffset)
+    assertEquals(1, log.latestPidMapOffset)
+  }
+
+  @Test
+  def testPidMapTruncateFullyAndStartAt() {
+    val records = TestUtils.singletonRecords("foo".getBytes)
+    val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    assertEquals(3, log.logSegments.size)
+    assertEquals(3, log.latestPidMapOffset)
+    assertEquals(Some(3), log.latestPidSnapshotOffset)
+
+    log.truncateFullyAndStartAt(29)
+    assertEquals(1, log.logSegments.size)
+    assertEquals(None, log.latestPidSnapshotOffset)
+    assertEquals(29, log.latestPidMapOffset)
+  }
+
+  @Test
+  def testPidExpirationOnSegmentDeletion() {
+    val pid1 = 1L
+    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, epoch = 0, sequence = 0)
+    val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
+    log.appendAsLeader(records, leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    val pid2 = 2L
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, epoch = 0, sequence = 0),
+      leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, epoch = 0, sequence = 1),
+      leaderEpoch = 0)
+    log.maybeTakePidSnapshot()
+
+    assertEquals(3, log.logSegments.size)
+    assertEquals(Set(pid1, pid2), log.activePids.keySet)
+
+    log.deleteOldSegments()
+
+    assertEquals(2, log.logSegments.size)
+    assertEquals(Set(pid2), log.activePids.keySet)
+  }
+
+  @Test
+  def testPeriodicPidSnapshot() {
+    val snapshotInterval = 100
+    val log = createLog(2048, pidSnapshotIntervalMs = snapshotInterval)
+
+    log.appendAsLeader(TestUtils.singletonRecords("foo".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
+    assertEquals(None, log.latestPidSnapshotOffset)
+
+    time.sleep(snapshotInterval)
+    assertEquals(Some(2), log.latestPidSnapshotOffset)
+  }
+
+  @Test
+  def testPeriodicPidExpiration() {
+    val maxPidExpirationMs = 200
+    val expirationCheckInterval = 100
+
+    val pid = 23L
+    val log = createLog(2048, maxPidExpirationMs = maxPidExpirationMs,
+      pidExpirationCheckIntervalMs = expirationCheckInterval)
+    val records = Seq(new SimpleRecord(time.milliseconds(), "foo".getBytes))
+    log.appendAsLeader(TestUtils.records(records, pid = pid, epoch = 0, sequence = 0), leaderEpoch = 0)
+
+    assertEquals(Set(pid), log.activePids.keySet)
+
+    time.sleep(expirationCheckInterval)
+    assertEquals(Set(pid), log.activePids.keySet)
+
+    time.sleep(expirationCheckInterval)
+    assertEquals(Set(), log.activePids.keySet)
   }
 
   @Test
@@ -1772,10 +1972,12 @@ class LogTest {
   }
 
 
-  def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
-                retentionBytes: Int = -1, cleanupPolicy: String = "delete"): Log = {
+  def createLog(messageSizeInBytes: Int, retentionMs: Int = -1, retentionBytes: Int = -1,
+                cleanupPolicy: String = "delete", messagesPerSegment: Int = 5,
+                maxPidExpirationMs: Int = 300000, pidExpirationCheckIntervalMs: Int = 30000,
+                pidSnapshotIntervalMs: Int = 60000): Log = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * 5: Integer)
+    logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * messagesPerSegment: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
     logProps.put(LogConfig.RetentionBytesProp, retentionBytes: Integer)
     logProps.put(LogConfig.CleanupPolicyProp, cleanupPolicy)
@@ -1786,7 +1988,10 @@ class LogTest {
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      maxPidExpirationMs = maxPidExpirationMs,
+      pidExpirationCheckIntervalMs = pidExpirationCheckIntervalMs,
+      pidSnapshotIntervalMs = pidSnapshotIntervalMs)
     log
   }
 }
