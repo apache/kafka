@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -54,6 +55,7 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,10 +67,12 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -89,6 +93,11 @@ public class KafkaAdminClient extends AdminClient {
      * The next integer to use to name a KafkaAdminClient which the user hasn't specified an explicit name for.
      */
     private static final AtomicInteger ADMIN_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+
+    /**
+     * The prefix to use for the JMX metrics for this class
+     */
+    private static final String JMX_PREFIX = "kafka.admin.client";
 
     /**
      * The default timeout to use for an operation.
@@ -239,7 +248,15 @@ public class KafkaAdminClient extends AdminClient {
         try {
             metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
-            metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
+            List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                MetricsReporter.class);
+            Map<String, String> metricTags = new LinkedHashMap<String, String>();
+            metricTags.put("client-id", clientId);
+            MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
+                .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                .tags(metricTags);
+            reporters.add(new JmxReporter(JMX_PREFIX));
+            metrics = new Metrics(metricConfig, reporters, time);
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
@@ -293,7 +310,8 @@ public class KafkaAdminClient extends AdminClient {
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
-        this.thread = new Thread(runnable, "AdminClientThread(" + clientId + ")");
+        String threadName = "kafka-admin-client-thread" + (clientId.length() > 0 ? " | " + clientId : "");
+        this.thread = new KafkaThread( threadName, runnable,false);
         config.logUnused();
         log.debug("Created Kafka admin client {}", this.clientId);
         thread.start();
@@ -493,7 +511,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
-         * Time out the elements in the newRpcs list which are expired.
+         * Time out the elements in the newCalls list which are expired.
          *
          * @param now       The current time in milliseconds.
          */
@@ -520,15 +538,15 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
-         * Choose nodes for the RPCs in the newRpcs list.
+         * Choose nodes for the calls in the callsToSend list.
          *
          * This function holds the lock for the minimum amount of time, to avoid blocking
-         * users of AdminClient who will also take the lock to add new RPC requests.
+         * users of AdminClient who will also take the lock to add new calls.
          *
          * @param now           The current time in milliseconds.
          * @param callsToSend   A map of nodes to the calls they need to handle.
          *
-         * @return              The new RPCs we need to process.
+         * @return              The new calls we need to process.
          */
         private void chooseNodesForNewCalls(long now, Map<Node, List<Call>> callsToSend) {
             List<Call> newCallsToAdd = null;
@@ -548,7 +566,7 @@ public class KafkaAdminClient extends AdminClient {
          * Choose a node for a new call.
          *
          * @param now           The current time in milliseconds.
-         * @param callsToSend   A map of nodes to the RPCs they need to handle.
+         * @param callsToSend   A map of nodes to the calls they need to handle.
          * @param call          The call.
          */
         private void chooseNodeForNewCall(long now, Map<Node, List<Call>> callsToSend, Call call) {
@@ -563,17 +581,17 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         /**
-         * Send the RPCs which are ready.
+         * Send the calls which are ready.
          *
          * @param now                   The current time in milliseconds.
          * @param callsToSend           The calls to send, by node.
-         * @param correlationIdToRpc    A map of correlation IDs to RPCs.
-         * @param callsInFlight         A map of nodes to the RPCs they have in flight.
+         * @param correlationIdToCalls  A map of correlation IDs to calls.
+         * @param callsInFlight         A map of nodes to the calls they have in flight.
          *
          * @return                      The minimum timeout we need for poll().
          */
-        private long sendEligibleRpcs(long now, Map<Node, List<Call>> callsToSend,
-                         Map<Integer, Call> correlationIdToRpc, Map<String, List<Call>> callsInFlight) {
+        private long sendEligibleCalls(long now, Map<Node, List<Call>> callsToSend,
+                         Map<Integer, Call> correlationIdToCalls, Map<String, List<Call>> callsInFlight) {
             long pollTimeout = Long.MAX_VALUE;
             for (Iterator<Map.Entry<Node, List<Call>>> iter = callsToSend.entrySet().iterator();
                      iter.hasNext(); ) {
@@ -605,22 +623,22 @@ public class KafkaAdminClient extends AdminClient {
                     clientRequest.correlationId());
                 client.send(clientRequest, now);
                 getOrCreateListValue(callsInFlight, node.idString()).add(call);
-                correlationIdToRpc.put(clientRequest.correlationId(), call);
+                correlationIdToCalls.put(clientRequest.correlationId(), call);
             }
             return pollTimeout;
         }
 
         /**
-         * Time out expired RPCs that are in flight.
+         * Time out expired calls that are in flight.
          *
-         * RPCs that are in flight may have been partially or completely sent over the wire.  They may
+         * Calls that are in flight may have been partially or completely sent over the wire.  They may
          * even be in the process of being processed by the remote server.  At the moment, our only option
          * to time them out is to close the entire connection.
          *
          * @param now                   The current time in milliseconds.
-         * @param callsInFlight         A map of nodes to the RPCs they have in flight.
+         * @param callsInFlight         A map of nodes to the calls they have in flight.
          */
-        private void timeoutRpcsInFlight(long now, Map<String, List<Call>> callsInFlight) {
+        private void timeoutCallsInFlight(long now, Map<String, List<Call>> callsInFlight) {
             int numTimedOut = 0;
             for (Map.Entry<String, List<Call>> entry : callsInFlight.entrySet()) {
                 List<Call> contexts = entry.getValue();
@@ -635,7 +653,7 @@ public class KafkaAdminClient extends AdminClient {
                     client.close(nodeId);
                     numTimedOut++;
                     // We don't remove anything from the callsInFlight data structure.  Because the connection
-                    // has been closed, the RPCs should be returned by the next client#poll(),
+                    // has been closed, the calls should be returned by the next client#poll(),
                     // and handled at that point.
                 }
             }
@@ -648,15 +666,15 @@ public class KafkaAdminClient extends AdminClient {
          *
          * @param now                   The current time in milliseconds.
          * @param responses             The latest responses from KafkaClient.
-         * @param correlationIdToRpc    A map of correlation IDs to RPCs.
-         * @param callsInFlight         A map of nodes to the RPCs they have in flight.
+         * @param correlationIdToCall   A map of correlation IDs to calls.
+         * @param callsInFlight         A map of nodes to the calls they have in flight.
         **/
         private void handleResponses(long now, List<ClientResponse> responses, Map<String, List<Call>> callsInFlight,
-                Map<Integer, Call> correlationIdToRpc) {
+                Map<Integer, Call> correlationIdToCall) {
             for (ClientResponse response : responses) {
                 int correlationId = response.requestHeader().correlationId();
 
-                Call call = correlationIdToRpc.get(correlationId);
+                Call call = correlationIdToCall.get(correlationId);
                 if (call == null) {
                     // If the server returns information about a correlation ID we didn't use yet,
                     // an internal server error has occurred.  Close the connection and log an error message.
@@ -667,7 +685,7 @@ public class KafkaAdminClient extends AdminClient {
                 }
 
                 // Stop tracking this call.
-                correlationIdToRpc.remove(correlationId);
+                correlationIdToCall.remove(correlationId);
                 getOrCreateListValue(callsInFlight, response.requestHeader().clientId()).remove(call);
 
                 // Handle the result of the call.  This may involve retrying the call, if we got a
@@ -707,7 +725,7 @@ public class KafkaAdminClient extends AdminClient {
             /**
              * Maps correlation IDs to calls that have been sent.
              */
-            Map<Integer, Call> correlationIdToRpc = new HashMap<>();
+            Map<Integer, Call> correlationIdToCalls = new HashMap<>();
 
             /**
              * The previous metadata version which wasn't usable, or null if there is none.
@@ -724,15 +742,15 @@ public class KafkaAdminClient extends AdminClient {
                 // Handle timeouts.
                 timeoutNewCalls(now);
                 timeoutCallsToSend(now, callsToSend);
-                timeoutRpcsInFlight(now, callsInFlight);
+                timeoutCallsInFlight(now, callsInFlight);
 
-                // Handle new RPCs and metadata update requests.
+                // Handle new calls and metadata update requests.
                 prevMetadataVersion = checkMetadataReady(prevMetadataVersion);
                 long pollTimeout = 1200000;
                 if (prevMetadataVersion == null) {
                     chooseNodesForNewCalls(now, callsToSend);
                     pollTimeout = Math.min(pollTimeout,
-                        sendEligibleRpcs(now, callsToSend, correlationIdToRpc, callsInFlight));
+                        sendEligibleCalls(now, callsToSend, correlationIdToCalls, callsInFlight));
                 }
 
                 // Wait for network responses.
@@ -742,13 +760,13 @@ public class KafkaAdminClient extends AdminClient {
 
                 // Update the current time and handle the latest responses.
                 now = time.milliseconds();
-                handleResponses(now, responses, callsInFlight, correlationIdToRpc);
+                handleResponses(now, responses, callsInFlight, correlationIdToCalls);
             }
             int numTimedOut = 0;
             synchronized (this) {
                 numTimedOut += timeoutCalls(Long.MAX_VALUE, newCalls);
             }
-            numTimedOut += timeoutCalls(Long.MAX_VALUE, correlationIdToRpc.values());
+            numTimedOut += timeoutCalls(Long.MAX_VALUE, correlationIdToCalls.values());
             if (numTimedOut > 0) {
                 log.debug("{}: timed out {} remaining operations.", clientId, numTimedOut);
             }
