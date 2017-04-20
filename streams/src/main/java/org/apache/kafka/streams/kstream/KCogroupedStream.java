@@ -17,7 +17,23 @@
 package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KeyValue;
 
+/**
+ * {@code KCogroupedStream} is an abstraction of multiple <i>grouped</i> record stream of {@link KeyValue} pairs.
+ * It is an intermediate representation of one or more {@link KStream}s in order to apply one or more aggregation
+ * operations on the original {@link KStream} records.
+ * <p>
+ * It is an intermediate representation after a grouping of {@link KStream}s before the aggregations are applied to
+ * the new partitions resulting in a {@link KTable}.
+ * <p>
+ * A {@code KCogroupedStream} must be obtained from a {@link KGroupedStream} via 
+ * {@link KGroupedStreamStream#cogroup(Initializer, Aggregator, Serde, String) cogroup(...)}.
+ *
+ * @param <K> Type of keys
+ * @param <V> Type of aggregate values
+ * @see KGroupedStream
+ */
 @InterfaceStability.Unstable
 public interface KCogroupedStream<K, V> {
 
