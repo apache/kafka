@@ -112,7 +112,7 @@ class Log(@volatile var dir: File,
           time: Time = Time.SYSTEM,
           val maxPidExpirationMs: Int = 60 * 60 * 1000,
           val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
-          val pidSnapshotCreationIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val pidSnapshotIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -199,7 +199,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       pidMap.maybeTakeSnapshot()
     }
-  }, period = pidSnapshotCreationIntervalMs, unit = TimeUnit.MILLISECONDS)
+  }, period = pidSnapshotIntervalMs, unit = TimeUnit.MILLISECONDS)
 
 
   /** The name of this log */
@@ -385,7 +385,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
       val currentTimeMs = time.milliseconds
-      pidMap.truncateAndReload(lastOffset, currentTimeMs)
+      pidMap.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
       logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
         val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
@@ -399,7 +399,6 @@ class Log(@volatile var dir: File,
           }
         }
       }
-      pidMap.expirePids(logStartOffset)
       pidMap.updateMapEndOffset(lastOffset)
     }
   }

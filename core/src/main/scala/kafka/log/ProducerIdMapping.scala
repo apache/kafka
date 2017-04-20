@@ -127,8 +127,7 @@ object ProducerIdMapping {
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
     new Field(PidEntriesField, new ArrayOf(PidSnapshotEntrySchema), "The entries in the PID table"))
 
-  private def loadSnapshot(file: File, pidMap: mutable.Map[Long, ProducerIdEntry],
-                           checkNotExpired: (ProducerIdEntry) => Boolean) {
+  private def readSnapshot(file: File): Iterable[(Long, ProducerIdEntry)] = {
     val buffer = Files.readAllBytes(file.toPath)
     val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
 
@@ -141,17 +140,16 @@ object ProducerIdMapping {
     if (crc != computedCrc)
       throw new CorruptSnapshotException(s"Snapshot file is corrupted (CRC is no longer valid). Stored crc: ${crc}. Computed crc: ${computedCrc}")
 
-    struct.getArray(PidEntriesField).foreach { pidEntryObj =>
+    struct.getArray(PidEntriesField).map { pidEntryObj =>
       val pidEntryStruct = pidEntryObj.asInstanceOf[Struct]
-      val pid = pidEntryStruct.getLong(PidField)
+      val pid: Long = pidEntryStruct.getLong(PidField)
       val epoch = pidEntryStruct.getShort(EpochField)
       val seq = pidEntryStruct.getInt(LastSequenceField)
       val offset = pidEntryStruct.getLong(LastOffsetField)
       val timestamp = pidEntryStruct.getLong(TimestampField)
       val offsetDelta = pidEntryStruct.getInt(OffsetDeltaField)
       val newEntry = ProducerIdEntry(epoch, seq, offset, offsetDelta, timestamp)
-      if (checkNotExpired(newEntry))
-        pidMap.put(pid, newEntry)
+      pid -> newEntry
     }
   }
 
@@ -225,49 +223,52 @@ class ProducerIdMapping(val config: LogConfig,
    * Load a snapshot of the id mapping or return empty maps
    * in the case the snapshot doesn't exist (first time).
    */
-  private def loadFromSnapshot(checkNotExpired:(ProducerIdEntry) => Boolean) {
+  private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
     pidMap.clear()
 
-    var loaded = false
-    while (!loaded) {
+    while (true) {
       latestSnapshotFile match {
         case Some(file) =>
           try {
             info(s"Loading PID mapping from snapshot file ${file.getName} for partition $topicPartition")
-            loadSnapshot(file, pidMap, checkNotExpired)
+            readSnapshot(file).foreach { case (pid, entry) =>
+              if (!isExpired(currentTime, entry))
+                pidMap.put(pid, entry)
+            }
+
             lastSnapOffset = Log.offsetFromFilename(file.getName)
             lastMapOffset = lastSnapOffset
-            loaded = true
+            return
           } catch {
             case e: CorruptSnapshotException =>
-              error(s"Snapshot file at $file is corrupt: ${e.getMessage}")
-              try Files.delete(file.toPath)
-              catch {
-                case e: IOException => error(s"Failed to delete corrupt snapshot file $file", e)
-              }
+              error(s"Snapshot file at ${file.getPath} is corrupt: ${e.getMessage}")
+              Files.deleteIfExists(file.toPath)
           }
         case None =>
-          lastSnapOffset = 0L
-          lastMapOffset = 0L
-          loaded = true
+          lastSnapOffset = logStartOffset
+          lastMapOffset = logStartOffset
+          return
       }
     }
   }
 
-  def isEntryValid(currentTimeMs: Long, producerIdEntry: ProducerIdEntry) : Boolean = {
-    currentTimeMs - producerIdEntry.timestamp < maxPidExpirationMs
+  def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry) : Boolean = {
+    currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
   }
 
   def checkForExpiredPids(currentTimeMs: Long) {
     pidMap.retain { case (pid, lastEntry) =>
-      isEntryValid(currentTimeMs, lastEntry)
+      !isExpired(currentTimeMs, lastEntry)
     }
   }
 
-  def truncateAndReload(logEndOffset: Long, currentTime: Long) {
+  def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTime: Long) {
     if (logEndOffset != mapEndOffset) {
-      deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) > logEndOffset)
-      loadFromSnapshot(producerIdEntry => isEntryValid(currentTime, producerIdEntry))
+      deleteSnapshotFiles { file =>
+        val offset = Log.offsetFromFilename(file.getName)
+        offset > logEndOffset || offset <= logStartOffset
+      }
+      loadFromSnapshot(logStartOffset, currentTime)
     }
   }
 
@@ -323,16 +324,17 @@ class ProducerIdMapping(val config: LogConfig,
   def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
 
   /**
-    * When we remove the head of the log due to retention, we need to
-    * clean up the id map. This method takes the new start offset and
-    * expires all ids that have a smaller offset.
-    *
-    * @param startOffset New start offset for the log associated to
-    *                    this id map instance
-    */
-  def expirePids(startOffset: Long) {
-    pidMap.retain((pid, entry) => entry.lastOffset >= startOffset)
-    deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= startOffset)
+   * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
+   * the new start offset and expires all ids that have a smaller offset.
+   *
+   * @param logStartOffset New start offset for the log associated to this id map instance
+   */
+  def expirePids(logStartOffset: Long) {
+    pidMap.retain((pid, entry) => entry.lastOffset >= logStartOffset)
+    deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= logStartOffset)
+    if (lastMapOffset < logStartOffset)
+      lastMapOffset = logStartOffset
+    lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
   }
 
   /**
@@ -370,7 +372,6 @@ class ProducerIdMapping(val config: LogConfig,
 
   private def deleteSnapshotFiles(predicate: File => Boolean = _ => true) {
     listSnapshotFiles.filter(predicate).foreach(file => Files.deleteIfExists(file.toPath))
-    lastSnapOffset = latestSnapshotOffset.getOrElse(0L)
   }
 
 }

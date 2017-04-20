@@ -249,6 +249,7 @@ public class MemoryRecordsTest {
             assertEquals(2, batches.size());
 
             MutableRecordBatch firstBatch = batches.get(0);
+            assertEquals(1, firstBatch.countOrNull().intValue());
             assertEquals(0L, firstBatch.baseOffset());
             assertEquals(2L, firstBatch.lastOffset());
             assertEquals(RecordBatch.NO_PRODUCER_ID, firstBatch.producerId());
@@ -257,6 +258,7 @@ public class MemoryRecordsTest {
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
 
             MutableRecordBatch secondBatch = batches.get(1);
+            assertEquals(2, secondBatch.countOrNull().intValue());
             assertEquals(3L, secondBatch.baseOffset());
             assertEquals(5L, secondBatch.lastOffset());
             assertEquals(pid, secondBatch.producerId());

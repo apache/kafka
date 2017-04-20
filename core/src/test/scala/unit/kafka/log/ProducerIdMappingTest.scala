@@ -39,14 +39,8 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @Before
   def setUp(): Unit = {
-    // Create configuration including number of snapshots to hold
-    val props = new Properties()
-    config = LogConfig(props)
-
-    // Create temporary directory
+    config = LogConfig(new Properties)
     idMappingDir = TestUtils.tempDir()
-
-    // Instantiate IdMapping
     idMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
   }
 
@@ -106,7 +100,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     checkAndUpdate(idMapping, pid, 1, epoch, 1L, time.milliseconds)
     idMapping.maybeTakeSnapshot()
     val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-    recoveredMapping.truncateAndReload(3L, time.milliseconds)
+    recoveredMapping.truncateAndReload(0L, 3L, time.milliseconds)
 
     // entry added after recovery
     checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, time.milliseconds)
@@ -120,7 +114,7 @@ class ProducerIdMappingTest extends JUnitSuite {
 
     idMapping.maybeTakeSnapshot()
     val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-    recoveredMapping.truncateAndReload(1L, 70000)
+    recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
     // we should get an out of order sequence exception.
@@ -176,7 +170,7 @@ class ProducerIdMappingTest extends JUnitSuite {
   }
 
   @Test
-  def testExpirePidsBefore(): Unit = {
+  def testExpirePids(): Unit = {
     val epoch = 0.toShort
 
     checkAndUpdate(idMapping, pid, 0, epoch, 0L)
@@ -185,22 +179,32 @@ class ProducerIdMappingTest extends JUnitSuite {
 
     val anotherPid = 2L
     checkAndUpdate(idMapping, anotherPid, 0, epoch, 2L)
+    checkAndUpdate(idMapping, anotherPid, 1, epoch, 3L)
     idMapping.maybeTakeSnapshot()
-    assertEquals(Set(2, 3), currentSnapshotOffsets)
+    assertEquals(Set(2, 4), currentSnapshotOffsets)
 
     idMapping.expirePids(2)
-    assertEquals(Set(3), currentSnapshotOffsets)
+    assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(Set(anotherPid), idMapping.activePids.keySet)
     assertEquals(None, idMapping.lastEntry(pid))
 
     val maybeEntry = idMapping.lastEntry(anotherPid)
     assertTrue(maybeEntry.isDefined)
-    assertEquals(2L, maybeEntry.get.lastOffset)
+    assertEquals(3L, maybeEntry.get.lastOffset)
 
     idMapping.expirePids(3)
+    assertEquals(Set(anotherPid), idMapping.activePids.keySet)
+    assertEquals(Set(4), currentSnapshotOffsets)
+    assertEquals(4, idMapping.mapEndOffset)
+
+    idMapping.expirePids(5)
+    assertEquals(Set(), idMapping.activePids.keySet)
     assertEquals(Set(), currentSnapshotOffsets)
+    assertEquals(5, idMapping.mapEndOffset)
+
     idMapping.maybeTakeSnapshot()
-    assertEquals(Set(3), currentSnapshotOffsets)
+    // shouldn't be any new snapshot because the log is empty
+    assertEquals(Set(), currentSnapshotOffsets)
   }
 
   @Test
@@ -230,7 +234,7 @@ class ProducerIdMappingTest extends JUnitSuite {
 
     intercept[OutOfOrderSequenceException] {
       val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-      recoveredMapping.truncateAndReload(1L, time.milliseconds)
+      recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
       checkAndUpdate(recoveredMapping, pid2, 1, epoch, 4L, 5L)
     }
   }

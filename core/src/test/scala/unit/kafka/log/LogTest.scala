@@ -171,7 +171,7 @@ class LogTest {
 
   @Test
   def testRebuildPidMapWithCompactedData() {
-    val log = createLog(2048)
+    val log = createLog(2048, pidSnapshotIntervalMs = Int.MaxValue)
     val pid = 1L
     val epoch = 0.toShort
     val seq = 0
@@ -309,6 +309,39 @@ class LogTest {
 
     assertEquals(2, log.logSegments.size)
     assertEquals(Set(pid2), log.activePids.keySet)
+  }
+
+  @Test
+  def testPeriodicPidSnapshot() {
+    val snapshotInterval = 100
+    val log = createLog(2048, pidSnapshotIntervalMs = snapshotInterval)
+
+    log.appendAsLeader(TestUtils.singletonRecords("foo".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
+    assertEquals(None, log.latestPidSnapshotOffset)
+
+    time.sleep(snapshotInterval)
+    assertEquals(Some(2), log.latestPidSnapshotOffset)
+  }
+
+  @Test
+  def testPeriodicPidExpiration() {
+    val maxPidExpirationMs = 200
+    val expirationCheckInterval = 100
+
+    val pid = 23L
+    val log = createLog(2048, maxPidExpirationMs = maxPidExpirationMs,
+      pidExpirationCheckIntervalMs = expirationCheckInterval)
+    val records = Seq(new SimpleRecord(time.milliseconds(), "foo".getBytes))
+    log.appendAsLeader(TestUtils.records(records, pid = pid, epoch = 0, sequence = 0), leaderEpoch = 0)
+
+    assertEquals(Set(pid), log.activePids.keySet)
+
+    time.sleep(expirationCheckInterval)
+    assertEquals(Set(pid), log.activePids.keySet)
+
+    time.sleep(expirationCheckInterval)
+    assertEquals(Set(), log.activePids.keySet)
   }
 
   @Test
@@ -1939,8 +1972,10 @@ class LogTest {
   }
 
 
-  def createLog(messageSizeInBytes: Int, retentionMs: Int = -1,
-                retentionBytes: Int = -1, cleanupPolicy: String = "delete", messagesPerSegment: Int = 5): Log = {
+  def createLog(messageSizeInBytes: Int, retentionMs: Int = -1, retentionBytes: Int = -1,
+                cleanupPolicy: String = "delete", messagesPerSegment: Int = 5,
+                maxPidExpirationMs: Int = 300000, pidExpirationCheckIntervalMs: Int = 30000,
+                pidSnapshotIntervalMs: Int = 60000): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * messagesPerSegment: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)
@@ -1953,7 +1988,10 @@ class LogTest {
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      maxPidExpirationMs = maxPidExpirationMs,
+      pidExpirationCheckIntervalMs = pidExpirationCheckIntervalMs,
+      pidSnapshotIntervalMs = pidSnapshotIntervalMs)
     log
   }
 }
