@@ -101,7 +101,6 @@ class TopicDeletionManager(controller: KafkaController, initialTopicsToBeDeleted
   def shutdown() {
     // Only allow one shutdown to go through
     if (isDeleteTopicEnabled) {
-      resumeDeletions()
       topicsToBeDeleted.clear()
       partitionsToBeDeleted.clear()
       topicsIneligibleForDeletion.clear()
