@@ -164,13 +164,13 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   private val controllerEventQueue = new LinkedBlockingQueue[ControllerEvent]
   private val controllerEventThread = new ControllerEventThread("controller-event-thread")
-  private val brokerChangeListener = new BrokerChangeListener(this, controllerEventQueue)
-  private val topicChangeListener = new TopicChangeListener(this, controllerEventQueue)
-  private val topicDeletionListener = new TopicDeletionListener(this, controllerEventQueue)
+  private val brokerChangeListener = new BrokerChangeListener(this)
+  private val topicChangeListener = new TopicChangeListener(this)
+  private val topicDeletionListener = new TopicDeletionListener(this)
   private val partitionModificationsListeners: mutable.Map[String, PartitionModificationsListener] = mutable.Map.empty
-  private val partitionReassignmentListener = new PartitionReassignmentListener(this, controllerEventQueue)
-  private val preferredReplicaElectionListener = new PreferredReplicaElectionListener(this, controllerEventQueue)
-  private val isrChangeNotificationListener = new IsrChangeNotificationListener(this, controllerEventQueue)
+  private val partitionReassignmentListener = new PartitionReassignmentListener(this)
+  private val preferredReplicaElectionListener = new PreferredReplicaElectionListener(this)
+  private val isrChangeNotificationListener = new IsrChangeNotificationListener(this)
   private val activeControllerId = new AtomicInteger(-1)
   private val offlinePartitionCount = new AtomicInteger(0)
   private val preferredReplicaImbalanceCount = new AtomicInteger(0)
@@ -218,7 +218,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    */
   def shutdownBroker(id: Int, controlledShutdownCallback: Try[Set[TopicAndPartition]] => Unit): Unit = {
     val controlledShutdownEvent = ControlledShutdown(id, controlledShutdownCallback)
-    controllerEventQueue.put(controlledShutdownEvent)
+    addToControllerEventQueue(controlledShutdownEvent)
   }
 
   /**
@@ -265,9 +265,9 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     maybeTriggerPreferredReplicaElection()
     info("starting the controller scheduler")
     kafkaScheduler.startup()
-    kafkaScheduler.schedule("controller-metric-task", () => controllerEventQueue.put(UpdateMetrics), period = 10, unit = TimeUnit.SECONDS)
+    kafkaScheduler.schedule("controller-metric-task", () => addToControllerEventQueue(UpdateMetrics), period = 10, unit = TimeUnit.SECONDS)
     if (config.autoLeaderRebalanceEnable) {
-      kafkaScheduler.schedule("auto-leader-rebalance-task", () => controllerEventQueue.put(AutoPreferredReplicaLeaderElection),
+      kafkaScheduler.schedule("auto-leader-rebalance-task", () => addToControllerEventQueue(AutoPreferredReplicaLeaderElection),
         delay = 5, period = config.leaderImbalanceCheckIntervalSeconds.toLong, TimeUnit.SECONDS)
     }
     topicDeletionManager.start()
@@ -531,7 +531,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
                                                     partition: Int,
                                                     reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
-    val isrChangeListener = new PartitionReassignmentIsrChangeListener(this, controllerEventQueue, topic, partition, reassignedReplicas.toSet)
+    val isrChangeListener = new PartitionReassignmentIsrChangeListener(this, topic, partition, reassignedReplicas.toSet)
     reassignedPartitionContext.isrChangeListener = isrChangeListener
     // register listener on the leader and isr path to wait until they catch up with the current leader
     zkUtils.zkClient.subscribeDataChanges(getTopicPartitionLeaderAndIsrPath(topic, partition), isrChangeListener)
@@ -588,8 +588,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    * elector
    */
   def startup() = {
-    controllerEventQueue.put(Startup)
-    controllerEventQueue.put(Elect)
+    addToControllerEventQueue(Startup)
+    addToControllerEventQueue(Elect)
     controllerEventThread.start()
   }
 
@@ -640,11 +640,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   private def registerSessionExpirationListener() = {
-    zkUtils.zkClient.subscribeStateChanges(new SessionExpirationListener(this, controllerEventQueue))
+    zkUtils.zkClient.subscribeStateChanges(new SessionExpirationListener(this))
   }
 
   private def registerControllerChangeListener() = {
-    zkUtils.zkClient.subscribeDataChanges(ZkUtils.ControllerPath, new ControllerChangeListener(this, controllerEventQueue))
+    zkUtils.zkClient.subscribeDataChanges(ZkUtils.ControllerPath, new ControllerChangeListener(this))
   }
 
   private def initializeControllerContext() {
@@ -715,7 +715,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     info("List of topics to be deleted: %s".format(topicsQueuedForDeletion.mkString(",")))
     info("List of topics ineligible for deletion: %s".format(topicsIneligibleForDeletion.mkString(",")))
     // initialize the topic deletion manager
-    topicDeletionManager = new TopicDeletionManager(this, controllerEventQueue, topicsQueuedForDeletion, topicsIneligibleForDeletion)
+    topicDeletionManager = new TopicDeletionManager(this, topicsQueuedForDeletion, topicsIneligibleForDeletion)
   }
 
   private def maybeTriggerPartitionReassignment() {
@@ -856,7 +856,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   def registerPartitionModificationsListener(topic: String) = {
-    partitionModificationsListeners.put(topic, new PartitionModificationsListener(this, controllerEventQueue, topic))
+    partitionModificationsListeners.put(topic, new PartitionModificationsListener(this, topic))
     zkUtils.zkClient.subscribeDataChanges(getTopicPath(topic), partitionModificationsListeners(topic))
   }
 
@@ -1145,6 +1145,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       case Some(controller) => KafkaController.parseControllerId(controller)
       case None => -1
     }
+  }
+
+  def addToControllerEventQueue(controllerEvent: ControllerEvent): Unit = {
+    controllerEventQueue.put(controllerEvent)
   }
 
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name) {
@@ -1574,23 +1578,23 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 /**
   * This is the zookeeper listener that triggers all the state transitions for a replica
   */
-class BrokerChangeListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkChildListener with Logging {
+class BrokerChangeListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
-    controllerEventQueue.put(controller.BrokerChange(currentChilds.asScala))
+    controller.addToControllerEventQueue(controller.BrokerChange(currentChilds.asScala))
   }
 }
 
-class TopicChangeListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkChildListener with Logging {
+class TopicChangeListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
-    controllerEventQueue.put(controller.TopicChange(currentChilds.asScala.toSet))
+    controller.addToControllerEventQueue(controller.TopicChange(currentChilds.asScala.toSet))
   }
 }
 
-class PartitionModificationsListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent], topic: String) extends IZkDataListener with Logging {
+class PartitionModificationsListener(protected val controller: KafkaController, topic: String) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
-    controllerEventQueue.put(controller.PartitionModifications(topic))
+    controller.addToControllerEventQueue(controller.PartitionModifications(topic))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {}
@@ -1601,10 +1605,10 @@ class PartitionModificationsListener(protected val controller: KafkaController, 
   * 1. Add the topic to be deleted to the delete topics cache, only if the topic exists
   * 2. If there are topics to be deleted, it signals the delete topic thread
   */
-class TopicDeletionListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkChildListener with Logging {
+class TopicDeletionListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
-    controllerEventQueue.put(controller.TopicDeletion(currentChilds.asScala.toSet))
+    controller.addToControllerEventQueue(controller.TopicDeletion(currentChilds.asScala.toSet))
   }
 }
 
@@ -1616,18 +1620,18 @@ class TopicDeletionListener(protected val controller: KafkaController, controlle
  * If any of the above conditions are satisfied, it logs an error and removes the partition from list of reassigned
  * partitions.
  */
-class PartitionReassignmentListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkDataListener with Logging {
+class PartitionReassignmentListener(protected val controller: KafkaController) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     val partitionReassignment = ZkUtils.parsePartitionReassignmentData(data.toString)
-    controllerEventQueue.put(controller.PartitionReassignment(partitionReassignment))
+    controller.addToControllerEventQueue(controller.PartitionReassignment(partitionReassignment))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {}
 }
 
-class PartitionReassignmentIsrChangeListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent], topic: String, partition: Int, reassignedReplicas: Set[Int]) extends IZkDataListener with Logging {
+class PartitionReassignmentIsrChangeListener(protected val controller: KafkaController, topic: String, partition: Int, reassignedReplicas: Set[Int]) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
-    controllerEventQueue.put(controller.PartitionReassignmentIsrChange(TopicAndPartition(topic, partition), reassignedReplicas))
+    controller.addToControllerEventQueue(controller.PartitionReassignmentIsrChange(TopicAndPartition(topic, partition), reassignedReplicas))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {}
@@ -1636,10 +1640,10 @@ class PartitionReassignmentIsrChangeListener(protected val controller: KafkaCont
 /**
  * Called when replica leader initiates isr change
  */
-class IsrChangeNotificationListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkChildListener with Logging {
+class IsrChangeNotificationListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
-    controllerEventQueue.put(controller.IsrChangeNotification(currentChilds.asScala))
+    controller.addToControllerEventQueue(controller.IsrChangeNotification(currentChilds.asScala))
   }
 }
 
@@ -1651,27 +1655,27 @@ object IsrChangeNotificationListener {
  * Starts the preferred replica leader election for the list of partitions specified under
  * /admin/preferred_replica_election -
  */
-class PreferredReplicaElectionListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkDataListener with Logging {
+class PreferredReplicaElectionListener(protected val controller: KafkaController) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     val partitions = PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(data.toString)
-    controllerEventQueue.put(controller.PreferredReplicaLeaderElection(partitions))
+    controller.addToControllerEventQueue(controller.PreferredReplicaLeaderElection(partitions))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {}
 }
 
-class ControllerChangeListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkDataListener {
+class ControllerChangeListener(protected val controller: KafkaController) extends IZkDataListener {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
-    controllerEventQueue.put(controller.Resign(KafkaController.parseControllerId(data.toString)))
+    controller.addToControllerEventQueue(controller.Resign(KafkaController.parseControllerId(data.toString)))
   }
 
   override def handleDataDeleted(dataPath: String): Unit = {
-    controllerEventQueue.put(controller.Resign(controller.getControllerID()))
-    controllerEventQueue.put(controller.Elect)
+    controller.addToControllerEventQueue(controller.Resign(controller.getControllerID()))
+    controller.addToControllerEventQueue(controller.Elect)
   }
 }
 
-class SessionExpirationListener(protected val controller: KafkaController, controllerEventQueue: LinkedBlockingQueue[ControllerEvent]) extends IZkStateListener with Logging {
+class SessionExpirationListener(protected val controller: KafkaController) extends IZkStateListener with Logging {
   override def handleStateChanged(state: KeeperState) {
     // do nothing, since zkclient will do reconnect for us.
   }
@@ -1684,8 +1688,8 @@ class SessionExpirationListener(protected val controller: KafkaController, contr
     */
   @throws[Exception]
   override def handleNewSession(): Unit = {
-    controllerEventQueue.put(controller.Resign(controller.getControllerID()))
-    controllerEventQueue.put(controller.Elect)
+    controller.addToControllerEventQueue(controller.Resign(controller.getControllerID()))
+    controller.addToControllerEventQueue(controller.Elect)
   }
 
   override def handleSessionEstablishmentError(error: Throwable): Unit = {
