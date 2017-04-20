@@ -234,6 +234,12 @@ public class MemoryRecordsBuilder {
         this.baseSequence = baseSequence;
     }
 
+    public void overrideLastOffset(long lastOffset) {
+        if (builtRecords != null)
+            throw new IllegalStateException("Cannot override the last offset after the records have been built");
+        this.lastOffset = lastOffset;
+    }
+
     /**
      * Release resources required for record appends (e.g. compression buffers). Once this method is called, it's only
      * possible to update the RecordBatch header.

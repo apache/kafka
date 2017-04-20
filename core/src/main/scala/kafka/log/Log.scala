@@ -112,7 +112,7 @@ class Log(@volatile var dir: File,
           time: Time = Time.SYSTEM,
           val maxPidExpirationMs: Int = 60 * 60 * 1000,
           val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
-          val pidSnapshotCreationIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val pidSnapshotIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -191,7 +191,7 @@ class Log(@volatile var dir: File,
 
   scheduler.schedule(name = "PeriodicPidExpirationCheck", fun = () => {
     lock synchronized {
-      pidMap.checkForExpiredPids(time.milliseconds)
+      pidMap.removeExpiredPids(time.milliseconds)
     }
   }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
@@ -199,7 +199,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       pidMap.maybeTakeSnapshot()
     }
-  }, period = pidSnapshotCreationIntervalMs, unit = TimeUnit.MILLISECONDS)
+  }, period = pidSnapshotIntervalMs, unit = TimeUnit.MILLISECONDS)
 
 
   /** The name of this log */
@@ -258,14 +258,14 @@ class Log(@volatile var dir: File,
         }
       } else if(filename.endsWith(LogFileSuffix)) {
         // if its a log file, load the corresponding log segment
-        val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
-        val indexFile = Log.indexFilename(dir, start)
-        val timeIndexFile = Log.timeIndexFilename(dir, start)
+        val startOffset = offsetFromFilename(filename)
+        val indexFile = Log.indexFilename(dir, startOffset)
+        val timeIndexFile = Log.timeIndexFilename(dir, startOffset)
 
         val indexFileExists = indexFile.exists()
         val timeIndexFileExists = timeIndexFile.exists()
         val segment = new LogSegment(dir = dir,
-                                     startOffset = start,
+                                     startOffset = startOffset,
                                      indexIntervalBytes = config.indexInterval,
                                      maxIndexSize = config.maxIndexSize,
                                      rollJitterMs = config.randomSegmentJitter,
@@ -291,7 +291,7 @@ class Log(@volatile var dir: File,
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
-        segments.put(start, segment)
+        segments.put(startOffset, segment)
       }
     }
 
@@ -300,8 +300,8 @@ class Log(@volatile var dir: File,
     // before the swap file is restored as the new segment file.
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
-      val fileName = logFile.getName
-      val startOffset = fileName.substring(0, fileName.length - LogFileSuffix.length).toLong
+      val filename = logFile.getName
+      val startOffset = offsetFromFilename(filename)
       val indexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, IndexFileSuffix) + SwapFileSuffix)
       val index =  new OffsetIndex(indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
       val timeIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TimeIndexFileSuffix) + SwapFileSuffix)
@@ -369,7 +369,7 @@ class Log(@volatile var dir: File,
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
         warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
-        unflushed.foreach(deleteSegment(_))
+        unflushed.foreach(deleteSegment)
       }
     }
   }
@@ -380,32 +380,26 @@ class Log(@volatile var dir: File,
     * starts from a snapshot that is taken strictly before the log end
     * offset. Consequently, we need to process the tail of the log to update
     * the mapping.
-    *
-    * @param lastOffset
-    *
-    * @return An instance of ProducerIdMapping
     */
   private def buildAndRecoverPidMap(lastOffset: Long) {
     lock synchronized {
+      info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
       val currentTimeMs = time.milliseconds
-      pidMap.truncateAndReload(lastOffset, currentTimeMs)
+      pidMap.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
       logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
         val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
         val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
-        val records = fetchDataInfo.records
-        records.batches.asScala.foreach { batch =>
-          if (batch.hasProducerId) {
-            // TODO: Currently accessing any of the batch-level headers other than the offset
-            // or magic causes us to load the full entry into memory. It would be better if we
-            // only loaded the header
-            val numRecords = (batch.lastOffset - batch.baseOffset + 1).toInt
-            val pidEntry = ProducerIdEntry(batch.producerEpoch, batch.lastSequence, batch.lastOffset,
-              numRecords, batch.maxTimestamp)
-            pidMap.load(batch.producerId, pidEntry, currentTimeMs)
+        if (fetchDataInfo != null) {
+          fetchDataInfo.records.batches.asScala.foreach { batch =>
+            if (batch.hasProducerId) {
+              val pidEntry = ProducerIdEntry(batch.producerEpoch, batch.lastSequence, batch.lastOffset,
+                batch.lastSequence - batch.baseSequence, batch.maxTimestamp)
+              pidMap.load(batch.producerId, pidEntry, currentTimeMs)
+            }
           }
         }
       }
-      pidMap.cleanFrom(logStartOffset)
+      pidMap.updateMapEndOffset(lastOffset)
     }
   }
 
@@ -435,7 +429,6 @@ class Log(@volatile var dir: File,
       logSegments.foreach(_.close())
     }
   }
-
 
   /**
     * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
@@ -529,10 +522,10 @@ class Log(@volatile var dir: File,
             throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
         }
 
-        //Update the epoch cache with the epoch stamped onto the message by the leader
-        validRecords.batches().asScala.map { batch =>
+        // update the epoch cache with the epoch stamped onto the message by the leader
+        validRecords.batches.asScala.foreach { batch =>
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -561,6 +554,10 @@ class Log(@volatile var dir: File,
             producerAppendInfo.assignLastOffsetAndTimestamp(appendInfo.lastOffset, appendInfo.maxTimestamp)
           pidMap.update(producerAppendInfo)
         }
+
+        // always update the last pid map offset so that the snapshot reflects the current offset
+        // even if there isn't any idempotent data being written
+        pidMap.updateMapEndOffset(appendInfo.lastOffset + 1)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
@@ -678,7 +675,7 @@ class Log(@volatile var dir: File,
               firstOffset = lastEntry.firstOffset
               lastOffset = lastEntry.lastOffset
               maxTimestamp = lastEntry.timestamp
-              info(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): (${firstOffset}, ${lastOffset}). " +
+              debug(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): ($firstOffset, $lastOffset). " +
                 "Ignoring the incoming record.")
             } else {
               val producerAppendInfo = new ProducerAppendInfo(pid, lastEntry)
@@ -860,9 +857,10 @@ class Log(@volatile var dir: File,
         roll()
       lock synchronized {
         // remove the segments for lookups
-        deletable.foreach(deleteSegment(_))
+        deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearEarliest(logStartOffset)
+        pidMap.expirePids(logStartOffset)
       }
     }
     numToDelete
@@ -1075,6 +1073,12 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private[log] def maybeTakePidSnapshot(): Unit = pidMap.maybeTakeSnapshot()
+
+  private[log] def latestPidSnapshotOffset: Option[Long] = pidMap.latestSnapshotOffset
+
+  private[log] def latestPidMapOffset: Long = pidMap.mapEndOffset
+
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.
    *
@@ -1093,14 +1097,14 @@ class Log(@volatile var dir: File,
         truncateFullyAndStartAt(targetOffset)
       } else {
         val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-        deletable.foreach(deleteSegment(_))
+        deletable.foreach(deleteSegment)
         activeSegment.truncateTo(targetOffset)
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
         this.logStartOffset = math.min(targetOffset, this.logStartOffset)
         leaderEpochCache.clearLatest(targetOffset)
+        buildAndRecoverPidMap(targetOffset)
       }
-      buildAndRecoverPidMap(targetOffset)
     }
   }
 
@@ -1110,10 +1114,10 @@ class Log(@volatile var dir: File,
    *  @param newOffset The new offset to start the log with
    */
   private[log] def truncateFullyAndStartAt(newOffset: Long) {
-    debug("Truncate and start log '" + name + "' to " + newOffset)
+    debug(s"Truncate and start log '$name' at offset $newOffset")
     lock synchronized {
       val segmentsToDelete = logSegments.toList
-      segmentsToDelete.foreach(deleteSegment(_))
+      segmentsToDelete.foreach(deleteSegment)
       addSegment(new LogSegment(dir,
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval,
@@ -1125,6 +1129,10 @@ class Log(@volatile var dir: File,
                                 preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
       leaderEpochCache.clear()
+
+      pidMap.truncate()
+      pidMap.updateMapEndOffset(newOffset)
+
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       this.logStartOffset = newOffset
     }
@@ -1272,6 +1280,8 @@ object Log {
   /** a time index file */
   val TimeIndexFileSuffix = ".timeindex"
 
+  val PidSnapshotFileSuffix = ".snapshot"
+
   /** a file that is scheduled to be deleted */
   val DeletedFileSuffix = ".deleted"
 
@@ -1332,6 +1342,18 @@ object Log {
    */
   def timeIndexFilename(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix)
+
+  /**
+   * Construct a PID snapshot file using the given offset.
+   *
+   * @param dir The directory in which the log will reside
+   * @param offset The last offset (exclusive) included in the snapshot
+   */
+  def pidSnapshotFilename(dir: File, offset: Long) =
+    new File(dir, filenamePrefixFromOffset(offset) + PidSnapshotFileSuffix)
+
+  def offsetFromFilename(filename: String): Long =
+    filename.substring(0, filename.indexOf('.')).toLong
 
   /**
    * Parse the topic and partition out of the directory name of a log
