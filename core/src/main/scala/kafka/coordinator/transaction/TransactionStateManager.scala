@@ -231,27 +231,19 @@ class TransactionStateManager(brokerId: Int,
 
     val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partition)
 
+    inLock(stateLock) {
+      ownedPartitions.put(partition, coordinatorEpoch)
+      loadingPartitions.add(partition)
+    }
+
     def loadTransactions() {
       info(s"Loading transaction metadata from $topicPartition")
-
-      inLock(stateLock) {
-        if (loadingPartitions.contains(partition)) {
-          // with background scheduler containing one thread, this should never happen,
-          // but just in case we change it in the future.
-          info(s"Transaction status loading from $topicPartition already in progress.")
-          return
-        } else {
-          loadingPartitions.add(partition)
-        }
-      }
-
       try {
         loadTransactionMetadata(topicPartition)
       } catch {
         case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
       } finally {
         inLock(stateLock) {
-          ownedPartitions.put(partition, coordinatorEpoch)
           loadingPartitions.remove(partition)
         }
       }
@@ -269,19 +261,14 @@ class TransactionStateManager(brokerId: Int,
 
     val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partition)
 
+    inLock(stateLock) {
+      ownedPartitions.remove(partition)
+    }
+
     def removeTransactions() {
       var numTxnsRemoved = 0
 
       inLock(stateLock) {
-        if (!ownedPartitions.contains(partition)) {
-          // with background scheduler containing one thread, this should never happen,
-          // but just in case we change it in the future.
-          info(s"Partition $topicPartition has already been removed.")
-          return
-        } else {
-          ownedPartitions.remove(partition)
-        }
-
         for (transactionalId <- transactionMetadataCache.keys) {
           if (partitionFor(transactionalId) == partition) {
             // we do not need to worry about whether the transactional id has any ongoing transaction or not since
