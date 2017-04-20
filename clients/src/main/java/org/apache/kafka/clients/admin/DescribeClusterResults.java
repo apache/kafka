@@ -17,7 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.KafkaFuture;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 
 import java.util.Collection;

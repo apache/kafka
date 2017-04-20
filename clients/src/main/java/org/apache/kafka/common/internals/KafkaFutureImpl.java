@@ -14,28 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.internals;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import org.apache.kafka.common.KafkaFuture;
 
 /**
  * A flexible future which supports call chaining and other asynchronous programming patterns.
  * This will eventually become a thin shim on top of Java 8's CompletableFuture.
  */
-public final class KafkaFuture<T> implements Future {
-    /**
-     * A function which takes objects of type A and returns objects of type B.
-     */
-    public static abstract class Function<A, B> {
-        public abstract B apply(A a);
-    }
-
+public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     /**
      * A convenience method that throws the current exception, wrapping it if needed.
      *
@@ -52,18 +46,11 @@ public final class KafkaFuture<T> implements Future {
         }
     }
 
-    /**
-     * A consumer of two different types of object.
-     */
-    public static abstract class BiConsumer<A, B> {
-        public abstract void accept(A a, B b);
-    }
-
     private static class Applicant<A, B> extends BiConsumer<A, Throwable> {
         private final Function<A, B> function;
-        private final KafkaFuture<B> future;
+        private final KafkaFutureImpl<B> future;
 
-        Applicant(Function<A, B> function, KafkaFuture<B> future) {
+        Applicant(Function<A, B> function, KafkaFutureImpl<B> future) {
             this.function = function;
             this.future = future;
         }
@@ -127,48 +114,6 @@ public final class KafkaFuture<T> implements Future {
         }
     }
 
-    private static class AllOfAdapter<R> extends BiConsumer<R, Throwable> {
-        private int remainingResponses;
-        private KafkaFuture future;
-
-        public AllOfAdapter(int remainingResponses, KafkaFuture future) {
-            this.remainingResponses = remainingResponses;
-            this.future = future;
-        }
-
-        @Override
-        public synchronized void accept(R newValue, Throwable exception) {
-            if (remainingResponses <= 0)
-                return;
-            if (exception != null) {
-                remainingResponses = 0;
-                future.completeExceptionally(exception);
-            } else {
-                remainingResponses--;
-                if (remainingResponses <= 0)
-                    future.complete(null);
-            }
-        }
-    }
-
-    /** 
-     * Returns a new KafkaFuture that is already completed with the given value.
-     */
-    public static <U> KafkaFuture<U> completedFuture(U value) {
-        KafkaFuture<U> future = new KafkaFuture<U>();
-        future.complete(value);
-        return future;
-    }
-
-    public static KafkaFuture<Void> allOf(KafkaFuture<?>... futures) {
-        KafkaFuture<Void> allOfFuture = new KafkaFuture<Void>();
-        AllOfAdapter allOfWaiter = new AllOfAdapter(futures.length, allOfFuture);
-        for (KafkaFuture<?> future : futures) {
-            future.addWaiter(allOfWaiter);
-        }
-        return allOfFuture;
-    }
-
     /**
      * True if this future is done.
      */
@@ -194,13 +139,15 @@ public final class KafkaFuture<T> implements Future {
      * Returns a new KafkaFuture that, when this future completes normally, is executed with this
      * futures's result as the argument to the supplied function.
      */
+    @Override
     public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
-        KafkaFuture<R> future = new KafkaFuture<R>();
+        KafkaFutureImpl<R> future = new KafkaFutureImpl<R>();
         addWaiter(new Applicant(function, future));
         return future;
     }
 
-    private synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
+    @Override
+    protected synchronized void addWaiter(BiConsumer<? super T, ? super Throwable> action) {
         if (exception != null) {
             action.accept(null, exception);
         } else if (done) {
@@ -210,10 +157,7 @@ public final class KafkaFuture<T> implements Future {
         }
     }
 
-    /**
-     * If not already completed, sets the value returned by get() and related methods to the given
-     * value.
-     */
+    @Override
     public synchronized boolean complete(T newValue) {
         List<BiConsumer<? super T, ? super Throwable>> oldWaiters = null;
         synchronized (this) {
@@ -230,10 +174,7 @@ public final class KafkaFuture<T> implements Future {
         return true;
     }
 
-    /**
-     * If not already completed, causes invocations of get() and related methods to throw the given
-     * exception.
-     */
+    @Override
     public boolean completeExceptionally(Throwable newException) {
         List<BiConsumer<? super T, ? super Throwable>> oldWaiters = null;
         synchronized (this) {
@@ -288,6 +229,7 @@ public final class KafkaFuture<T> implements Future {
      * Returns the result value (or throws any encountered exception) if completed, else returns
      * the given valueIfAbsent.
      */
+    @Override
     public synchronized T getNow(T valueIfAbsent) throws InterruptedException, ExecutionException {
         if (exception != null)
             wrapAndThrow(exception);
@@ -307,6 +249,7 @@ public final class KafkaFuture<T> implements Future {
     /**
      * Returns true if this CompletableFuture completed exceptionally, in any way.
      */
+    @Override
     public synchronized boolean isCompletedExceptionally() {
         return exception != null;
     }

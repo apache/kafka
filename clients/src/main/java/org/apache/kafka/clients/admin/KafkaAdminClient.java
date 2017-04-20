@@ -22,12 +22,12 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.KafkaFuture;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.ApiException;
@@ -37,6 +37,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -135,11 +136,11 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Get or create a list value from a map.
      *
-     * @param map                               The map to get or create the element from.
-     * @param key                               The key.
-     * @param <K>                               The key type.
-     * @param <V>                               The value type.
-     * @return                                  The list value.
+     * @param map   The map to get or create the element from.
+     * @param key   The key.
+     * @param <K>   The key type.
+     * @param <V>   The value type.
+     * @return      The list value.
      */
     static <K, V> List<V> getOrCreateListValue(Map<K, List<V>> map, K key) {
         List<V> list = map.get(key);
@@ -151,14 +152,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     /**
-     * Send an exception to every element in a collection of KafkaFutures.
+     * Send an exception to every element in a collection of KafkaFutureImpls.
      *
-     * @param futures                           The collection of KafkaFuture objects.
-     * @param exc                               The exception
-     * @param <T>                               The KafkaFuture result type.
+     * @param futures   The collection of KafkaFutureImpl objects.
+     * @param exc       The exception
+     * @param <T>       The KafkaFutureImpl result type.
      */
-    private static <T> void completeAllExceptionally(Collection<KafkaFuture<T>> futures, Throwable exc) {
-        for (KafkaFuture<?> future : futures) {
+    private static <T> void completeAllExceptionally(Collection<KafkaFutureImpl<T>> futures, Throwable exc) {
+        for (KafkaFutureImpl<?> future : futures) {
             future.completeExceptionally(exc);
         }
     }
@@ -166,9 +167,9 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Get the current time remaining before a deadline as an integer.
      *
-     * @param now                               The current time in milliseconds.
-     * @param deadlineMs                        The deadline time in milliseconds.
-     * @return                                  The time delta in milliseconds.
+     * @param now           The current time in milliseconds.
+     * @param deadlineMs    The deadline time in milliseconds.
+     * @return              The time delta in milliseconds.
      */
     static int getTimeoutMsRemainingAsInt(long now, long deadlineMs) {
         long deltaMs = deadlineMs - now;
@@ -182,9 +183,9 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Generate the client id based on the configuration.
      *
-     * @param config                            The configuration
+     * @param config    The configuration
      *
-     * @return                                  The client id
+     * @return          The client id
      */
     static String generateClientId(AdminClientConfig config) {
         String clientId = config.getString(AdminClientConfig.CLIENT_ID_CONFIG);
@@ -196,9 +197,9 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Get the deadline for a particular call.
      *
-     * @param optionTimeoutMs                   The timeout option given by the user.
+     * @param optionTimeoutMs   The timeout option given by the user.
      *
-     * @return                                  The deadline in milliseconds.
+     * @return                  The deadline in milliseconds.
      */
     private long getDeadlineMs(Integer optionTimeoutMs) {
         if (optionTimeoutMs != null)
@@ -210,9 +211,9 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Pretty-print an exception.
      *
-     * @param throwable                         The exception.
+     * @param throwable     The exception.
      *
-     * @return                                  A compact human-readable string.
+     * @return              A compact human-readable string.
      */
     static String prettyPrintException(Throwable throwable) {
         if (throwable == null)
@@ -226,8 +227,8 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Close an AutoCloseable, suppressing any exceptions.
      *
-     * @param what                              Human-readable string explaining what we are closing.
-     * @param closeable                         What we are closing, or null to ignore.
+     * @param what          Human-readable string explaining what we are closing.
+     * @param closeable     What we are closing, or null to ignore.
      */
     static void closeQuietly(String what, AutoCloseable closeable) {
         if (closeable == null)
@@ -412,19 +413,18 @@ public class KafkaAdminClient extends AdminClient {
         /**
          * Create an AbstractRequest.Builder for this Call.
          *
-         * @param timeoutMs                     The timeout in milliseconds.
+         * @param timeoutMs The timeout in milliseconds.
          *
-         * @return                              The AbstractRequest builder.
+         * @return          The AbstractRequest builder.
          */
         abstract AbstractRequest.Builder createRequest(int timeoutMs);
 
         /**
          * Process the call response.
          *
-         * @param abstractResponse              The AbstractResponse.
+         * @param abstractResponse  The AbstractResponse.
          *
-         * @return                              True if the response has been processed;
-         *                                      false to re-submit the request.
+         * @return                  True if the response has been processed; false to re-submit the request.
          */
         abstract void handleResponse(AbstractResponse abstractResponse);
 
@@ -432,16 +432,16 @@ public class KafkaAdminClient extends AdminClient {
          * Handle a failure.  This will only be called if the failure exception was not
          * retryable, or if we hit a timeout.
          *
-         * @param throwable                     The exception.
+         * @param throwable     The exception.
          */
         abstract void handleFailure(Throwable throwable);
 
         /**
          * Handle an UnsupportedVersionException.
          *
-         * @param exception                     The exception.
+         * @param exception     The exception.
          *
-         * @return                              True if the exception can be handled; false otherwise.
+         * @return              True if the exception can be handled; false otherwise.
          */
         boolean handleUnsupportedVersionException(UnsupportedVersionException exception) {
             return false;
@@ -490,8 +490,8 @@ public class KafkaAdminClient extends AdminClient {
         /**
          * Time out a list of calls.
          *
-         * @param now               The current time in milliseconds.
-         * @param calls             The collection of calls.  Must be sorted from oldest to newest.
+         * @param now       The current time in milliseconds.
+         * @param calls     The collection of calls.  Must be sorted from oldest to newest.
          */
         private int timeoutCalls(long now, Collection<Call> calls) {
             int numTimedOut = 0;
@@ -509,7 +509,7 @@ public class KafkaAdminClient extends AdminClient {
         /**
          * Time out the elements in the newRpcs list which are expired.
          *
-         * @param now               The current time in milliseconds.
+         * @param now       The current time in milliseconds.
          */
         private synchronized void timeoutNewCalls(long now) {
             int numTimedOut = timeoutCalls(now, newCalls);
@@ -521,8 +521,8 @@ public class KafkaAdminClient extends AdminClient {
         /**
          * Time out calls which have been assigned to nodes.
          *
-         * @param now                   The current time in milliseconds.
-         * @param callsToSend           A map of nodes to the calls they need to handle.
+         * @param now           The current time in milliseconds.
+         * @param callsToSend   A map of nodes to the calls they need to handle.
          */
         private void timeoutCallsToSend(long now, Map<Node, List<Call>> callsToSend) {
             int numTimedOut = 0;
@@ -539,10 +539,10 @@ public class KafkaAdminClient extends AdminClient {
          * This function holds the lock for the minimum amount of time, to avoid blocking
          * users of AdminClient who will also take the lock to add new RPC requests.
          *
-         * @param now                   The current time in milliseconds.
-         * @param callsToSend           A map of nodes to the calls they need to handle.
+         * @param now           The current time in milliseconds.
+         * @param callsToSend   A map of nodes to the calls they need to handle.
          *
-         * @return                      The new RPCs we need to process.
+         * @return              The new RPCs we need to process.
          */
         private void chooseNodesForNewCalls(long now, Map<Node, List<Call>> callsToSend) {
             List<Call> newCallsToAdd = null;
@@ -561,9 +561,9 @@ public class KafkaAdminClient extends AdminClient {
         /**
          * Choose a node for a new call.
          *
-         * @param now                   The current time in milliseconds.
-         * @param callsToSend           A map of nodes to the RPCs they need to handle.
-         * @param call                  The call.
+         * @param now           The current time in milliseconds.
+         * @param callsToSend   A map of nodes to the RPCs they need to handle.
+         * @param call          The call.
          */
         private void chooseNodeForNewCall(long now, Map<Node, List<Call>> callsToSend, Call call) {
             Node node = call.nodeProvider.provide();
@@ -783,9 +783,9 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateTopicResults createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
-        final Map<String, KafkaFuture<Void>> topicFutures = new HashMap<>(newTopics.size());
+        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
         for (NewTopic newTopic : newTopics) {
-            topicFutures.put(newTopic.name(), new KafkaFuture<Void>());
+            topicFutures.put(newTopic.name(), new KafkaFutureImpl<Void>());
         }
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
         for (NewTopic newTopic : newTopics) {
@@ -804,7 +804,7 @@ public class KafkaAdminClient extends AdminClient {
                 CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
                 for (Map.Entry<String, CreateTopicsResponse.Error> entry : response.errors().entrySet()) {
-                    KafkaFuture<Void> future = topicFutures.get(entry.getKey());
+                    KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());
                     } else {
@@ -817,8 +817,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic.  But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFuture<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFuture<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<Void> future = entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
@@ -831,15 +831,15 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         });
-        return new CreateTopicResults(topicFutures);
+        return new CreateTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
     public DeleteTopicResults deleteTopics(final Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
-        final Map<String, KafkaFuture<Void>> topicFutures = new HashMap<>(topicNames.size());
+        final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
-            topicFutures.put(topicName, new KafkaFuture<Void>());
+            topicFutures.put(topicName, new KafkaFutureImpl<Void>());
         }
         runnable.call(new Call("deleteTopics", getDeadlineMs(options.timeoutMs()),
             new ControllerNodeProvider()) {
@@ -854,7 +854,7 @@ public class KafkaAdminClient extends AdminClient {
                 DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
                 for (Map.Entry<String, Errors> entry : response.errors().entrySet()) {
-                    KafkaFuture<Void> future = topicFutures.get(entry.getKey());
+                    KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());
                     } else {
@@ -867,8 +867,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // The server should send back a response for every topic.  But do a sanity check anyway.
-                for (Map.Entry<String, KafkaFuture<Void>> entry : topicFutures.entrySet()) {
-                    KafkaFuture<Void> future = entry.getValue();
+                for (Map.Entry<String, KafkaFutureImpl<Void>> entry : topicFutures.entrySet()) {
+                    KafkaFutureImpl<Void> future = entry.getValue();
                     if (!future.isDone()) {
                         future.completeExceptionally(new ApiException("The server response did not " +
                             "contain a reference to node " + entry.getKey()));
@@ -881,12 +881,12 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         });
-        return new DeleteTopicResults(topicFutures);
+        return new DeleteTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
     public ListTopicsResults listTopics(final ListTopicsOptions options) {
-        final KafkaFuture<Map<String, TopicListing>> topicListingFuture = new KafkaFuture<>();
+        final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
         runnable.call(new Call("listTopics", getDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -916,9 +916,9 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeTopicsResults describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
-        final Map<String, KafkaFuture<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
+        final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
-            topicFutures.put(topicName, new KafkaFuture<TopicDescription>());
+            topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
         }
         runnable.call(new Call("describeTopics", getDeadlineMs(options.timeoutMs()),
             new ControllerNodeProvider()) {
@@ -932,9 +932,9 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : topicFutures.entrySet()) {
+                for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
                     String topicName = entry.getKey();
-                    KafkaFuture<TopicDescription> future = entry.getValue();
+                    KafkaFutureImpl<TopicDescription> future = entry.getValue();
                     Errors topicError = response.errors().get(topicName);
                     if (topicError != null) {
                         future.completeExceptionally(topicError.exception());
@@ -964,12 +964,12 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         });
-        return new DescribeTopicsResults(topicFutures);
+        return new DescribeTopicsResults(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
     }
 
     @Override
     public DescribeClusterResults describeCluster(DescribeClusterOptions options) {
-        final KafkaFuture<Collection<Node>> describeClusterFuture = new KafkaFuture<>();
+        final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
         runnable.call(new Call("listNodes", getDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -995,7 +995,7 @@ public class KafkaAdminClient extends AdminClient {
         final long deadlineMs = getDeadlineMs(options.timeoutMs());
         Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
         for (final Node node : nodes) {
-            final KafkaFuture<NodeApiVersions> nodeFuture = new KafkaFuture<>();
+            final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
             nodeFutures.put(node, nodeFuture);
             runnable.call(new Call("apiVersions", deadlineMs, new ConstantAdminNodeProvider(node)) {
                     @Override

@@ -16,22 +16,19 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.KafkaFuture;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.CreateTopicsResponse.Error;
+import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.utils.Time;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
 
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
@@ -43,6 +40,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -56,7 +56,7 @@ import static org.junit.Assert.fail;
  */
 public class KafkaAdminClientTest {
     @Rule
-    public Timeout globalTimeout = Timeout.millis(120000);
+    final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
     public void testGetOrCreateListValue() {

@@ -14,10 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common;
 
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,9 +35,12 @@ import static org.junit.Assert.assertEquals;
  * A unit test for KafkaFuture.
  */
 public class KafkaFutureTest {
-    @Test(timeout = 120000)
+    @Rule
+    final public Timeout globalTimeout = Timeout.millis(120000);
+
+    @Test
     public void testCompleteFutures() throws Exception {
-        KafkaFuture<Integer> future123 = new KafkaFuture<>();
+        KafkaFutureImpl<Integer> future123 = new KafkaFutureImpl<>();
         assertTrue(future123.complete(123));
         assertEquals(Integer.valueOf(123), future123.get());
         assertFalse(future123.complete(456));
@@ -45,7 +51,7 @@ public class KafkaFutureTest {
         KafkaFuture<Integer> future456 = KafkaFuture.completedFuture(456);
         assertEquals(Integer.valueOf(456), future456.get());
 
-        KafkaFuture<Integer> futureFail = new KafkaFuture<>();
+        KafkaFutureImpl<Integer> futureFail = new KafkaFutureImpl<>();
         futureFail.completeExceptionally(new RuntimeException("We require more vespene gas"));
         try {
             futureFail.get();
@@ -56,9 +62,9 @@ public class KafkaFutureTest {
         }
     }
 
-    @Test(timeout = 120000)
+    @Test
     public void testCompletingFutures() throws Exception {
-        final KafkaFuture<String> future = new KafkaFuture<>();
+        final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
         CompleterThread myThread = new CompleterThread(future, "You must construct additional pylons.");
         assertFalse(future.isDone());
         assertFalse(future.isCompletedExceptionally());
@@ -76,11 +82,11 @@ public class KafkaFutureTest {
     }
 
     private static class CompleterThread<T> extends Thread {
-        private final KafkaFuture<T> future;
+        private final KafkaFutureImpl<T> future;
         private final T value;
         Throwable testException = null;
 
-        CompleterThread(KafkaFuture<T> future, T value) {
+        CompleterThread(KafkaFutureImpl<T> future, T value) {
             this.future = future;
             this.value = value;
         }
@@ -100,11 +106,11 @@ public class KafkaFutureTest {
     }
 
     private static class WaiterThread<T> extends Thread {
-        private final KafkaFuture<T> future;
+        private final KafkaFutureImpl<T> future;
         private final T expected;
         Throwable testException = null;
 
-        WaiterThread(KafkaFuture<T> future, T expected) {
+        WaiterThread(KafkaFutureImpl<T> future, T expected) {
             this.future = future;
             this.expected = expected;
         }
@@ -120,12 +126,12 @@ public class KafkaFutureTest {
         }
     }
 
-    @Test(timeout = 120000)
+    @Test
     public void testAllOfFutures() throws Exception {
         final int numThreads = 5;
-        final List<KafkaFuture<Integer>> futures = new ArrayList<>();
+        final List<KafkaFutureImpl<Integer>> futures = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
-            futures.add(new KafkaFuture<Integer>());
+            futures.add(new KafkaFutureImpl<Integer>());
         }
         KafkaFuture<Void> allFuture = KafkaFuture.allOf(futures.toArray(new KafkaFuture[0]));
         final List<CompleterThread> completerThreads = new ArrayList<>();
