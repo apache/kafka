@@ -15,6 +15,7 @@
 
 from ducktape.mark import parametrize
 from ducktape.tests.test import Test
+from ducktape.utils.util import wait_until
 
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsBrokerCompatibilityService
@@ -66,13 +67,10 @@ class StreamsBrokerCompatibility(Test):
 
         self.processor.wait()
 
-        num_consumed_mgs = self.consumer.total_consumed()
+        wait_until(lambda: self.consumer.total_consumed() > 0, timeout_sec=30, err_msg="Did expect to read a message but got none within 30 seconds.")
 
         self.consumer.stop()
         self.kafka.stop()
-
-        assert num_consumed_mgs == 1, \
-            "Did expect to read exactly one message but got %d" % num_consumed_mgs
 
     @parametrize(broker_version=str(LATEST_0_10_0))
     def test_fail_fast_on_incompatible_brokers(self, broker_version):
