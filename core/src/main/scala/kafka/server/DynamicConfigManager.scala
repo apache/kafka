@@ -146,12 +146,11 @@ class DynamicConfigManager(private val zkUtils: ZkUtils,
               " Received: " + json)
       val fullSanitizedEntityName = entityPath.substring(index + 1)
 
-      def loggableConfig(entityConfig: Properties) = entityConfig.asScala.map {
+      val entityConfig = AdminUtils.fetchEntityConfig(zkUtils, rootEntityType, fullSanitizedEntityName)
+      val loggableConfig = entityConfig.asScala.map {
         case (k, v) => (k, if (ScramMechanism.isScram(k)) Password.HIDDEN else v)
       }
-
-      val entityConfig = AdminUtils.fetchEntityConfig(zkUtils, rootEntityType, fullSanitizedEntityName)
-      logger.info(s"Processing override for entityPath: $entityPath with config: ${loggableConfig(entityConfig)}")
+      logger.info(s"Processing override for entityPath: $entityPath with config: $loggableConfig")
       configHandlers(rootEntityType).processConfigChanges(fullSanitizedEntityName, entityConfig)
 
     }
