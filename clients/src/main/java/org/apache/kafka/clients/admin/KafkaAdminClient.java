@@ -240,7 +240,7 @@ public class KafkaAdminClient extends AdminClient {
             metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
-            String metricGrpPrefix = "adminclient";
+            String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                     metrics, time, metricGrpPrefix, channelBuilder);
