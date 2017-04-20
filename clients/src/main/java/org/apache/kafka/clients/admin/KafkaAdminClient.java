@@ -71,6 +71,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
+
 /**
  * An administrative client for Kafka which supports managing and inspecting topics, brokers,
  * and configurations.
@@ -171,7 +173,7 @@ public class KafkaAdminClient extends AdminClient {
      * @param deadlineMs    The deadline time in milliseconds.
      * @return              The time delta in milliseconds.
      */
-    static int getTimeoutMsRemainingAsInt(long now, long deadlineMs) {
+    static int calcTimeoutMsRemainingAsInt(long now, long deadlineMs) {
         long deltaMs = deadlineMs - now;
         if (deltaMs > Integer.MAX_VALUE)
             deltaMs = Integer.MAX_VALUE;
@@ -201,7 +203,7 @@ public class KafkaAdminClient extends AdminClient {
      *
      * @return                  The deadline in milliseconds.
      */
-    private long getDeadlineMs(Integer optionTimeoutMs) {
+    private long calcDeadlineMs(Integer optionTimeoutMs) {
         if (optionTimeoutMs != null)
             return time.milliseconds() + Math.min(0, optionTimeoutMs);
         // If optionTimeoutMs is less than 0, we use the default timeout.
@@ -222,22 +224,6 @@ public class KafkaAdminClient extends AdminClient {
             return throwable.getClass().getSimpleName() + ": " + throwable.getMessage();
         }
         return throwable.getClass().getSimpleName();
-    }
-
-    /**
-     * Close an AutoCloseable, suppressing any exceptions.
-     *
-     * @param what          Human-readable string explaining what we are closing.
-     * @param closeable     What we are closing, or null to ignore.
-     */
-    static void closeQuietly(String what, AutoCloseable closeable) {
-        if (closeable == null)
-            return;
-        try {
-            closeable.close();
-        } catch (Throwable exc) {
-            log.error("Error closing " + what, exc);
-        }
     }
 
     static KafkaAdminClient create(AdminClientConfig config) {
@@ -273,10 +259,10 @@ public class KafkaAdminClient extends AdminClient {
             channelBuilder = null;
             return new KafkaAdminClient(config, clientId, time, metadata, metrics, networkClient);
         } catch (Throwable exc) {
-            closeQuietly("Metrics", metrics);
-            closeQuietly("NetworkClient", networkClient);
-            closeQuietly("Selector", selector);
-            closeQuietly("ChannelBuilder", channelBuilder);
+            closeQuietly(metrics, "Metrics");
+            closeQuietly(networkClient, "NetworkClient");
+            closeQuietly(selector, "Selector");
+            closeQuietly(channelBuilder, "ChannelBuilder");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
         }
     }
@@ -290,7 +276,7 @@ public class KafkaAdminClient extends AdminClient {
             metrics = new Metrics(new MetricConfig(), new LinkedList<MetricsReporter>(), time);
             return new KafkaAdminClient(config, clientId, time, metadata, metrics, client);
         } catch (Throwable exc) {
-            closeQuietly("Metrics", metrics);
+            closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed create new KafkaAdminClient", exc);
         }
     }
@@ -399,7 +385,7 @@ public class KafkaAdminClient extends AdminClient {
             }
             // Retriable exceptions can be retried a few times.
             tries++;
-            if ((tries > MAX_CALL_RETRIES) || getTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
+            if ((tries > MAX_CALL_RETRIES) || calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
                 log.debug("{} failed after {} attempt{}: {}",
                     callName, tries, tries == 1 ? "" : "s", prettyPrintException(throwable));
                 handleFailure(throwable);
@@ -497,7 +483,7 @@ public class KafkaAdminClient extends AdminClient {
             int numTimedOut = 0;
             for (Iterator<Call> iter = calls.iterator(); iter.hasNext(); ) {
                 Call call = iter.next();
-                if (getTimeoutMsRemainingAsInt(now, call.deadlineMs) < 0) {
+                if (calcTimeoutMsRemainingAsInt(now, call.deadlineMs) < 0) {
                     call.fail(now, new TimeoutException());
                     iter.remove();
                     numTimedOut++;
@@ -605,7 +591,7 @@ public class KafkaAdminClient extends AdminClient {
                     continue;
                 }
                 Call call = calls.remove(0);
-                int timeoutMs = getTimeoutMsRemainingAsInt(now, call.deadlineMs);
+                int timeoutMs = calcTimeoutMsRemainingAsInt(now, call.deadlineMs);
                 AbstractRequest.Builder<?> requestBuilder = null;
                 try {
                     requestBuilder = call.createRequest(timeoutMs);
@@ -644,7 +630,7 @@ public class KafkaAdminClient extends AdminClient {
                 // We assume that the first element in the list is the earliest.  So it should be the
                 // only one we need to check the timeout for.
                 Call call = contexts.get(0);
-                if (getTimeoutMsRemainingAsInt(now, call.deadlineMs) < 0) {
+                if (calcTimeoutMsRemainingAsInt(now, call.deadlineMs) < 0) {
                     log.debug("{}: Closing connection to {} to time out {}", clientId, nodeId, call);
                     client.close(nodeId);
                     numTimedOut++;
@@ -766,8 +752,8 @@ public class KafkaAdminClient extends AdminClient {
             if (numTimedOut > 0) {
                 log.debug("{}: timed out {} remaining operations.", clientId, numTimedOut);
             }
-            closeQuietly("KafkaClient", client);
-            closeQuietly("Metrics", metrics);
+            closeQuietly(client, "KafkaClient");
+            closeQuietly(metrics, "Metrics");
             log.debug("{}: exiting AdminClientRunnable thread.", clientId);
         }
 
@@ -791,7 +777,7 @@ public class KafkaAdminClient extends AdminClient {
         for (NewTopic newTopic : newTopics) {
             topicsMap.put(newTopic.name(), newTopic.convertToTopicDetails());
         }
-        runnable.call(new Call("createTopics", getDeadlineMs(options.timeoutMs()),
+        runnable.call(new Call("createTopics", calcDeadlineMs(options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -841,7 +827,7 @@ public class KafkaAdminClient extends AdminClient {
         for (String topicName : topicNames) {
             topicFutures.put(topicName, new KafkaFutureImpl<Void>());
         }
-        runnable.call(new Call("deleteTopics", getDeadlineMs(options.timeoutMs()),
+        runnable.call(new Call("deleteTopics", calcDeadlineMs(options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -887,7 +873,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListTopicsResults listTopics(final ListTopicsOptions options) {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
-        runnable.call(new Call("listTopics", getDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
+        runnable.call(new Call("listTopics", calcDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return MetadataRequest.Builder.allTopics();
@@ -920,7 +906,7 @@ public class KafkaAdminClient extends AdminClient {
         for (String topicName : topicNames) {
             topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
         }
-        runnable.call(new Call("describeTopics", getDeadlineMs(options.timeoutMs()),
+        runnable.call(new Call("describeTopics", calcDeadlineMs(options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -970,7 +956,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeClusterResults describeCluster(DescribeClusterOptions options) {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
-        runnable.call(new Call("listNodes", getDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
+        runnable.call(new Call("listNodes", calcDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(Collections.<String>emptyList());
@@ -992,7 +978,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
-        final long deadlineMs = getDeadlineMs(options.timeoutMs());
+        final long deadlineMs = calcDeadlineMs(options.timeoutMs());
         Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
         for (final Node node : nodes) {
             final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();

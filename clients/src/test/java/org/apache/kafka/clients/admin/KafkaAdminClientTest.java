@@ -20,7 +20,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -30,7 +29,6 @@ import org.apache.kafka.common.requests.CreateTopicsResponse.Error;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.utils.Time;
 
-import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -75,11 +73,11 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testGetTimeoutMsRemainingAsInt() {
-        assertEquals(0, KafkaAdminClient.getTimeoutMsRemainingAsInt(1000, 1000));
-        assertEquals(100, KafkaAdminClient.getTimeoutMsRemainingAsInt(1000, 1100));
-        assertEquals(Integer.MAX_VALUE, KafkaAdminClient.getTimeoutMsRemainingAsInt(0, Long.MAX_VALUE));
-        assertEquals(Integer.MIN_VALUE, KafkaAdminClient.getTimeoutMsRemainingAsInt(Long.MAX_VALUE, 0));
+    public void testCalcTimeoutMsRemainingAsInt() {
+        assertEquals(0, KafkaAdminClient.calcTimeoutMsRemainingAsInt(1000, 1000));
+        assertEquals(100, KafkaAdminClient.calcTimeoutMsRemainingAsInt(1000, 1100));
+        assertEquals(Integer.MAX_VALUE, KafkaAdminClient.calcTimeoutMsRemainingAsInt(0, Long.MAX_VALUE));
+        assertEquals(Integer.MIN_VALUE, KafkaAdminClient.calcTimeoutMsRemainingAsInt(Long.MAX_VALUE, 0));
     }
 
     @Test
@@ -88,18 +86,6 @@ public class KafkaAdminClientTest {
         assertEquals("TimeoutException", KafkaAdminClient.prettyPrintException(new TimeoutException()));
         assertEquals("The foobar timed out.",
             KafkaAdminClient.prettyPrintException(new TimeoutException("The foobar timed out.")));
-    }
-
-    @Test
-    public void testCloseQuietly() {
-        KafkaAdminClient.closeQuietly("nothing", null);
-        KafkaAdminClient.closeQuietly("ByteArrayOutputStream", new ByteArrayOutputStream());
-        KafkaAdminClient.closeQuietly("ErrorCloser", new AutoCloseable() {
-            @Override
-            public void close() throws Exception {
-                throw new KafkaException("oh no");
-            }
-        });
     }
 
     private static Map<String, Object> newStrMap(String... vals) {
