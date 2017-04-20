@@ -38,6 +38,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name", new MockTimer, reaperEnabled = false)
   private val topic1 = new TopicPartition("topic1", 0)
   private val epochAndMarkers = CoordinatorEpochAndMarkers(0,
+    0,
     Utils.mkList(
       new WriteTxnMarkersRequest.TxnMarkerEntry(0,
         0,
@@ -48,7 +49,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldReEnqueuePartitionsWhenBrokerDisconnected(): Unit = {
-    EasyMock.expect(markerChannel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
+    EasyMock.expect(markerChannel.addRequestToSend(epochAndMarkers.metadataPartition, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, true, null, null))
@@ -75,8 +76,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
 
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
-    EasyMock.expect(markerChannel.pendingTxnMetadata(0))
-      .andReturn(metadata)
+    EasyMock.expect(markerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, 0))
+      .andReturn(Some(metadata))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))
@@ -95,8 +96,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
       completed = true
     }), Seq(0L))
 
-    EasyMock.expect(markerChannel.pendingTxnMetadata(0))
-      .andReturn(metadata)
+    EasyMock.expect(markerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, 0))
+      .andReturn(Some(metadata))
 
     EasyMock.replay(markerChannel)
 
@@ -143,7 +144,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.UNKNOWN_TOPIC_OR_PARTITION))
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0)
 
-    EasyMock.expect(markerChannel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
+    EasyMock.expect(markerChannel.addRequestToSend(epochAndMarkers.metadataPartition, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))

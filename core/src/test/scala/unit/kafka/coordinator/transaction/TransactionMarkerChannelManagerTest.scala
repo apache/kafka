@@ -43,6 +43,7 @@ class TransactionMarkerChannelManagerTest {
   private val partition2 = new TopicPartition("topic1", 1)
   private val broker1 = new Node(1, "host", 10)
   private val broker2 = new Node(2, "otherhost", 10)
+  private val metadataPartition = 0
   private val channelManager = new TransactionMarkerChannelManager(KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
     purgatory,
@@ -66,7 +67,7 @@ class TransactionMarkerChannelManagerTest {
 
     channel.addNewBroker(broker1)
     channel.addNewBroker(broker2)
-    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(0,
@@ -88,7 +89,7 @@ class TransactionMarkerChannelManagerTest {
   }
 
   @Test
-  def shouldGenerateRequestPerCoordinatorEpochPerBroker(): Unit ={
+  def shouldGenerateRequestPerPartitionPerBroker(): Unit ={
     val partitionOneEpoch = 0
     val partitionTwoEpoch = 1
 
@@ -102,8 +103,8 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.replay(metadataCache)
 
     channel.addNewBroker(broker1)
-    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, partitionOneEpoch, Set[TopicPartition](partition1))
-    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, partitionTwoEpoch, Set[TopicPartition](partition2))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, partitionOneEpoch, Set[TopicPartition](partition1))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, partitionTwoEpoch, Set[TopicPartition](partition2))
 
     val expectedPartition1Request = new WriteTxnMarkersRequest.Builder(0,
       Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
@@ -131,7 +132,7 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.replay(metadataCache)
 
     channel.addNewBroker(broker1)
-    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     requestGenerator()
     assertTrue(channel.brokerStateMap(1).markersQueue.isEmpty)
@@ -151,9 +152,9 @@ class TransactionMarkerChannelManagerTest {
     channel.addNewBroker(broker1)
     channel.addNewBroker(broker2)
 
-    channelManager.addTxnMarkerRequest(metadata, 0, completionCallback)
+    channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
 
-    assertEquals(channel.pendingTxnMetadata(1), metadata)
+    assertEquals(Some(metadata), channel.pendingTxnMetadata(metadataPartition, 1))
 
   }
 
@@ -166,7 +167,7 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.replay(metadataCache)
     channel.addNewBroker(broker1)
-    channelManager.addTxnMarkerRequest(metadata, 0, completionCallback)
+    channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
 
     assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
   }
@@ -181,7 +182,7 @@ class TransactionMarkerChannelManagerTest {
 
     channel.addNewBroker(broker1)
 
-    channelManager.addTxnMarkerRequest(metadata, 0, completionCallback)
+    channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
     assertEquals(1,purgatory.watched)
   }
 

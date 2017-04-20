@@ -50,9 +50,9 @@ class TransactionMarkerChannelTest {
   def shouldQueueRequestsByBrokerId(): Unit = {
     channel.addNewBroker(new Node(1, "host", 10))
     channel.addNewBroker(new Node(2, "otherhost", 10))
-    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
-    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
-    channel.addRequestForBroker(2, CoordinatorEpochAndMarkers(0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(2, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
 
     assertEquals(2, channel.brokerStateMap(1).markersQueue.size())
     assertEquals(1, channel.brokerStateMap(2).markersQueue.size())
@@ -60,8 +60,8 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldNotAddPendingTxnIfOneAlreadyExistsForPid(): Unit = {
-    channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-    assertFalse(channel.maybeAddPendingRequest(new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0)))
+    channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
+    assertFalse(channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0)))
   }
 
   @Test
@@ -78,7 +78,7 @@ class TransactionMarkerChannelTest {
     EasyMock.replay(metadataCache)
     channel.addNewBroker(new Node(1, "host", 10))
     channel.addNewBroker(new Node(2, "otherhost", 10))
-    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
     assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
     assertEquals(1, channel.brokerStateMap(2).markersQueue.size())
@@ -93,19 +93,47 @@ class TransactionMarkerChannelTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(new Node(1, "host", 10)))
 
     EasyMock.replay(metadataCache)
-    channel.addRequestToSend(0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
     EasyMock.verify(metadataCache)
   }
 
-
-
+  @Test
   def shouldGetPendingTxnMetadataByPid(): Unit = {
+    val metadataPartition = 0
     val transaction = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0)
-    channel.maybeAddPendingRequest(transaction)
-    channel.maybeAddPendingRequest(new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0))
-    assertEquals(transaction, channel.pendingTxnMetadata(1))
+    channel.maybeAddPendingRequest(metadataPartition, transaction)
+    channel.maybeAddPendingRequest(metadataPartition, new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0))
+    assertEquals(Some(transaction), channel.pendingTxnMetadata(metadataPartition, 1))
+  }
+
+  @Test
+  def shouldRemovePendingRequestsForPartitionWhenPartitionEmigrated(): Unit = {
+    channel.maybeAddPendingRequest(0, new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set.empty, 0))
+    channel.maybeAddPendingRequest(0, new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set.empty, 0))
+    val metadata = new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0)
+    channel.maybeAddPendingRequest(1, metadata)
+
+    channel.removeStateForPartition(0)
+
+    assertEquals(None, channel.pendingTxnMetadata(0, 0))
+    assertEquals(None, channel.pendingTxnMetadata(0, 1))
+    assertEquals(Some(metadata), channel.pendingTxnMetadata(1, 2))
+  }
+
+  @Test
+  def shouldRemoveBrokerRequestsForPartitionWhenPartitionEmigrated(): Unit = {
+    channel.addNewBroker(new Node(1, "host", 10))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(1, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+    channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(1, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
+
+    channel.removeStateForPartition(1)
+    val markersQueue = channel.brokerStateMap(1).markersQueue
+    assertEquals(1, markersQueue.size())
+    assertEquals(0, markersQueue.peek().metadataPartition)
+
   }
 
   def errorCallback(error: Errors): Unit = {}

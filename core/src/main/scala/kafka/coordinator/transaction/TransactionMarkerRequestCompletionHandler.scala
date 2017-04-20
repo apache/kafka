@@ -38,7 +38,9 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
       trace(s"Cancelled request $response due to node ${response.destination} being disconnected")
       // re-enqueue the markers
       for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntry) {
-        transactionMarkerChannel.addRequestToSend(txnMarker.producerId(),
+        transactionMarkerChannel.addRequestToSend(
+          epochAndMarkers.metadataPartition,
+          txnMarker.producerId(),
           txnMarker.producerEpoch(),
           txnMarker.transactionResult(),
           epochAndMarkers.coordinatorEpoch,
@@ -59,9 +61,14 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
         for ((topicPartition: TopicPartition, error: Errors) <- errors) {
           error match {
             case Errors.NONE =>
-              val metadata = transactionMarkerChannel.pendingTxnMetadata(txnMarker.producerId())
-              // do not synchronize on this metadata since it will only be accessed by the sender thread
-              metadata.topicPartitions -= topicPartition
+              transactionMarkerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, txnMarker.producerId()) match {
+                case None =>
+                  // TODO: probably need to respond with Errors.NOT_COORDINATOR
+                  throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${epochAndMarkers.metadataPartition} has likely emigrated")
+                case Some(metadata) =>
+                // do not synchronize on this metadata since it will only be accessed by the sender thread
+                  metadata.topicPartitions -= topicPartition
+              }
             case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
                  Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
               retryPartitions += topicPartition
@@ -71,7 +78,9 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
 
           if (retryPartitions.nonEmpty) {
             // re-enqueue with possible new leaders of the partitions
-            transactionMarkerChannel.addRequestToSend(txnMarker.producerId(),
+            transactionMarkerChannel.addRequestToSend(
+              epochAndMarkers.metadataPartition,
+              txnMarker.producerId(),
               txnMarker.producerEpoch(),
               txnMarker.transactionResult,
               epochAndMarkers.coordinatorEpoch,

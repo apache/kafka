@@ -579,6 +579,17 @@ class TransactionCoordinatorTest {
     EasyMock.verify(transactionManager)
   }
 
+  @Test
+  def shouldRemoveTransactionsForPartitionOnEmigration(): Unit = {
+    EasyMock.expect(transactionManager.removeTransactionsForPartition(0))
+    EasyMock.expect(transactionMarkerChannelManager.removeStateForPartition(0))
+    EasyMock.replay(transactionManager, transactionMarkerChannelManager)
+
+    coordinator.handleTxnEmigration(0)
+
+    EasyMock.verify(transactionManager, transactionMarkerChannelManager)
+  }
+
   private def validateWaitsForCompletionBeforeRespondingWithIncrementedEpoch(state: TransactionState) = {
     val transactionId = "tid"
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
@@ -641,9 +652,7 @@ class TransactionCoordinatorTest {
 
     coordinator.handleInitPid(transactionId, 10, initPidMockCallback)
 
-    assertEquals(1, result.epoch)
-    assertEquals(0, result.pid)
-    assertEquals(Errors.NONE, result.error)
+    assertEquals(InitPidResult(0, 1, Errors.NONE), result)
     assertEquals(10, metadata.txnTimeoutMs)
     assertEquals(time.milliseconds(), metadata.timestamp)
     assertEquals(1, metadata.epoch)
@@ -701,6 +710,7 @@ class TransactionCoordinatorTest {
       .andReturn(Some(0))
 
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
+      EasyMock.eq(0),
       EasyMock.anyObject(),
       EasyMock.anyInt(),
       EasyMock.capture(capturedErrorsCallback)

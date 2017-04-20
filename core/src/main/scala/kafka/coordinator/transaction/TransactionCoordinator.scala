@@ -254,6 +254,7 @@ class TransactionCoordinator(brokerId: Int,
 
   def handleTxnEmigration(transactionStateTopicPartitionId: Int) {
     txnManager.removeTransactionsForPartition(transactionStateTopicPartitionId)
+    txnMarkerChannelManager.removeStateForPartition(transactionStateTopicPartitionId)
   }
 
   def handleEndTransaction(transactionalId: String,
@@ -326,12 +327,12 @@ class TransactionCoordinator(brokerId: Int,
                       newMetadata.timestamp)
                     preparedCommitMetadata.prepareTransitionTo(completedState)
                     txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
-                    txnMarkerChannelManager.removeCompleted(pid)
+                    txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionalId), pid)
                   case None =>
                     responseCallback(Errors.NOT_COORDINATOR)
                 }
             }
-            txnMarkerChannelManager.addTxnMarkerRequest(newMetadata, coordinatorEpoch, completionCallback)
+            txnMarkerChannelManager.addTxnMarkerRequest(txnManager.partitionFor(transactionalId), newMetadata, coordinatorEpoch, completionCallback)
           case None =>
             responseCallback(Errors.NOT_COORDINATOR)
         }
