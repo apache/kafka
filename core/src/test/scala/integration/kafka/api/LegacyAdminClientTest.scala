@@ -33,7 +33,7 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import scala.collection.JavaConverters._
 
-class AdminClientTest extends IntegrationTestHarness with Logging {
+class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1
   val consumerCount = 2
