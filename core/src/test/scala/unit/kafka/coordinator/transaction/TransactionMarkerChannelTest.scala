@@ -39,17 +39,37 @@ class TransactionMarkerChannelTest {
 
 
   @Test
-  def shouldAddEmptyBrokerQueueWhenAddNewBroker(): Unit = {
-    channel.addNewBroker(new Node(1, "host", 10))
-    channel.addNewBroker(new Node(2, "host", 10))
+  def shouldAddEmptyBrokerQueueWhenAddingNewBroker(): Unit = {
+    channel.addOrUpdateBroker(new Node(1, "host", 10))
+    channel.addOrUpdateBroker(new Node(2, "host", 10))
     assertEquals(0, channel.brokerStateMap(1).markersQueue.size())
     assertEquals(0, channel.brokerStateMap(2).markersQueue.size())
   }
 
   @Test
+  def shouldUpdateDestinationBrokerNodeWhenUpdatingBroker(): Unit = {
+    val partition1 = new TopicPartition("topic1", 0)
+    val newDestination = new Node(1, "otherhost", 100)
+
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+
+    // getAliveEndpoint returns an updated node
+    EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(newDestination))
+    EasyMock.replay(metadataCache)
+
+    channel.addOrUpdateBroker(new Node(1, "host", 10))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+
+    val destinationAndQueue = channel.brokerStateMap(1)
+    assertEquals(newDestination, destinationAndQueue.destBrokerNode)
+    assertEquals(1, destinationAndQueue.markersQueue.size())
+  }
+
+  @Test
   def shouldQueueRequestsByBrokerId(): Unit = {
-    channel.addNewBroker(new Node(1, "host", 10))
-    channel.addNewBroker(new Node(2, "otherhost", 10))
+    channel.addOrUpdateBroker(new Node(1, "host", 10))
+    channel.addOrUpdateBroker(new Node(2, "otherhost", 10))
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
     channel.addRequestForBroker(2, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
@@ -75,9 +95,10 @@ class TransactionMarkerChannelTest {
     EasyMock.expect(metadataCache.getPartitionInfo(partition2.topic(), partition2.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(2, 0, List.empty, 0), 0), Set.empty)))
 
+    EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(new Node(1, "host", 10)))
+    EasyMock.expect(metadataCache.getAliveEndpoint(2, listenerName)).andReturn(Some(new Node(2, "otherhost", 10)))
+
     EasyMock.replay(metadataCache)
-    channel.addNewBroker(new Node(1, "host", 10))
-    channel.addNewBroker(new Node(2, "otherhost", 10))
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
     assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
@@ -124,7 +145,7 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldRemoveBrokerRequestsForPartitionWhenPartitionEmigrated(): Unit = {
-    channel.addNewBroker(new Node(1, "host", 10))
+    channel.addOrUpdateBroker(new Node(1, "host", 10))
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(1, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(1, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))

@@ -63,10 +63,11 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getPartitionInfo(partition2.topic(), partition2.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(2, 0, List.empty, 0), 0), Set.empty)))
 
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(2), EasyMock.anyObject())).andReturn(Some(broker2))
+
     EasyMock.replay(metadataCache)
 
-    channel.addNewBroker(broker1)
-    channel.addNewBroker(broker2)
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
 
@@ -99,10 +100,9 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.expect(metadataCache.getPartitionInfo(partition2.topic(), partition2.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, partitionTwoEpoch, List.empty, 0), 0), Set.empty)))
-
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1)).anyTimes()
     EasyMock.replay(metadataCache)
 
-    channel.addNewBroker(broker1)
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, partitionOneEpoch, Set[TopicPartition](partition1))
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, partitionTwoEpoch, Set[TopicPartition](partition2))
 
@@ -129,9 +129,9 @@ class TransactionMarkerChannelManagerTest {
   def shouldDrainBrokerQueueWhenGeneratingRequests(): Unit = {
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
     EasyMock.replay(metadataCache)
 
-    channel.addNewBroker(broker1)
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     requestGenerator()
@@ -143,14 +143,12 @@ class TransactionMarkerChannelManagerTest {
     val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0, 0L)
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
-
     EasyMock.expect(metadataCache.getPartitionInfo(partition2.topic(), partition2.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(2, 0, List.empty, 0), 0), Set.empty)))
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(2), EasyMock.anyObject())).andReturn(Some(broker2))
 
     EasyMock.replay(metadataCache)
-
-    channel.addNewBroker(broker1)
-    channel.addNewBroker(broker2)
 
     channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
 
@@ -164,9 +162,9 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
-
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
     EasyMock.replay(metadataCache)
-    channel.addNewBroker(broker1)
+
     channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
 
     assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
@@ -177,10 +175,9 @@ class TransactionMarkerChannelManagerTest {
     val metadata = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0, 0L)
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
 
     EasyMock.replay(metadataCache)
-
-    channel.addNewBroker(broker1)
 
     channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
     assertEquals(1,purgatory.watched)

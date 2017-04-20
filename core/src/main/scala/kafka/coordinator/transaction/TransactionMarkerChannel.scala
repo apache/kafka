@@ -39,10 +39,18 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
   private[transaction] val brokerStateMap: concurrent.Map[Int, DestinationBrokerAndQueuedMarkers] = concurrent.TrieMap.empty[Int, DestinationBrokerAndQueuedMarkers]
   private val pendingTxnMap: concurrent.Map[PendingTxnKey, TransactionMetadata] = concurrent.TrieMap.empty[PendingTxnKey, TransactionMetadata]
 
-  def addNewBroker(broker: Node) {
-    val markersQueue = new LinkedBlockingQueue[CoordinatorEpochAndMarkers]()
-    brokerStateMap.put(broker.id, DestinationBrokerAndQueuedMarkers(broker, markersQueue))
-    trace(s"Added destination broker ${broker.id}: $broker")
+  def addOrUpdateBroker(broker: Node) {
+    if (brokerStateMap.contains(broker.id())) {
+      val brokerQueue = brokerStateMap(broker.id())
+      if (!brokerQueue.destBrokerNode.equals(broker)) {
+        brokerStateMap.put(broker.id(), DestinationBrokerAndQueuedMarkers(broker, brokerQueue.markersQueue))
+        trace(s"Updated destination broker for ${broker.id} from: ${brokerQueue.destBrokerNode} to: $broker")
+      }
+    } else {
+      val markersQueue = new LinkedBlockingQueue[CoordinatorEpochAndMarkers]()
+      brokerStateMap.put(broker.id, DestinationBrokerAndQueuedMarkers(broker, markersQueue))
+      trace(s"Added destination broker ${broker.id}: $broker")
+    }
   }
 
   private[transaction] def addRequestForBroker(brokerId: Int, txnMarkerRequest: CoordinatorEpochAndMarkers) {
@@ -57,11 +65,9 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
       leaderForPartition match {
         case Some(partitionInfo) =>
           val brokerId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-          if (!brokerStateMap.contains(brokerId)) {
-            // TODO: What should we do if we get BrokerEndPointNotAvailableException?
-            val broker = metadataCache.getAliveEndpoint(brokerId, interBrokerListenerName).get
-            addNewBroker(broker)
-          }
+          // TODO: What should we do if we get BrokerEndPointNotAvailableException?
+          val broker = metadataCache.getAliveEndpoint(brokerId, interBrokerListenerName).get
+          addOrUpdateBroker(broker)
           brokerId
         case None =>
           // TODO: there is a rare case that the producer gets the partition info from another broker who has the newer information of the
