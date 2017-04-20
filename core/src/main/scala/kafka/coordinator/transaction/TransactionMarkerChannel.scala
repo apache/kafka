@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
 
-import scala.collection.{concurrent, immutable}
+import scala.collection.{concurrent, immutable, mutable}
 import collection.JavaConverters._
 
 class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCache: MetadataCache) extends Logging {
@@ -62,12 +62,15 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
   def addRequestToSend(metadataPartition: Int, pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val partitionsByDestination: immutable.Map[Int, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
       val leaderForPartition = metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
+      val currentBrokers = mutable.Set.empty[Int]
       leaderForPartition match {
         case Some(partitionInfo) =>
           val brokerId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-          // TODO: What should we do if we get BrokerEndPointNotAvailableException?
-          val broker = metadataCache.getAliveEndpoint(brokerId, interBrokerListenerName).get
-          addOrUpdateBroker(broker)
+          if (currentBrokers.add(brokerId)) {
+            // TODO: What should we do if we get BrokerEndPointNotAvailableException?
+            val broker = metadataCache.getAliveEndpoint(brokerId, interBrokerListenerName).get
+            addOrUpdateBroker(broker)
+          }
           brokerId
         case None =>
           // TODO: there is a rare case that the producer gets the partition info from another broker who has the newer information of the
