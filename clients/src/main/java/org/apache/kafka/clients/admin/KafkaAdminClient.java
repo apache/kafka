@@ -311,7 +311,7 @@ public class KafkaAdminClient extends AdminClient {
         this.client = client;
         this.runnable = new AdminClientRunnable();
         String threadName = "kafka-admin-client-thread" + (clientId.length() > 0 ? " | " + clientId : "");
-        this.thread = new KafkaThread( threadName, runnable,false);
+        this.thread = new KafkaThread(threadName, runnable, false);
         config.logUnused();
         log.debug("Created Kafka admin client {}", this.clientId);
         thread.start();
@@ -389,7 +389,7 @@ public class KafkaAdminClient extends AdminClient {
         final void fail(long now, Throwable throwable) {
             // If this is an UnsupportedVersionException that we can retry, do so.
             if ((throwable instanceof UnsupportedVersionException) &&
-                     handleUnsupportedVersionException((UnsupportedVersionException)throwable)) {
+                     handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
                 log.trace("{} attempting protocol downgrade.", callName);
                 runnable.call(this);
                 return;
@@ -904,7 +904,7 @@ public class KafkaAdminClient extends AdminClient {
                 Map<String, TopicListing> topicListing = new HashMap<>();
                 for (String topicName : cluster.topics()) {
                     boolean internal = cluster.internalTopics().contains(topicName);
-                    if (internal == false || options.listInternal())
+                    if (!internal || options.listInternal())
                         topicListing.put(topicName, new TopicListing(topicName, internal));
                 }
                 topicListingFuture.complete(topicListing);
