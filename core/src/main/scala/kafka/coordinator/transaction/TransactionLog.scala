@@ -144,7 +144,7 @@ object TransactionLog {
   private[coordinator] def valueToBytes(txnMetadata: TransactionMetadata): Array[Byte] = {
     val value = new Struct(CURRENT_VALUE_SCHEMA)
     value.set(VALUE_SCHEMA_PID_FIELD, txnMetadata.pid)
-    value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.epoch)
+    value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.coordinatorEpoch)
     value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, txnMetadata.txnTimeoutMs)
     value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.state.byte)
     value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.entryTimestamp)

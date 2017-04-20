@@ -64,7 +64,7 @@ class TransactionStateManager(brokerId: Int,
   private val shuttingDown = new AtomicBoolean(false)
 
   /** lock protecting access to loading and owned partition sets */
-  private val partitionLock = new ReentrantLock()
+  private val stateLock = new ReentrantLock()
 
   /** partitions of transaction topic that are assigned to this manager, partition lock should be called BEFORE accessing this set */
   private val ownedPartitions: mutable.Map[Int, Int] = mutable.Map()
@@ -125,20 +125,17 @@ class TransactionStateManager(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
-  def coordinatorEpochFor(transactionId: String): Option[Int] = inLock (partitionLock) {
+  def coordinatorEpochFor(transactionId: String): Option[Int] = inLock (stateLock) {
     ownedPartitions.get(partitionFor(transactionId))
   }
 
-  def isCoordinatorFor(transactionalId: String): Boolean = inLock(partitionLock) {
+  def isCoordinatorFor(transactionalId: String): Boolean = inLock(stateLock) {
     val partitionId = partitionFor(transactionalId)
-
-    // partition id should be within the owned list and NOT in the corrupted list
     ownedPartitions.contains(partitionId)
   }
 
-  def isCoordinatorLoadingInProgress(transactionalId: String): Boolean = inLock(partitionLock) {
+  def isCoordinatorLoadingInProgress(transactionalId: String): Boolean = inLock(stateLock) {
     val partitionId = partitionFor(transactionalId)
-
     loadingPartitions.contains(partitionId)
   }
 
@@ -237,7 +234,7 @@ class TransactionStateManager(brokerId: Int,
     def loadTransactions() {
       info(s"Loading transaction metadata from $topicPartition")
 
-      inLock(partitionLock) {
+      inLock(stateLock) {
         if (loadingPartitions.contains(partition)) {
           // with background scheduler containing one thread, this should never happen,
           // but just in case we change it in the future.
@@ -253,7 +250,7 @@ class TransactionStateManager(brokerId: Int,
       } catch {
         case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
       } finally {
-        inLock(partitionLock) {
+        inLock(stateLock) {
           ownedPartitions.put(partition, coordinatorEpoch)
           loadingPartitions.remove(partition)
         }
@@ -275,7 +272,7 @@ class TransactionStateManager(brokerId: Int,
     def removeTransactions() {
       var numTxnsRemoved = 0
 
-      inLock(partitionLock) {
+      inLock(stateLock) {
         if (!ownedPartitions.contains(partition)) {
           // with background scheduler containing one thread, this should never happen,
           // but just in case we change it in the future.
@@ -391,7 +388,7 @@ class TransactionStateManager(brokerId: Int,
           case Some(metadata) =>
             metadata synchronized {
               if (metadata.pid == txnMetadata.pid &&
-                metadata.epoch == txnMetadata.epoch &&
+                metadata.coordinatorEpoch == txnMetadata.coordinatorEpoch &&
                 metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
                 completeStateTransition(metadata, txnMetadata.state)) {
                 // only topic-partition lists could possibly change (state should have transited in the above condition)
@@ -405,7 +402,7 @@ class TransactionStateManager(brokerId: Int,
             // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
             // return NOT_COORDINATOR to let the client retry
             debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
-              s"has been appended to the log since there is no metadata in the cache anymore.")
+              s"has been appended to the log. The partition for $transactionalId may have migrated as the metadata is no longer in the cache")
 
             responseError = Errors.NOT_COORDINATOR
         }

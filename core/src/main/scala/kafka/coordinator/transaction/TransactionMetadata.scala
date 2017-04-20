@@ -99,7 +99,7 @@ private[coordinator] object TransactionMetadata {
 
 @nonthreadsafe
 private[coordinator] class TransactionMetadata(val pid: Long,
-                                               var epoch: Short,
+                                               var coordinatorEpoch: Short,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
@@ -140,15 +140,15 @@ private[coordinator] class TransactionMetadata(val pid: Long,
   }
 
   def copy(): TransactionMetadata =
-    new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, entryTimestamp)
+    new TransactionMetadata(pid, coordinatorEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, entryTimestamp)
 
   override def toString: String =
-    s"(pid: $pid, epoch: $epoch, transactionTimeoutMs: $txnTimeoutMs, transactionState: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
+    s"(pid: $pid, epoch: $coordinatorEpoch, transactionTimeoutMs: $txnTimeoutMs, transactionState: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
 
   override def equals(that: Any): Boolean = that match {
     case other: TransactionMetadata =>
       pid == other.pid &&
-      epoch == other.epoch &&
+      coordinatorEpoch == other.coordinatorEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
       topicPartitions.equals(other.topicPartitions)

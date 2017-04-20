@@ -60,7 +60,7 @@ object TransactionCoordinator {
   }
 
   private def initTransactionMetadata(txnMetadata: TransactionMetadata): InitPidResult = {
-    InitPidResult(txnMetadata.pid, txnMetadata.epoch, Errors.NONE)
+    InitPidResult(txnMetadata.pid, txnMetadata.coordinatorEpoch, Errors.NONE)
   }
 }
 
@@ -111,7 +111,7 @@ class TransactionCoordinator(brokerId: Int,
         case None =>
           val pid = pidManager.nextPid()
           val newMetadata: TransactionMetadata = new TransactionMetadata(pid = pid,
-            epoch = 0,
+            coordinatorEpoch = 0,
             txnTimeoutMs = transactionTimeoutMs,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
@@ -125,7 +125,7 @@ class TransactionCoordinator(brokerId: Int,
           // treat it as the metadata has existed and update it accordingly
           metadata synchronized {
             if (!metadata.equals(newMetadata))
-              metadata.epoch = (metadata.epoch + 1).toShort
+              metadata.coordinatorEpoch = (metadata.coordinatorEpoch + 1).toShort
 
             appendMetadataToLog(transactionalId,  metadata, responseCallback)
           }
@@ -158,7 +158,7 @@ class TransactionCoordinator(brokerId: Int,
         // abort the ongoing transaction
         handleEndTransaction(transactionalId,
           metadata.pid,
-          metadata.epoch,
+          metadata.coordinatorEpoch,
           TransactionResult.ABORT,
           (errors: Errors) => {
             if (errors != Errors.NONE) {
@@ -177,7 +177,7 @@ class TransactionCoordinator(brokerId: Int,
             handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
         }), Seq(metadata.pid))
       } else {
-        metadata.epoch = (metadata.epoch + 1).toShort
+        metadata.coordinatorEpoch = (metadata.coordinatorEpoch + 1).toShort
         metadata.txnTimeoutMs = transactionTimeoutMs
         metadata.topicPartitions.clear()
         metadata.entryTimestamp = time.milliseconds()
@@ -219,7 +219,7 @@ class TransactionCoordinator(brokerId: Int,
           metadata synchronized {
             if (metadata.pid != pid) {
               (Errors.INVALID_PID_MAPPING, null)
-            } else if (metadata.epoch != epoch) {
+            } else if (metadata.coordinatorEpoch != epoch) {
               (Errors.INVALID_PRODUCER_EPOCH, null)
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
@@ -278,7 +278,7 @@ class TransactionCoordinator(brokerId: Int,
           metadata synchronized {
             if (metadata.pid != pid)
               responseCallback(Errors.INVALID_PID_MAPPING)
-            else if (metadata.epoch != epoch)
+            else if (metadata.coordinatorEpoch != epoch)
               responseCallback(Errors.INVALID_PRODUCER_EPOCH)
             else metadata.state match {
               case Ongoing =>

@@ -73,7 +73,7 @@ object TransactionMarkerChannelManager {
         new ManualMetadataUpdater(),
         threadName,
         1,
-        0,
+        50,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.socketReceiveBufferBytes,
         config.requestTimeoutMs,
@@ -152,7 +152,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       }
       transactionMarkerChannel.addRequestToSend(metadataPartition,
         metadataToWrite.pid,
-        metadataToWrite.epoch,
+        metadataToWrite.coordinatorEpoch,
         result,
         coordinatorEpoch,
         metadataToWrite.topicPartitions.toSet)

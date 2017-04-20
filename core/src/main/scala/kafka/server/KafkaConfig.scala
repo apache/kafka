@@ -341,7 +341,7 @@ object KafkaConfig {
   val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMsProp = "transactional.id.expiration.ms"
-  val TransactionsMaxTimeoutMsProp = "max.transaction.timeout.ms"
+  val TransactionsMaxTimeoutMsProp = "transaction.max.timeout.ms"
   val TransactionsTopicMinISRProp = "transaction.state.log.min.isr"
   val TransactionsLoadBufferSizeProp = "transaction.state.log.load.buffer.size"
   val TransactionsTopicPartitionsProp = "transaction.state.log.num.partitions"
