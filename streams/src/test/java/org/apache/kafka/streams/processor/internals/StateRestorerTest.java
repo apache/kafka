@@ -33,7 +33,7 @@ public class StateRestorerTest {
     @Test
     public void shouldCallRestoreOnRestoreCallback() throws Exception {
         restorer.restore(new byte[0], new byte[0]);
-        assertThat(callback.restoreCount, equalTo(1));
+        assertThat(callback.restored.size(), equalTo(1));
     }
 
     @Test

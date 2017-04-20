@@ -174,7 +174,9 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 final ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
                 for (ConsumerRecord<byte[], byte[]> record : records) {
                     offset = record.offset() + 1;
-                    stateRestoreCallback.restore(record.key(), record.value());
+                    if (record.key() != null) {
+                        stateRestoreCallback.restore(record.key(), record.value());
+                    }
                 }
             }
             checkpointableOffsets.put(topicPartition, offset);
