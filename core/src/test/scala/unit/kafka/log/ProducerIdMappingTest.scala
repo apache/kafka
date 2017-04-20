@@ -196,6 +196,11 @@ class ProducerIdMappingTest extends JUnitSuite {
     val maybeEntry = idMapping.lastEntry(anotherPid)
     assertTrue(maybeEntry.isDefined)
     assertEquals(2L, maybeEntry.get.lastOffset)
+
+    idMapping.expirePids(3)
+    assertEquals(Set(), currentSnapshotOffsets)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(Set(3), currentSnapshotOffsets)
   }
 
   @Test

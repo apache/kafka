@@ -370,6 +370,7 @@ class ProducerIdMapping(val config: LogConfig,
 
   private def deleteSnapshotFiles(predicate: File => Boolean = _ => true) {
     listSnapshotFiles.filter(predicate).foreach(file => Files.deleteIfExists(file.toPath))
+    lastSnapOffset = latestSnapshotOffset.getOrElse(0L)
   }
 
 }
