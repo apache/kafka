@@ -76,7 +76,14 @@ private[kafka] object LogValidator extends Logging {
                              timestampDiffMaxMs: Long, compactedTopic: Boolean): Unit = {
     if (!record.hasMagic(batch.magic))
       throw new InvalidRecordException(s"Log record magic does not match outer magic ${batch.magic}")
-    record.ensureValid()
+
+    // verify the record-level CRC only if this is one of the deep entries of a compressed message
+    // set for magic v0 and v1. For non-compressed messages, there is no inner record for magic v0 and v1,
+    // so we depend on the batch-level CRC check in Log.analyzeAndValidateRecords(). For magic v2 and above,
+    // there is no record-level CRC to check.
+    if (batch.magic <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed)
+      record.ensureValid()
+
     ensureNotControlRecord(record)
     validateKey(record, compactedTopic)
     validateTimestamp(batch, record, now, timestampType, timestampDiffMaxMs)
