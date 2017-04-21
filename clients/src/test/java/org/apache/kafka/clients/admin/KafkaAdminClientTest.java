@@ -84,7 +84,7 @@ public class KafkaAdminClientTest {
     public void testPrettyPrintException() {
         assertEquals("Null exception.", KafkaAdminClient.prettyPrintException(null));
         assertEquals("TimeoutException", KafkaAdminClient.prettyPrintException(new TimeoutException()));
-        assertEquals("The foobar timed out.",
+        assertEquals("TimeoutException: The foobar timed out.",
             KafkaAdminClient.prettyPrintException(new TimeoutException("The foobar timed out.")));
     }
 
