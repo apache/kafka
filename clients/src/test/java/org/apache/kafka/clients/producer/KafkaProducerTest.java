@@ -332,11 +332,8 @@ public class KafkaProducerTest {
                 for (int i = 0; i < 12; i++) {
                     metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
                     time.sleep(60 * 1000L);
-                    try {
-                        Thread.sleep(100);
-                    } catch (InterruptedException e) {
-                        // skip
-                    }
+                    while (!metadata.updateRequested())
+                        yield();
                 }
             }
         };
