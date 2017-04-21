@@ -49,33 +49,33 @@ public class StandbyTask extends AbstractTask {
      * @param metrics               the {@link StreamsMetrics} created by the thread
      * @param stateDirectory        the {@link StateDirectory} created by the thread
      */
-    public StandbyTask(final TaskId id,
-                       final String applicationId,
-                       final Collection<TopicPartition> partitions,
-                       final ProcessorTopology topology,
-                       final Consumer<byte[], byte[]> consumer,
-                       final ChangelogReader changelogReader,
-                       final StreamsConfig config,
-                       final StreamsMetrics metrics,
-                       final StateDirectory stateDirectory) {
+    StandbyTask(final TaskId id,
+                final String applicationId,
+                final Collection<TopicPartition> partitions,
+                final ProcessorTopology topology,
+                final Consumer<byte[], byte[]> consumer,
+                final ChangelogReader changelogReader,
+                final StreamsConfig config,
+                final StreamsMetrics metrics,
+                final StateDirectory stateDirectory) {
         super(id, applicationId, partitions, topology, consumer, changelogReader, true, stateDirectory, null);
 
         // initialize the topology with its own context
-        this.processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
+        processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
         log.info("standby-task [{}] Initializing state stores", id());
         initializeStateStores();
 
-        this.processorContext.initialized();
+        processorContext.initialized();
 
-        this.checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
+        checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    Map<TopicPartition, Long> checkpointedOffsets() {
         return checkpointedOffsets;
     }
 
-    public Collection<TopicPartition> changeLogPartitions() {
+    Collection<TopicPartition> changeLogPartitions() {
         return checkpointedOffsets.keySet();
     }
 
@@ -83,11 +83,12 @@ public class StandbyTask extends AbstractTask {
      * Updates a state store using records from one change log partition
      * @return a list of records not consumed
      */
-    public List<ConsumerRecord<byte[], byte[]>> update(TopicPartition partition, List<ConsumerRecord<byte[], byte[]>> records) {
+    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> records) {
         log.debug("standby-task [{}] Updating standby replicas of its state store for partition [{}]", id(), partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
+    @Override
     public void commit() {
         log.debug("standby-task [{}] Committing its state", id());
         stateMgr.flush();

@@ -70,18 +70,18 @@ public abstract class AbstractTask {
         // create the processor state manager
         try {
             stateMgr = new ProcessorStateManager(id, partitions, isStandby, stateDirectory, topology.storeToChangelogTopic(), changelogReader);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
         }
     }
 
-    protected void initializeStateStores() {
+    void initializeStateStores() {
         // set initial offset limits
         initializeOffsetLimits();
 
-        for (StateStore store : this.topology.stateStores()) {
+        for (final StateStore store : topology.stateStores()) {
             log.trace("task [{}] Initializing store {}", id(), store.name());
-            store.init(this.processorContext, store);
+            store.init(processorContext, store);
         }
 
     }
@@ -95,7 +95,7 @@ public abstract class AbstractTask {
     }
 
     public final Set<TopicPartition> partitions() {
-        return this.partitions;
+        return partitions;
     }
 
     public final ProcessorTopology topology() {
@@ -124,10 +124,10 @@ public abstract class AbstractTask {
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
     void closeStateManager(final boolean writeCheckpoint) {
-        log.trace("task [{}] Closing", id());
+        log.trace("task [{}] Closing", id);
         try {
             stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new ProcessorStateException("Error while closing the state manager", e);
         }
     }
@@ -137,15 +137,15 @@ public abstract class AbstractTask {
     }
 
     protected void initializeOffsetLimits() {
-        for (TopicPartition partition : partitions) {
+        for (final TopicPartition partition : partitions) {
             try {
-                OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
                 stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
-            } catch (AuthorizationException e) {
+            } catch (final AuthorizationException e) {
                 throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
-            } catch (WakeupException e) {
+            } catch (final WakeupException e) {
                 throw e;
-            } catch (KafkaException e) {
+            } catch (final KafkaException e) {
                 throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
             }
         }
@@ -171,7 +171,7 @@ public abstract class AbstractTask {
      * @return A string representation of the StreamTask instance.
      */
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + this.id() + "\n");
+        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + id + "\n");
 
         // print topology
         if (topology != null) {
@@ -181,7 +181,7 @@ public abstract class AbstractTask {
         // print assigned partitions
         if (partitions != null && !partitions.isEmpty()) {
             sb.append(indent).append("Partitions [");
-            for (TopicPartition topicPartition : partitions) {
+            for (final TopicPartition topicPartition : partitions) {
                 sb.append(topicPartition.toString()).append(", ");
             }
             sb.setLength(sb.length() - 2);
