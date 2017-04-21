@@ -324,13 +324,13 @@ public class KafkaProducerTest {
         final Time time = new MockTime();
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
         MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
-        String topic = "topic";
+        final String topic = "topic";
 
-        Thread t = new Thread(new Runnable() {
+        Thread t = new Thread() {
             @Override
             public void run() {
                 for (int i = 0; i < 12; i++) {
-                    metadata.update(Cluster.empty(), Collections.<String>emptySet(), time.milliseconds());
+                    metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
                     time.sleep(60 * 1000L);
                     try {
                         Thread.sleep(100);
@@ -339,7 +339,7 @@ public class KafkaProducerTest {
                     }
                 }
             }
-        });
+        };
         t.start();
         try {
             producer.partitionsFor(topic);
