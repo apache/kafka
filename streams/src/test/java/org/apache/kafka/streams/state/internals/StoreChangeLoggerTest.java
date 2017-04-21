@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -65,6 +66,10 @@ public class StoreChangeLoggerTest {
 
     private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
 
+    @After
+    public void after() {
+        context.close();
+    }
 
     @SuppressWarnings("unchecked")
     @Test

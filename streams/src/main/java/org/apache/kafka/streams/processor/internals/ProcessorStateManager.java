@@ -43,7 +43,7 @@ public class ProcessorStateManager implements StateManager {
     private static final Logger log = LoggerFactory.getLogger(ProcessorStateManager.class);
 
     public static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
-    public static final String CHECKPOINT_FILE_NAME = ".checkpoint";
+    static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
     private final File baseDir;
     private final TaskId taskId;
@@ -234,7 +234,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     @Override
-    public void flush(final InternalProcessorContext context) {
+    public void flush() {
         if (!this.stores.isEmpty()) {
             log.debug("{} Flushing all stores registered in the state manager", logPrefix);
             for (StateStore store : this.stores.values()) {
