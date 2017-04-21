@@ -50,7 +50,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 import scala.collection._
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 /**
  * Logic to handle the various Kafka requests
@@ -245,13 +245,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterAction(request)
 
     def controlledShutdownCallback(controlledShutdownResult: Try[Set[TopicAndPartition]]): Unit = {
-      if (controlledShutdownResult.isSuccess) {
-        val partitionsRemaining = controlledShutdownResult.get
-        val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
-          Errors.NONE, partitionsRemaining)
-        requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
-      } else {
-        request.requestObj.handleError(controlledShutdownResult.failed.get, requestChannel, request)
+      controlledShutdownResult match {
+        case Success(partitionsRemaining) =>
+          val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
+            Errors.NONE, partitionsRemaining)
+          requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
+        case Failure(throwable) =>
+          controlledShutdownRequest.handleError(throwable, requestChannel, request)
       }
     }
     controller.shutdownBroker(controlledShutdownRequest.brokerId, controlledShutdownCallback)
