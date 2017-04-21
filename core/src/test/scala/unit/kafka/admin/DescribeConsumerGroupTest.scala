@@ -26,20 +26,19 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
-import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
-import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService
-import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
-import kafka.consumer.OldConsumer
-import kafka.consumer.Whitelist
+import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService, LogEndOffsetResult, ZkConsumerGroupService}
+import kafka.api._
+import kafka.common.TopicAndPartition
+import kafka.consumer.{OldConsumer, SimpleConsumer, Whitelist}
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.errors.{CoordinatorNotAvailableException, WakeupException}
+import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.serialization.StringDeserializer
-
 
 class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
@@ -159,14 +158,36 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         val (_, assignments) = consumerGroupCommand.describeGroup()
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 2 &&
-        assignments.get.count { x => x.group == group && x.partition.isDefined } == 1 &&
-        assignments.get.count { x => x.group == group && !x.partition.isDefined } == 1
+        assignments.get.count { x => x.group == group && x.topicPartition.isDefined } == 1 &&
+        assignments.get.count { x => x.group == group && !x.topicPartition.isDefined } == 1
       }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     // cleanup
     consumerGroupCommand.close()
     consumer1Mock.stop()
     consumer2Mock.stop()
+  }
+
+  @Test
+  def testErrorFetchingLogEndOffset() {
+    props.setProperty("zookeeper.connect", zkConnect)
+
+    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
+    val consumerGroupService = new ZkConsumerGroupService(opts)
+
+    val consumer = EasyMock.createMock(classOf[SimpleConsumer])
+
+    val topicAndPartition = TopicAndPartition(topic, 0)
+    val listOffsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+    val partitionResponse = PartitionOffsetsResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, Seq.empty[Long])
+    EasyMock.expect(consumer.getOffsetsBefore(listOffsetRequest))
+      .andReturn(OffsetResponse(0, Map(topicAndPartition -> partitionResponse)))
+
+    EasyMock.replay(consumer)
+
+    val (maybeErrMsg, result) = consumerGroupService.fetchLogEndOffset(new TopicPartition(topic, 0), consumer)
+    assertTrue(maybeErrMsg.isDefined)
+    assertEquals(LogEndOffsetResult.Ignore, result)
   }
 
   @Test
@@ -252,8 +273,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         state == Some("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 2 &&
-        assignments.get.count{ x => x.group == group && x.partition.isDefined} == 1 &&
-        assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 1
+        assignments.get.count{ x => x.group == group && x.topicPartition.isDefined} == 1 &&
+        assignments.get.count{ x => x.group == group && !x.topicPartition.isDefined} == 1
     }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     consumerGroupCommand.close()
@@ -277,8 +298,8 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
       state == Some("Stable") &&
       assignments.isDefined &&
       assignments.get.count(_.group == group) == 2 &&
-      assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
-      assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 0
+      assignments.get.count{ x => x.group == group && x.topicPartition.isDefined} == 2 &&
+      assignments.get.count{ x => x.group == group && !x.topicPartition.isDefined} == 0
     }, "Expected two rows (one row per consumer) in describe group results.")
 
     consumerGroupCommand.close()

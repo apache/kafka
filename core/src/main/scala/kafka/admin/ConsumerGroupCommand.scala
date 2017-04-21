@@ -23,7 +23,7 @@ import joptsimple.{OptionParser, OptionSpec}
 
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
-import kafka.common.{TopicAndPartition, _}
+import kafka.common._
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 
@@ -50,7 +50,7 @@ object ConsumerGroupCommand extends Logging {
       CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, or delete consumer group info.")
 
     // should have exactly one action
-    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
+    val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has)
     if (actions != 1)
       CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --delete")
 
@@ -126,19 +126,21 @@ object ConsumerGroupCommand extends Logging {
 
     groupAssignment.foreach { consumerAssignment =>
       print("%-30s %-10s %-15s %-15s %-10s %-50s".format(
-        consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
-        consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
-        consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
+        consumerAssignment.topicPartition.map(_.topic).getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.topicPartition.map(_.partition).getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE),
+        consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
       if (useNewConsumer)
         print("%-30s %s".format(consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE)))
       println()
     }
   }
 
-  protected case class PartitionAssignmentState(group: String, coordinator: Option[Node], topic: Option[String],
-                                                partition: Option[Int], offset: Option[Long], lag: Option[Long],
-                                                consumerId: Option[String], host: Option[String],
-                                                clientId: Option[String], logEndOffset: Option[Long])
+  protected case class PartitionAssignmentState(group: String, coordinator: Option[Node], topicPartition: Option[TopicPartition],
+                                                offset: Option[Long], lag: Option[Long], consumerId: Option[String],
+                                                host: Option[String], clientId: Option[String], logEndOffset: Option[Long])
 
   sealed trait ConsumerGroupService {
 
@@ -158,24 +160,20 @@ object ConsumerGroupCommand extends Logging {
 
     protected def collectConsumerAssignment(group: String,
                                             coordinator: Option[Node],
-                                            topicPartitions: Seq[TopicAndPartition],
-                                            getPartitionOffset: TopicAndPartition => Option[Long],
+                                            topicPartitions: Seq[TopicPartition],
+                                            getPartitionOffset: TopicPartition => Option[Long],
                                             consumerIdOpt: Option[String],
                                             hostOpt: Option[String],
                                             clientIdOpt: Option[String]): Array[PartitionAssignmentState] = {
       if (topicPartitions.isEmpty)
         Array[PartitionAssignmentState](
-          PartitionAssignmentState(group, coordinator, None, None, None, getLag(None, None), consumerIdOpt, hostOpt, clientIdOpt, None)
+          PartitionAssignmentState(group, coordinator, None, None, getLag(None, None), consumerIdOpt, hostOpt, clientIdOpt, None)
         )
       else {
-        var assignmentRows: Array[PartitionAssignmentState] = Array()
-        topicPartitions
-          .sortBy(_.partition)
-          .foreach { topicPartition =>
-            assignmentRows = assignmentRows :+ describePartition(group, coordinator, topicPartition.topic, topicPartition.partition, getPartitionOffset(topicPartition),
-              consumerIdOpt, hostOpt, clientIdOpt)
-          }
-        assignmentRows
+        topicPartitions.sortBy(_.partition).map { topicPartition =>
+          describePartition(group, coordinator, topicPartition, getPartitionOffset(topicPartition),
+            consumerIdOpt, hostOpt, clientIdOpt)
+        }.toArray
       }
     }
 
@@ -184,18 +182,17 @@ object ConsumerGroupCommand extends Logging {
 
     private def describePartition(group: String,
                                   coordinator: Option[Node],
-                                  topic: String,
-                                  partition: Int,
+                                  topicPartition: TopicPartition,
                                   offsetOpt: Option[Long],
                                   consumerIdOpt: Option[String],
                                   hostOpt: Option[String],
                                   clientIdOpt: Option[String]): PartitionAssignmentState = {
       def getDescribePartitionResult(logEndOffsetOpt: Option[Long]): PartitionAssignmentState =
-        PartitionAssignmentState(group, coordinator, Option(topic), Option(partition), offsetOpt,
+        PartitionAssignmentState(group, coordinator, Some(topicPartition), offsetOpt,
                                  getLag(offsetOpt, logEndOffsetOpt), consumerIdOpt, hostOpt,
                                  clientIdOpt, logEndOffsetOpt)
 
-      getLogEndOffset(new TopicPartition(topic, partition)) match {
+      getLogEndOffset(topicPartition) match {
         case LogEndOffsetResult.LogEndOffset(logEndOffset) => getDescribePartitionResult(Some(logEndOffset))
         case LogEndOffsetResult.Unknown => getDescribePartitionResult(None)
         case LogEndOffsetResult.Ignore => null
@@ -264,18 +261,19 @@ object ConsumerGroupCommand extends Logging {
         topicsByConsumerId(consumerId).flatMap { _ =>
           // since consumers with no topic partitions are processed here, we pass empty for topic partitions and offsets
           // since consumer id is repeated in client id, leave host and client id empty
-          collectConsumerAssignment(group, None, Array[TopicAndPartition](), Map[TopicAndPartition, Option[Long]](), Some(consumerId), None, None)
+          collectConsumerAssignment(group, None, Array[TopicPartition](), Map[TopicPartition, Option[Long]](),
+            Some(consumerId), None, None)
         }
       }
 
       (None, Some(assignmentRows))
     }
 
-    private def getAllTopicPartitions(topics: Seq[String]): Seq[TopicAndPartition] = {
+    private def getAllTopicPartitions(topics: Seq[String]): Seq[TopicPartition] = {
       val topicPartitionMap = zkUtils.getPartitionsForTopics(topics)
       topics.flatMap { topic =>
         val partitions = topicPartitionMap.getOrElse(topic, Seq.empty)
-        partitions.map(TopicAndPartition(topic, _))
+        partitions.map(new TopicPartition(topic, _))
       }
     }
 
@@ -284,11 +282,11 @@ object ConsumerGroupCommand extends Logging {
         case Some(-1) => LogEndOffsetResult.Unknown
         case Some(brokerId) =>
           getZkConsumer(brokerId).map { consumer =>
-            val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
-            val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
-            val logEndOffset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-            consumer.close()
-            LogEndOffsetResult.LogEndOffset(logEndOffset)
+            try {
+              val (maybeErrMsg, result) = fetchLogEndOffset(topicPartition, consumer)
+              maybeErrMsg.foreach(printError(_))
+              result
+            } finally consumer.close()
           }.getOrElse(LogEndOffsetResult.Ignore)
         case None =>
           printError(s"No broker for partition '$topicPartition'")
@@ -296,13 +294,34 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
+    private[admin] def fetchLogEndOffset(topicPartition: TopicPartition,
+                                         consumer: SimpleConsumer): (Option[String], LogEndOffsetResult) = {
+      val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
+      val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+      val response = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition)
+
+      response.error match {
+        case Errors.NONE =>
+          if (response.offsets.nonEmpty) {
+            (None, LogEndOffsetResult.LogEndOffset(response.offsets.head))
+          } else {
+            val errorMsg = s"No log end offset returned in ListOffsets response for partition $topicPartition"
+            (Some(errorMsg), LogEndOffsetResult.Ignore)
+          }
+
+        case error =>
+          val errorMsg = s"Error fetching log end offset for partition $topicPartition: ${error.message}"
+          (Some(errorMsg), LogEndOffsetResult.Ignore)
+      }
+    }
+
     private def getPartitionOffsets(group: String,
-                                    topicPartitions: Seq[TopicAndPartition],
+                                    topicPartitions: Seq[TopicPartition],
                                     channelSocketTimeoutMs: Int,
-                                    channelRetryBackoffMs: Int): Map[TopicAndPartition, Long] = {
-      val offsetMap = mutable.Map[TopicAndPartition, Long]()
+                                    channelRetryBackoffMs: Int): Map[TopicPartition, Long] = {
+      val offsetMap = mutable.Map[TopicPartition, Long]()
       val channel = ClientUtils.channelToOffsetManager(group, zkUtils, channelSocketTimeoutMs, channelRetryBackoffMs)
-      channel.send(OffsetFetchRequest(group, topicPartitions))
+      channel.send(OffsetFetchRequest(group, topicPartitions.map(new TopicAndPartition(_))))
       val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
@@ -313,13 +332,13 @@ object ConsumerGroupCommand extends Logging {
             // (meaning the lag may be off until all the consumers in the group have the same setting for offsets storage)
             try {
               val offset = zkUtils.readData(topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1.toLong
-              offsetMap.put(topicAndPartition, offset)
+              offsetMap.put(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offset)
             } catch {
               case z: ZkNoNodeException =>
                 printError(s"Could not fetch offset from zookeeper for group '$group' partition '$topicAndPartition' due to missing offset data in zookeeper.", Some(z))
             }
           case offsetAndMetaData if offsetAndMetaData.error == Errors.NONE =>
-            offsetMap.put(topicAndPartition, offsetAndMetadata.offset)
+            offsetMap.put(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition), offsetAndMetadata.offset)
           case _ =>
             printError(s"Could not fetch offset from kafka for group '$group' partition '$topicAndPartition' due to ${offsetAndMetadata.error.message}.")
         }
@@ -403,32 +422,26 @@ object ConsumerGroupCommand extends Logging {
             None
           case Some(consumers) =>
             var assignedTopicPartitions = Array[TopicPartition]()
-            val offsets = adminClient.listGroupOffsets(group)
+            val offsets = adminClient.listGroupOffsets(group).mapValues(Some(_))
             val rowsWithConsumer =
               if (offsets.isEmpty)
                 List[PartitionAssignmentState]()
               else {
                 consumers.sortWith(_.assignment.size > _.assignment.size).flatMap { consumerSummary =>
-                  val topicPartitions = consumerSummary.assignment.map(tp => TopicAndPartition(tp.topic, tp.partition))
-                  assignedTopicPartitions = assignedTopicPartitions ++ consumerSummary.assignment
-                  val partitionOffsets: Map[TopicAndPartition, Option[Long]] = consumerSummary.assignment.map { topicPartition =>
-                    new TopicAndPartition(topicPartition) -> offsets.get(topicPartition)
-                  }.toMap
-                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), topicPartitions,
-                    partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+                  assignedTopicPartitions ++= consumerSummary.assignment
+                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), consumerSummary.assignment,
+                    offsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
                     Some(s"${consumerSummary.clientId}"))
                 }
               }
 
             val rowsWithoutConsumer = offsets.filterNot {
               case (topicPartition, offset) => assignedTopicPartitions.contains(topicPartition)
-              }.flatMap {
-                case (topicPartition, offset) =>
-                  val topicAndPartition = new TopicAndPartition(topicPartition)
-                  collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicAndPartition),
-                      Map(topicAndPartition -> Some(offset)), Some(MISSING_COLUMN_VALUE),
-                      Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
-                }
+            }.flatMap {
+              case (topicPartition, offset) =>
+                collectConsumerAssignment(group, Some(consumerGroupSummary.coordinator), Seq(topicPartition),
+                  offsets, Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE), Some(MISSING_COLUMN_VALUE))
+            }
 
             Some(rowsWithConsumer ++ rowsWithoutConsumer)
       }
