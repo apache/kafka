@@ -508,7 +508,7 @@ private[kafka] class Processor(val id: Int,
         val session = {
           // Only methods that are safe to call on a disconnected channel should be invoked on 'channel'.
           val channel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
-          RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName), channel.socketAddress)
+          RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName, channel.principal()), channel.socketAddress)
         }
         val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
           buffer = receive.payload, startTimeMs = time.milliseconds, listenerName = listenerName,
