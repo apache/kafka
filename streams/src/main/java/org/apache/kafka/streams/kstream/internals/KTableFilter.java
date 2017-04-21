@@ -27,20 +27,20 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final KTableImpl<K, ?, V> parent;
     private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
-    private final String storeName;
+    private final String queryableName;
     private boolean sendOldValues = false;
 
-    public KTableFilter(KTableImpl<K, ?, V> parent, Predicate<? super K, ? super V> predicate,
-                        boolean filterNot, String storeName) {
+    public KTableFilter(final KTableImpl<K, ?, V> parent, final Predicate<? super K, ? super V> predicate,
+                        final boolean filterNot, final String queryableName) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;
-        this.storeName = storeName;
+        this.queryableName = queryableName;
     }
 
     @Override
     public Processor<K, Change<V>> get() {
-        return storeName != null ? new MaterializedKTableFilterProcessor() : new KTableFilterProcessor();
+        return queryableName != null ? new MaterializedKTableFilterProcessor() : new KTableFilterProcessor();
     }
 
     @Override
@@ -76,6 +76,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         return newValue;
     }
 
+
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
 
         @Override
@@ -99,7 +100,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
         }
 

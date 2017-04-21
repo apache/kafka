@@ -104,7 +104,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testKTableWithMaterializedFilter() {
+    public void testQueryableKTable() {
         final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -214,7 +214,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testValueGetterwithMaterializedFilter() throws IOException {
+    public void testQueryableValueGetter() throws IOException {
         KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -298,7 +298,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testNotSendingOldValueWithMaterializedFilter() throws IOException {
+    public void testQueryableNotSendingOldValue() throws IOException {
         KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -376,7 +376,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSendingOldValueWithMaterializedFilter() throws IOException {
+    public void testQueryableSendingOldValue() throws IOException {
         KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -436,7 +436,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSkipNullOnMaterializationWithMaterializedFilter() throws IOException {
+    public void testQueryableSkipNullOnMaterialization() throws IOException {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         KStreamBuilder builder = new KStreamBuilder();
 

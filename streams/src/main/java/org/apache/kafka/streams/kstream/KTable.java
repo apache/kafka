@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 
@@ -102,14 +103,28 @@ public interface KTable<K, V> {
      * directly if required (i.e., if there is anything to be deleted).
      * Furthermore, for each record that gets dropped (i.e., dot not satisfied the given predicate) a tombstone record
      * is forwarded.
+     * <p>
+     * To query the local {@link KeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * <pre>{@code
+     * KafkaStreams streams = ... // filtering words
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(storeName, QueryableStoreTypes.<K, V>keyValueStore());
+     * K key = "some-word";
+     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * }</pre>
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * <p>
      *
      * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param storeName the name of the underlying {@link KTable} state store; valid characters are ASCII
-     *                      alphanumerics, '.', '_' and '-'. Cannot be {@code null}.
+     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     *                      used to subsequently query the operation results; valid characters are ASCII
+     *                      alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     *                      (i.e., that would be equivalent to calling {@link KTable#filter(Predicate)}.
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
-    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String storeName);
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String queryableName);
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
@@ -132,6 +147,43 @@ public interface KTable<K, V> {
      * @see #filter(Predicate)
      */
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate);
+
+    /**
+     * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
+     * given predicate.
+     * All records that <em>do</em> satisfy the predicate are dropped.
+     * For each {@code KTable} update the filter is evaluated on the update record to produce an update record for the
+     * result {@code KTable}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * Note that {@code filterNot} for a <i>changelog stream</i> works different to {@link KStream#filterNot(Predicate)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided filter predicate is not evaluated but the tombstone record is forwarded
+     * directly if required (i.e., if there is anything to be deleted).
+     * Furthermore, for each record that gets dropped (i.e., does satisfy the given predicate) a tombstone record is
+     * forwarded.
+     * <p>
+     * To query the local {@link KeyValueStore} it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * <pre>{@code
+     * KafkaStreams streams = ... // filtering words
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(storeName, QueryableStoreTypes.<K, V>keyValueStore());
+     * K key = "some-word";
+     * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
+     * }</pre>
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * <p>
+     * @param predicate a filter {@link Predicate} that is applied to each record
+     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * used to subsequently query the operation results; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     * (i.e., that would be equivalent to calling {@link KTable#filterNot(Predicate)}.
+     * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
+     * @see #filter(Predicate)
+     */
+    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final String queryableName);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -167,6 +219,95 @@ public interface KTable<K, V> {
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
 
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possible new type)in the new {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
+     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * The example below counts the number of token of the value string.
+     * <pre>{@code
+     * KTable<String, String> inputTable = builder.table("topic");
+     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapper<String, Integer> {
+     *     Integer apply(String value) {
+     *         return value.split(" ").length;
+     *     }
+     * });
+     * }</pre>
+     * <p>
+     * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * <p>
+     * <p>
+     * This operation preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
+     * the result {@code KTable}.
+     * <p>
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
+     * delete the corresponding record in the result {@code KTable}.
+     *
+     * @param mapper a {@link ValueMapper} that computes a new output value
+     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * used to subsequently query the operation results; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     * (i.e., that would be equivalent to calling {@link KTable#mapValues(ValueMapper)}.
+     * @param <VR>   the value type of the result {@code KTable}
+     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     */
+    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper, final String queryableName);
+
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possible new type)in the new {@code KTable}.
+     * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the update record and
+     * computes a new value for it, resulting in an update record for the result {@code KTable}.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is a stateless record-by-record operation.
+     * <p>
+     * The example below counts the number of token of the value string.
+     * <pre>{@code
+     * KTable<String, String> inputTable = builder.table("topic");
+     * KTable<String, Integer> outputTable = inputTable.mapValue(new ValueMapper<String, Integer> {
+     *     Integer apply(String value) {
+     *         return value.split(" ").length;
+     *     }
+     * });
+     * }</pre>
+     * <p>
+     * To query the local {@link KeyValueStore} representing outputTable above it must be obtained via
+     * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
+     * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
+     * query the value of the key on a parallel running instance of your Kafka Streams application.
+     * <p>
+     * <p>
+     * This operation preserves data co-location with respect to the key.
+     * Thus, <em>no</em> internal data redistribution is required if a key based operator (like a join) is applied to
+     * the result {@code KTable}.
+     * <p>
+     * Note that {@code mapValues} for a <i>changelog stream</i> works different to {@link KStream#mapValues(ValueMapper)
+     * record stream filters}, because {@link KeyValue records} with {@code null} values (so-called tombstone records)
+     * have delete semantics.
+     * Thus, for tombstones the provided value-mapper is not evaluated but the tombstone record is forwarded directly to
+     * delete the corresponding record in the result {@code KTable}.
+     *
+     * @param mapper a {@link ValueMapper} that computes a new output value
+     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * used to subsequently query the operation results; valid characters are ASCII
+     * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     * (i.e., that would be equivalent to calling {@link KTable#mapValues(ValueMapper)}.
+     * @param valueSerde serializer for new value type
+     * @param <VR>   the value type of the result {@code KTable}
+     *
+     * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
+     */
+    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper, final Serde<VR> valueSerde, final String queryableName);
 
     /**
      * Print the update records of this {@code KTable} to {@code System.out}.
@@ -432,6 +573,44 @@ public interface KTable<K, V> {
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
+     * serializers and deserializers and producer's {@link DefaultPartitioner}.
+     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
+     * started).
+     * <p>
+     * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
+     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName)}.
+     * <p>
+     * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
+     * {@link KStreamBuilder#table(String)})
+     *
+     * @param topic     the topic name
+     * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
+     */
+    KTable<K, V> through(final String topic);
+
+    /**
+     * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
+     * serializers and deserializers and a customizable {@link StreamPartitioner} to determine the distribution of
+     * records to partitions.
+     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
+     * started).
+     * <p>
+     * This is equivalent to calling {@link #to(StreamPartitioner, String) #to(partitioner, someTopicName)} and
+     * {@link KStreamBuilder#table(String, String) KStreamBuilder#table(someTopicName)}.
+     * <p>
+     * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
+     * {@link KStreamBuilder#table(String)})
+     *
+     * @param partitioner the function used to determine how records are distributed among partitions of the topic,
+     *                    if not specified producer's {@link DefaultPartitioner} will be used
+     * @param topic       the topic name
+     * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
+     */
+    KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
+                         final String topic);
+
+    /**
+     * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
      * serializers and deserializers and a customizable {@link StreamPartitioner} to determine the distribution of
      * records to partitions.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
@@ -480,6 +659,30 @@ public interface KTable<K, V> {
                          final String storeName);
 
     /**
+     * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic.
+     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
+     * started).
+     * <p>
+     * If {@code keySerde} provides a {@link WindowedSerializer} for the key {@link WindowedStreamPartitioner} is
+     * used&mdash;otherwise producer's {@link DefaultPartitioner} is used.
+     * <p>
+     * This is equivalent to calling {@link #to(Serde, Serde, String) #to(keySerde, valueSerde, someTopicName)} and
+     * {@link KStreamBuilder#table(String) KStreamBuilder#table(someTopicName)}.
+     * <p>
+     * The resulting {@code KTable} will be materialized in a local state store with an interna; store name (cf.
+     * {@link KStreamBuilder#table(String)})
+     *
+     * @param keySerde  key serde used to send key-value pairs,
+     *                  if not specified the default key serde defined in the configuration will be used
+     * @param valSerde  value serde used to send key-value pairs,
+     *                  if not specified the default value serde defined in the configuration will be used
+     * @param topic     the topic name
+     * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
+     */
+    KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
+                         final String topic);
+
+    /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using a customizable
      * {@link StreamPartitioner} to determine the distribution of records to partitions.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
@@ -509,6 +712,36 @@ public interface KTable<K, V> {
                          final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
                          final String storeName);
+
+    /**
+     * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using a customizable
+     * {@link StreamPartitioner} to determine the distribution of records to partitions.
+     * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
+     * started).
+     * <p>
+     * This is equivalent to calling {@link #to(Serde, Serde, StreamPartitioner, String)
+     * #to(keySerde, valueSerde, partitioner, someTopicName)} and
+     * {@link KStreamBuilder#table(String) KStreamBuilder#table(someTopicName)}.
+     * <p>
+     * The resulting {@code KTable} will be materialized in a local state store with an internal store name (cf.
+     * {@link KStreamBuilder#table(String)})
+     *
+     * @param keySerde    key serde used to send key-value pairs,
+     *                    if not specified the default key serde defined in the configuration will be used
+     * @param valSerde    value serde used to send key-value pairs,
+     *                    if not specified the default value serde defined in the configuration will be used
+     * @param partitioner the function used to determine how records are distributed among partitions of the topic,
+     *                    if not specified and {@code keySerde} provides a {@link WindowedSerializer} for the key
+     *                    {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
+     *                    be used
+     * @param topic      the topic name
+     * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
+     */
+    KTable<K, V> through(final Serde<K> keySerde,
+                         final Serde<V> valSerde,
+                         final StreamPartitioner<? super K, ? super V> partitioner,
+                         final String topic);
+
 
     /**
      * Materialize this changelog stream to a topic using default serializers and deserializers and producer's

@@ -419,12 +419,12 @@ public class KTableImplTest {
     }
 
     @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTopicInThrough() throws Exception {
-        table.through(null, "store");
+    public void shouldAllowNullTopicInThrough() throws Exception {
+        table.through((String) null, "store");
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullStoreInThrough() throws Exception {
+    @Test
+    public void shouldAllowNullStoreInThrough() throws Exception {
         table.through("topic", null);
     }
 
