@@ -96,7 +96,7 @@ public interface Transformer<K, V, R> {
      * and not based on wall-clock time.
      *
      * @param timestamp the stream time when {@code punctuate} is being called
-     * @return must return {@code null}&mdash;otherwise, a {@link StreamsException exception} will be thrown
+     * @return new {@link KeyValue} pair to be forwarded to down stream&mdash;if {@code null} will not be forwarded
      */
     R punctuate(final long timestamp);
 
