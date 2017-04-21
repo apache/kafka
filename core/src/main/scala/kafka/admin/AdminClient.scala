@@ -186,6 +186,17 @@ class AdminClient(val time: Time,
     response.responseData.asScala.map { case (tp, partitionData) => (tp, partitionData.offset) }.toMap
   }
 
+  def getTopicListOffset(req: ListOffsetRequest.Builder, node: Node): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+    val responseBody = send(node, ApiKeys.LIST_OFFSETS, req)
+    responseBody.asInstanceOf[ListOffsetResponse].responseData().asScala.toMap
+  }
+
+
+  def getMetadata(req: MetadataRequest.Builder, node: Node): MetadataResponse = {
+    val responseBody = send(node, ApiKeys.METADATA, req)
+    responseBody.asInstanceOf[MetadataResponse]
+  }
+
   def listAllBrokerVersionInfo(): Map[Node, Try[NodeApiVersions]] =
     findAllBrokers.map { broker =>
       broker -> Try[NodeApiVersions](new NodeApiVersions(getApiVersions(broker).asJava))
