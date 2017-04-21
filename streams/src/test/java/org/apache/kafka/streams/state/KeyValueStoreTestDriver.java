@@ -45,7 +45,7 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
-import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -154,9 +154,9 @@ public class KeyValueStoreTestDriver<K, V> {
      *            {@code Long.class}, or {@code byte[].class}
      * @return the test driver; never null
      */
-    public static <K, V> KeyValueStoreTestDriver<K, V> create(Class<K> keyClass, Class<V> valueClass) {
-        StateSerdes<K, V> serdes = StateSerdes.withBuiltinTypes("unexpected", keyClass, valueClass);
-        return new KeyValueStoreTestDriver<K, V>(serdes);
+    public static <K, V> KeyValueStoreTestDriver<K, V> create(final Class<K> keyClass, final Class<V> valueClass) {
+        final StateSerdes<K, V> serdes = StateSerdes.withBuiltinTypes("unexpected", keyClass, valueClass);
+        return new KeyValueStoreTestDriver<>(serdes);
     }
 
     /**
@@ -175,11 +175,11 @@ public class KeyValueStoreTestDriver<K, V> {
                                                               final Deserializer<K> keyDeserializer,
                                                               final Serializer<V> valueSerializer,
                                                               final Deserializer<V> valueDeserializer) {
-        StateSerdes<K, V> serdes = new StateSerdes<K, V>(
+        final StateSerdes<K, V> serdes = new StateSerdes<>(
             "unexpected",
             Serdes.serdeFrom(keySerializer, keyDeserializer),
             Serdes.serdeFrom(valueSerializer, valueDeserializer));
-        return new KeyValueStoreTestDriver<K, V>(serdes);
+        return new KeyValueStoreTestDriver<>(serdes);
     }
 
     private final Map<K, V> flushedEntries = new HashMap<>();
@@ -187,53 +187,50 @@ public class KeyValueStoreTestDriver<K, V> {
     private final List<KeyValue<K, V>> restorableEntries = new LinkedList<>();
     private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
-    private MockTime time = new MockTime();
-    private MetricConfig config = new MetricConfig();
-    private Metrics metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+    private final MockTime time = new MockTime();
+    private final MetricConfig config = new MetricConfig();
+    private final Metrics metrics = new Metrics(config, Collections.singletonList((MetricsReporter) new JmxReporter()), time, true);
 
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
     private final ThreadCache cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
     private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
-    private final RecordCollector recordCollector;
     private File stateDir = null;
 
-    protected KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
-        ByteArraySerializer rawSerializer = new ByteArraySerializer();
-        Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
+    private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
+        final ByteArraySerializer rawSerializer = new ByteArraySerializer();
+        final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
-        this.recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
+        final RecordCollector recordCollector = new RecordCollectorImpl(producer, "KeyValueStoreTestDriver") {
             @SuppressWarnings("unchecked")
             @Override
             public <K1, V1> void send(final String topic,
-                                      K1 key,
-                                      V1 value,
-                                      Integer partition,
-                                      Long timestamp,
-                                      Serializer<K1> keySerializer,
-                                      Serializer<V1> valueSerializer) {
+                                      final K1 key,
+                                      final V1 value,
+                                      final Integer partition,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer) {
             // for byte arrays we need to wrap it for comparison
 
-                K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
-                V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
+                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
+                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
 
                 recordFlushed(keyTest, valueTest);
             }
 
             @Override
             public <K1, V1> void send(final String topic,
-                                      K1 key,
-                                      V1 value,
-                                      Integer partition,
-                                      Long timestamp,
-                                      Serializer<K1> keySerializer,
-                                      Serializer<V1> valueSerializer,
-                                      StreamPartitioner<? super K1, ? super V1> partitioner) {
-                // ignore partitioner
-                send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+                                      final K1 key,
+                                      final V1 value,
+                                      final Long timestamp,
+                                      final Serializer<K1> keySerializer,
+                                      final Serializer<V1> valueSerializer,
+                                      final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                throw new UnsupportedOperationException();
             }
         };
-        this.stateDir = TestUtils.tempDirectory();
-        this.stateDir.mkdirs();
+        stateDir = TestUtils.tempDirectory();
+        stateDir.mkdirs();
 
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
@@ -244,25 +241,25 @@ public class KeyValueStoreTestDriver<K, V> {
 
 
 
-        this.context = new MockProcessorContext(this.stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+        context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             @Override
             public TaskId taskId() {
                 return new TaskId(0, 1);
             }
 
             @Override
-            public <K1, V1> void forward(K1 key, V1 value, int childIndex) {
+            public <K1, V1> void forward(final K1 key, final V1 value, final int childIndex) {
                 forward(key, value);
             }
 
             @Override
-            public void register(StateStore store, boolean loggingEnabled, StateRestoreCallback func) {
+            public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
                 storeMap.put(store.name(), store);
                 restoreEntries(func, serdes);
             }
 
             @Override
-            public StateStore getStateStore(String name) {
+            public StateStore getStateStore(final String name) {
                 return storeMap.get(name);
             }
 
@@ -282,7 +279,7 @@ public class KeyValueStoreTestDriver<K, V> {
             }
 
             @Override
-            public Map<String, Object> appConfigsWithPrefix(String prefix) {
+            public Map<String, Object> appConfigsWithPrefix(final String prefix) {
                 return new StreamsConfig(props).originalsWithPrefix(prefix);
             }
 
@@ -298,7 +295,7 @@ public class KeyValueStoreTestDriver<K, V> {
         };
     }
 
-    protected void recordFlushed(K key, V value) {
+    private void recordFlushed(final K key, final V value) {
         if (value == null) {
             // This is a removal ...
             flushedRemovals.add(key);
@@ -310,11 +307,11 @@ public class KeyValueStoreTestDriver<K, V> {
         }
     }
 
-    private void restoreEntries(StateRestoreCallback func, StateSerdes<K, V> serdes) {
-        for (KeyValue<K, V> entry : restorableEntries) {
+    private void restoreEntries(final StateRestoreCallback func, final StateSerdes<K, V> serdes) {
+        for (final KeyValue<K, V> entry : restorableEntries) {
             if (entry != null) {
-                byte[] rawKey = serdes.rawKey(entry.key);
-                byte[] rawValue = serdes.rawValue(entry.value);
+                final byte[] rawKey = serdes.rawKey(entry.key);
+                final byte[] rawValue = serdes.rawValue(entry.value);
                 func.restore(rawKey, rawValue);
             }
         }
@@ -349,8 +346,8 @@ public class KeyValueStoreTestDriver<K, V> {
      * @param value the value for the entry
      * @see #checkForRestoredEntries(KeyValueStore)
      */
-    public void addEntryToRestoreLog(K key, V value) {
-        restorableEntries.add(new KeyValue<K, V>(key, value));
+    public void addEntryToRestoreLog(final K key, final V value) {
+        restorableEntries.add(new KeyValue<>(key, value));
     }
 
     /**
@@ -386,11 +383,11 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return the number of restore entries missing from the store, or 0 if all restore entries were found
      * @see #addEntryToRestoreLog(Object, Object)
      */
-    public int checkForRestoredEntries(KeyValueStore<K, V> store) {
+    public int checkForRestoredEntries(final KeyValueStore<K, V> store) {
         int missing = 0;
-        for (KeyValue<K, V> kv : restorableEntries) {
+        for (final KeyValue<K, V> kv : restorableEntries) {
             if (kv != null) {
-                V value = store.get(kv.key);
+                final V value = store.get(kv.key);
                 if (!Objects.equals(value, kv.value)) {
                     ++missing;
                 }
@@ -405,7 +402,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @param store the key value store using this {@link #context()}.
      * @return the number of entries
      */
-    public int sizeOf(KeyValueStore<K, V> store) {
+    public int sizeOf(final KeyValueStore<K, V> store) {
         int size = 0;
         try (KeyValueIterator<K, V> iterator = store.all()) {
             while (iterator.hasNext()) {
@@ -421,9 +418,9 @@ public class KeyValueStoreTestDriver<K, V> {
      *
      * @param key the key
      * @return the value that was flushed with the key, or {@code null} if no such key was flushed or if the entry with this
-     *         key was {@link #flushedEntryStored(Object) removed} upon flush
+     *         key was removed upon flush
      */
-    public V flushedEntryStored(K key) {
+    public V flushedEntryStored(final K key) {
         return flushedEntries.get(key);
     }
 
@@ -434,7 +431,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * @return {@code true} if the entry with the given key was removed when flushed, or {@code false} if the entry was not
      *         removed when last flushed
      */
-    public boolean flushedEntryRemoved(K key) {
+    public boolean flushedEntryRemoved(final K key) {
         return flushedRemovals.contains(key);
     }
 
