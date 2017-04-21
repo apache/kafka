@@ -35,7 +35,6 @@ import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMo
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, StopReplicaResponse}
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
@@ -1592,21 +1591,21 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 /**
   * This is the zookeeper listener that triggers all the state transitions for a replica
   */
-class BrokerChangeListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
+class BrokerChangeListener(controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
     controller.addToControllerEventQueue(controller.BrokerChange(currentChilds.asScala))
   }
 }
 
-class TopicChangeListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
+class TopicChangeListener(controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
     controller.addToControllerEventQueue(controller.TopicChange(currentChilds.asScala.toSet))
   }
 }
 
-class PartitionModificationsListener(protected val controller: KafkaController, topic: String) extends IZkDataListener with Logging {
+class PartitionModificationsListener(controller: KafkaController, topic: String) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     controller.addToControllerEventQueue(controller.PartitionModifications(topic))
   }
@@ -1619,7 +1618,7 @@ class PartitionModificationsListener(protected val controller: KafkaController, 
   * 1. Add the topic to be deleted to the delete topics cache, only if the topic exists
   * 2. If there are topics to be deleted, it signals the delete topic thread
   */
-class TopicDeletionListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
+class TopicDeletionListener(controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
     controller.addToControllerEventQueue(controller.TopicDeletion(currentChilds.asScala.toSet))
@@ -1634,7 +1633,7 @@ class TopicDeletionListener(protected val controller: KafkaController) extends I
  * If any of the above conditions are satisfied, it logs an error and removes the partition from list of reassigned
  * partitions.
  */
-class PartitionReassignmentListener(protected val controller: KafkaController) extends IZkDataListener with Logging {
+class PartitionReassignmentListener(controller: KafkaController) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     val partitionReassignment = ZkUtils.parsePartitionReassignmentData(data.toString)
     controller.addToControllerEventQueue(controller.PartitionReassignment(partitionReassignment))
@@ -1643,7 +1642,7 @@ class PartitionReassignmentListener(protected val controller: KafkaController) e
   override def handleDataDeleted(dataPath: String): Unit = {}
 }
 
-class PartitionReassignmentIsrChangeListener(protected val controller: KafkaController, topic: String, partition: Int, reassignedReplicas: Set[Int]) extends IZkDataListener with Logging {
+class PartitionReassignmentIsrChangeListener(controller: KafkaController, topic: String, partition: Int, reassignedReplicas: Set[Int]) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     controller.addToControllerEventQueue(controller.PartitionReassignmentIsrChange(TopicAndPartition(topic, partition), reassignedReplicas))
   }
@@ -1654,7 +1653,7 @@ class PartitionReassignmentIsrChangeListener(protected val controller: KafkaCont
 /**
  * Called when replica leader initiates isr change
  */
-class IsrChangeNotificationListener(protected val controller: KafkaController) extends IZkChildListener with Logging {
+class IsrChangeNotificationListener(controller: KafkaController) extends IZkChildListener with Logging {
   override def handleChildChange(parentPath: String, currentChilds: java.util.List[String]): Unit = {
     import scala.collection.JavaConverters._
     controller.addToControllerEventQueue(controller.IsrChangeNotification(currentChilds.asScala))
@@ -1669,7 +1668,7 @@ object IsrChangeNotificationListener {
  * Starts the preferred replica leader election for the list of partitions specified under
  * /admin/preferred_replica_election -
  */
-class PreferredReplicaElectionListener(protected val controller: KafkaController) extends IZkDataListener with Logging {
+class PreferredReplicaElectionListener(controller: KafkaController) extends IZkDataListener with Logging {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     val partitions = PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(data.toString)
     controller.addToControllerEventQueue(controller.PreferredReplicaLeaderElection(partitions))
@@ -1678,7 +1677,7 @@ class PreferredReplicaElectionListener(protected val controller: KafkaController
   override def handleDataDeleted(dataPath: String): Unit = {}
 }
 
-class ControllerChangeListener(protected val controller: KafkaController) extends IZkDataListener {
+class ControllerChangeListener(controller: KafkaController) extends IZkDataListener {
   override def handleDataChange(dataPath: String, data: scala.Any): Unit = {
     controller.addToControllerEventQueue(controller.ControllerChange(KafkaController.parseControllerId(data.toString)))
   }
@@ -1688,7 +1687,7 @@ class ControllerChangeListener(protected val controller: KafkaController) extend
   }
 }
 
-class SessionExpirationListener(protected val controller: KafkaController) extends IZkStateListener with Logging {
+class SessionExpirationListener(controller: KafkaController) extends IZkStateListener with Logging {
   override def handleStateChanged(state: KeeperState) {
     // do nothing, since zkclient will do reconnect for us.
   }
