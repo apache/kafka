@@ -208,15 +208,16 @@ public class KafkaAdminClient extends AdminClient {
     /**
      * Get the deadline for a particular call.
      *
+     * @param now               The current time in milliseconds.
      * @param optionTimeoutMs   The timeout option given by the user.
      *
      * @return                  The deadline in milliseconds.
      */
-    private long calcDeadlineMs(Integer optionTimeoutMs) {
+    private long calcDeadlineMs(long now, Integer optionTimeoutMs) {
         if (optionTimeoutMs != null)
-            return time.milliseconds() + Math.min(0, optionTimeoutMs);
+            return now + Math.max(0, optionTimeoutMs);
         // If optionTimeoutMs is less than 0, we use the default timeout.
-        return time.milliseconds() + defaultTimeoutMs;
+        return now + defaultTimeoutMs;
     }
 
     /**
@@ -401,7 +402,7 @@ public class KafkaAdminClient extends AdminClient {
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
                 log.trace("{} attempting protocol downgrade.", this);
-                runnable.call(this);
+                runnable.call(this, now);
                 return;
             }
             tries++;
@@ -436,7 +437,7 @@ public class KafkaAdminClient extends AdminClient {
                 log.debug("{} failed: {}.  Beginning retry #{}",
                     this, prettyPrintException(throwable), tries);
             }
-            runnable.call(this);
+            runnable.call(this, now);
         }
 
         /**
@@ -800,8 +801,11 @@ public class KafkaAdminClient extends AdminClient {
             log.debug("{}: exiting AdminClientRunnable thread.", clientId);
         }
 
-        void call(Call call) {
-            log.debug("{}: queueing {}", clientId, call);
+        void call(Call call, long now) {
+            if (log.isDebugEnabled()) {
+                log.debug("{}: queueing {} with a timeout {} ms from now.",
+                    clientId, call, call.deadlineMs - now);
+            }
             synchronized (this) {
                 newCalls.add(call);
             }
@@ -820,7 +824,8 @@ public class KafkaAdminClient extends AdminClient {
         for (NewTopic newTopic : newTopics) {
             topicsMap.put(newTopic.name(), newTopic.convertToTopicDetails());
         }
-        runnable.call(new Call("createTopics", calcDeadlineMs(options.timeoutMs()),
+        final long now = time.milliseconds();
+        runnable.call(new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -859,7 +864,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        });
+        }, now);
         return new CreateTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
@@ -870,7 +875,8 @@ public class KafkaAdminClient extends AdminClient {
         for (String topicName : topicNames) {
             topicFutures.put(topicName, new KafkaFutureImpl<Void>());
         }
-        runnable.call(new Call("deleteTopics", calcDeadlineMs(options.timeoutMs()),
+        final long now = time.milliseconds();
+        runnable.call(new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -909,14 +915,17 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        });
+        }, now);
         return new DeleteTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
     public ListTopicsResults listTopics(final ListTopicsOptions options) {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
-        runnable.call(new Call("listTopics", calcDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
+        final long now = time.milliseconds();
+        runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return MetadataRequest.Builder.allTopics();
@@ -939,7 +948,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 topicListingFuture.completeExceptionally(throwable);
             }
-        });
+        }, now);
         return new ListTopicsResults(topicListingFuture);
     }
 
@@ -949,7 +958,8 @@ public class KafkaAdminClient extends AdminClient {
         for (String topicName : topicNames) {
             topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
         }
-        runnable.call(new Call("describeTopics", calcDeadlineMs(options.timeoutMs()),
+        final long now = time.milliseconds();
+        runnable.call(new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
             @Override
@@ -992,14 +1002,17 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
-        });
+        }, now);
         return new DescribeTopicsResults(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
     }
 
     @Override
     public DescribeClusterResults describeCluster(DescribeClusterOptions options) {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
-        runnable.call(new Call("listNodes", calcDeadlineMs(options.timeoutMs()), new LeastLoadedNodeProvider()) {
+        final long now = time.milliseconds();
+        runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 return new MetadataRequest.Builder(Collections.<String>emptyList());
@@ -1015,13 +1028,14 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 describeClusterFuture.completeExceptionally(throwable);
             }
-        });
+        }, now);
         return new DescribeClusterResults(describeClusterFuture);
     }
 
     @Override
     public ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
-        final long deadlineMs = calcDeadlineMs(options.timeoutMs());
+        final long now = time.milliseconds();
+        final long deadlineMs = calcDeadlineMs(now, options.timeoutMs());
         Map<Node, KafkaFuture<NodeApiVersions>> nodeFutures = new HashMap<>();
         for (final Node node : nodes) {
             final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
@@ -1042,7 +1056,7 @@ public class KafkaAdminClient extends AdminClient {
                     public void handleFailure(Throwable throwable) {
                         nodeFuture.completeExceptionally(throwable);
                     }
-                });
+                }, now);
         }
         return new ApiVersionsResults(nodeFutures);
 

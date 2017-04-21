@@ -181,7 +181,7 @@ public class KafkaAdminClientTest {
             KafkaFuture<Void> future = ctx.client.
                 createTopic(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
                         put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
-                    }}), new CreateTopicsOptions().timeoutMs(10000)).all();
+                    }}), new CreateTopicsOptions().timeoutMs(1000)).all();
             assertFutureError(future, TimeoutException.class);
         }
     }
