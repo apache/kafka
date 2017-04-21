@@ -183,7 +183,8 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
     }
 
-    public void flush(final InternalProcessorContext context) {
+    @Override
+    public void flush() {
         log.debug("Flushing all global stores registered in the state manager");
         for (StateStore store : this.stores.values()) {
             try {

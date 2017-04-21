@@ -194,6 +194,6 @@ public abstract class AbstractTask {
      * Flush all state stores owned by this task
      */
     public void flushState() {
-        stateMgr.flush((InternalProcessorContext) this.context());
+        stateMgr.flush();
     }
 }

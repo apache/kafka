@@ -48,6 +48,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     private final long retention = 60000L;
     private final int numSegments = 3;
+    private MockProcessorContext context;
     private final String storeName = "bytes-store";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
@@ -62,16 +63,18 @@ public class RocksDBSegmentedBytesStoreTest {
                                                     schema);
 
         stateDir = TestUtils.tempDirectory();
-        final MockProcessorContext context = new MockProcessorContext(stateDir,
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      new NoOpRecordCollector(),
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        context = new MockProcessorContext(
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new NoOpRecordCollector(),
+            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         bytesStore.init(context, bytesStore);
     }
 
     @After
     public void close() {
+        context.close();
         bytesStore.close();
     }
 

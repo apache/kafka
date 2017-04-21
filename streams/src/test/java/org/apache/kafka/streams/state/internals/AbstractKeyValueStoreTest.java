@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
-
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -30,6 +26,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+
 public abstract class AbstractKeyValueStoreTest {
 
 
@@ -37,13 +37,14 @@ public abstract class AbstractKeyValueStoreTest {
                                                                       Class<K> keyClass, Class<V> valueClass,
                                                                       boolean useContextSerdes);
 
+    protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @Before
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        context = (MockProcessorContext) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context, Integer.class, String.class, false);
     }
@@ -51,6 +52,7 @@ public abstract class AbstractKeyValueStoreTest {
     @After
     public void after() {
         store.close();
+        context.close();
     }
 
     @Test

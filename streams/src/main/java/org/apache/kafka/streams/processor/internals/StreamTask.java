@@ -70,7 +70,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         @Override
         public void run() {
             // 1) flush local state
-            stateMgr.flush(processorContext);
+            stateMgr.flush();
 
             log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
             // 2) flush produced records in the downstream and change logs of local states
