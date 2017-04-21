@@ -128,6 +128,10 @@ public class ProducerPerformance {
                     throttler.throttle();
                 }
             }
+
+            // Make sure all messages are sent before printing out the stats and the metrics
+            producer.flush();
+
             /* print final results */
             stats.printTotal();
 
