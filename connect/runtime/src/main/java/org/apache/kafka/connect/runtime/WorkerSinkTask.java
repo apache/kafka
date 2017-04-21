@@ -250,6 +250,11 @@ class WorkerSinkTask extends WorkerTask {
         deliverMessages();
     }
 
+    // Visible for testing
+    boolean isCommitting() {
+        return committing;
+    }
+
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
         try {
             consumer.commitSync(offsets);
