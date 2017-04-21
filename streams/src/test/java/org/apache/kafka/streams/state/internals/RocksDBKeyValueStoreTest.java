@@ -43,20 +43,11 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Override
-    protected <K, V> KeyValueStore<K, V> createKeyValueStore(
-            ProcessorContext context,
-            Class<K> keyClass,
-            Class<V> valueClass,
-            boolean useContextSerdes) {
-
-        return createStore(context, keyClass, valueClass, useContextSerdes);
-
-    }
-
-    @SuppressWarnings("unchecked")
-    private <K, V> KeyValueStore<K, V> createStore(final ProcessorContext context, final Class<K> keyClass, final Class<V> valueClass, final boolean useContextSerdes) {
-
-        Stores.PersistentKeyValueFactory<?, ?> factory;
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
+                                                             final Class<K> keyClass,
+                                                             final Class<V> valueClass,
+                                                             final boolean useContextSerdes) {
+        final Stores.PersistentKeyValueFactory<?, ?> factory;
         if (useContextSerdes) {
             factory = Stores
                     .create("my-store")
@@ -72,7 +63,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
                     .persistent();
         }
 
-        KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
+        final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
         store.init(context, store);
         return store;
     }
@@ -89,19 +80,20 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @After
     public void after() {
+        store.close();
         context.close();
     }
 
     @Test
     public void shouldUseCustomRocksDbConfigSetter() throws Exception {
         driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
-        createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
         assertTrue(TheRocksDbConfigSetter.called);
     }
 
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
-        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false);
+        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -113,7 +105,7 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
-        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false);
+        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -125,8 +117,8 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() throws Exception {
+        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
-        final KeyValueStore<Integer, String> store = createStore(context, Integer.class, String.class, false);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);
@@ -140,28 +132,28 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         try {
             iteratorOne.hasNext();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
 
         try {
             iteratorOne.next();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
 
         try {
             iteratorTwo.hasNext();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
 
         try {
             iteratorTwo.next();
             fail("should have thrown InvalidStateStoreException on closed store");
-        } catch (InvalidStateStoreException e) {
+        } catch (final InvalidStateStoreException e) {
             // ok
         }
     }
