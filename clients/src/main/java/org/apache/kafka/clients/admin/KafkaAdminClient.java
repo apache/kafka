@@ -386,31 +386,56 @@ public class KafkaAdminClient extends AdminClient {
             this.nodeProvider = nodeProvider;
         }
 
+        /**
+         * Handle a failure.
+         *
+         * Depending on what the exception is and how many times we have already tried, we may choose to
+         * fail the Call, or retry it.  It is important to print the stack traces here in some cases,
+         * since they are not necessarily preserved in ApiVersionException objects.
+         *
+         * @param now           The current time in milliseconds.
+         * @param throwable     The failure exception.
+         */
         final void fail(long now, Throwable throwable) {
             // If this is an UnsupportedVersionException that we can retry, do so.
             if ((throwable instanceof UnsupportedVersionException) &&
                      handleUnsupportedVersionException((UnsupportedVersionException) throwable)) {
-                log.trace("{} attempting protocol downgrade.", callName);
+                log.trace("{} attempting protocol downgrade.", this);
                 runnable.call(this);
                 return;
             }
-
-            // If the exception is not retryable, fail immediately.
-            if (!(throwable instanceof RetriableException)) {
-                log.debug("{} failed: {}", callName, prettyPrintException(throwable));
-                handleFailure(throwable);
-                return;
-            }
-            // Retriable exceptions can be retried a few times.
             tries++;
-            if ((tries > MAX_CALL_RETRIES) || calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
-                log.debug("{} failed after {} attempt{}: {}",
-                    callName, tries, tries == 1 ? "" : "s", prettyPrintException(throwable));
+            // If the call has timed out, fail.
+            if (calcTimeoutMsRemainingAsInt(now, deadlineMs) < 0) {
+                if (log.isDebugEnabled()) {
+                    log.debug("{} timed out at {} after {} attempt(s)", this, now, tries,
+                        new Exception(prettyPrintException(throwable)));
+                }
                 handleFailure(throwable);
                 return;
             }
-            log.debug("{} failed: {}.  Beginning retry #{}",
-                callName, prettyPrintException(throwable), tries);
+            // If the exception is not retryable, fail.
+            if (!(throwable instanceof RetriableException)) {
+                if (log.isDebugEnabled()) {
+                    log.debug("{} failed with non-retriable exception after {} attempt(s)", this, tries,
+                        new Exception(prettyPrintException(throwable)));
+                }
+                handleFailure(throwable);
+                return;
+            }
+            // If we are out of retries, fail.
+            if (tries > MAX_CALL_RETRIES) {
+                if (log.isDebugEnabled()) {
+                    log.debug("{} failed after {} attempt(s)", this, tries,
+                        new Exception(prettyPrintException(throwable)));
+                }
+                handleFailure(throwable);
+                return;
+            }
+            if (log.isDebugEnabled()) {
+                log.debug("{} failed: {}.  Beginning retry #{}",
+                    this, prettyPrintException(throwable), tries);
+            }
             runnable.call(this);
         }
 
