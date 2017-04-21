@@ -156,7 +156,7 @@ You can run findbugs using:
     ./gradlew findbugsMain findbugsTest -x test
 
 The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
-directories. Currently, findbugs warnings do not cause the build to fail.
+directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
 
 ### Common build options ###
 
