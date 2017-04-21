@@ -370,6 +370,44 @@ public class FetcherTest {
         assertEquals(5, records.get(1).offset());
     }
 
+    /**
+     * Test the scenario where a partition with fetched but not consumed records (i.e. max.poll.records is
+     * less than the number of fetched records) is unassigned and a different partition is assigned. This is a
+     * pattern used by Streams state restoration and KAFKA-5097 would have been caught by this test.
+     */
+    @Test
+    public void testFetchAfterPartitionWithFetchedRecordsIsUnassigned() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), 2);
+
+        List<ConsumerRecord<byte[], byte[]>> records;
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 1);
+
+        client.prepareResponse(matchesOffset(tp1, 1), fetchResponse(tp1, this.records, Errors.NONE, 100L, 0));
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(2, records.size());
+        assertEquals(3L, subscriptions.position(tp1).longValue());
+        assertEquals(1, records.get(0).offset());
+        assertEquals(2, records.get(1).offset());
+
+        subscriptions.assignFromUser(singleton(tp2));
+        client.prepareResponse(matchesOffset(tp2, 4), fetchResponse(tp2, this.nextRecords, Errors.NONE, 100L, 0));
+        subscriptions.seek(tp2, 4);
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertNull(fetchedRecords.get(tp1));
+        records = fetchedRecords.get(tp2);
+        assertEquals(2, records.size());
+        assertEquals(6L, subscriptions.position(tp2).longValue());
+        assertEquals(4, records.get(0).offset());
+        assertEquals(5, records.get(1).offset());
+    }
+
     @Test
     public void testFetchNonContinuousRecords() {
         // if we are fetching from a compacted topic, there may be gaps in the returned records
@@ -1467,7 +1505,11 @@ public class FetcherTest {
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {
-        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp1,
+        return fetchResponse(tp1, records, error, hw, throttleTime);
+    }
+
+    private FetchResponse fetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponse.PartitionData(error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
         return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
     }
