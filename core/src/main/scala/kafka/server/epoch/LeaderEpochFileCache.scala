@@ -24,14 +24,11 @@ import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFIN
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
-
 import scala.collection.mutable.ListBuffer
 
 trait LeaderEpochCache {
-  def cacheLatestEpoch(leaderEpoch: Int)
-  def maybeAssignLatestCachedEpochToLeo()
   def assign(leaderEpoch: Int, offset: Long)
-  def latestUsedEpoch(): Int
+  def latestEpoch(): Int
   def endOffsetFor(epoch: Int): Long
   def clearLatest(offset: Long)
   def clearEarliest(offset: Long)
@@ -50,7 +47,6 @@ trait LeaderEpochCache {
 class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetMetadata, checkpoint: LeaderEpochCheckpoint) extends LeaderEpochCache with Logging {
   private val lock = new ReentrantReadWriteLock()
   private var epochs: ListBuffer[EpochEntry] = inWriteLock(lock) { ListBuffer(checkpoint.read(): _*) }
-  private var cachedLatestEpoch: Option[Int] = None //epoch which has yet to be assigned to a message.
 
   /**
     * Assigns the supplied Leader Epoch to the supplied Offset
@@ -61,12 +57,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     */
   override def assign(epoch: Int, offset: Long): Unit = {
     inWriteLock(lock) {
-      if (epoch >= 0 && epoch > latestUsedEpoch && offset >= latestOffset) {
+      if (epoch >= 0 && epoch > latestEpoch && offset >= latestOffset) {
         info(s"Updated PartitionLeaderEpoch. ${epochChangeMsg(epoch, offset)}. Cache now contains ${epochs.size} entries.")
         epochs += EpochEntry(epoch, offset)
         flush()
       } else {
-        maybeWarn(epoch, offset)
+        validateAndMaybeWarn(epoch, offset)
       }
     }
   }
@@ -77,7 +73,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @return
     */
-  override def latestUsedEpoch(): Int = {
+  override def latestEpoch(): Int = {
     inReadLock(lock) {
       if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
     }
@@ -95,7 +91,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   override def endOffsetFor(requestedEpoch: Int): Long = {
     inReadLock(lock) {
       val offset =
-        if (requestedEpoch == latestUsedEpoch) {
+        if (requestedEpoch == latestEpoch) {
           leo().messageOffset
         }
         else {
@@ -177,45 +173,16 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     checkpoint.write(epochs)
   }
 
-  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Latest: {epoch:$latestUsedEpoch, offset$latestOffset} for Partition: $topicPartition"
+  def epochChangeMsg(epoch: Int, offset: Long) = s"New: {epoch:$epoch, offset:$offset}, Latest: {epoch:$latestEpoch, offset$latestOffset} for Partition: $topicPartition"
 
-  def maybeWarn(epoch: Int, offset: Long) = {
-    if (epoch < latestUsedEpoch())
+  def validateAndMaybeWarn(epoch: Int, offset: Long) = {
+    assert(epoch >= 0, s"Received a PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
+    if (epoch < latestEpoch())
       warn(s"Received a PartitionLeaderEpoch assignment for an epoch < latestEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
-    else if (epoch < 0)
-      warn(s"Received an PartitionLeaderEpoch assignment for an epoch < 0. This should not happen. ${epochChangeMsg(epoch, offset)}")
-    else if (offset < latestOffset() && epoch >= 0)
-      warn(s"Received an PartitionLeaderEpoch assignment for an offset < latest offset for the most recent, stored PartitionLeaderEpoch. " +
+    else if (offset < latestOffset())
+      warn(s"Received a PartitionLeaderEpoch assignment for an offset < latest offset for the most recent, stored PartitionLeaderEpoch. " +
         s"This implies messages have arrived out of order. ${epochChangeMsg(epoch, offset)}")
-  }
-
-  /**
-    * Registers a PartitionLeaderEpoch (typically in response to a leadership change).
-    * This will be cached until {@link #maybeAssignLatestCachedEpochToLeo} is called.
-    *
-    * This allows us to register an epoch in response to a leadership change, but not persist
-    * that epoch until a message arrives and is stamped. This asigns the aassignment of leadership
-    * on leader and follower, for eases debugability.
-    *
-    * @param epoch
-    */
-  override def cacheLatestEpoch(epoch: Int) = {
-    inWriteLock(lock) {
-      cachedLatestEpoch = Some(epoch)
-    }
-  }
-
-  /**
-    * If there is a cached epoch, associate its start offset with the current log end offset if it's not in the epoch list yet.
-    */
-  override def maybeAssignLatestCachedEpochToLeo() = {
-    inWriteLock(lock) {
-      if (cachedLatestEpoch == None) error("Attempt to assign log end offset to epoch before epoch has been set. This should never happen.")
-      cachedLatestEpoch.foreach { epoch =>
-        assign(epoch, leo().messageOffset)
-      }
-    }
   }
 }
 

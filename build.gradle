@@ -24,8 +24,8 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.7.0"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.13.0'
+    classpath "org.ajoberstar:grgit:1.9.2"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.14.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
   }
@@ -68,7 +68,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "3.2.1"
+  gradleVersion = "3.5"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -881,9 +881,9 @@ project(':jmh-benchmarks') {
   dependencies {
       compile project(':clients')
       compile project(':streams')
-      compile 'org.openjdk.jmh:jmh-core:1.17.5'
-      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.17.5'
-      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.17.5'
+      compile 'org.openjdk.jmh:jmh-core:1.18'
+      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.18'
+      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.18'
   }
 
   jar {
@@ -1052,10 +1052,7 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
-    compile(libs.reflections) {
-      // Exclude because of LGPL license
-      exclude group: 'com.google.code.findbugs', module: 'annotations'
-    }
+    compile(libs.reflections)
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock

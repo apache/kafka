@@ -593,6 +593,83 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchPositionAfterException() {
+        // verify the advancement in the next fetch offset equals the number of fetched records when
+        // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1, tp2));
+        subscriptionsNoAutoReset.seek(tp1, 1);
+        subscriptionsNoAutoReset.seek(tp2, 1);
+
+        assertEquals(1, fetcherNoAutoReset.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+        partitions.put(tp2, new FetchResponse.PartitionData(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
+        client.prepareResponse(new FetchResponse(new LinkedHashMap<>(partitions), 0));
+        consumerClient.poll(0);
+
+        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
+        List<OffsetOutOfRangeException> exceptions = new ArrayList<>();
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (OffsetOutOfRangeException e) {
+            exceptions.add(e);
+        }
+
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp2).longValue() - 1);
+
+        try {
+            for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
+                fetchedRecords.addAll(records);
+        } catch (OffsetOutOfRangeException e) {
+            exceptions.add(e);
+        }
+
+        assertEquals(4, subscriptionsNoAutoReset.position(tp2).longValue());
+        assertEquals(3, fetchedRecords.size());
+
+        // Should have received one OffsetOutOfRangeException for partition tp1
+        assertEquals(1, exceptions.size());
+        OffsetOutOfRangeException e = exceptions.get(0);
+        assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
+        assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+    }
+
+    @Test
+    public void testSeekBeforeException() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptionsNoAutoReset, new Metrics(time), 2);
+
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1));
+        subscriptionsNoAutoReset.seek(tp1, 1);
+        assertEquals(1, fetcher.sendFetches());
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp1, new FetchResponse.PartitionData(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, records));
+        client.prepareResponse(fetchResponse(this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
+
+        assertEquals(2, fetcher.fetchedRecords().get(tp1).size());
+
+        subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1, tp2));
+        subscriptionsNoAutoReset.seek(tp2, 1);
+        assertEquals(1, fetcher.sendFetches());
+        partitions = new HashMap<>();
+        partitions.put(tp2, new FetchResponse.PartitionData(Errors.OFFSET_OUT_OF_RANGE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY));
+        client.prepareResponse(new FetchResponse(new LinkedHashMap<>(partitions), 0));
+        consumerClient.poll(0);
+        assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
+
+        subscriptionsNoAutoReset.seek(tp2, 10);
+        // Should not throw OffsetOutOfRangeException after the seek
+        assertEquals(0, fetcher.fetchedRecords().size());
+    }
+
+    @Test
     public void testFetchDisconnected() {
         subscriptions.assignFromUser(singleton(tp1));
         subscriptions.seek(tp1, 0);
