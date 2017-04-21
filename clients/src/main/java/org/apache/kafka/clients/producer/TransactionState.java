@@ -339,6 +339,8 @@ public class TransactionState {
             throw new IllegalStateException("Multiple concurrent calls to initTransactions are not allowed.");
         }
         isInitializing = true;
+        setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.sequenceNumbers.clear();
         if (transactionCoordinator == null)
             pendingTransactionalRequests.add(findCoordinatorRequest(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId, false));
 
