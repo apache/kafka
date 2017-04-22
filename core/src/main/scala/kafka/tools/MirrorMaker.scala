@@ -43,7 +43,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
-import org.apache.kafka.common.header.RecordHeaders
+import org.apache.kafka.common.header.internals.RecordHeaders
 import org.apache.kafka.common.record.RecordBatch
 
 /**

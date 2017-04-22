@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;

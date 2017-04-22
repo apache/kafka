@@ -26,7 +26,8 @@ import kafka.message.Message
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.header.{Headers, RecordHeaders}
+import org.apache.kafka.common.header.Headers
+import org.apache.kafka.common.header.internals.RecordHeaders
 
 /**
  * A base consumer used to abstract both old and new consumer

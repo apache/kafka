@@ -18,7 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
-import org.apache.kafka.common.header.RecordHeaders;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional

@@ -28,6 +28,16 @@ public interface Headers extends Iterable<Header> {
     Headers add(Header header) throws IllegalStateException;
 
     /**
+     * Creates and adds a header, to the end, returning if the operation succeeded.
+     *
+     * @param key of the header to be added.
+     * @param value of the header to be added.
+     * @return this instance of the Headers, once the header is added.
+     * @throws IllegalStateException is thrown if headers are in a read-only state.
+     */
+    Headers add(String key, byte[] value) throws IllegalStateException;
+
+    /**
      * Removes ALL HEADERS for the given key returning if the operation succeeded.
      * 
      * @param key to remove ALL HEADERS for.

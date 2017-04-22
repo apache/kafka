@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.header;
+package org.apache.kafka.common.header.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -24,6 +24,8 @@ import static org.junit.Assert.fail;
 import java.io.IOException;
 import java.util.Iterator;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.junit.Test;
 
 public class RecordHeadersTest {

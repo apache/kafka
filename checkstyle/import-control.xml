@@ -102,6 +102,7 @@
     </subpackage>
 
     <subpackage name="header">
+      <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
     </subpackage>
 

@@ -14,27 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.header;
+package org.apache.kafka.common.header.internals;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Objects;
 
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Utils;
 
 public class RecordHeader implements Header {
     private final String key;
-    private final ByteBuffer value;
+    private ByteBuffer valueBuffer;
+    private byte[] value;
 
     public RecordHeader(String key, byte[] value) {
         Objects.requireNonNull(key, "Null header keys are not permitted");
         this.key = key;
-        this.value = Utils.wrapNullable(value);
+        this.value = value;
     }
 
-    public RecordHeader(String key, ByteBuffer value) {
+    public RecordHeader(String key, ByteBuffer valueBuffer) {
         Objects.requireNonNull(key, "Null header keys are not permitted");
         this.key = key;
-        this.value = value;
+        this.valueBuffer = valueBuffer;
     }
     
     public String key() {
@@ -42,7 +45,11 @@ public class RecordHeader implements Header {
     }
 
     public byte[] value() {
-        return value == null ? null : Utils.toArray(value);
+        if (value == null && valueBuffer != null) {
+            value = Utils.toArray(valueBuffer);
+            valueBuffer = null;
+        }
+        return value;
     }
 
     @Override
@@ -53,20 +60,20 @@ public class RecordHeader implements Header {
             return false;
 
         RecordHeader header = (RecordHeader) o;
-        return (key == null ? header.key == null : key.equals(header.key)) &&
-                (value == null ? header.value == null : value.equals(header.value));
+        return (key == null ? header.key == null : key.equals(header.key)) && 
+               Arrays.equals(value(), header.value());
     }
 
     @Override
     public int hashCode() {
         int result = key != null ? key.hashCode() : 0;
-        result = 31 * result + (value != null ? value.hashCode() : 0);
+        result = 31 * result + Arrays.hashCode(value());
         return result;
     }
 
     @Override
     public String toString() {
-        return "RecordHeader(key = " + key + ", value = " + value + ")";
+        return "RecordHeader(key = " + key + ", value = " + Arrays.toString(value()) + ")";
     }
 
 }

@@ -43,7 +43,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.header.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -356,8 +356,6 @@ public class FetcherTest {
         builder.append(0L, "key".getBytes(), "value-3".getBytes(), headersArray2);
 
         MemoryRecords memoryRecords = builder.build();
-
-        System.out.println(memoryRecords);
 
         List<ConsumerRecord<byte[], byte[]>> records;
         subscriptions.assignFromUser(singleton(tp1));

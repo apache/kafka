@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.header;
+package org.apache.kafka.common.header.internals;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -24,6 +24,8 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.AbstractIterator;
 
@@ -70,6 +72,11 @@ public class RecordHeaders implements Headers, Closeable {
         checkClosed();
         headers.add(header);
         return this;
+    }
+
+    @Override
+    public Headers add(String key, byte[] value) throws IllegalStateException {
+        return add(new RecordHeader(key, value));
     }
 
     @Override
