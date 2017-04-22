@@ -244,10 +244,6 @@ class TransactionStateManagerTest {
     prepareForTxnMessageAppend(Errors.RECORD_LIST_TOO_LARGE)
     transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
-
-    prepareForTxnMessageAppend(Errors.INVALID_FETCH_SIZE)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
-    assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
   }
 
   @Test(expected = classOf[IllegalStateException])

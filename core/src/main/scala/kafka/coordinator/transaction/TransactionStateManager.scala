@@ -294,8 +294,7 @@ class TransactionStateManager(brokerId: Int,
 
   def appendTransactionToLog(transactionalId: String,
                              txnMetadata: TransactionMetadata,
-                             responseCallback: Errors => Unit,
-                             acks:Short = TransactionLog.EnforcedRequiredAcks) {
+                             responseCallback: Errors => Unit) {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -342,8 +341,7 @@ class TransactionStateManager(brokerId: Int,
             Errors.NOT_COORDINATOR
 
           case Errors.MESSAGE_TOO_LARGE
-               | Errors.RECORD_LIST_TOO_LARGE
-               | Errors.INVALID_FETCH_SIZE =>
+               | Errors.RECORD_LIST_TOO_LARGE =>
 
             error(s"Appending transaction message $txnMetadata for $transactionalId failed due to " +
               s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
@@ -369,30 +367,33 @@ class TransactionStateManager(brokerId: Int,
           else
             metadata.completeTransitionTo(txnMetadata.state)
         }
-        // now try to update the cache: we need to update the status in-place instead of
-        // overwriting the whole object to ensure synchronization
-        getTransactionState(transactionalId) match {
-          case Some(metadata) =>
-            metadata synchronized {
-              if (metadata.pid == txnMetadata.pid &&
-                metadata.producerEpoch == txnMetadata.producerEpoch &&
-                metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
-                completeStateTransition(metadata, txnMetadata.state)) {
-                // only topic-partition lists could possibly change (state should have transited in the above condition)
-                metadata.addPartitions(txnMetadata.topicPartitions.toSet)
-              } else {
-                throw new IllegalStateException(s"Completing transaction state transition to $txnMetadata while its current state is $metadata.")
+        if (isCoordinatorLoadingInProgress(transactionalId))
+          responseError = Errors.NOT_COORDINATOR
+        else
+          // now try to update the cache: we need to update the status in-place instead of
+          // overwriting the whole object to ensure synchronization
+          getTransactionState(transactionalId) match {
+            case Some(metadata) =>
+              metadata synchronized {
+                if (metadata.pid == txnMetadata.pid &&
+                  metadata.producerEpoch == txnMetadata.producerEpoch &&
+                  metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
+                  completeStateTransition(metadata, txnMetadata.state)) {
+                  // only topic-partition lists could possibly change (state should have transited in the above condition)
+                  metadata.addPartitions(txnMetadata.topicPartitions.toSet)
+                } else {
+                  throw new IllegalStateException(s"Completing transaction state transition to $txnMetadata while its current state is $metadata.")
+                }
               }
-            }
 
-          case None =>
-            // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-            // return NOT_COORDINATOR to let the client retry
-            debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
-              s"has been appended to the log. The partition for $transactionalId may have migrated as the metadata is no longer in the cache")
+            case None =>
+              // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
+              // return NOT_COORDINATOR to let the client retry
+              debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
+                s"has been appended to the log. The partition for $transactionalId may have migrated as the metadata is no longer in the cache")
 
-            responseError = Errors.NOT_COORDINATOR
-        }
+              responseError = Errors.NOT_COORDINATOR
+          }
       }
 
       responseCallback(responseError)
@@ -400,7 +401,7 @@ class TransactionStateManager(brokerId: Int,
 
     replicaManager.appendRecords(
       txnMetadata.txnTimeoutMs.toLong,     // use the txn timeout value as the timeout for append
-      acks,
+      TransactionLog.EnforcedRequiredAcks,
       internalTopicsAllowed = true,        // allow appending to internal offset topic
       recordsPerPartition,
       updateCacheCallback)

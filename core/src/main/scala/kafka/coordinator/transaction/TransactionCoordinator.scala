@@ -317,37 +317,48 @@ class TransactionCoordinator(brokerId: Int,
     metadata.prepareTransitionTo(nextState)
 
     def logAppendCallback(errors: Errors): Unit = {
-      if (errors != Errors.NONE)
-        responseCallback(errors)
-      else {
+      // we can respond to the client immediately and continue to write the txn markers if
+      // the log append was successful
+      responseCallback(errors)
+      if (errors == Errors.NONE)
         txnManager.coordinatorEpochFor(transactionalId) match {
           case Some(coordinatorEpoch) =>
-            def completionCallback(error:Errors): Unit = {
-              if (errors != Errors.NONE)
-                responseCallback(errors)
+            def completionCallback(error: Errors): Unit = {
+              if (error != Errors.NONE)
+              // TODO: what should we do in the error case? We've already responded with success
+              // do we retry here?
+                warn(s"error: $error caught during transaction completion")
               else
                 txnManager.getTransactionState(transactionalId) match {
                   case Some(preparedCommitMetadata) =>
                     val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
                     val committedMetadata = new TransactionMetadata(pid,
                       epoch,
-                      newMetadata.txnTimeoutMs,
+                      preparedCommitMetadata.txnTimeoutMs,
                       completedState,
-                      metadata.topicPartitions,
-                      newMetadata.transactionStartTime,
-                      newMetadata.entryTimestamp)
+                      preparedCommitMetadata.topicPartitions,
+                      preparedCommitMetadata.transactionStartTime,
+                      preparedCommitMetadata.entryTimestamp)
                     preparedCommitMetadata.prepareTransitionTo(completedState)
-                    txnManager.appendTransactionToLog(transactionalId, committedMetadata, responseCallback, 1)
-                    txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionalId), pid)
+                    txnManager.appendTransactionToLog(transactionalId, committedMetadata, {
+                      case Errors.NONE =>
+                        txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionalId), pid)
+                      case _ =>
+                      // TODO: What do we do in the case of errors?
+                      // has already been logged in TransactionStateManager
+                    })
+
                   case None =>
-                    responseCallback(Errors.NOT_COORDINATOR)
+                    // this one should be completed by the new coordinator
+                    warn(s"no longer the coordinator for transactionalId: $transactionalId")
                 }
             }
+
             txnMarkerChannelManager.addTxnMarkerRequest(txnManager.partitionFor(transactionalId), newMetadata, coordinatorEpoch, completionCallback)
           case None =>
-            responseCallback(Errors.NOT_COORDINATOR)
+            // this one should be completed by the new coordinator
+            warn(s"no longer the coordinator for transactionalId: $transactionalId")
         }
-      }
     }
 
     txnManager.appendTransactionToLog(transactionalId, newMetadata, logAppendCallback)

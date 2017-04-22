@@ -129,8 +129,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.capture(capturedTxn),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()))
+      EasyMock.capture(capturedErrorsCallback)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -255,8 +254,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, 0, time.milliseconds())),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()
+      EasyMock.capture(capturedErrorsCallback)
     ))
 
     EasyMock.replay(transactionManager)
@@ -551,20 +549,19 @@ class TransactionCoordinatorTest {
     mockComplete(transactionId, 0, 0, 10, PrepareAbort)
 
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
-      .andReturn(true)
+      .andReturn(true).anyTimes()
     EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
-      .andReturn(true)
+      .andReturn(true).anyTimes()
 
     val completedMetadata = new TransactionMetadata(0, 0, 0, CompleteAbort, mutable.Set.empty[TopicPartition], 0, 0)
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
       .andReturn(Some(completedMetadata))
-      .once()
+      .anyTimes()
 
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionId),
       EasyMock.anyObject(classOf[TransactionMetadata]),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()
+      EasyMock.capture(capturedErrorsCallback)
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
         capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -604,8 +601,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionId),
       EasyMock.anyObject(classOf[TransactionMetadata]),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()
+      EasyMock.capture(capturedErrorsCallback)
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
         capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -640,8 +636,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionId),
       EasyMock.anyObject(classOf[TransactionMetadata]),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()
+      EasyMock.capture(capturedErrorsCallback)
     )).andAnswer(new IAnswer[Unit] {
       override def answer(): Unit = {
         capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -689,8 +684,7 @@ class TransactionCoordinatorTest {
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionId),
       EasyMock.eq(prepareCommitMetadata),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()))
+      EasyMock.capture(capturedErrorsCallback)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           if (runCallback) capturedErrorsCallback.getValue.apply(Errors.NONE)
@@ -737,8 +731,7 @@ class TransactionCoordinatorTest {
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionId),
       EasyMock.eq(completedMetadata),
-      EasyMock.capture(capturedErrorsCallback),
-      EasyMock.anyObject()))
+      EasyMock.capture(capturedErrorsCallback)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
           capturedErrorsCallback.getValue.apply(Errors.NONE)
