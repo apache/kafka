@@ -14,11 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.utils;
 
 import java.util.Locale;
 
-public final class Os {
+public final class OperatingSystem {
+
+    private OperatingSystem() {
+    }
+    
     public static final String NAME;
 
     public static final boolean IS_WINDOWS;
