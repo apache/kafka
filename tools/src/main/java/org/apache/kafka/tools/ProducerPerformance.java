@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -129,17 +130,26 @@ public class ProducerPerformance {
                 }
             }
 
-            // Make sure all messages are sent before printing out the stats and the metrics
-            producer.flush();
+            if (!shouldPrintMetrics) {
+                producer.close();
 
-            /* print final results */
-            stats.printTotal();
+                /* print final results */
+                stats.printTotal();
+            } else {
+                // Make sure all messages are sent before printing out the stats and the metrics
+                // We need to use reflection for now since tests/kafkatest/sanity_checks/test_performance_services.py
+                // expects the class to bind with old version of client jars.
+                Class c= Class.forName("org.apache.kafka.clients.producer.KafkaProducer");
+                Method flush = c.getDeclaredMethod("flush");
+                flush.invoke(producer);
 
-            /* print out metrics */
-            if (shouldPrintMetrics) {
+                /* print final results */
+                stats.printTotal();
+
+                /* print out metrics */
                 ToolsUtils.printMetrics(producer.metrics());
+                producer.close();
             }
-            producer.close();
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
