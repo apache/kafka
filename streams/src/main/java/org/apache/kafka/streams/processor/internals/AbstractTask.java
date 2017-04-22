@@ -48,6 +48,7 @@ public abstract class AbstractTask {
     protected final Set<TopicPartition> partitions;
     InternalProcessorContext processorContext;
     protected final ThreadCache cache;
+
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -75,16 +76,10 @@ public abstract class AbstractTask {
         }
     }
 
-    void initializeStateStores() {
-        // set initial offset limits
-        initializeOffsetLimits();
-
-        for (final StateStore store : topology.stateStores()) {
-            log.trace("task [{}] Initializing store {}", id(), store.name());
-            store.init(processorContext, store);
-        }
-
-    }
+    public abstract void resume();
+    public abstract void commit();
+    public abstract void suspend();
+    public abstract void close();
 
     public final TaskId id() {
         return id;
@@ -108,39 +103,6 @@ public abstract class AbstractTask {
 
     public final ThreadCache cache() {
         return cache;
-    }
-
-    public abstract void resume();
-    public abstract void commit();
-    public abstract void suspend();
-    public abstract void close();
-
-    /**
-     * @throws ProcessorStateException if there is an error while closing the state manager
-     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
-     */
-    void closeStateManager(final boolean writeCheckpoint) {
-        log.trace("task [{}] Closing", id);
-        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
-    }
-
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
-        return Collections.emptyMap();
-    }
-
-    protected void initializeOffsetLimits() {
-        for (final TopicPartition partition : partitions) {
-            try {
-                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
-            } catch (final AuthorizationException e) {
-                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
-            } catch (final WakeupException e) {
-                throw e;
-            } catch (final KafkaException e) {
-                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
-            }
-        }
     }
 
     public StateStore getStore(final String name) {
@@ -182,10 +144,50 @@ public abstract class AbstractTask {
         return sb.toString();
     }
 
+    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+        return Collections.emptyMap();
+    }
+
+    protected void initializeOffsetLimits() {
+        for (final TopicPartition partition : partitions) {
+            try {
+                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            } catch (final AuthorizationException e) {
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+            } catch (final WakeupException e) {
+                throw e;
+            } catch (final KafkaException e) {
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+            }
+        }
+    }
+
     /**
      * Flush all state stores owned by this task
      */
     void flushState() {
         stateMgr.flush();
     }
+
+    void initializeStateStores() {
+        // set initial offset limits
+        initializeOffsetLimits();
+
+        for (final StateStore store : topology.stateStores()) {
+            log.trace("task [{}] Initializing store {}", id(), store.name());
+            store.init(processorContext, store);
+        }
+    }
+
+    /**
+     * @throws ProcessorStateException if there is an error while closing the state manager
+     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
+     */
+    void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+        log.trace("task [{}] Closing", id);
+        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+    }
+
+
 }

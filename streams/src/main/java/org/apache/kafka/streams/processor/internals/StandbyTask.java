@@ -41,14 +41,15 @@ public class StandbyTask extends AbstractTask {
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
-     * @param id                    the ID of this task
-     * @param applicationId         the ID of the stream processing application
-     * @param partitions            the collection of assigned {@link TopicPartition}
-     * @param topology              the instance of {@link ProcessorTopology}
-     * @param consumer              the instance of {@link Consumer}
-     * @param config                the {@link StreamsConfig} specified by the user
-     * @param metrics               the {@link StreamsMetrics} created by the thread
-     * @param stateDirectory        the {@link StateDirectory} created by the thread
+     *
+     * @param id             the ID of this task
+     * @param applicationId  the ID of the stream processing application
+     * @param partitions     the collection of assigned {@link TopicPartition}
+     * @param topology       the instance of {@link ProcessorTopology}
+     * @param consumer       the instance of {@link Consumer}
+     * @param config         the {@link StreamsConfig} specified by the user
+     * @param metrics        the {@link StreamsMetrics} created by the thread
+     * @param stateDirectory the {@link StateDirectory} created by the thread
      */
     StandbyTask(final TaskId id,
                 final String applicationId,
@@ -72,19 +73,6 @@ public class StandbyTask extends AbstractTask {
         processorContext.initialized();
 
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
-    }
-
-    Map<TopicPartition, Long> checkpointedOffsets() {
-        return checkpointedOffsets;
-    }
-
-    /**
-     * Updates a state store using records from one change log partition
-     * @return a list of records not consumed
-     */
-    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
-        return stateMgr.updateStandbyStates(partition, records);
     }
 
     /**
@@ -137,6 +125,20 @@ public class StandbyTask extends AbstractTask {
         } finally {
             closeStateManager(committedSuccessfully);
         }
+    }
+
+    /**
+     * Updates a state store using records from one change log partition
+     *
+     * @return a list of records not consumed
+     */
+    public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> records) {
+        log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
+        return stateMgr.updateStandbyStates(partition, records);
+    }
+
+    Map<TopicPartition, Long> checkpointedOffsets() {
+        return checkpointedOffsets;
     }
 
 }
