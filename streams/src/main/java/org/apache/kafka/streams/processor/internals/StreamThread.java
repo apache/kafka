@@ -309,7 +309,7 @@ public class StreamThread extends Thread {
 
     }
 
-    void partitionAssignor(final StreamPartitionAssignor partitionAssignor) {
+    void setPartitionAssignor(final StreamPartitionAssignor partitionAssignor) {
         this.partitionAssignor = partitionAssignor;
     }
 
@@ -409,24 +409,18 @@ public class StreamThread extends Thread {
             logPrefix, activeTasks.keySet(), standbyTasks.keySet(),
             suspendedTasks.keySet(), suspendedStandbyTasks.keySet());
 
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        // Close all processors in topology order
-        firstException.compareAndSet(null, closeTasks(activeAndStandbytasks()));
-        firstException.compareAndSet(null, closeTasks(suspendedAndSuspendedStandbytasks()));
-        // flush state
-        firstException.compareAndSet(null, flushAllState());
-        // Close all task state managers. Don't need to set exception as all
-        // state would have been flushed above
-        closeStateManagers(activeAndStandbytasks(), firstException.get() == null);
-        closeStateManagers(suspendedAndSuspendedStandbytasks(), firstException.get() == null);
-        // only commit under clean exit
-        if (cleanRun && firstException.get() == null) {
-            firstException.set(commitOffsets());
+        for (final AbstractTask task : allTasks()) {
+            try {
+                task.close();
+            } catch (final RuntimeException e) {
+                log.error("{} Failed while closing {} {} due to {}: ",
+                    logPrefix,
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    e);
+            }
         }
-        // Close all task producers
-        if (exactlyOnceEnabled) {
-            closeAllProducers();
-        }
+
         // remove the changelog partitions from restore consumer
         unAssignChangeLogPartitions();
     }
@@ -439,17 +433,17 @@ public class StreamThread extends Thread {
     private void suspendTasksAndState()  {
         log.debug("{} suspendTasksAndState: suspending all active tasks {} and standby tasks {}", logPrefix,
             activeTasks.keySet(), standbyTasks.keySet());
+
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
-        // Close all topology nodes
-        firstException.compareAndSet(null, closeActiveAndStandbyTasksTopologies());
-        // flush state
-        firstException.compareAndSet(null, flushAllState());
-        // only commit after all state has been flushed and there hasn't been an exception
-        if (firstException.get() == null) {
-            // TODO: currently commit failures will not be thrown to users
-            // while suspending tasks; this need to be re-visit after KIP-98
-            commitOffsets();
+
+        for (final AbstractTask task : activeAndStandbytasks()) {
+            try {
+                task.suspend();
+            } catch (final RuntimeException e) {
+                firstException.compareAndSet(null, e);
+            }
         }
+
         // remove the changelog partitions from restore consumer
         firstException.compareAndSet(null, unAssignChangeLogPartitions());
 
@@ -457,47 +451,6 @@ public class StreamThread extends Thread {
 
         if (firstException.get() != null) {
             throw new StreamsException(logPrefix + " failed to suspend stream tasks", firstException.get());
-        }
-    }
-
-    interface AbstractTaskAction {
-        void apply(final AbstractTask task);
-    }
-
-    private RuntimeException performOnTasks(final List<AbstractTask> tasks,
-                                            final AbstractTaskAction action,
-                                            final String exceptionMessage) {
-        RuntimeException firstException = null;
-        for (final AbstractTask task : tasks) {
-            try {
-                action.apply(task);
-            } catch (final RuntimeException e) {
-                log.error("{} Failed while executing {} {} due to {}: ",
-                        logPrefix,
-                        task.getClass().getSimpleName(),
-                        task.id(),
-                        exceptionMessage,
-                        e);
-                if (firstException == null) {
-                    firstException = e;
-                }
-            }
-        }
-        return firstException;
-    }
-
-    private void closeAllProducers() {
-        for (final StreamTask task : activeTasks.values()) {
-            log.info("{} Closing the producer of task {}", logPrefix, task.id());
-            try {
-                task.closeProducer();
-            } catch (final RuntimeException e) {
-                log.error("{} Failed while executing {} {} due to {}: ",
-                    logPrefix,
-                    task.getClass().getSimpleName(),
-                    task.id(),
-                    e);
-            }
         }
     }
 
@@ -513,35 +466,10 @@ public class StreamThread extends Thread {
         return tasks;
     }
 
-    private Throwable closeStateManagers(final List<AbstractTask> tasks, final boolean writeCheckpoint) {
-        return performOnTasks(tasks, new AbstractTaskAction() {
-            @Override
-            public void apply(final AbstractTask task) {
-                log.info("{} Closing the state manager of task {}", logPrefix, task.id());
-                task.closeStateManager(writeCheckpoint);
-            }
-        }, "close state manager");
-    }
-
-    private RuntimeException commitOffsets() {
-        // Exceptions should not prevent this call from going through all shutdown steps
-        return performOnTasks(activeAndStandbytasks(), new AbstractTaskAction() {
-            @Override
-            public void apply(final AbstractTask task) {
-                log.info("{} Committing consumer offsets of task {}", logPrefix, task.id());
-                task.commitOffsets();
-            }
-        }, "commit consumer offsets");
-    }
-
-    private RuntimeException flushAllState() {
-        return performOnTasks(activeAndStandbytasks(), new AbstractTaskAction() {
-            @Override
-            public void apply(final AbstractTask task) {
-                log.info("{} Flushing state stores of task {}", logPrefix, task.id());
-                task.flushState();
-            }
-        }, "flush state");
+    private List<AbstractTask> allTasks() {
+        final List<AbstractTask> tasks = activeAndStandbytasks();
+        tasks.addAll(suspendedAndSuspendedStandbytasks());
+        return tasks;
     }
 
     /**
@@ -937,7 +865,6 @@ public class StreamThread extends Thread {
                 log.debug("{} Closing suspended non-assigned active task {}", logPrefix, task.id);
                 try {
                     task.close();
-                    task.closeStateManager(true);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended task {}", logPrefix, next.getKey(), e);
                 } finally {
@@ -957,7 +884,6 @@ public class StreamThread extends Thread {
                 log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, task.id);
                 try {
                     task.close();
-                    task.closeStateManager(true);
                 } catch (final Exception e) {
                     log.error("{} Failed to remove suspended standby task {}", logPrefix, task.id, e);
                 } finally {
@@ -1023,7 +949,7 @@ public class StreamThread extends Thread {
                     if (task != null) {
                         log.debug("{} recycling old task {}", logPrefix, taskId);
                         suspendedTasks.remove(taskId);
-                        task.initTopology();
+                        task.resume();
 
                         activeTasks.put(taskId, task);
 
@@ -1087,7 +1013,7 @@ public class StreamThread extends Thread {
             if (task != null) {
                 log.debug("{} recycling old standby task {}", logPrefix, taskId);
                 suspendedStandbyTasks.remove(taskId);
-                task.initTopology();
+                task.init();
             } else {
                 newStandbyTasks.put(taskId, partitions);
             }
@@ -1159,29 +1085,6 @@ public class StreamThread extends Thread {
         standbyTasks.clear();
         standbyTasksByPartition.clear();
         standbyRecords.clear();
-    }
-
-    private RuntimeException closeTasks(final List<AbstractTask> tasks) {
-        return performOnTasks(tasks, new AbstractTaskAction() {
-            @Override
-            public void apply(final AbstractTask task) {
-                log.info("{} Closing task {}", logPrefix, task.id());
-                task.close();
-                streamsMetrics.tasksClosedSensor.record();
-            }
-        }, "close");
-    }
-
-
-    private RuntimeException closeActiveAndStandbyTasksTopologies() {
-        return performOnTasks(activeAndStandbytasks(), new AbstractTaskAction() {
-            @Override
-            public void apply(final AbstractTask task) {
-                log.info("{} Closing task's topology {}", logPrefix, task.id());
-                task.closeTopology();
-                streamsMetrics.tasksClosedSensor.record();
-            }
-        }, "close");
     }
 
     /**

@@ -110,14 +110,11 @@ public abstract class AbstractTask {
         return cache;
     }
 
+    public abstract void init();
+    public abstract void resume();
     public abstract void commit();
-
+    public abstract void suspend();
     public abstract void close();
-
-    public abstract void initTopology();
-    public abstract void closeTopology();
-
-    public abstract void commitOffsets();
 
     /**
      * @throws ProcessorStateException if there is an error while closing the state manager
@@ -193,7 +190,7 @@ public abstract class AbstractTask {
     /**
      * Flush all state stores owned by this task
      */
-    public void flushState() {
+    protected void flushState() {
         stateMgr.flush();
     }
 }

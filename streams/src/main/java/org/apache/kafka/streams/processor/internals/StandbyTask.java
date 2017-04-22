@@ -89,6 +89,12 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public void init() {}
+
+    @Override
+    public void resume() {}
+
+    @Override
     public void commit() {
         log.debug("standby-task [{}] Committing its state", id());
         stateMgr.flush();
@@ -98,31 +104,19 @@ public class StandbyTask extends AbstractTask {
     }
 
     @Override
+    public void suspend() {
+        commit();
+    }
+
+    @Override
     public void close() {
-        //no-op
+        try {
+            commit();
+            closeStateManager(true);
+        } catch (final RuntimeException e) {
+            closeStateManager(false);
+            throw e;
+        }
     }
 
-    @Override
-    public void initTopology() {
-        //no-op
-    }
-
-    @Override
-    public void closeTopology() {
-        //no-op
-    }
-
-    @Override
-    public void commitOffsets() {
-        // no-op
-    }
-
-    /**
-     * Produces a string representation contain useful information about a StreamTask.
-     * This is useful in debugging scenarios.
-     * @return A string representation of the StreamTask instance.
-     */
-    public String toString() {
-        return super.toString();
-    }
 }

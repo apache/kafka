@@ -65,21 +65,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private boolean commitOffsetNeeded = false;
     private final Time time;
     private final TaskMetrics metrics;
-    private final Runnable commitDelegate = new Runnable() {
-        @Override
-        public void run() {
-            // 1) flush local state
-            stateMgr.flush();
-
-            log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
-            // 2) flush produced records in the downstream and change logs of local states
-            recordCollector.flush();
-            // 3) write checkpoints for any local state
-            stateMgr.checkpoint(recordCollectorOffsets());
-            // 4) commit consumed offsets if it is dirty already
-            commitOffsets();
-        }
-    };
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -141,7 +126,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.info("{} Initializing state stores", logPrefix);
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        initTopology();
+        init();
         processorContext.initialized();
     }
 
@@ -271,18 +256,56 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * Commit the current task state
+     * <pre>
+     *  - flush state and producer
+     *  - write checkpoint
+     *  - commit offsets
+     * </pre>
      */
     @Override
     public void commit() {
-        metrics.metrics.measureLatencyNs(time, commitDelegate, metrics.taskCommitTimeSensor);
+        log.trace("{} Committing", logPrefix);
+        metrics.metrics.measureLatencyNs(
+            time,
+            new Runnable() {
+                @Override
+                public void run() {
+                    flushState();
+                    stateMgr.checkpoint(recordCollectorOffsets());
+                    commitOffsets();
+                }
+            },
+            metrics.taskCommitTimeSensor);
     }
 
     /**
-     * commit consumed offsets if needed
+     * <pre>
+     *  - close topology
+     *  - {@link #commit()}
+     *    - flush state and producer
+     *    - write checkpoint
+     *    - commit offsets
+     * </pre>
      */
     @Override
-    public void commitOffsets() {
+    public void suspend() {
+        log.info("{} Suspending task", logPrefix);
+        closeTopology();
+        log.debug("{} Committing offsets", logPrefix);
+        commit();
+    }
+
+    /**
+     * re-initialize the task
+     */
+    @Override
+    public void resume() {
+        log.info("{} Resuming task", logPrefix);
+        init();
+    }
+
+    private void commitOffsets() {
+        log.trace("{} Committing offsets", logPrefix);
         if (commitOffsetNeeded) {
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
@@ -332,7 +355,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @Override
-    public void initTopology() {
+    public void init() {
         // initialize the task by initializing all its processor nodes in the topology
         log.info("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
@@ -345,8 +368,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    @Override
-    public void closeTopology() {
+    private void closeTopology() {
+        log.debug("{} Closing processor topology", logPrefix);
+
         partitionGroup.clear();
 
         // close the processors
@@ -369,26 +393,35 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * @throws RuntimeException if an error happens during closing of processor nodes
+     * <pre>
+     *  - {@link #suspend()}
+     *    - close topology
+     *    - {@link #commit()}
+     *      - flush state and producer
+     *      - write checkpoint
+     *      - commit offsets
+     *  - close state
+     * </pre>
      */
     @Override
     public void close() {
-        log.debug("{} Closing processor topology", logPrefix);
-
-        partitionGroup.close();
-        closeTopology();
-        metrics.removeAllSensors();
-    }
-
-    void closeProducer() {
-        if (exactlyOnceEnabled) {
-            try {
-                recordCollector.close();
-            } catch (final Throwable e) {
-                log.error("{} Failed to close producer: ", logPrefix, e);
+        log.info("{} Closing task", logPrefix);
+        try {
+            suspend();
+            closeStateManager(true);
+            partitionGroup.close();
+            metrics.removeAllSensors();
+        } catch (final RuntimeException e) {
+            closeStateManager(false);
+            throw e;
+        } finally {
+            if (exactlyOnceEnabled) {
+                try {
+                    recordCollector.close();
+                } catch (final Throwable e) {
+                    log.error("{} Failed to close producer: ", logPrefix, e);
+                }
             }
-        } else {
-            throw new IllegalStateException("Tasks should only close producers if exactly-once semantics is enabled.");
         }
     }
 
@@ -437,7 +470,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @Override
-    public void flushState() {
+    protected void flushState() {
+        log.trace("{} Flushing state and producer topology", logPrefix);
         super.flushState();
         recordCollector.flush();
     }

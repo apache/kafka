@@ -288,6 +288,7 @@ public class ProcessorStateManager implements StateManager {
     // write the checkpoint
     @Override
     public void checkpoint(final Map<TopicPartition, Long> ackedOffsets) {
+        log.trace("{} Writing checkpoint", logPrefix);
         checkpointedOffsets.putAll(changelogReader.restoredOffsets());
         for (final Map.Entry<String, StateStore> entry : stores.entrySet()) {
             final String storeName = entry.getKey();

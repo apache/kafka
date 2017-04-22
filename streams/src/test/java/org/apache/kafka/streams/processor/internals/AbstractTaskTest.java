@@ -76,29 +76,19 @@ public class AbstractTaskTest {
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
                                 new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
             @Override
-            public void commit() {
-                // do nothing
-            }
+            public void init() {}
 
             @Override
-            public void close() {
-
-            }
+            public void resume() {}
 
             @Override
-            public void initTopology() {
-
-            }
+            public void commit() {}
 
             @Override
-            public void closeTopology() {
-
-            }
+            public void suspend() {}
 
             @Override
-            public void commitOffsets() {
-                // do nothing
-            }
+            public void close() {}
         };
     }
 

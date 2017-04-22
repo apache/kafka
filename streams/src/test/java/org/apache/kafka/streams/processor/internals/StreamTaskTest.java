@@ -527,7 +527,7 @@ public class StreamTaskTest {
         task.close();
         task = createTaskThatThrowsExceptionOnClose();
         try {
-            task.closeTopology();
+            task.close();
             fail("should have thrown runtime exception");
         } catch (final RuntimeException e) {
             // ok
@@ -548,11 +548,6 @@ public class StreamTaskTest {
         assertTrue(source2.closed);
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void shouldThrowWhenClosingProducerForNonEoS() {
-        task.closeProducer();
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseProducerWhenExactlyOneEnabled() {
@@ -565,7 +560,7 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
 
-        task.closeProducer();
+        task.close();
 
         assertTrue(producer.closed);
     }
@@ -607,7 +602,9 @@ public class StreamTaskTest {
 
         @Override
         public void flush() {
-            flushed.set(true);
+            if (flushed != null) {
+                flushed.set(true);
+            }
         }
 
         @Override
