@@ -98,7 +98,7 @@ class StreamsBrokerCompatibility(Test):
 
         self.processor.node.account.ssh(self.processor.start_cmd(self.processor.node))
         with self.processor.node.account.monitor_log(self.processor.STDERR_FILE) as monitor:
-            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.StreamsException: Could not find any available broker.',
+            monitor.wait_until('Exception in thread "main" org.apache.kafka.streams.errors.BrokerNotFoundException: Could not find any available broker.',
                                timeout_sec=60,
                                err_msg="Never saw 'no available broker' error message " + str(self.processor.node.account))
 
