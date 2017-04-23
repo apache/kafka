@@ -51,8 +51,9 @@ import org.apache.kafka.common.record.RecordBatch
  */
 class TimeIndex(file: File,
                 baseOffset: Long,
-                maxIndexSize: Int = -1)
-    extends AbstractIndex[Long, Long](file, baseOffset, maxIndexSize) with Logging {
+                maxIndexSize: Int = -1,
+                writable: Boolean = true)
+    extends AbstractIndex[Long, Long](file, baseOffset, maxIndexSize, writable) with Logging {
 
   override def entrySize = 12
 
