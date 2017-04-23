@@ -567,8 +567,7 @@ private[log] class Cleaner(val id: Int,
       var indexSize = segs.head.index.sizeInBytes
       var timeIndexSize = segs.head.timeIndex.sizeInBytes
       segs = segs.tail
-      while(segs.nonEmpty &&
-            logSize + segs.head.size <= maxSize &&
+      while(segs.nonEmpty && logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
             segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
