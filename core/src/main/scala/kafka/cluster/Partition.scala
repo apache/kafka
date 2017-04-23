@@ -78,28 +78,14 @@ class Partition(val topic: String,
     tags
   )
 
-  newGauge("InSyncReplicasCount",
-    new Gauge[Int] {
-      def value = {
-        if (isLeaderReplicaLocal) inSyncReplicas.size else 0
-      }
-    },
-    tags
-  )
-
-  newGauge("ReplicasCount",
-    new Gauge[Int] {
-      def value = {
-        if (isLeaderReplicaLocal) assignedReplicas.size else 0
-      }
-    },
-    tags
-  )
-
-  private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
-
-  def isUnderReplicated: Boolean =
-    isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size
+  def isUnderReplicated(): Boolean = {
+    leaderReplicaIfLocal() match {
+      case Some(_) =>
+        inSyncReplicas.size < assignedReplicas.size
+      case None =>
+        false
+    }
+  }
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
     assignedReplicaMap.getAndMaybePut(replicaId, {
@@ -530,8 +516,6 @@ class Partition(val topic: String,
    */
   private def removePartitionMetrics() {
     removeMetric("UnderReplicated", tags)
-    removeMetric("InSyncReplicasCount", tags)
-    removeMetric("ReplicasCount", tags)
   }
 
   override def equals(that: Any): Boolean = that match {
