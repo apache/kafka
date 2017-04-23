@@ -257,7 +257,7 @@ class LogCleanerTest extends JUnitSuite {
 
   @Test
   def testLogToClean(): Unit = {
-    val log = LogWithMessagesAndSmallSegments()
+    val log = logWithMessagesAndSmallSegments()
     val logToClean = LogToClean(new TopicPartition("test", 0), log, log.activeSegment.baseOffset, log.activeSegment.baseOffset)
 
     assertEquals("Total bytes of LogToClean should equal size of all segments excluding the active segment",
@@ -266,7 +266,7 @@ class LogCleanerTest extends JUnitSuite {
 
   @Test
   def testLogToCleanWithUncleanableSection(): Unit = {
-    val log = LogWithMessagesAndSmallSegments()
+    val log = logWithMessagesAndSmallSegments()
     val segs = log.logSegments.toSeq
     val logToClean = LogToClean(new TopicPartition("test", 0), log, segs(2).baseOffset, segs(4).baseOffset)
 
@@ -755,7 +755,7 @@ class LogCleanerTest extends JUnitSuite {
    * Segments [0,1] are clean; segments [2, 3] are cleanable; segments [4,5] are uncleanable.
    * @return Log with 6 segments and small size
    */
-  private def LogWithMessagesAndSmallSegments(): Log = {
+  private def logWithMessagesAndSmallSegments(): Log = {
     val segmentSize = 100
     val logProps = createLogProps(segmentSize)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -842,10 +842,10 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   private def records(records: Array[(Int, Int)], pid: Long = RecordBatch.NO_PRODUCER_ID,
-              epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-              sequence: Int = RecordBatch.NO_SEQUENCE,
-              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
-    MemoryRecords.withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, pid, epoch, sequence,
+                      epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+                      sequence: Int = RecordBatch.NO_SEQUENCE,
+                      partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
+    MemoryRecords.withIdempotentRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, CompressionType.NONE, pid, epoch, sequence,
       partitionLeaderEpoch,
       records.map(r => new SimpleRecord(r._1.toString.getBytes, r._2.toString.getBytes)): _*
     )
