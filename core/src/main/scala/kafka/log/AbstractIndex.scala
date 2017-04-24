@@ -37,7 +37,7 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1)
+abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1, val writable: Boolean)
     extends Logging {
 
   protected def entrySize: Int
@@ -47,7 +47,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   @volatile
   protected var mmap: MappedByteBuffer = {
     val newlyCreated = file.createNewFile()
-    val raf = new RandomAccessFile(file, "rw")
+    val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
       /* pre-allocate the file if necessary */
       if(newlyCreated) {
@@ -58,8 +58,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* memory-map the file */
       val len = raf.length()
-      val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
-
+      val idx = {
+        if (writable)
+          raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+        else
+          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+      }
       /* set the position in the index for the next entry */
       if(newlyCreated)
         idx.position(0)
