@@ -175,9 +175,13 @@ public class BufferPool {
         } finally {
             // signal any additional waiters if there is more memory left
             // over for them
-            if (!(this.availableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
-                this.waiters.peekFirst().signal();
-            lock.unlock();
+            try {
+                if (!(this.availableMemory == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
+                    this.waiters.peekFirst().signal();
+            } finally {
+                // Another finally... otherwise find bugs complains
+                lock.unlock();
+            }
         }
     }
 
