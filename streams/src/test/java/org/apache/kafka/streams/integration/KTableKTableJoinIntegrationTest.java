@@ -39,7 +39,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
@@ -146,7 +145,7 @@ public class KTableKTableJoinIntegrationTest {
         verifyKTableKTableJoin(JoinType.INNER, JoinType.INNER, Collections.singletonList(new KeyValue<>("b", "B1-B2-B3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldInnerInnerJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.INNER, JoinType.INNER, Collections.singletonList(new KeyValue<>("b", "B1-B2-B3")), true);
     }
@@ -156,7 +155,7 @@ public class KTableKTableJoinIntegrationTest {
         verifyKTableKTableJoin(JoinType.INNER, JoinType.LEFT, Collections.singletonList(new KeyValue<>("b", "B1-B2-B3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldInnerLeftJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.INNER, JoinType.LEFT, Collections.singletonList(new KeyValue<>("b", "B1-B2-B3")), true);
     }
@@ -170,7 +169,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("b", "B1-B2-B3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldInnerOuterJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.INNER, JoinType.OUTER, Arrays.asList(
             new KeyValue<>("a", "null-A3"),
@@ -187,7 +186,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("b", "B1-B2-B3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldLeftInnerJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.LEFT, JoinType.INNER, Arrays.asList(
             new KeyValue<>("a", "A1-null-A3"),
@@ -203,7 +202,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("b", "B1-B2-B3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldLeftLeftJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.LEFT, JoinType.LEFT, Arrays.asList(
             new KeyValue<>("a", "A1-null-A3"),
@@ -222,7 +221,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("b", "B1-B2-B3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldLeftOuterJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.LEFT, JoinType.OUTER, Arrays.asList(
             new KeyValue<>("a", "null-A3"),
@@ -242,7 +241,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("c", "null-C2-C3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldOuterInnerJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.OUTER, JoinType.INNER, Arrays.asList(
             new KeyValue<>("a", "A1-null-A3"),
@@ -260,7 +259,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("c", "null-C2-C3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldOuterLeftJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.OUTER, JoinType.LEFT,  Arrays.asList(
             new KeyValue<>("a", "A1-null-A3"),
@@ -281,7 +280,7 @@ public class KTableKTableJoinIntegrationTest {
                 new KeyValue<>("c", "null-C2-C3")), false);
     }
 
-    @Ignore
+    @Test
     public void shouldOuterOuterJoinQueryable() throws Exception {
         verifyKTableKTableJoin(JoinType.OUTER, JoinType.OUTER, Arrays.asList(
             new KeyValue<>("a", "null-A3"),
@@ -299,7 +298,7 @@ public class KTableKTableJoinIntegrationTest {
                                         final List<KeyValue<String, String>> expectedResult,
                                         boolean verifyQueryableState) throws Exception {
         final String queryableName = verifyQueryableState ? joinType1 + "-" + joinType2 + "-ktable-ktable-join-query" : null;
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType1 + "-" + joinType2 + "-ktable-ktable-join");
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType1 + "-" + joinType2 + "-ktable-ktable-join" + queryableName);
 
         streams = prepareTopology(joinType1, joinType2, queryableName);
         streams.start();
@@ -338,6 +337,7 @@ public class KTableKTableJoinIntegrationTest {
             KeyValue<String, String> storeEntry = all.next();
             assertTrue(expectedResult.contains(storeEntry));
         }
+        all.close();
 
     }
 
