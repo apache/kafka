@@ -329,11 +329,12 @@ public class KafkaProducerTest {
         Thread t = new Thread() {
             @Override
             public void run() {
-                for (int i = 0; i < 12; i++) {
+                long startTimeMs = System.currentTimeMillis();
+                for (int i = 0; i < 10; i++) {
+                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
+                        yield();
                     metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
                     time.sleep(60 * 1000L);
-                    while (!metadata.updateRequested())
-                        yield();
                 }
             }
         };
