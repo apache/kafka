@@ -1129,7 +1129,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringSuspendWhenSuspendingState() throws Exception {
+    public void shouldNotViolateAtLeastOnceWhenExceptionOccursDuringTaskSuspension() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         builder.setApplicationId(applicationId);
         builder.stream("t1").groupByKey();

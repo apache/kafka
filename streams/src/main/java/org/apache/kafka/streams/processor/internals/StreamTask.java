@@ -122,10 +122,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
-        // initialize the state stores
-        log.info("{} Initializing state stores", logPrefix);
-        initializeStateStores();
-        stateMgr.registerGlobalStateStores(topology.globalStateStores());
         init();
         processorContext.initialized();
     }
@@ -301,7 +297,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void resume() {
         log.info("{} Resuming task", logPrefix);
-        init();
+        initTopology();
     }
 
     private void commitOffsets() {
@@ -354,8 +350,22 @@ public class StreamTask extends AbstractTask implements Punctuator {
         punctuationQueue.schedule(new PunctuationSchedule(processorContext.currentNode(), interval));
     }
 
+    /**
+     * <pre>
+     * - initialize local stores
+     * - registers global stores
+     * - init topology
+     * </pre>
+     */
     @Override
     public void init() {
+        log.info("{} Initialize task", logPrefix);
+        initializeStateStores();
+        stateMgr.registerGlobalStateStores(topology.globalStateStores());
+        initTopology();
+    }
+
+    private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.info("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
