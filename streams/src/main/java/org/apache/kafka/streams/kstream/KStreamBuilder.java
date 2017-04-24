@@ -243,7 +243,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
+     * {@code queryableName}.
      * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -251,7 +251,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -259,12 +259,12 @@ public class KStreamBuilder extends TopologyBuilder {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      *
      * @param topic     the topic name; cannot be {@code null}
-     * @param storeName the state store name; if {@code null} an internal store name will be automatically given.
+     * @param queryableName the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final String topic,
-                                     final String storeName) {
-        return table(null, null, null, topic, storeName);
+                                     final String queryableName) {
+        return table(null, null, null, topic, queryableName);
     }
 
     /**
@@ -278,7 +278,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that that store name may not be queriable through Interactive Queries.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * @param topic     the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
@@ -296,7 +296,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
+     * {@code queryableName}.
      * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -304,7 +304,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -314,13 +314,13 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
      *                    offsets are available
      * @param topic       the topic name; cannot be {@code null}
-     * @param storeName   the state store name; if {@code null} an internal store name will be automatically given.
+     * @param queryableName   the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
                                      final String topic,
-                                     final String storeName) {
-        return table(offsetReset, null, null, topic, storeName);
+                                     final String queryableName) {
+        return table(offsetReset, null, null, topic, queryableName);
     }
 
     /**
@@ -333,7 +333,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that that store name may not be queriable through Interactive Queries.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
      * @param offsetReset the {@code "auto.offset.reset"} policy to use for the specified topic if no valid committed
@@ -355,7 +355,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
+     * {@code queryableName}.
      * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -363,7 +363,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -375,14 +375,14 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde  value serde used to send key-value pairs,
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name; cannot be {@code null}
-     * @param storeName the state store name; if {@code null} an internal store name will be automatically given.
+     * @param queryableName the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final Serde<K> keySerde,
                                      final Serde<V> valSerde,
                                      final String topic,
-                                     final String storeName) {
-        return table(null, keySerde, valSerde, topic, storeName);
+                                     final String queryableName) {
+        return table(null, keySerde, valSerde, topic, queryableName);
     }
 
     /**
@@ -393,9 +393,9 @@ public class KStreamBuilder extends TopologyBuilder {
      * Note that the specified input topics must be partitioned by key.
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
-     * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
+     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
      * @param keySerde  key serde used to send key-value pairs,
@@ -419,7 +419,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
+     * {@code queryableName}.
      * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -427,7 +427,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -441,17 +441,17 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde    value serde used to send key-value pairs,
      *                    if not specified the default value serde defined in the configuration will be used
      * @param topic       the topic name; cannot be {@code null}
-     * @param storeName   the state store name; if {@code null} an internal store name will be automatically given.
+     * @param queryableName   the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link KTable} for the specified topic
      */
     public <K, V> KTable<K, V> table(final AutoOffsetReset offsetReset,
                                      final Serde<K> keySerde,
                                      final Serde<V> valSerde,
                                      final String topic,
-                                     final String storeName) {
+                                     final String queryableName) {
         final String source = newName(KStreamImpl.SOURCE_NAME);
         final String name = newName(KTableImpl.SOURCE_NAME);
-        final String internalStoreName = storeName != null ? storeName : newStoreName(KTableImpl.SOURCE_NAME);
+        final String internalStoreName = queryableName != null ? queryableName : newStoreName(KTableImpl.SOURCE_NAME);
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(internalStoreName);
 
         addSource(offsetReset, source, keySerde == null ? null : keySerde.deserializer(), valSerde == null ? null : valSerde.deserializer(), topic);
@@ -480,7 +480,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
+     * {@code queryableName}.
      * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -488,7 +488,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -496,12 +496,12 @@ public class KStreamBuilder extends TopologyBuilder {
      * regardless of the specified value in {@link StreamsConfig}.
      *
      * @param topic     the topic name; cannot be {@code null}
-     * @param storeName the state store name; if {@code null} an internal store name will be automatically given.
+     * @param queryableName the state store name; if {@code null} an internal store name will be automatically given.
      * @return a {@link GlobalKTable} for the specified topic
      */
     public <K, V> GlobalKTable<K, V> globalTable(final String topic,
-                                                 final String storeName) {
-        return globalTable(null, null, topic, storeName);
+                                                 final String queryableName) {
+        return globalTable(null, null, topic, queryableName);
     }
 
     /**
@@ -509,9 +509,9 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
-     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
+     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}
@@ -530,7 +530,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
+     * {@code queryableName}.
      * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
@@ -538,7 +538,7 @@ public class KStreamBuilder extends TopologyBuilder {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ...
-     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+     * ReadOnlyKeyValueStore<String,Long> localStore = streams.store(queryableName, QueryableStoreTypes.<String, Long>keyValueStore());
      * String key = "some-key";
      * Long valueForKey = localStore.get(key);
      * }</pre>
@@ -550,15 +550,15 @@ public class KStreamBuilder extends TopologyBuilder {
      * @param valSerde  value serde used to send key-value pairs,
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name; cannot be {@code null}
-     * @param storeName the state store name; cannot be {@code null}
+     * @param queryableName the state store name; cannot be {@code null}
      * @return a {@link GlobalKTable} for the specified topic
      */
     @SuppressWarnings("unchecked")
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,
-                                                 final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : newStoreName(KTableImpl.SOURCE_NAME);
+                                                 final String queryableName) {
+        final String internalStoreName = queryableName != null ? queryableName : newStoreName(KTableImpl.SOURCE_NAME);
         final String sourceName = newName(KStreamImpl.SOURCE_NAME);
         final String processorName = newName(KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(internalStoreName);
@@ -583,9 +583,9 @@ public class KStreamBuilder extends TopologyBuilder {
      * The default key and value deserializers as specified in the {@link StreamsConfig config} are used.
      * Input {@link KeyValue records} with {@code null} key will be dropped.
      * <p>
-     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with the given
-     * {@code storeName}.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
+     * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} with an internal
+     * store name. Note that that store name may not be queriable through Interactive Queries.
+     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
      * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
      * <p>
      * Note that {@link GlobalKTable} always applies {@code "auto.offset.reset"} strategy {@code "earliest"}

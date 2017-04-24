@@ -64,8 +64,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final Serde<T> aggValueSerde,
-                                      final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+                                      final String queryableName) {
+        final String internalStoreName = queryableName != null ? queryableName : topology.newStoreName(AGGREGATE_NAME);
         Topic.validate(internalStoreName);
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, internalStoreName));
     }
@@ -84,8 +84,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
-                                      final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+                                      final String queryableName) {
+        final String internalStoreName = queryableName != null ? queryableName : topology.newStoreName(AGGREGATE_NAME);
         Topic.validate(internalStoreName);
         return aggregate(initializer, adder, subtractor, null, internalStoreName);
     }
@@ -147,8 +147,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor,
-                               final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+                               final String queryableName) {
+        final String internalStoreName = queryableName != null ? queryableName : topology.newStoreName(AGGREGATE_NAME);
         Topic.validate(internalStoreName);
         return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, internalStoreName));
     }
@@ -173,8 +173,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     }
 
     @Override
-    public KTable<K, Long> count(final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
+    public KTable<K, Long> count(final String queryableName) {
+        final String internalStoreName = queryableName != null ? queryableName : topology.newStoreName(AGGREGATE_NAME);
         Topic.validate(internalStoreName);
         return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
     }

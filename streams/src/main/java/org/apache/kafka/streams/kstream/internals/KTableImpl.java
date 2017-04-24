@@ -73,7 +73,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final String storeName;
+    private final String queryableName;
 
     private boolean sendOldValues = false;
     private final Serde<K> keySerde;
@@ -83,10 +83,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       String name,
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
-                      final String storeName) {
+                      final String queryableName) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
-        this.storeName = storeName;
+        this.queryableName = queryableName;
         this.keySerde = null;
         this.valSerde = null;
     }
@@ -97,17 +97,17 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
                       Set<String> sourceNodes,
-                      final String storeName) {
+                      final String queryableName) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
-        this.storeName = storeName;
+        this.queryableName = queryableName;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
     }
 
     @Override
-    public String getStoreName() {
-        return this.storeName;
+    public String getQueryableName() {
+        return this.queryableName;
     }
 
 
@@ -118,7 +118,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false, null);
         topology.addProcessor(name, processorSupplier, this.name);
 
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.queryableName);
     }
 
     @Override
@@ -147,7 +147,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         topology.addProcessor(name, processorSupplier, this.name);
 
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.queryableName);
     }
 
     @Override
@@ -177,7 +177,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         topology.addProcessor(name, processorSupplier, this.name);
 
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.queryableName);
     }
 
     @Override
@@ -292,8 +292,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                 final Serde<V> valSerde,
                                 final StreamPartitioner<? super K, ? super V> partitioner,
                                 final String topic,
-                                final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(KTableImpl.TOSTREAM_NAME);
+                                final String queryableName) {
+        final String internalStoreName = queryableName != null ? queryableName : topology.newStoreName(KTableImpl.TOSTREAM_NAME);
 
         to(keySerde, valSerde, partitioner, topic);
 
@@ -311,8 +311,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KTable<K, V> through(final Serde<K> keySerde,
                                 final Serde<V> valSerde,
                                 final String topic,
-                                final String storeName) {
-        return through(keySerde, valSerde, null, topic, storeName);
+                                final String queryableName) {
+        return through(keySerde, valSerde, null, topic, queryableName);
     }
 
     @Override
@@ -325,8 +325,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     @Override
     public KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                                 final String topic,
-                                final String storeName) {
-        return through(null, null, partitioner, topic, storeName);
+                                final String queryableName) {
+        return through(null, null, partitioner, topic, queryableName);
     }
 
     @Override
@@ -337,8 +337,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     @Override
     public KTable<K, V> through(final String topic,
-                                final String storeName) {
-        return through(null, null, null, topic, storeName);
+                                final String queryableName) {
+        return through(null, null, null, topic, queryableName);
     }
 
     @Override
@@ -465,9 +465,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-            new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, storeName),
+            new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, queryableName),
                 new KTableImpl<K, V1, R>(topology, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes,
-                    other.getStoreName()),
+                    other.getQueryableName()),
                     queryableName
         );
 

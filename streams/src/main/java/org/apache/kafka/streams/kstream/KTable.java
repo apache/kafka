@@ -49,7 +49,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  *     final KafkaStreams streams = ...;
  *     streams.start()
  *     ...
- *     final String queryableStoreName = table.getStoreName(); // returns null if KTable is not queryable
+ *     final String queryableStoreName = table.getQueryableName(); // returns null if KTable is not queryable
  *     ReadOnlyKeyValueStore view = streams.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
  *     view.get(key);
  *}</pre>
@@ -108,7 +108,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(storeName, QueryableStoreTypes.<K, V>keyValueStore());
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableName, QueryableStoreTypes.<K, V>keyValueStore());
      * K key = "some-word";
      * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -168,7 +168,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(storeName, QueryableStoreTypes.<K, V>keyValueStore());
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableName, QueryableStoreTypes.<K, V>keyValueStore());
      * K key = "some-word";
      * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -564,12 +564,12 @@ public interface KTable<K, V> {
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
-     * @param storeName the state store name used for the result {@code KTable}; valid characters are ASCII
+     * @param queryableName the state store name used for the result {@code KTable}; valid characters are ASCII
      *                  alphanumerics, '.', '_' and '-'
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final String topic,
-                         final String storeName);
+                         final String queryableName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
@@ -625,12 +625,12 @@ public interface KTable<K, V> {
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
-     * @param storeName   the state store name used for the result {@code KTable}
+     * @param queryableName   the state store name used for the result {@code KTable}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
-                         final String storeName);
+                         final String queryableName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic.
@@ -651,12 +651,12 @@ public interface KTable<K, V> {
      * @param valSerde  value serde used to send key-value pairs,
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name
-     * @param storeName the state store name used for the result {@code KTable}
+     * @param queryableName the state store name used for the result {@code KTable}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
                          final String topic,
-                         final String storeName);
+                         final String queryableName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic.
@@ -704,14 +704,14 @@ public interface KTable<K, V> {
      *                    {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
      *                    be used
      * @param topic      the topic name
-     * @param storeName  the state store name used for the result {@code KTable}
+     * @param queryableName  the state store name used for the result {@code KTable}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde,
                          final Serde<V> valSerde,
                          final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
-                         final String storeName);
+                         final String queryableName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using a customizable
@@ -1363,9 +1363,9 @@ public interface KTable<K, V> {
                                      final String queryableName);
 
     /**
-     * Get the name of the local state store used for materializing this {@code KTable}.
+     * Get the name of the local state store used that can be used to query this {@code KTable}.
      *
-     * @return the underlying state store name, or {@code null} if this {@code KTable} is not materialized
+     * @return the underlying state store name, or {@code null} if this {@code KTable} cannot be queried.
      */
-    String getStoreName();
+    String getQueryableName();
 }
