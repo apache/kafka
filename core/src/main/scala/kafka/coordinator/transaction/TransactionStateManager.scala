@@ -368,7 +368,7 @@ class TransactionStateManager(brokerId: Int,
             metadata.completeTransitionTo(txnMetadata.state)
         }
         if (isCoordinatorLoadingInProgress(transactionalId))
-          responseError = Errors.NOT_COORDINATOR
+          responseError = Errors.COORDINATOR_LOAD_IN_PROGRESS
         else
           // now try to update the cache: we need to update the status in-place instead of
           // overwriting the whole object to ensure synchronization
