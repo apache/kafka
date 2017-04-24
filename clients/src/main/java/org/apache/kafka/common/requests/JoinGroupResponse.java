@@ -33,9 +33,9 @@ public class JoinGroupResponse extends AbstractResponse {
     /**
      * Possible error codes:
      *
-     * GROUP_LOAD_IN_PROGRESS (14)
+     * COORDINATOR_LOAD_IN_PROGRESS (14)
      * GROUP_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_GROUP (16)
+     * NOT_COORDINATOR (16)
      * INCONSISTENT_GROUP_PROTOCOL (23)
      * UNKNOWN_MEMBER_ID (25)
      * INVALID_SESSION_TIMEOUT (26)

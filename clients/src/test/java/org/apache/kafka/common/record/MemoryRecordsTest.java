@@ -190,6 +190,85 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testFilterToPreservesPartitionLeaderEpoch() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            int partitionLeaderEpoch = 67;
+
+            ByteBuffer buffer = ByteBuffer.allocate(2048);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                    0L, RecordBatch.NO_TIMESTAMP, partitionLeaderEpoch);
+            builder.append(10L, null, "a".getBytes());
+            builder.append(11L, "1".getBytes(), "b".getBytes());
+            builder.append(12L, null, "c".getBytes());
+
+            ByteBuffer filtered = ByteBuffer.allocate(2048);
+            builder.build().filterTo(new RetainNonNullKeysFilter(), filtered);
+
+            filtered.flip();
+            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+            assertEquals(1, batches.size());
+
+            MutableRecordBatch firstBatch = batches.get(0);
+            assertEquals(partitionLeaderEpoch, firstBatch.partitionLeaderEpoch());
+        }
+    }
+
+    @Test
+    public void testFilterToPreservesProducerInfo() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            ByteBuffer buffer = ByteBuffer.allocate(2048);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+            builder.append(10L, null, "a".getBytes());
+            builder.append(11L, "1".getBytes(), "b".getBytes());
+            builder.append(12L, null, "c".getBytes());
+
+            builder.close();
+
+            long pid = 23L;
+            short epoch = 5;
+            int baseSequence = 10;
+
+            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
+                    RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+            builder.append(13L, null, "d".getBytes());
+            builder.append(14L, "4".getBytes(), "e".getBytes());
+            builder.append(15L, "5".getBytes(), "f".getBytes());
+            builder.close();
+
+            buffer.flip();
+
+            ByteBuffer filtered = ByteBuffer.allocate(2048);
+            MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered);
+
+            filtered.flip();
+            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+            assertEquals(2, batches.size());
+
+            MutableRecordBatch firstBatch = batches.get(0);
+            assertEquals(1, firstBatch.countOrNull().intValue());
+            assertEquals(0L, firstBatch.baseOffset());
+            assertEquals(2L, firstBatch.lastOffset());
+            assertEquals(RecordBatch.NO_PRODUCER_ID, firstBatch.producerId());
+            assertEquals(RecordBatch.NO_PRODUCER_EPOCH, firstBatch.producerEpoch());
+            assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.baseSequence());
+            assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
+
+            MutableRecordBatch secondBatch = batches.get(1);
+            assertEquals(2, secondBatch.countOrNull().intValue());
+            assertEquals(3L, secondBatch.baseOffset());
+            assertEquals(5L, secondBatch.lastOffset());
+            assertEquals(pid, secondBatch.producerId());
+            assertEquals(epoch, secondBatch.producerEpoch());
+            assertEquals(baseSequence, secondBatch.baseSequence());
+            assertEquals(baseSequence + 2, secondBatch.lastSequence());
+        }
+    }
+
+    @Test
     public void testFilterTo() {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -246,7 +325,7 @@ public class MemoryRecordsTest {
             expectedStartOffsets = asList(1L, 4L, 6L);
             expectedMaxTimestamps = asList(11L, 20L, 16L);
         } else {
-            expectedEndOffsets = asList(1L, 5L, 6L);
+            expectedEndOffsets = asList(2L, 5L, 6L);
             expectedStartOffsets = asList(1L, 3L, 6L);
             expectedMaxTimestamps = asList(11L, 20L, 16L);
         }

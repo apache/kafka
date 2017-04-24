@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -106,7 +107,22 @@ public class StateDirectoryTest {
         }
     }
 
+    @Test(expected = ProcessorStateException.class)
+    public void shouldThrowProcessorStateException() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
 
+        Utils.delete(stateDir);
+        directory.directoryForTask(taskId);
+    }
+
+    @Test
+    public void shouldNotLockDeletedDirectory() throws Exception {
+        final TaskId taskId = new TaskId(0, 0);
+
+        Utils.delete(stateDir);
+        assertFalse(directory.lock(taskId, 0));
+    }
+    
     @Test
     public void shouldLockMulitpleTaskDirectories() throws Exception {
         final TaskId taskId = new TaskId(0, 0);

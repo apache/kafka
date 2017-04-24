@@ -114,10 +114,13 @@ public class RegexSourceIntegrationTest {
 
     @Before
     public void setUp() {
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(CLUSTER.bootstrapServers(),
-            STRING_SERDE_CLASSNAME,
-            STRING_SERDE_CLASSNAME);
+        final Properties properties = new Properties();
+        properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
+                                                                 CLUSTER.bootstrapServers(),
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 properties);
     }
 
     @After

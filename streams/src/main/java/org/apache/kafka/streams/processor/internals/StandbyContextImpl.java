@@ -32,25 +32,22 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
         @Override
         public <K, V> void send(final String topic,
-                                K key,
-                                V value,
-                                Integer partition,
-                                Long timestamp,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valueSerializer) {
+                                final K key,
+                                final V value,
+                                final Integer partition,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer) {
         }
 
         @Override
         public <K, V> void send(final String topic,
-                                K key,
-                                V value,
-                                Integer partition,
-                                Long timestamp,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valueSerializer,
-                                StreamPartitioner<? super K, ? super V> partitioner) {
-
-        }
+                                final K key,
+                                final V value,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer,
+                                final StreamPartitioner<? super K, ? super V> partitioner) {}
 
         @Override
         public void flush() {
@@ -69,10 +66,10 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     };
 
     public StandbyContextImpl(final TaskId id,
-                       final String applicationId,
-                       final StreamsConfig config,
-                       final ProcessorStateManager stateMgr,
-                       final StreamsMetrics metrics) {
+                              final String applicationId,
+                              final StreamsConfig config,
+                              final ProcessorStateManager stateMgr,
+                              final StreamsMetrics metrics) {
         super(id, applicationId, config, metrics, stateMgr, new ThreadCache("zeroCache", 0, metrics));
     }
 
@@ -87,15 +84,15 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public StateStore getStateStore(String name) {
+    public StateStore getStateStore(final String name) {
         throw new UnsupportedOperationException("this should not happen: getStateStore() not supported in standby tasks.");
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
     public String topic() {
@@ -103,7 +100,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
     public int partition() {
@@ -111,7 +108,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
     public long offset() {
@@ -119,7 +116,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
     public long timestamp() {
@@ -127,31 +124,31 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(K key, V value) {
+    public <K, V> void forward(final K key, final V value) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(K key, V value, int childIndex) {
+    public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(K key, V value, String childName) {
+    public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
     public void commit() {
@@ -159,19 +156,25 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public void schedule(long interval) {
+    public void schedule(final long interval) {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public RecordContext recordContext() {
         throw new UnsupportedOperationException("this should not happen: recordContext not supported in standby tasks.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public void setRecordContext(final RecordContext recordContext) {
         throw new UnsupportedOperationException("this should not happen: setRecordContext not supported in standby tasks.");
@@ -183,6 +186,9 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         // no-op. can't throw as this is called on commit when the StateStores get flushed.
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public ProcessorNode currentNode() {
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");

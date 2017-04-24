@@ -26,7 +26,6 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Before
 import org.junit.Test
-
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupCommandOptions
 import kafka.admin.ConsumerGroupCommand.KafkaConsumerGroupService
 import kafka.admin.ConsumerGroupCommand.ZkConsumerGroupService
@@ -37,9 +36,8 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.GroupCoordinatorNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.errors.{CoordinatorNotAvailableException, WakeupException}
 import org.apache.kafka.common.serialization.StringDeserializer
 
 
@@ -184,6 +182,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val (state, assignments) = consumerGroupCommand.describeGroup()
     assertTrue("Expected the state to be 'Dead' with no members in the group.", state == Some("Dead") && assignments == Some(List()))
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -203,9 +202,10 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.clientId.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.host.exists(_.trim != ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-      }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe group results.")
+    }, "Expected a 'Stable' group status, rows and valid values for consumer id / client id / host columns in describe group results.")
 
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -218,9 +218,9 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-        val (state, _) = consumerGroupCommand.describeGroup()
-        state == Some("Stable")
-      }, "Expected the group to initially become stable.")
+      val (state, _) = consumerGroupCommand.describeGroup()
+      state == Some("Stable")
+    }, "Expected the group to initially become stable.")
 
     // stop the consumer so the group has no active member anymore
     executor.shutdown()
@@ -233,7 +233,7 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.filter(_.group == group).head.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
         assignments.get.filter(_.group == group).head.clientId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) &&
         assignments.get.filter(_.group == group).head.host.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE)
-      }, "Expected no active member in describe group results.")
+    }, "Expected no active member in describe group results.")
 
     consumerGroupCommand.close()
   }
@@ -254,9 +254,10 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
         assignments.get.count(_.group == group) == 2 &&
         assignments.get.count{ x => x.group == group && x.partition.isDefined} == 1 &&
         assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 1
-      }, "Expected rows for consumers with no assigned partitions in describe group results.")
+    }, "Expected rows for consumers with no assigned partitions in describe group results.")
 
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -272,15 +273,16 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-          val (state, assignments) = consumerGroupCommand.describeGroup()
-          state == Some("Stable") &&
-          assignments.isDefined &&
-          assignments.get.count(_.group == group) == 2 &&
-          assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
-          assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 0
-      }, "Expected two rows (one row per consumer) in describe group results.")
+      val (state, assignments) = consumerGroupCommand.describeGroup()
+      state == Some("Stable") &&
+      assignments.isDefined &&
+      assignments.get.count(_.group == group) == 2 &&
+      assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
+      assignments.get.count{ x => x.group == group && !x.partition.isDefined} == 0
+    }, "Expected two rows (one row per consumer) in describe group results.")
 
     consumerGroupCommand.close()
+    executor.shutdown()
   }
 
   @Test
@@ -294,16 +296,17 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     try {
-      val (state, assignments) = consumerGroupCommand.describeGroup()
+      consumerGroupCommand.describeGroup()
       fail("The consumer group command should fail due to low initialization timeout")
     } catch {
-      case e: TimeoutException =>
+      case _: TimeoutException =>
         // OK
       case e: Throwable =>
         fail("An unexpected exception occurred: " + e.getMessage)
         throw e
     } finally {
       consumerGroupCommand.close()
+      executor.shutdown()
     }
   }
 }
@@ -341,7 +344,7 @@ class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, 
   for (i <- 1 to numConsumers) {
     val consumer = new ConsumerThread(broker, i, groupId, topic)
     consumers ++= List(consumer)
-    executor.submit(consumer);
+    executor.submit(consumer)
   }
 
   Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -352,7 +355,7 @@ class ConsumerGroupExecutor(broker: String, numConsumers: Int, groupId: String, 
 
   def shutdown() {
     consumers.foreach(_.shutdown)
-    executor.shutdown();
+    executor.shutdown()
     try {
       executor.awaitTermination(5000, TimeUnit.MILLISECONDS);
     } catch {

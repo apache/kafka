@@ -774,23 +774,43 @@ public class Protocol {
     public static final Schema[] DESCRIBE_GROUPS_REQUEST = new Schema[] {DESCRIBE_GROUPS_REQUEST_V0};
     public static final Schema[] DESCRIBE_GROUPS_RESPONSE = new Schema[] {DESCRIBE_GROUPS_RESPONSE_V0};
 
-    /* Group coordinator api */
-    public static final Schema GROUP_COORDINATOR_REQUEST_V0 = new Schema(new Field("group_id",
-                                                                                   STRING,
-                                                                                   "The unique group id."));
+    /* Find coordinator api */
+    public static final Schema FIND_COORDINATOR_REQUEST_V0 = new Schema(
+            new Field("group_id",
+                    STRING,
+                    "The unique group id."));
 
-    public static final Schema GROUP_COORDINATOR_BROKER_V0 = new Schema(new Field("node_id", INT32, "The broker id."),
-                                                                        new Field("host", STRING, "The hostname of the broker."),
-                                                                        new Field("port", INT32,
-                                                                            "The port on which the broker accepts requests."));
+    public static final Schema FIND_COORDINATOR_REQUEST_V1 = new Schema(
+            new Field("coordinator_key",
+                    STRING,
+                    "Id to use for finding the coordinator (for groups, this is the groupId, " +
+                            "for transactional producers, this is the transactional id)"),
+            new Field("coordinator_type",
+                    INT8,
+                    "The type of coordinator to find (0 = group, 1 = transaction)"));
 
-    public static final Schema GROUP_COORDINATOR_RESPONSE_V0 = new Schema(new Field("error_code", INT16),
-                                                                          new Field("coordinator",
-                                                                                    GROUP_COORDINATOR_BROKER_V0,
-                                                                                    "Host and port information for the coordinator for a consumer group."));
+    public static final Schema FIND_COORDINATOR_BROKER_V0 = new Schema(
+            new Field("node_id", INT32, "The broker id."),
+            new Field("host", STRING, "The hostname of the broker."),
+            new Field("port", INT32,
+                    "The port on which the broker accepts requests."));
 
-    public static final Schema[] GROUP_COORDINATOR_REQUEST = new Schema[] {GROUP_COORDINATOR_REQUEST_V0};
-    public static final Schema[] GROUP_COORDINATOR_RESPONSE = new Schema[] {GROUP_COORDINATOR_RESPONSE_V0};
+    public static final Schema FIND_COORDINATOR_RESPONSE_V0 = new Schema(
+            new Field("error_code", INT16),
+            new Field("coordinator",
+                    FIND_COORDINATOR_BROKER_V0,
+                    "Host and port information for the coordinator for a consumer group."));
+
+    public static final Schema FIND_COORDINATOR_RESPONSE_V1 = new Schema(
+            new Field("error_code", INT16),
+            new Field("error_message", NULLABLE_STRING),
+            new Field("coordinator",
+                    FIND_COORDINATOR_BROKER_V0,
+                    "Host and port information for the coordinator for a consumer group."));
+
+
+    public static final Schema[] FIND_COORDINATOR_REQUEST = new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
+    public static final Schema[] FIND_COORDINATOR_RESPONSE = new Schema[] {FIND_COORDINATOR_RESPONSE_V0, FIND_COORDINATOR_RESPONSE_V1};
 
     /* Controlled shutdown api */
     public static final Schema CONTROLLED_SHUTDOWN_REQUEST_V1 = new Schema(new Field("broker_id",
@@ -1180,7 +1200,10 @@ public class Protocol {
     public static final Schema INIT_PRODUCER_ID_REQUEST_V0 = new Schema(
             new Field("transactional_id",
                     NULLABLE_STRING,
-                    "The transactional id whose producer id we want to retrieve or generate.")
+                    "The transactional id whose producer id we want to retrieve or generate."),
+            new Field("transaction_timeout_ms",
+                    INT32,
+                    "The time in ms to wait for before aborting idle transactions sent by this producer.")
     );
 
     public static final Schema INIT_PRODUCER_ID_RESPONSE_V0 = new Schema(
@@ -1432,7 +1455,7 @@ public class Protocol {
         REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_REQUEST;
         REQUESTS[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_REQUEST;
         REQUESTS[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_REQUEST;
-        REQUESTS[ApiKeys.GROUP_COORDINATOR.id] = GROUP_COORDINATOR_REQUEST;
+        REQUESTS[ApiKeys.FIND_COORDINATOR.id] = FIND_COORDINATOR_REQUEST;
         REQUESTS[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_REQUEST;
         REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
         REQUESTS[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_REQUEST;
@@ -1462,7 +1485,7 @@ public class Protocol {
         RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_RESPONSE;
         RESPONSES[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_RESPONSE;
-        RESPONSES[ApiKeys.GROUP_COORDINATOR.id] = GROUP_COORDINATOR_RESPONSE;
+        RESPONSES[ApiKeys.FIND_COORDINATOR.id] = FIND_COORDINATOR_RESPONSE;
         RESPONSES[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_RESPONSE;
         RESPONSES[ApiKeys.HEARTBEAT.id] = HEARTBEAT_RESPONSE;
         RESPONSES[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_RESPONSE;

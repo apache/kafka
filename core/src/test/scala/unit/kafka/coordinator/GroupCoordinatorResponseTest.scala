@@ -120,7 +120,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     val joinGroupResult = joinGroup(otherGroupId, memberId, protocolType, protocols)
     val joinGroupError = joinGroupResult.error
-    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, joinGroupError)
+    assertEquals(Errors.NOT_COORDINATOR, joinGroupError)
   }
 
   @Test
@@ -213,7 +213,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   def testHeartbeatWrongCoordinator() {
 
     val heartbeatResult = heartbeat(otherGroupId, memberId, -1)
-    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, heartbeatResult)
+    assertEquals(Errors.NOT_COORDINATOR, heartbeatResult)
   }
 
   @Test
@@ -480,7 +480,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val generation = 1
 
     val syncGroupResult = syncGroupFollower(otherGroupId, generation, memberId)
-    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, syncGroupResult._2)
+    assertEquals(Errors.NOT_COORDINATOR, syncGroupResult._2)
   }
 
   @Test
@@ -780,7 +780,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   def testFetchOffsetNotCoordinatorForGroup(): Unit = {
     val tp = new TopicPartition("topic", 0)
     val (error, partitionData) = groupCoordinator.handleFetchOffsets(otherGroupId, Some(Seq(tp)))
-    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, error)
+    assertEquals(Errors.NOT_COORDINATOR, error)
     assertTrue(partitionData.isEmpty)
   }
 
@@ -875,7 +875,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
     val leaveGroupResult = leaveGroup(otherGroupId, memberId)
-    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, leaveGroupResult)
+    assertEquals(Errors.NOT_COORDINATOR, leaveGroupResult)
   }
 
   @Test
@@ -948,7 +948,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   def testDescribeGroupWrongCoordinator() {
     EasyMock.reset(replicaManager)
     val (error, _) = groupCoordinator.handleDescribeGroup(otherGroupId)
-    assertEquals(Errors.NOT_COORDINATOR_FOR_GROUP, error)
+    assertEquals(Errors.NOT_COORDINATOR, error)
   }
 
   @Test

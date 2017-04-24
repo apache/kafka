@@ -51,6 +51,8 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  *     ReadOnlyKeyValueStore view = streams.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
  *     view.get(key);
  *}</pre>
+ *<p>
+ * Records from the source topic that have null keys are dropped.
  *
  * @param <K> Type of primary keys
  * @param <V> Type of value changes
