@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.BrokerNotFoundException;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.IOException;
@@ -212,7 +213,10 @@ public class StreamsKafkaClient {
             }
         }
         if (brokerId == null) {
-            throw new StreamsException("Could not find any available broker.");
+            throw new BrokerNotFoundException("Could not find any available broker. " +
+                "Check your StreamsConfig setting '" + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG + "'. " +
+                "This error might also occur, if you try to connect to pre-0.10 brokers. " +
+                "Kafka Streams requires broker version 0.10.1.x or higher.");
         }
         return brokerId;
     }

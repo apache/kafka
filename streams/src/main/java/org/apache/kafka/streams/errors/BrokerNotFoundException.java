@@ -14,17 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.streams.errors;
 
-import java.util.Locale;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-public final class Os {
-    public static final String NAME;
+/**
+ * Indicates that none of the specified {@link org.apache.kafka.streams.StreamsConfig#BOOTSTRAP_SERVERS_CONFIG brokers}
+ * could be found.
+ *
+ * @see org.apache.kafka.streams.StreamsConfig
+ */
+@InterfaceStability.Unstable
+public class BrokerNotFoundException extends StreamsException {
 
-    public static final boolean IS_WINDOWS;
+    private final static long serialVersionUID = 1L;
 
-    static {
-        NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        IS_WINDOWS = NAME.startsWith("windows");
+    public BrokerNotFoundException(final String message) {
+        super(message);
     }
+
+    public BrokerNotFoundException(final String message, final Throwable throwable) {
+        super(message, throwable);
+    }
+
+    public BrokerNotFoundException(final Throwable throwable) {
+        super(throwable);
+    }
+
 }

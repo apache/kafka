@@ -327,8 +327,8 @@ subprojects {
 
   tasks.withType(FindBugs) {
     reports {
-      xml.enabled false
-      html.enabled true
+      xml.enabled (project.hasProperty('xmlFindBugsReport'))
+      html.enabled (!project.hasProperty('xmlFindBugsReport'))
     }
   }
 

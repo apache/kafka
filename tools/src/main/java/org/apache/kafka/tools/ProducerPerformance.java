@@ -128,14 +128,25 @@ public class ProducerPerformance {
                     throttler.throttle();
                 }
             }
-            /* print final results */
-            stats.printTotal();
 
-            /* print out metrics */
-            if (shouldPrintMetrics) {
+            if (!shouldPrintMetrics) {
+                producer.close();
+
+                /* print final results */
+                stats.printTotal();
+            } else {
+                // Make sure all messages are sent before printing out the stats and the metrics
+                // We need to do this in a different branch for now since tests/kafkatest/sanity_checks/test_performance_services.py
+                // expects this class to work with older versions of the client jar that don't support flush().
+                producer.flush();
+
+                /* print final results */
+                stats.printTotal();
+
+                /* print out metrics */
                 ToolsUtils.printMetrics(producer.metrics());
+                producer.close();
             }
-            producer.close();
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();

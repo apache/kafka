@@ -46,36 +46,36 @@ public class KStreamTestDriver {
     private final MockProcessorContext context;
     private final ProcessorTopology globalTopology;
 
-    public KStreamTestDriver(KStreamBuilder builder) {
+    public KStreamTestDriver(final KStreamBuilder builder) {
         this(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
-    public KStreamTestDriver(KStreamBuilder builder, File stateDir) {
+    public KStreamTestDriver(final KStreamBuilder builder, final File stateDir) {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
-    public KStreamTestDriver(KStreamBuilder builder, File stateDir, final long cacheSize) {
+    public KStreamTestDriver(final KStreamBuilder builder, final File stateDir, final long cacheSize) {
         this(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
     }
 
-    public KStreamTestDriver(KStreamBuilder builder,
-                             File stateDir,
-                             Serde<?> keySerde,
-                             Serde<?> valSerde) {
+    public KStreamTestDriver(final KStreamBuilder builder,
+                             final File stateDir,
+                             final Serde<?> keySerde,
+                             final Serde<?> valSerde) {
         this(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
     }
 
-    public KStreamTestDriver(KStreamBuilder builder,
-                             File stateDir,
-                             Serde<?> keySerde,
-                             Serde<?> valSerde,
-                             long cacheSize) {
+    public KStreamTestDriver(final KStreamBuilder builder,
+                             final File stateDir,
+                             final Serde<?> keySerde,
+                             final Serde<?> valSerde,
+                             final long cacheSize) {
         builder.setApplicationId("TestDriver");
-        this.topology = builder.build(null);
-        this.globalTopology = builder.buildGlobalStateTopology();
-        ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
-        this.context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        this.context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        topology = builder.build(null);
+        globalTopology = builder.buildGlobalStateTopology();
+        final ThreadCache cache = new ThreadCache("testCache", cacheSize, new MockStreamsMetrics(new Metrics()));
+        context = new MockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
         if (globalTopology != null) {
@@ -85,11 +85,11 @@ public class KStreamTestDriver {
     }
 
     private void initTopology(final ProcessorTopology topology, final List<StateStore> stores) {
-        for (StateStore store : stores) {
+        for (final StateStore store : stores) {
             store.init(context, store);
         }
 
-        for (ProcessorNode node : topology.processors()) {
+        for (final ProcessorNode node : topology.processors()) {
             context.setCurrentNode(node);
             try {
                 node.init(context);
@@ -107,7 +107,7 @@ public class KStreamTestDriver {
         return context;
     }
 
-    public void process(String topicName, Object key, Object value) {
+    public void process(final String topicName, final Object key, final Object value) {
         final ProcessorNode prevNode = context.currentNode();
         ProcessorNode currNode = topology.source(topicName);
         if (currNode == null && globalTopology != null) {
@@ -128,9 +128,9 @@ public class KStreamTestDriver {
         }
     }
 
-    public void punctuate(long timestamp) {
+    public void punctuate(final long timestamp) {
         final ProcessorNode prevNode = context.currentNode();
-        for (ProcessorNode processor : topology.processors()) {
+        for (final ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
                 context.setRecordContext(createRecordContext(timestamp));
                 context.setCurrentNode(processor);
@@ -143,13 +143,13 @@ public class KStreamTestDriver {
         }
     }
 
-    public void setTime(long timestamp) {
+    public void setTime(final long timestamp) {
         context.setTime(timestamp);
     }
 
     public void close() {
         // close all processors
-        for (ProcessorNode node : topology.processors()) {
+        for (final ProcessorNode node : topology.processors()) {
             context.setCurrentNode(node);
             try {
                 node.close();
@@ -158,27 +158,29 @@ public class KStreamTestDriver {
             }
         }
 
+        context.close();
         closeState();
     }
 
     public Set<String> allProcessorNames() {
-        Set<String> names = new HashSet<>();
+        final Set<String> names = new HashSet<>();
 
-        List<ProcessorNode> nodes = topology.processors();
+        final List<ProcessorNode> nodes = topology.processors();
 
-        for (ProcessorNode node: nodes) {
+        for (final ProcessorNode node: nodes) {
             names.add(node.name());
         }
 
         return names;
     }
 
-    public ProcessorNode processor(String name) {
-        List<ProcessorNode> nodes = topology.processors();
+    public ProcessorNode processor(final String name) {
+        final List<ProcessorNode> nodes = topology.processors();
 
-        for (ProcessorNode node: nodes) {
-            if (node.name().equals(name))
+        for (final ProcessorNode node: nodes) {
+            if (node.name().equals(name)) {
                 return node;
+            }
         }
 
         return null;
@@ -189,7 +191,7 @@ public class KStreamTestDriver {
     }
 
     public void flushState() {
-        for (StateStore stateStore : context.allStateStores().values()) {
+        for (final StateStore stateStore : context.allStateStores().values()) {
             stateStore.flush();
         }
     }
@@ -199,12 +201,12 @@ public class KStreamTestDriver {
         // of them since the flushing could cause eviction and hence tries to access other stores
         flushState();
 
-        for (StateStore stateStore : context.allStateStores().values()) {
+        for (final StateStore stateStore : context.allStateStores().values()) {
             stateStore.close();
         }
     }
 
-    private ProcessorRecordContext createRecordContext(long timestamp) {
+    private ProcessorRecordContext createRecordContext(final long timestamp) {
         return new ProcessorRecordContext(timestamp, -1, -1, "topic");
     }
 
@@ -215,25 +217,24 @@ public class KStreamTestDriver {
 
         @Override
         public <K, V> void send(final String topic,
-                                K key,
-                                V value,
-                                Integer partition,
-                                Long timestamp,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valueSerializer,
-                                StreamPartitioner<? super K, ? super V> partitioner) {
+                                final K key,
+                                final V value,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer,
+                                final StreamPartitioner<? super K, ? super V> partitioner) {
             // The serialization is skipped.
             process(topic, key, value);
         }
 
         @Override
         public <K, V> void send(final String topic,
-                                K key,
-                                V value,
-                                Integer partition,
-                                Long timestamp,
-                                Serializer<K> keySerializer,
-                                Serializer<V> valueSerializer) {
+                                final K key,
+                                final V value,
+                                final Integer partition,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer) {
         // The serialization is skipped.
             process(topic, key, value);
         }

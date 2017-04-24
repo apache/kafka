@@ -228,7 +228,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 1, t2);
         stateManager.register(store2, false, stateRestoreCallback);
 
-        stateManager.flush(context);
+        stateManager.flush();
         assertTrue(store1.flushed);
         assertTrue(store2.flushed);
     }
@@ -246,7 +246,7 @@ public class GlobalStateManagerImplTest {
             }
         }, false, stateRestoreCallback);
 
-        stateManager.flush(context);
+        stateManager.flush();
     }
 
     @Test

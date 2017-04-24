@@ -14,26 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
+import java.util.Locale;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.Map;
+public final class OperatingSystem {
 
-interface StateManager extends Checkpointable {
-    File baseDir();
+    private OperatingSystem() {
+    }
+    
+    public static final String NAME;
 
-    void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback);
+    public static final boolean IS_WINDOWS;
 
-    void flush();
-
-    void close(Map<TopicPartition, Long> offsets) throws IOException;
-
-    StateStore getGlobalStore(final String name);
-
-    StateStore getStore(final String name);
+    static {
+        NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        IS_WINDOWS = NAME.startsWith("windows");
+    }
 }

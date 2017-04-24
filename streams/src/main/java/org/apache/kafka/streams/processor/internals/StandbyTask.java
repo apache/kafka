@@ -90,7 +90,7 @@ public class StandbyTask extends AbstractTask {
 
     public void commit() {
         log.debug("standby-task [{}] Committing its state", id());
-        stateMgr.flush(processorContext);
+        stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
         // reinitialize offset limits
         initializeOffsetLimits();
