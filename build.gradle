@@ -31,6 +31,8 @@ buildscript {
   }
 }
 
+apply from: "$rootDir/gradle/dependencies.gradle"
+
 allprojects {
   apply plugin: 'idea'
   apply plugin: "jacoco"
@@ -52,6 +54,13 @@ allprojects {
           if (rejected) {
             selection.reject('Release candidate')
           }
+        }
+      }
+    }
+    configurations {
+      runtime {
+        resolutionStrategy {
+          force "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson"
         }
       }
     }
@@ -91,7 +100,6 @@ ext {
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 }
 
-apply from: "$rootDir/gradle/dependencies.gradle"
 apply from: file('wrapper.gradle')
 
 if (new File('.git').exists()) {
