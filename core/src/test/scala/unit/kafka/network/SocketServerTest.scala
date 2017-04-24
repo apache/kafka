@@ -404,14 +404,14 @@ class SocketServerTest extends JUnitSuite {
   def testMetricCollectionAfterShutdown(): Unit = {
     server.shutdown()
 
-    val sum = YammerMetrics
+    val nonZeroMetricNamesAndValues = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
-      .collect { case (_, metric: Gauge[_]) => metric.value.asInstanceOf[Double] }
-      .sum
+      .collect { case (k, metric: Gauge[_]) => (k, metric.value().asInstanceOf[Double]) }
+      .filter { case (_, value) => value != 0.0 }
 
-    assertEquals(0, sum, 0)
+    assertEquals(Map.empty, nonZeroMetricNamesAndValues)
   }
 
 }
