@@ -625,6 +625,10 @@ class GroupCoordinator(val brokerId: Int,
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
     member.awaitingJoinCallback = callback
+    // update the newMemberAdded flag to indicate that the join group can be further delayed
+    if (group.is(InitialRebalance))
+      group.newMemberAdded = true
+
     group.add(member)
     maybePrepareRebalance(group)
     member
@@ -640,8 +644,8 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def maybePrepareRebalance(group: GroupMetadata) {
-    if (group.is(Empty)) group.transitionTo(InitialRebalance)
     group synchronized {
+      if (group.is(Empty)) group.transitionTo(InitialRebalance)
       if (group.canRebalance)
         prepareRebalance(group)
     }
@@ -652,21 +656,28 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(AwaitingSync))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
-    val groupKey = GroupKey(group.groupId)
-
-    val (delay, timeout) = if (group.currentState != InitialRebalance) {
-      group.transitionTo(PreparingRebalance)
-      (group.rebalanceTimeoutMs, time.milliseconds() + group.rebalanceTimeoutMs)
+    val (delay, timeout) = if (group.is(InitialRebalance) && group.size == 1) {
+      group.initialRebalanceTimeout = time.milliseconds() + group.rebalanceTimeoutMs
+      val joinDelay = scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.rebalanceTimeoutMs)
+      (joinDelay, group.initialRebalanceTimeout)
     } else {
-      joinPurgatory.cancelForKey(groupKey) match {
-        case x :: Nil => (scala.math.min(groupConfig.groupInitialRebalanceDelayMs, x.rebalanceTimeOut - time.milliseconds()).toInt, x.rebalanceTimeOut)
-        case _ => (scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.rebalanceTimeoutMs), time.milliseconds() + group.rebalanceTimeoutMs)
-      }
+      (group.rebalanceTimeoutMs, group.initialRebalanceTimeout)
+    }
+
+    group.currentState match {
+      case InitialRebalance => // nothing to do
+      case _ => group.transitionTo(PreparingRebalance)
     }
 
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
-    val delayedRebalance = new DelayedJoin(this, group, delay, timeout)
-    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
+    val delayedRebalance = new DelayedJoin(this, group, delay, group.initialRebalanceTimeout)
+    val groupKey = GroupKey(group.groupId)
+    // if this is the first member joining the group just watch the operation rather than trying to complete it
+    if (group.is(InitialRebalance) && group.size() == 1)
+      joinPurgatory.watchOperation(delayedRebalance, Seq(groupKey))
+    else if(!group.is(InitialRebalance))
+      // try complete when the group is in not in the InitialRebalance state
+      joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
@@ -681,7 +692,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteJoin(group: GroupMetadata, forceComplete: () => Boolean) = {
     group synchronized {
-      if (group.notYetRejoinedMembers.isEmpty && group.currentState != InitialRebalance)
+      if (group.notYetRejoinedMembers.isEmpty)
         forceComplete()
       else false
     }
@@ -694,14 +705,23 @@ class GroupCoordinator(val brokerId: Int,
   def onCompleteJoin(group: GroupMetadata) {
     var delayedStore: Option[DelayedStore] = None
     group synchronized {
+      if (group.is(InitialRebalance)) {
+        if (group.newMemberAdded && time.milliseconds() < group.initialRebalanceTimeout) {
+          group.newMemberAdded = false
+          val delay = scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.initialRebalanceTimeout - time.milliseconds()).toInt
+          val groupKey = GroupKey(group.groupId)
+          joinPurgatory.watchOperation(new DelayedJoin(this, group, delay, group.initialRebalanceTimeout), Seq(groupKey))
+          return
+        } else {
+          group.newMemberAdded = false
+          group.transitionTo(PreparingRebalance)
+        }
+      }
       // remove any members who haven't joined the group yet
       group.notYetRejoinedMembers.foreach { failedMember =>
         group.remove(failedMember.memberId)
         // TODO: cut the socket connection to the client
       }
-
-      if (group.is(InitialRebalance))
-        group.transitionTo(PreparingRebalance)
 
       if (!group.is(Dead)) {
         group.initNextGeneration()

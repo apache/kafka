@@ -1013,7 +1013,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   private def verifyDelayedTaskNotCompleted(firstJoinFuture: Future[JoinGroupResult]) = {
     try {
       await(firstJoinFuture, 1)
-      Assert.fail("should have timeout as rebalance delay not expired")
+      Assert.fail("should have timed out as rebalance delay not expired")
     } catch {
       case _: TimeoutException => // ok
     }
@@ -1021,7 +1021,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
   @Test
   def shouldResetRebalanceDelayWhenNewMemberJoinsGroupInInitialRebalance() {
-    val rebalanceTimeout = GroupInitialRebalanceDelay * 2
+    val rebalanceTimeout = GroupInitialRebalanceDelay * 3
     val firstMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
     EasyMock.reset(replicaManager)
     timer.advanceClock(GroupInitialRebalanceDelay - 1)

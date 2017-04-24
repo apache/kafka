@@ -198,24 +198,20 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     if (isCompletedByMe)
       return true
 
-    var watchCreated = false
-    for(key <- watchKeys) {
-      // If the operation is already completed, stop adding it to the rest of the watcher list.
-      if (operation.isCompleted)
-        return false
-      watchForOperation(key, operation)
-
-      if (!watchCreated) {
-        watchCreated = true
-        estimatedTotalOperations.incrementAndGet()
-      }
-    }
+    if (addWatches(operation, watchKeys))
+      return false
 
     isCompletedByMe = operation.safeTryComplete()
     if (isCompletedByMe)
       return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
+    addToExpireQueue(operation)
+
+    false
+  }
+
+  private def addToExpireQueue(operation: T) = {
     if (!operation.isCompleted) {
       timeoutTimer.add(operation)
       if (operation.isCompleted) {
@@ -223,8 +219,28 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         operation.cancel()
       }
     }
+  }
 
+  private def addWatches(operation:T, watchKeys: Seq[Any]): Boolean = {
+    var watchCreated = false
+    for(key <- watchKeys) {
+      // If the operation is already completed, stop adding it to the rest of the watcher list.
+      if (operation.isCompleted)
+        return true
+      watchForOperation(key, operation)
+
+      if (!watchCreated) {
+        watchCreated = true
+        estimatedTotalOperations.incrementAndGet()
+      }
+    }
     false
+  }
+
+  def watchOperation(operation: T, watchKeys: Seq[Any]): Unit = {
+    if (!addWatches(operation, watchKeys)) {
+      addToExpireQueue(operation)
+    }
   }
 
   /**
@@ -239,19 +255,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       0
     else
       watchers.tryCompleteWatched()
-  }
-
-  /**
-    * Remove the watch for the given key and cancel any operations
-    * @param key
-    * @return the delayed operations that were watched
-    */
-  def cancelForKey(key: Any): List[T] = {
-    inWriteLock(removeWatchersLock) {
-        val watchers = watchersForKey.remove(key)
-        if (watchers != null) watchers.cancel()
-        else Nil
-    }
   }
 
   /**

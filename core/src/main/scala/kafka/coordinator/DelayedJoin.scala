@@ -40,20 +40,6 @@ private[coordinator] class DelayedJoin(coordinator: GroupCoordinator,
   override def safeTryComplete(): Boolean = tryComplete()
 
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete)
-  override def onExpiration() =
-    coordinator.onExpireJoin()
-
-  override def onComplete() = {
-    group synchronized {
-      group.currentState match {
-        case PreparingRebalance | InitialRebalance =>
-          coordinator.onCompleteJoin(group)
-        case _ =>
-          // has already transitioned so ignore. this can happen if the delay has been reached, i.e., run() is called,
-          // and the key was cancelled in purgatory at roughly the same time
-
-      }
-    }
-
-  }
+  override def onExpiration() = coordinator.onExpireJoin()
+  override def onComplete() = coordinator.onCompleteJoin(group)
 }

@@ -165,11 +165,14 @@ private[coordinator] class GroupMetadata(val groupId: String, initialState: Grou
   var generationId = 0
   var leaderId: String = null
   var protocol: String = null
+  var initialRebalanceTimeout: Long = _
+  var newMemberAdded: Boolean = false
 
   def is(groupState: GroupState) = state == groupState
   def not(groupState: GroupState) = state != groupState
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
+  def size() = members.size
 
   def add(member: MemberMetadata) {
     if (members.isEmpty)
