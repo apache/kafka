@@ -438,6 +438,11 @@ public class KTableImplTest {
         table.join(null, MockValueJoiner.TOSTRING_JOINER);
     }
 
+    @Test
+    public void shouldAllowNullStoreInJoin() throws Exception {
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, null, null);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullJoinerJoin() throws Exception {
         table.join(table, null);
