@@ -72,8 +72,8 @@ public enum ControlRecordType {
     public static ControlRecordType parse(ByteBuffer key) {
         short version = key.getShort(0);
         if (version != CURRENT_CONTROL_RECORD_KEY_VERSION)
-            log.debug("Received unknown control record key version {}. Parsing as version {}" +
-                    version, CURRENT_CONTROL_RECORD_KEY_VERSION);
+            log.debug("Received unknown control record key version {}. Parsing as version {}", version, 
+                    CURRENT_CONTROL_RECORD_KEY_VERSION);
         short type = key.getShort(2);
         switch (type) {
             case 0:

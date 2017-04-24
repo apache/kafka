@@ -18,7 +18,7 @@
 package kafka.security.auth
 
 import kafka.admin.ZkSecurityMigrator
-import kafka.utils.{Logging, ZkUtils}
+import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.security.JaasUtils
@@ -83,7 +83,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
         val aclList = zkUtils.zkConnection.getAcl(path).getKey
         assertTrue(aclList.size == 2)
         for (acl: ACL <- aclList.asScala) {
-          assertTrue(isAclSecure(acl, false))
+          assertTrue(TestUtils.isAclSecure(acl, false))
         }
       }
     }
@@ -226,7 +226,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   private def verify(path: String): Boolean = {
     val sensitive = ZkUtils.sensitivePath(path)
     val list = zkUtils.zkConnection.getAcl(path).getKey
-    list.asScala.forall(isAclSecure(_, sensitive))
+    list.asScala.forall(TestUtils.isAclSecure(_, sensitive))
   }
 
   /**
@@ -240,35 +240,10 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
         list.size == 1
     isListSizeCorrect && list.asScala.forall(
       if (secure)
-        isAclSecure(_, sensitive)
+        TestUtils.isAclSecure(_, sensitive)
       else
-        isAclUnsecure
+        TestUtils.isAclUnsecure
     )
-  }
-  
-  /**
-   * Verifies that this ACL is the secure one. The
-   * values are based on the constants used in the 
-   * ZooKeeper code base.
-   */
-  private def isAclSecure(acl: ACL, sensitive: Boolean): Boolean = {
-    info(s"ACL $acl")
-    acl.getPerms match {
-      case 1 => !sensitive && acl.getId.getScheme.equals("world")
-      case 31 => acl.getId.getScheme.equals("sasl")
-      case _ => false
-    }
-  }
-  
-  /**
-   * Verifies that the ACL corresponds to the unsecure one.
-   */
-  private def isAclUnsecure(acl: ACL): Boolean = {
-    info(s"ACL $acl")
-    acl.getPerms match {
-      case 31 => acl.getId.getScheme.equals("world")
-      case _ => false
-    }
   }
   
   /**

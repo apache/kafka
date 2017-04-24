@@ -14,20 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.common.utils;
 
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
+import java.util.Locale;
 
-import java.util.ArrayList;
-import java.util.List;
+public final class OperatingSystem {
 
-public class MockRestoreCallback implements StateRestoreCallback {
-    public List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
+    private OperatingSystem() {
+    }
+    
+    public static final String NAME;
 
+    public static final boolean IS_WINDOWS;
 
-    @Override
-    public void restore(final byte[] key, final byte[] value) {
-        restored.add(KeyValue.pair(key, value));
+    static {
+        NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        IS_WINDOWS = NAME.startsWith("windows");
     }
 }

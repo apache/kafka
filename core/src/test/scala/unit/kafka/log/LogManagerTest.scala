@@ -21,7 +21,7 @@ import java.io._
 import java.util.Properties
 
 import kafka.common._
-import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -103,8 +103,8 @@ class LogManagerTest {
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    //There should be a log file, two indexes, the leader epoch checkpoint and the pid snapshot dir
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 2, log.dir.list.length)
+    // there should be a log file, two indexes, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 1, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).records.sizeInBytes)
 
     try {

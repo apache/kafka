@@ -118,7 +118,7 @@ object ReplicaVerificationTool extends Logging {
     val initialOffsetTime = options.valueOf(initialOffsetTimeOpt).longValue
     val reportInterval = options.valueOf(reportIntervalOpt).longValue
     // getting topic metadata
-    info("Getting topic metatdata...")
+    info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)

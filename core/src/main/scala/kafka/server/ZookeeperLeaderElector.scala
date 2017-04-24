@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.CoreUtils._
-import kafka.utils.{Json, Logging, ZKCheckedEphemeral}
+import kafka.utils.{Json, Logging, ZKCheckedEphemeral, ZkUtils}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
@@ -60,9 +60,9 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   }
 
   def elect: Boolean = {
-    val timestamp = time.milliseconds.toString
-    val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
-   
+    val timestamp = time.milliseconds
+    val electString = ZkUtils.controllerZkData(brokerId, timestamp)
+
    leaderId = getControllerID 
     /* 
      * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition, 
@@ -78,7 +78,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
       val zkCheckedEphemeral = new ZKCheckedEphemeral(electionPath,
                                                       electString,
                                                       controllerContext.zkUtils.zkConnection.getZookeeper,
-                                                      JaasUtils.isZkSecurityEnabled())
+                                                      controllerContext.zkUtils.isSecure)
       zkCheckedEphemeral.create()
       info(brokerId + " successfully elected as leader")
       leaderId = brokerId
