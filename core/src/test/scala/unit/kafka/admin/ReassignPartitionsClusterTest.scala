@@ -290,6 +290,17 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, NoThrottle)
   }
 
+  @Test(expected = classOf[AdminCommandFailedException])
+  def shouldFailIfProposedHasEmptyReplicaList() {
+    //Given a single replica on server 100
+    startBrokers(Seq(100, 101))
+    createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
+
+    //When we execute an assignment that specifies an empty replica list (0: empty list in this case)
+    val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, NoThrottle)
+  }
+
   @Test
   def shouldPerformThrottledReassignmentOverVariousTopics() {
     val throttle = Throttle(1000L)
