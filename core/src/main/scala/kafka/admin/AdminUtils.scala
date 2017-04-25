@@ -588,10 +588,11 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
-    val str: Option[String] = zkUtils.readDataMaybeNull(entityConfigPath)._1
+    //readDataMaybeNull returns Some(null) if the path exists, but there is no data
+    val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
-    str.foreach { data =>
-      Json.parseFull(data) match {
+    if (str != null) {
+      Json.parseFull(str) match {
         case None => // there are no config overrides
         case Some(mapAnon: Map[_, _]) =>
           val map = mapAnon collect { case (k: String, v: Any) => k -> v }
@@ -602,12 +603,12 @@ object AdminUtils extends Logging with AdminUtilities {
                 configTup match {
                   case (k: String, v: String) =>
                     props.setProperty(k, v)
-                  case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${data}")
+                  case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
                 }
-            case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${data}")
+            case _ => throw new IllegalArgumentException(s"Invalid ${entityConfigPath} config: ${str}")
           }
 
-        case _ => throw new IllegalArgumentException(s"Unexpected value in config:(${data}), entity_config_path: ${entityConfigPath}")
+        case _ => throw new IllegalArgumentException(s"Unexpected value in config:(${str}), entity_config_path: ${entityConfigPath}")
       }
     }
     props
