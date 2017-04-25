@@ -27,6 +27,7 @@ import java.util.Map;
  * JSON deserializer for Jackson's JsonNode tree model. Using the tree model allows it to work with arbitrarily
  * structured data without having associated Java classes. This deserializer also supports Connect schemas.
  */
+@Deprecated
 public class JsonDeserializer implements Deserializer<JsonNode> {
     private ObjectMapper objectMapper = new ObjectMapper();
 
