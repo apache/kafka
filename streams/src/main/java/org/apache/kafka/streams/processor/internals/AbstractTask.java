@@ -46,20 +46,20 @@ public abstract class AbstractTask {
     protected final Consumer consumer;
     protected final ProcessorStateManager stateMgr;
     protected final Set<TopicPartition> partitions;
-    protected InternalProcessorContext processorContext;
+    InternalProcessorContext processorContext;
     protected final ThreadCache cache;
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
-    protected AbstractTask(final TaskId id,
-                           final String applicationId,
-                           final Collection<TopicPartition> partitions,
-                           final ProcessorTopology topology,
-                           final Consumer<byte[], byte[]> consumer,
-                           final ChangelogReader changelogReader,
-                           final boolean isStandby,
-                           final StateDirectory stateDirectory,
-                           final ThreadCache cache) {
+    AbstractTask(final TaskId id,
+                 final String applicationId,
+                 final Collection<TopicPartition> partitions,
+                 final ProcessorTopology topology,
+                 final Consumer<byte[], byte[]> consumer,
+                 final ChangelogReader changelogReader,
+                 final boolean isStandby,
+                 final StateDirectory stateDirectory,
+                 final ThreadCache cache) {
         this.id = id;
         this.applicationId = applicationId;
         this.partitions = new HashSet<>(partitions);
@@ -110,6 +110,7 @@ public abstract class AbstractTask {
         return cache;
     }
 
+    public abstract void resume();
     public abstract void commit();
     public abstract void suspend();
     public abstract void close();
@@ -120,11 +121,7 @@ public abstract class AbstractTask {
      */
     void closeStateManager(final boolean writeCheckpoint) {
         log.trace("task [{}] Closing", id);
-        try {
-            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
-        } catch (final IOException e) {
-            throw new ProcessorStateException("Error while closing the state manager", e);
-        }
+        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
     }
 
     protected Map<TopicPartition, Long> recordCollectorOffsets() {

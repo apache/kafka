@@ -256,10 +256,13 @@ public class ProcessorStateManager implements StateManager {
     }
 
     /**
-     * @throws IOException if any error happens when closing the state stores
+     * {@link StateStore#close() Close} all stores (even in case of failure).
+     * Re-throw the first
+     * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final Map<TopicPartition, Long> ackedOffsets) throws IOException {
+    public void close(final Map<TopicPartition, Long> ackedOffsets) throws ProcessorStateException {
+        RuntimeException firstException = null;
         try {
             // attempting to close the stores, just in case they
             // are not closed by a ProcessorNode yet
@@ -270,7 +273,10 @@ public class ProcessorStateManager implements StateManager {
                     try {
                         entry.getValue().close();
                     } catch (final Exception e) {
-                        throw new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
+                        if (firstException == null) {
+                            firstException = new ProcessorStateException(String.format("%s Failed to close state store %s", logPrefix, entry.getKey()), e);
+                        }
+                        log.error("{} Failed to close state store {} due to {}", logPrefix, entry.getKey(), e);
                     }
                 }
 
@@ -281,7 +287,18 @@ public class ProcessorStateManager implements StateManager {
             }
         } finally {
             // release the state directory directoryLock
-            stateDirectory.unlock(taskId);
+            try {
+                stateDirectory.unlock(taskId);
+            } catch (final IOException e) {
+                if (firstException == null) {
+                    firstException = new ProcessorStateException(String.format("%s Failed to release state dir lock", logPrefix), e);
+                }
+                log.error("{} Failed to release state dir lock due to {}", logPrefix, e);
+            }
+        }
+
+        if (firstException != null) {
+            throw firstException;
         }
     }
 

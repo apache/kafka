@@ -76,6 +76,9 @@ public class AbstractTaskTest {
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
                                 new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
             @Override
+            public void resume() {}
+
+            @Override
             public void commit() {}
 
             @Override

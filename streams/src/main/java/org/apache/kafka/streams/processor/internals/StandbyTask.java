@@ -37,6 +37,7 @@ public class StandbyTask extends AbstractTask {
 
     private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
     private final Map<TopicPartition, Long> checkpointedOffsets;
+    private final String logPrefix;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -63,7 +64,9 @@ public class StandbyTask extends AbstractTask {
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
-        log.info("standby-task [{}] Initializing state stores", id());
+        logPrefix = String.format("Standby Task [%s]", id());
+
+        log.info("{} Initializing", logPrefix);
         initializeStateStores();
 
         processorContext.initialized();
@@ -80,32 +83,59 @@ public class StandbyTask extends AbstractTask {
      * @return a list of records not consumed
      */
     public List<ConsumerRecord<byte[], byte[]>> update(final TopicPartition partition, final List<ConsumerRecord<byte[], byte[]>> records) {
-        log.debug("standby-task [{}] Updating standby replicas of its state store for partition [{}]", id(), partition);
+        log.debug("{} Updating standby replicas of its state store for partition [{}]", logPrefix, partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
 
+    /**
+     * <pre>
+     * - update offset limits
+     * </pre>
+     */
+    @Override
+    public void resume() {
+        log.info("{} " + "Resuming", logPrefix);
+        initializeOffsetLimits();
+    }
+
+    /**
+     * <pre>
+     * - flush store
+     * - checkpoint store
+     * - update offset limits
+     * </pre>
+     */
     @Override
     public void commit() {
-        log.debug("standby-task [{}] Committing its state", id());
+        log.trace("{} Committing", logPrefix);
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
         // reinitialize offset limits
         initializeOffsetLimits();
     }
 
+    /**
+     * <pre>
+     * - flush store
+     * - checkpoint store
+     * </pre>
+     */
     @Override
     public void suspend() {
-        commit();
+        log.info("{} Suspending", logPrefix);
+        stateMgr.flush();
+        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
 
     @Override
     public void close() {
+        log.info("{} Closing", logPrefix);
+        boolean committedSuccessfully = false;
         try {
             commit();
-            closeStateManager(true);
-        } catch (final RuntimeException e) {
-            closeStateManager(false);
-            throw e;
+            committedSuccessfully = true;
+        } finally {
+            closeStateManager(committedSuccessfully);
         }
     }
 

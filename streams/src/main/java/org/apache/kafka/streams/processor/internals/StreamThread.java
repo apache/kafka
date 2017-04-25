@@ -1013,6 +1013,7 @@ public class StreamThread extends Thread {
             if (task != null) {
                 log.debug("{} resuming old standby task {}", logPrefix, taskId);
                 suspendedStandbyTasks.remove(taskId);
+                task.resume();
             } else {
                 newStandbyTasks.put(taskId, partitions);
             }
