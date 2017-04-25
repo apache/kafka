@@ -17,7 +17,7 @@
 package kafka.coordinator.transaction
 
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
-import kafka.common.InterBrokerSendThread
+import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, InterBrokerSendThread}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.TestUtils
@@ -136,6 +136,53 @@ class TransactionMarkerChannelManagerTest {
 
     assertTrue(requestGenerator().nonEmpty)
     assertTrue(requestGenerator().isEmpty)
+  }
+
+  @Test
+  def shouldRetryGettingLeaderWhenNotFound(): Unit = {
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(None)
+      .andReturn(None)
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
+    EasyMock.replay(metadataCache)
+
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+
+    EasyMock.verify(metadataCache)
+  }
+
+  @Test
+  def shouldRetryGettingLeaderWhenBrokerEndPointNotAvailableException(): Unit = {
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+      .times(2)
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject()))
+      .andThrow(new BrokerEndPointNotAvailableException())
+      .andReturn(Some(broker1))
+    EasyMock.replay(metadataCache)
+
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+
+    EasyMock.verify(metadataCache)
+  }
+
+  @Test
+  def shouldRetryGettingLeaderWhenLeaderDoesntExist(): Unit = {
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+      .times(2)
+
+    EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject()))
+      .andReturn(None)
+      .andReturn(Some(broker1))
+
+    EasyMock.replay(metadataCache)
+
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+
+    EasyMock.verify(metadataCache)
   }
 
   @Test

@@ -19,26 +19,31 @@ package kafka.coordinator.transaction
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
 
-import kafka.common.{BrokerNotAvailableException, RequestAndCompletionHandler}
+import kafka.common.{BrokerEndPointNotAvailableException, RequestAndCompletionHandler}
 import kafka.server.{DelayedOperationPurgatory, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.{concurrent, immutable, mutable}
 import collection.JavaConverters._
 import collection.JavaConversions._
 
-class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCache: MetadataCache) extends Logging {
+class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
+                               metadataCache: MetadataCache,
+                               time: Time = Time.SYSTEM) extends Logging {
 
   // we need the metadataPartition so we can clean up when Transaction Log partitions emigrate
   case class PendingTxnKey(metadataPartition: Int, producerId: Long)
 
   private val brokerStateMap: concurrent.Map[Int, DestinationBrokerAndQueuedMarkers] = concurrent.TrieMap.empty[Int, DestinationBrokerAndQueuedMarkers]
   private val pendingTxnMap: concurrent.Map[PendingTxnKey, TransactionMetadata] = concurrent.TrieMap.empty[PendingTxnKey, TransactionMetadata]
+
+  // TODO: What is reasonable for this
+  private val brokerNotAliveBackoffMs = 10
 
   // visible for testing
   private[transaction] def queueForBroker(brokerId: Int) = {
@@ -86,22 +91,38 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCa
 
   def addRequestToSend(metadataPartition: Int, pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val partitionsByDestination: immutable.Map[Int, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
-      val leaderForPartition = metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
       val currentBrokers = mutable.Set.empty[Int]
-      leaderForPartition match {
-        case Some(partitionInfo) =>
-          val brokerId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-          if (currentBrokers.add(brokerId)) {
-            // TODO: What should we do if we get BrokerEndPointNotAvailableException?
-            val broker = metadataCache.getAliveEndpoint(brokerId, interBrokerListenerName).get
-            addOrUpdateBroker(broker)
-          }
-          brokerId
-        case None =>
-          // TODO: there is a rare case that the producer gets the partition info from another broker who has the newer information of the
-          // partition, while the TC itself has not received the propagated metadata update; do we need to block when this happens?
-          throw new IllegalStateException("Cannot find the leader broker for the txn marker to write for topic partition " + topicPartition)
+      var brokerId:Option[Int] = None
+
+      while(brokerId.isEmpty) {
+        val leaderForPartition = metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
+        leaderForPartition match {
+          case Some(partitionInfo) =>
+            val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+            if (currentBrokers.add(leaderId)) {
+              try {
+                metadataCache.getAliveEndpoint(leaderId, interBrokerListenerName) match {
+                  case Some(broker) =>
+                    addOrUpdateBroker(broker)
+                    brokerId = Some(leaderId)
+                  case None =>
+                    currentBrokers.remove(leaderId)
+                    trace(s"alive endpoint for broker with id: $leaderId not available. retrying")
+
+                }
+              } catch {
+                case _:BrokerEndPointNotAvailableException =>
+                  currentBrokers.remove(leaderId)
+                  trace(s"alive endpoint for broker with id: $leaderId not available. retrying")
+              }
+            }
+          case None =>
+            trace(s"couldn't find leader for partition: $topicPartition")
+        }
+        if (brokerId.isEmpty)
+          time.sleep(brokerNotAliveBackoffMs)
       }
+      brokerId.get
     }
 
     for ((brokerId: Int, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
