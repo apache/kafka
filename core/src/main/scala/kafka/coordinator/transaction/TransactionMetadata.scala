@@ -97,14 +97,24 @@ private[coordinator] object TransactionMetadata {
       CompleteAbort -> Set(PrepareAbort))
 }
 
+/**
+  *
+  * @param pid                   producer id
+  * @param producerEpoch         current epoch of the producer
+  * @param txnTimeoutMs          timeout to be used to abort long running transactions
+  * @param state                 the current state of the transaction
+  * @param topicPartitions       set of partitions that are part of this transaction
+  * @param transactionStartTime  time the transaction was started, i.e., when first partition is added
+  * @param lastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
+  */
 @nonthreadsafe
 private[coordinator] class TransactionMetadata(val pid: Long,
                                                var producerEpoch: Short,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
-                                               var transactionStartTime: Long,
-                                               var entryTimestamp: Long) {
+                                               var transactionStartTime: Long = -1,
+                                               var lastUpdateTimestamp: Long) {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -140,7 +150,7 @@ private[coordinator] class TransactionMetadata(val pid: Long,
   }
 
   def copy(): TransactionMetadata =
-    new TransactionMetadata(pid, producerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, entryTimestamp)
+    new TransactionMetadata(pid, producerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, lastUpdateTimestamp)
 
   override def toString: String =
     s"(pid: $pid, epoch: $producerEpoch, transactionTimeoutMs: $txnTimeoutMs, transactionState: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
@@ -151,13 +161,15 @@ private[coordinator] class TransactionMetadata(val pid: Long,
       producerEpoch == other.producerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
-      topicPartitions.equals(other.topicPartitions)
+      topicPartitions.equals(other.topicPartitions) &&
+      transactionStartTime.equals(other.transactionStartTime) &&
+      lastUpdateTimestamp.equals(other.lastUpdateTimestamp)
     case _ => false
   }
 
 
   override def hashCode(): Int = {
-    val state = Seq(pid, txnTimeoutMs, topicPartitions, entryTimestamp)
+    val state = Seq(pid, txnTimeoutMs, topicPartitions, lastUpdateTimestamp)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

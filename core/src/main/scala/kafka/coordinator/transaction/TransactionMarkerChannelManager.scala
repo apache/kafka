@@ -29,15 +29,13 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Node
 
-import scala.collection.mutable
 import java.util.concurrent.BlockingQueue
 
 import org.apache.kafka.common.protocol.Errors
 
 import collection.JavaConverters._
-import collection.JavaConversions._
 
-case class CoordinatorEpochAndMarkers(metadataPartition: Int, coordinatorEpoch: Int, txnMarkerEntry: util.List[WriteTxnMarkersRequest.TxnMarkerEntry])
+case class CoordinatorEpochAndMarkers(metadataPartition: Int, coordinatorEpoch: Int, txnMarkerEntries: util.List[WriteTxnMarkersRequest.TxnMarkerEntry])
 case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[CoordinatorEpochAndMarkers])
 
 object TransactionMarkerChannelManager {
@@ -81,7 +79,7 @@ object TransactionMarkerChannelManager {
         false,
         new ApiVersions
       )
-
+      networkClient.wakeup()
       new InterBrokerSendThread(threadName, networkClient, requestGenerator(channel, txnMarkerPurgatory), time)
     }
 
@@ -95,22 +93,8 @@ object TransactionMarkerChannelManager {
 
   private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel,
                                             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): () => Iterable[RequestAndCompletionHandler] = {
-    def generateRequests(): Iterable[RequestAndCompletionHandler] = {
-      transactionMarkerChannel.brokerStateMap.flatMap {case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
-        val markersToSend: java.util.List[CoordinatorEpochAndMarkers] = new util.ArrayList[CoordinatorEpochAndMarkers] ()
-        destAndMarkerQueue.markersQueue.drainTo (markersToSend)
-        markersToSend.groupBy{ epochAndMarker => (epochAndMarker.metadataPartition, epochAndMarker.coordinatorEpoch) }
-          .map { case((metadataPartition: Int, coordinatorEpoch:Int), buffer: mutable.Buffer[CoordinatorEpochAndMarkers]) =>
-            val txnMarkerEntries = buffer.flatMap { x => x.txnMarkerEntry }.asJava
-            val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(
-              transactionMarkerChannel,
-              txnMarkerPurgatory,
-              CoordinatorEpochAndMarkers(metadataPartition, coordinatorEpoch, txnMarkerEntries),
-              brokerId)
-            RequestAndCompletionHandler(destAndMarkerQueue.destBrokerNode, new WriteTxnMarkersRequest.Builder(coordinatorEpoch, txnMarkerEntries), requestCompletionHandler)
-          }
-      }
-    }
+    def generateRequests(): Iterable[RequestAndCompletionHandler] = transactionMarkerChannel.drainQueuedTransactionMarkers(txnMarkerPurgatory)
+
     generateRequests
   }
 }
@@ -135,10 +119,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
 
-  def addTxnMarkerRequest(metadataPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
+  def addTxnMarkerRequest(coordinatorPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
     val metadataToWrite = metadata synchronized metadata.copy()
 
-    if (!transactionMarkerChannel.maybeAddPendingRequest(metadataPartition, metadata))
+    if (!transactionMarkerChannel.maybeAddPendingRequest(coordinatorPartition, metadata))
       // TODO: Not sure this is the correct response here?
       completionCallback(Errors.INVALID_TXN_STATE)
     else {
@@ -150,7 +134,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
         case PrepareAbort => TransactionResult.ABORT
         case s => throw new IllegalStateException("Unexpected txn metadata state while writing markers: " + s)
       }
-      transactionMarkerChannel.addRequestToSend(metadataPartition,
+      transactionMarkerChannel.addRequestToSend(coordinatorPartition,
         metadataToWrite.pid,
         metadataToWrite.producerEpoch,
         result,

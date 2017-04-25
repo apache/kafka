@@ -1364,7 +1364,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(error: Errors) {
       val responseBody = new EndTxnResponse(error)
-      trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId()}.")
+      trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId}.")
       requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
     }
 

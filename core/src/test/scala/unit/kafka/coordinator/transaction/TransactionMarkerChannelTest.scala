@@ -19,7 +19,8 @@ package kafka.coordinator.transaction
 
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.server.MetadataCache
+import kafka.server.{DelayedOperationPurgatory, MetadataCache}
+import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
@@ -34,6 +35,7 @@ import scala.collection.mutable
 class TransactionMarkerChannelTest {
 
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
+  private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("name", new MockTimer, reaperEnabled = false)
   private val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
   private val channel = new TransactionMarkerChannel(listenerName, metadataCache)
 
@@ -42,8 +44,8 @@ class TransactionMarkerChannelTest {
   def shouldAddEmptyBrokerQueueWhenAddingNewBroker(): Unit = {
     channel.addOrUpdateBroker(new Node(1, "host", 10))
     channel.addOrUpdateBroker(new Node(2, "host", 10))
-    assertEquals(0, channel.brokerStateMap(1).markersQueue.size())
-    assertEquals(0, channel.brokerStateMap(2).markersQueue.size())
+    assertEquals(0, channel.queueForBroker(1).get.markersQueue.size())
+    assertEquals(0, channel.queueForBroker(2).get.markersQueue.size())
   }
 
   @Test
@@ -61,7 +63,7 @@ class TransactionMarkerChannelTest {
     channel.addOrUpdateBroker(new Node(1, "host", 10))
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
-    val destinationAndQueue = channel.brokerStateMap(1)
+    val destinationAndQueue = channel.queueForBroker(1).get
     assertEquals(newDestination, destinationAndQueue.destBrokerNode)
     assertEquals(1, destinationAndQueue.markersQueue.size())
   }
@@ -74,8 +76,8 @@ class TransactionMarkerChannelTest {
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
     channel.addRequestForBroker(2, CoordinatorEpochAndMarkers(0, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
 
-    assertEquals(2, channel.brokerStateMap(1).markersQueue.size())
-    assertEquals(1, channel.brokerStateMap(2).markersQueue.size())
+    assertEquals(2, channel.queueForBroker(1).get.markersQueue.size())
+    assertEquals(1, channel.queueForBroker(2).get.markersQueue.size())
   }
 
   @Test
@@ -101,8 +103,8 @@ class TransactionMarkerChannelTest {
     EasyMock.replay(metadataCache)
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
-    assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
-    assertEquals(1, channel.brokerStateMap(2).markersQueue.size())
+    assertEquals(1, channel.queueForBroker(1).get.markersQueue.size)
+    assertEquals(1, channel.queueForBroker(2).get.markersQueue.size)
   }
 
   @Test
@@ -116,7 +118,7 @@ class TransactionMarkerChannelTest {
     EasyMock.replay(metadataCache)
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
-    assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
+    assertEquals(1, channel.queueForBroker(1).get.markersQueue.size)
     EasyMock.verify(metadataCache)
   }
 
@@ -151,7 +153,9 @@ class TransactionMarkerChannelTest {
     channel.addRequestForBroker(1, CoordinatorEpochAndMarkers(1, 0, Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList()))))
 
     channel.removeStateForPartition(1)
-    val markersQueue = channel.brokerStateMap(1).markersQueue
+
+
+    val markersQueue = channel.queueForBroker(1).get.markersQueue
     assertEquals(1, markersQueue.size())
     assertEquals(0, markersQueue.peek().metadataPartition)
 

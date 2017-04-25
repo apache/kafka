@@ -253,7 +253,7 @@ class TransactionCoordinatorTest {
 
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
-      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, 0, time.milliseconds())),
+      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, time.milliseconds(), time.milliseconds())),
       EasyMock.capture(capturedErrorsCallback)
     ))
 
@@ -649,7 +649,7 @@ class TransactionCoordinatorTest {
 
     assertEquals(InitPidResult(0, 1, Errors.NONE), result)
     assertEquals(10, metadata.txnTimeoutMs)
-    assertEquals(time.milliseconds(), metadata.entryTimestamp)
+    assertEquals(time.milliseconds(), metadata.lastUpdateTimestamp)
     assertEquals(1, metadata.producerEpoch)
     assertEquals(0, metadata.pid)
   }
@@ -727,7 +727,7 @@ class TransactionCoordinatorTest {
       finalState,
       prepareMetadata.topicPartitions,
       prepareMetadata.transactionStartTime,
-      prepareMetadata.entryTimestamp)
+      prepareMetadata.lastUpdateTimestamp)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionId),
       EasyMock.eq(completedMetadata),

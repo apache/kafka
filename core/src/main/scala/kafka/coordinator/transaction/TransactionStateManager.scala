@@ -163,7 +163,9 @@ class TransactionStateManager(brokerId: Int,
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         var currOffset = log.logStartOffset
-        while (currOffset < highWaterMark && !shuttingDown.get()) {
+        while (currOffset < highWaterMark
+                && loadingPartitions.contains(topicPartition.partition())
+                && !shuttingDown.get()) {
           buffer.clear()
           val fileRecords = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None, minOneMessage = true)
             .records.asInstanceOf[FileRecords]
@@ -187,6 +189,7 @@ class TransactionStateManager(brokerId: Int,
                   }
 
                 case unknownKey =>
+                  // TODO: Metrics
                   throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
               }
 
@@ -197,7 +200,7 @@ class TransactionStateManager(brokerId: Int,
           loadedTransactions.foreach {
             case (transactionalId, txnMetadata) =>
               val currentTxnMetadata = addTransaction(transactionalId, txnMetadata)
-              if (!txnMetadata.equals(currentTxnMetadata)) {
+              if (!txnMetadata.eq(currentTxnMetadata)) {
                 // treat this as a fatal failure as this should never happen
                 fatal(s"Attempt to load $transactionalId's metadata $txnMetadata failed " +
                   s"because there is already a different cached transaction metadata $currentTxnMetadata.")
@@ -263,6 +266,7 @@ class TransactionStateManager(brokerId: Int,
 
     inLock(stateLock) {
       ownedPartitions.remove(partition)
+      loadingPartitions.remove(partition)
     }
 
     def removeTransactions() {
@@ -400,9 +404,9 @@ class TransactionStateManager(brokerId: Int,
     }
 
     replicaManager.appendRecords(
-      txnMetadata.txnTimeoutMs.toLong,     // use the txn timeout value as the timeout for append
+      txnMetadata.txnTimeoutMs.toLong,
       TransactionLog.EnforcedRequiredAcks,
-      internalTopicsAllowed = true,        // allow appending to internal offset topic
+      internalTopicsAllowed = true,
       recordsPerPartition,
       updateCacheCallback)
   }

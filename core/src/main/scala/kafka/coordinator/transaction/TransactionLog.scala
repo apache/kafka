@@ -147,7 +147,7 @@ object TransactionLog {
     value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.producerEpoch)
     value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, txnMetadata.txnTimeoutMs)
     value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.state.byte)
-    value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.entryTimestamp)
+    value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.lastUpdateTimestamp)
     value.set(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD, txnMetadata.transactionStartTime)
 
     if (txnMetadata.state == Empty) {

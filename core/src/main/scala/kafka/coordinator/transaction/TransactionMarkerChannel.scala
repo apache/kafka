@@ -19,25 +19,50 @@ package kafka.coordinator.transaction
 import java.util
 import java.util.concurrent.LinkedBlockingQueue
 
-import kafka.server.MetadataCache
+import kafka.common.{BrokerNotAvailableException, RequestAndCompletionHandler}
+import kafka.server.{DelayedOperationPurgatory, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.TransactionResult
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.{concurrent, immutable, mutable}
 import collection.JavaConverters._
+import collection.JavaConversions._
 
 class TransactionMarkerChannel(interBrokerListenerName: ListenerName, metadataCache: MetadataCache) extends Logging {
 
   // we need the metadataPartition so we can clean up when Transaction Log partitions emigrate
   case class PendingTxnKey(metadataPartition: Int, producerId: Long)
 
-
-  private[transaction] val brokerStateMap: concurrent.Map[Int, DestinationBrokerAndQueuedMarkers] = concurrent.TrieMap.empty[Int, DestinationBrokerAndQueuedMarkers]
+  private val brokerStateMap: concurrent.Map[Int, DestinationBrokerAndQueuedMarkers] = concurrent.TrieMap.empty[Int, DestinationBrokerAndQueuedMarkers]
   private val pendingTxnMap: concurrent.Map[PendingTxnKey, TransactionMetadata] = concurrent.TrieMap.empty[PendingTxnKey, TransactionMetadata]
+
+  // visible for testing
+  private[transaction] def queueForBroker(brokerId: Int) = {
+    brokerStateMap.get(brokerId)
+  }
+
+  private[transaction]
+  def drainQueuedTransactionMarkers(txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): Iterable[RequestAndCompletionHandler] = {
+    brokerStateMap.flatMap {case (brokerId: Int, destAndMarkerQueue: DestinationBrokerAndQueuedMarkers) =>
+      val markersToSend: java.util.List[CoordinatorEpochAndMarkers] = new util.ArrayList[CoordinatorEpochAndMarkers] ()
+      destAndMarkerQueue.markersQueue.drainTo (markersToSend)
+      markersToSend.groupBy{ epochAndMarker => (epochAndMarker.metadataPartition, epochAndMarker.coordinatorEpoch) }
+        .map { case((metadataPartition: Int, coordinatorEpoch:Int), buffer: mutable.Buffer[CoordinatorEpochAndMarkers]) =>
+          val txnMarkerEntries = buffer.flatMap{_.txnMarkerEntries }.asJava
+          val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(
+            this,
+            txnMarkerPurgatory,
+            CoordinatorEpochAndMarkers(metadataPartition, coordinatorEpoch, txnMarkerEntries),
+            brokerId)
+          RequestAndCompletionHandler(destAndMarkerQueue.destBrokerNode, new WriteTxnMarkersRequest.Builder(coordinatorEpoch, txnMarkerEntries), requestCompletionHandler)
+        }
+    }
+  }
+
 
   def addOrUpdateBroker(broker: Node) {
     if (brokerStateMap.contains(broker.id())) {

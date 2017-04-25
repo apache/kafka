@@ -115,8 +115,7 @@ class TransactionCoordinator(brokerId: Int,
             txnTimeoutMs = transactionTimeoutMs,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            transactionStartTime = time.milliseconds(),
-            entryTimestamp = time.milliseconds())
+            lastUpdateTimestamp = time.milliseconds())
 
           val metadata = txnManager.addTransaction(transactionalId, newMetadata)
 
@@ -124,10 +123,11 @@ class TransactionCoordinator(brokerId: Int,
           // with the transactional id at the same time; in this case we will
           // treat it as the metadata has existed and update it accordingly
           metadata synchronized {
-            if (!metadata.equals(newMetadata))
-              metadata.producerEpoch = (metadata.producerEpoch + 1).toShort
+            if (!metadata.eq(newMetadata))
+              initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
+            else
+              appendMetadataToLog(transactionalId, metadata, responseCallback)
 
-            appendMetadataToLog(transactionalId,  metadata, responseCallback)
           }
         case Some(metadata) =>
           initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
@@ -180,8 +180,7 @@ class TransactionCoordinator(brokerId: Int,
         metadata.producerEpoch = (metadata.producerEpoch + 1).toShort
         metadata.txnTimeoutMs = transactionTimeoutMs
         metadata.topicPartitions.clear()
-        metadata.entryTimestamp = time.milliseconds()
-        metadata.transactionStartTime = time.milliseconds()
+        metadata.lastUpdateTimestamp = time.milliseconds()
         metadata.state = Empty
         appendMetadataToLog(transactionalId, metadata, responseCallback)
       }
@@ -236,7 +235,7 @@ class TransactionCoordinator(brokerId: Int,
                 metadata.txnTimeoutMs,
                 Ongoing,
                 metadata.topicPartitions ++ partitions,
-                now,
+                if (metadata.state == Empty) now else metadata.transactionStartTime,
                 now)
               metadata.prepareTransitionTo(Ongoing)
               (Errors.NONE, newMetadata)
@@ -338,7 +337,7 @@ class TransactionCoordinator(brokerId: Int,
                       completedState,
                       preparedCommitMetadata.topicPartitions,
                       preparedCommitMetadata.transactionStartTime,
-                      preparedCommitMetadata.entryTimestamp)
+                      time.milliseconds())
                     preparedCommitMetadata.prepareTransitionTo(completedState)
                     txnManager.appendTransactionToLog(transactionalId, committedMetadata, {
                       case Errors.NONE =>

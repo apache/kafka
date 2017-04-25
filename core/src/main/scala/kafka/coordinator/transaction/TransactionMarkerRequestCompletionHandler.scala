@@ -37,7 +37,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
     if (response.wasDisconnected) {
       trace(s"Cancelled request $response due to node ${response.destination} being disconnected")
       // re-enqueue the markers
-      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntry) {
+      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntries) {
         transactionMarkerChannel.addRequestToSend(
           epochAndMarkers.metadataPartition,
           txnMarker.producerId(),
@@ -51,7 +51,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntry) {
+      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntries) {
         val errors = writeTxnMarkerResponse.errors(txnMarker.producerId())
 
         if (errors == null)

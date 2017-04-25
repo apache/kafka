@@ -134,8 +134,8 @@ class TransactionMarkerChannelManagerTest {
 
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
-    requestGenerator()
-    assertTrue(channel.brokerStateMap(1).markersQueue.isEmpty)
+    assertTrue(requestGenerator().nonEmpty)
+    assertTrue(requestGenerator().isEmpty)
   }
 
   @Test
@@ -166,8 +166,7 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.replay(metadataCache)
 
     channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
-
-    assertEquals(1, channel.brokerStateMap(1).markersQueue.size())
+    assertEquals(1, requestGenerator().size)
   }
 
   @Test
