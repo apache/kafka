@@ -153,7 +153,7 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
@@ -173,7 +173,7 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...

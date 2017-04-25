@@ -185,7 +185,6 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Map<K, V> flushedEntries = new HashMap<>();
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<K, V>> restorableEntries = new LinkedList<>();
-    private final MockProcessorContext context;
     private final Map<String, StateStore> storeMap = new HashMap<>();
     private final MockTime time = new MockTime();
     private final MetricConfig config = new MetricConfig();
@@ -194,7 +193,10 @@ public class KeyValueStoreTestDriver<K, V> {
     private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
     private final ThreadCache cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
     private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
+    private final MockProcessorContext context;
+    private final StateSerdes<K, V> stateSerdes;
     private File stateDir = null;
+    private StateRestoreCallback restoreFunc = null;
 
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         final ByteArraySerializer rawSerializer = new ByteArraySerializer();
@@ -231,6 +233,7 @@ public class KeyValueStoreTestDriver<K, V> {
         };
         stateDir = TestUtils.tempDirectory();
         stateDir.mkdirs();
+        stateSerdes = serdes;
 
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
@@ -238,8 +241,6 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
-
-
 
         context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             @Override
@@ -255,7 +256,7 @@ public class KeyValueStoreTestDriver<K, V> {
             @Override
             public void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback func) {
                 storeMap.put(store.name(), store);
-                restoreEntries(func, serdes);
+                restoreFunc = func;
             }
 
             @Override
@@ -307,12 +308,17 @@ public class KeyValueStoreTestDriver<K, V> {
         }
     }
 
-    private void restoreEntries(final StateRestoreCallback func, final StateSerdes<K, V> serdes) {
-        for (final KeyValue<K, V> entry : restorableEntries) {
-            if (entry != null) {
-                final byte[] rawKey = serdes.rawKey(entry.key);
-                final byte[] rawValue = serdes.rawValue(entry.value);
-                func.restore(rawKey, rawValue);
+    /**
+     * Apply the defined restore entries and the restore callback to restore a KeyValueStore.
+     */
+    public void restoreEntries() {
+        if (restoreFunc != null) {
+            for (final KeyValue<K, V> entry : restorableEntries) {
+                if (entry != null) {
+                    final byte[] rawKey = stateSerdes.rawKey(entry.key);
+                    final byte[] rawValue = stateSerdes.rawValue(entry.value);
+                    restoreFunc.restore(rawKey, rawValue);
+                }
             }
         }
     }
@@ -366,20 +372,10 @@ public class KeyValueStoreTestDriver<K, V> {
     }
 
     /**
-     * Get the entries that are restored to a KeyValueStore when it is constructed with this driver's {@link #context()
-     * ProcessorContext}.
-     *
-     * @return the restore entries; never null but possibly a null iterator
-     */
-    public Iterable<KeyValue<K, V>> restoredEntries() {
-        return restorableEntries;
-    }
-
-    /**
      * Utility method that will count the number of {@link #addEntryToRestoreLog(Object, Object) restore entries} missing from the
      * supplied store.
      *
-     * @param store the store that is to have all of the {@link #restoredEntries() restore entries}
+     * @param store the store that is to have all of the restore entries
      * @return the number of restore entries missing from the store, or 0 if all restore entries were found
      * @see #addEntryToRestoreLog(Object, Object)
      */
@@ -433,6 +429,13 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public boolean flushedEntryRemoved(final K key) {
         return flushedRemovals.contains(key);
+    }
+
+    /**
+     * Return number of removed entry
+     */
+    public int numFlushedEntryStored() {
+        return flushedEntries.size();
     }
 
     /**

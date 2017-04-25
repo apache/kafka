@@ -39,6 +39,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         KeyValueStore<K, V> store = (KeyValueStore<K, V>) supplier.get();
         store.init(context, store);
+        driver.restoreEntries();
         return store;
     }
 }
