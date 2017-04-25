@@ -562,9 +562,9 @@ public class WorkerSinkTaskTest {
         EasyMock.expectLastCall().andReturn(workerCurrentOffsets);
 
         // We need to delay the result of trying to commit offsets to Kafka via the consumer.commitAsync
-        // method. We do this so that we can test that commit timeouts are handled correctly while a commit
-        // is still running. To fake this for tests we have the commit run in a separate thread and wait
-        // for a latch which we control back in the main thread.
+        // method. We do this so that we can test that we do not erroneously mark a commit as timed out
+        // while it is still running and under time. To fake this for tests we have the commit run in a
+        // separate thread and wait for a latch which we control back in the main thread.
         final ExecutorService executor = Executors.newSingleThreadExecutor();
         final CountDownLatch latch = new CountDownLatch(1);
 
@@ -610,6 +610,7 @@ public class WorkerSinkTaskTest {
         assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "currentOffsets"));
         assertEquals(workerStartingOffsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
 
+        time.sleep(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_DEFAULT);
         workerTask.iteration(); // iter 2 -- deliver 2 records
 
         sinkTaskContext.getValue().requestCommit();
