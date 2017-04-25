@@ -53,6 +53,7 @@ public abstract class AbstractKeyValueStoreTest {
     public void after() {
         store.close();
         context.close();
+        driver.clear();
     }
 
     @Test

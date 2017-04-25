@@ -18,25 +18,16 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.MetricConfig;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -45,7 +36,6 @@ import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.File;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -185,17 +175,9 @@ public class KeyValueStoreTestDriver<K, V> {
     private final Map<K, V> flushedEntries = new HashMap<>();
     private final Set<K> flushedRemovals = new HashSet<>();
     private final List<KeyValue<byte[], byte[]>> restorableEntries = new LinkedList<>();
-    private final MockTime time = new MockTime();
-    private final MetricConfig config = new MetricConfig();
-    private final Metrics metrics = new Metrics(config, Collections.singletonList((MetricsReporter) new JmxReporter()), time, true);
 
-    private static final long DEFAULT_CACHE_SIZE_BYTES = 1 * 1024 * 1024L;
-    private final ThreadCache cache = new ThreadCache("testCache", DEFAULT_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-    private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final MockProcessorContext context;
     private final StateSerdes<K, V> stateSerdes;
-    private File stateDir = null;
-    private StateRestoreCallback restoreFunc = null;
 
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         final ByteArraySerializer rawSerializer = new ByteArraySerializer();
@@ -230,7 +212,8 @@ public class KeyValueStoreTestDriver<K, V> {
                 throw new UnsupportedOperationException();
             }
         };
-        stateDir = TestUtils.tempDirectory();
+
+        File stateDir = TestUtils.tempDirectory();
         stateDir.mkdirs();
         stateSerdes = serdes;
 
@@ -241,10 +224,12 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
 
-        context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, cache) {
+        context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+            ThreadCache cache = new ThreadCache("testCache", 1 * 1024 * 1024L, metrics());
+
             @Override
-            public StreamsMetrics metrics() {
-                return streamsMetrics;
+            public ThreadCache getCache() {
+                return cache;
             }
 
             @Override
@@ -339,9 +324,9 @@ public class KeyValueStoreTestDriver<K, V> {
      */
     public int checkForRestoredEntries(final KeyValueStore<K, V> store) {
         int missing = 0;
-        for (final KeyValue<K, V> kv : restorableEntries) {
+        for (final KeyValue<byte[], byte[]> kv : restorableEntries) {
             if (kv != null) {
-                final V value = store.get(kv.key);
+                final V value = store.get(stateSerdes.keyFrom(kv.key));
                 if (!Objects.equals(value, kv.value)) {
                     ++missing;
                 }
