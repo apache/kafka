@@ -40,7 +40,7 @@ import java.util.Set;
 public abstract class AbstractTask {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
-    protected final TaskId id;
+    private final TaskId id;
     protected final String applicationId;
     protected final ProcessorTopology topology;
     protected final Consumer consumer;
@@ -48,6 +48,7 @@ public abstract class AbstractTask {
     protected final Set<TopicPartition> partitions;
     InternalProcessorContext processorContext;
     protected final ThreadCache cache;
+    final String logPrefix;
 
     /**
      * @throws ProcessorStateException if the state manager cannot be created
@@ -68,11 +69,13 @@ public abstract class AbstractTask {
         this.consumer = consumer;
         this.cache = cache;
 
+        logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
+
         // create the processor state manager
         try {
             stateMgr = new ProcessorStateManager(id, partitions, isStandby, stateDirectory, topology.storeToChangelogTopic(), changelogReader);
         } catch (final IOException e) {
-            throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
+            throw new ProcessorStateException(String.format("%s Error while creating the state manager", logPrefix), e);
         }
     }
 
@@ -105,6 +108,7 @@ public abstract class AbstractTask {
         return cache;
     }
 
+
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
     }
@@ -125,7 +129,11 @@ public abstract class AbstractTask {
      * @return A string representation of the StreamTask instance.
      */
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + id + "\n");
+        final StringBuilder sb = new StringBuilder();
+        sb.append(indent);
+        sb.append("StreamsTask taskId: ");
+        sb.append(id);
+        sb.append("\n");
 
         // print topology
         if (topology != null) {
@@ -148,7 +156,8 @@ public abstract class AbstractTask {
         return Collections.emptyMap();
     }
 
-    protected void initializeOffsetLimits() {
+    protected void updateOffsetLimits() {
+        log.trace("{} Updating store offset limits", logPrefix);
         for (final TopicPartition partition : partitions) {
             try {
                 final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
@@ -167,12 +176,15 @@ public abstract class AbstractTask {
      * Flush all state stores owned by this task
      */
     void flushState() {
+        log.trace("{} Flushing state store", logPrefix);
         stateMgr.flush();
     }
 
     void initializeStateStores() {
+        log.debug("{} Initializing state stores", logPrefix);
+
         // set initial offset limits
-        initializeOffsetLimits();
+        updateOffsetLimits();
 
         for (final StateStore store : topology.stateStores()) {
             log.trace("task [{}] Initializing store {}", id(), store.name());
@@ -185,7 +197,7 @@ public abstract class AbstractTask {
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
-        log.trace("task [{}] Closing", id);
+        log.trace("{} Closing state stores", logPrefix);
         stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
     }
 

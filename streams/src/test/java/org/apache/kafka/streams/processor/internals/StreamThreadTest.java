@@ -173,7 +173,7 @@ public class StreamThreadTest {
         }
 
         @Override
-        protected void initializeOffsetLimits() {}
+        protected void updateOffsetLimits() {}
 
         @Override
         public void close() {
@@ -1059,7 +1059,7 @@ public class StreamThreadTest {
 
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+        activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
 
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
@@ -1110,7 +1110,7 @@ public class StreamThreadTest {
 
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+        activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
 
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
@@ -1163,7 +1163,7 @@ public class StreamThreadTest {
 
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+        activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
 
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));
@@ -1214,7 +1214,7 @@ public class StreamThreadTest {
 
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
-        activeTasks.put(testStreamTask.id, testStreamTask.partitions);
+        activeTasks.put(testStreamTask.id(), testStreamTask.partitions);
 
 
         thread.setPartitionAssignor(new MockStreamsPartitionAssignor(activeTasks));

@@ -155,9 +155,14 @@ public class StreamThread extends Thread {
                     "\tcurrent suspended active tasks: {}\n" +
                     "\tcurrent suspended standby tasks: {}\n" +
                     "\tprevious active tasks: {}",
-                logPrefix, state, assignment,
-                partitionAssignor.activeTasks().keySet(), partitionAssignor.standbyTasks().keySet(),
-                suspendedTasks.keySet(), suspendedStandbyTasks.keySet(), prevActiveTasks);
+                logPrefix,
+                state,
+                assignment,
+                partitionAssignor.activeTasks().keySet(),
+                partitionAssignor.standbyTasks().keySet(),
+                suspendedTasks.keySet(),
+                suspendedStandbyTasks.keySet(),
+                prevActiveTasks);
 
             final long start = time.milliseconds();
             try {
@@ -180,8 +185,10 @@ public class StreamThread extends Thread {
                 log.info("{} partition assignment took {} ms.\n" +
                         "\tcurrent active tasks: {}\n" +
                         "\tcurrent standby tasks: {}",
-                    logPrefix, time.milliseconds() - start,
-                    activeTasks.keySet(), standbyTasks.keySet());
+                    logPrefix,
+                    time.milliseconds() - start,
+                    activeTasks.keySet(),
+                    standbyTasks.keySet());
             }
         }
 
@@ -190,7 +197,9 @@ public class StreamThread extends Thread {
             log.info("{} at state {}: partitions {} revoked at the beginning of consumer rebalance.\n" +
                     "\tcurrent assigned active tasks: {}\n" +
                     "\tcurrent assigned standby tasks: {}\n",
-                logPrefix, state, assignment,
+                logPrefix,
+                state,
+                assignment,
                 activeTasks.keySet(), standbyTasks.keySet());
 
             final long start = time.milliseconds();
@@ -211,8 +220,11 @@ public class StreamThread extends Thread {
                         "\tsuspended active tasks: {}\n" +
                         "\tsuspended standby tasks: {}\n" +
                         "\tprevious active tasks: {}\n",
-                    logPrefix, time.milliseconds() - start,
-                    suspendedTasks.keySet(), suspendedStandbyTasks.keySet(), prevActiveTasks);
+                    logPrefix,
+                    time.milliseconds() - start,
+                    suspendedTasks.keySet(),
+                    suspendedStandbyTasks.keySet(),
+                    prevActiveTasks);
             }
         }
     }
@@ -220,6 +232,8 @@ public class StreamThread extends Thread {
     abstract class AbstractTaskCreator {
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated, final long start) {
             long backoffTimeMs = 50L;
+            final Set<TaskId> retryingTasks = new HashSet<>();
+            long nextLoggingTime = System.currentTimeMillis() + 10000;
             while (true) {
                 final Iterator<Map.Entry<TaskId, Set<TopicPartition>>> it = tasksToBeCreated.entrySet().iterator();
                 while (it.hasNext()) {
@@ -231,9 +245,15 @@ public class StreamThread extends Thread {
                         createTask(taskId, partitions);
                         it.remove();
                         backoffTimeMs = 50L;
+                        if (retryingTasks.remove(taskId) && log.isWarnEnabled()) {
+                            log.info("{} Created task {}", logPrefix, taskId);
+                        }
                     } catch (final LockException e) {
                         // ignore and retry
-                        log.warn("Could not create task {}. Will retry.", taskId, e);
+                        if (!retryingTasks.contains(taskId)) {
+                            log.warn("{} Could not create task {}. Will retry. {}", logPrefix, taskId, e);
+                            retryingTasks.add(taskId);
+                        }
                     }
                 }
 
@@ -246,6 +266,11 @@ public class StreamThread extends Thread {
                     backoffTimeMs <<= 1;
                 } catch (final InterruptedException e) {
                     // ignore
+                }
+
+                if (System.currentTimeMillis() > nextLoggingTime) {
+                    nextLoggingTime += 10000;
+                    log.warn("{} Still retrying to create tasks: {}", logPrefix, retryingTasks);
                 }
             }
         }
@@ -419,15 +444,16 @@ public class StreamThread extends Thread {
         partitionGrouper = config.getConfiguredInstance(StreamsConfig.PARTITION_GROUPER_CLASS_CONFIG, PartitionGrouper.class);
         this.streamsMetadataState = streamsMetadataState;
         threadClientId = getName();
+        logPrefix = String.format("stream-thread [%s]", threadClientId);
+
         streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", threadClientId);
+            log.warn("{} Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", logPrefix, threadClientId);
         }
         cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
         exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals("exactly_once");
 
-        logPrefix = String.format("stream-thread [%s]", threadClientId);
 
         // set the consumer clients
         log.info("{} Creating consumer client", logPrefix);
@@ -491,7 +517,7 @@ public class StreamThread extends Thread {
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions
             // should be due to user application errors
-            log.error("{} Streams application error during processing: ", logPrefix, e);
+            log.error("{} Streams application error during processing: {}", logPrefix, e);
             throw e;
         } finally {
             shutdown();
@@ -558,9 +584,9 @@ public class StreamThread extends Thread {
 
         for (final TopicPartition partition : partitions) {
             if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                addToResetList(partition, seekToBeginning, "stream-thread [%s] setting topic %s to consume from %s offset", "earliest", loggedTopics);
+                addToResetList(partition, seekToBeginning, "{} Setting topic '{}' to consume from {} offset", "earliest", loggedTopics);
             } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                addToResetList(partition, seekToEnd, "stream-thread [%s] setting topic %s to consume from %s offset", "latest", loggedTopics);
+                addToResetList(partition, seekToEnd, "{} Setting topic '{}' to consume from {} offset", "latest", loggedTopics);
             } else {
                 if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
                     setState(State.PENDING_SHUTDOWN);
@@ -571,9 +597,9 @@ public class StreamThread extends Thread {
                 }
 
                 if (originalReset.equals("earliest")) {
-                    addToResetList(partition, seekToBeginning, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "earliest", loggedTopics);
+                    addToResetList(partition, seekToBeginning, "{} No custom setting defined for topic '{}' using original config '{}' for offset reset", "earliest", loggedTopics);
                 } else if (originalReset.equals("latest")) {
-                    addToResetList(partition, seekToEnd, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "latest", loggedTopics);
+                    addToResetList(partition, seekToEnd, "{} No custom setting defined for topic '{}' using original config '{}' for offset reset", "latest", loggedTopics);
                 }
             }
         }
@@ -589,7 +615,7 @@ public class StreamThread extends Thread {
     private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
         final String topic = partition.topic();
         if (loggedTopics.add(topic)) {
-            log.info(String.format(logMessage, getName(), topic, resetPolicy));
+            log.info(logMessage, logPrefix, topic, resetPolicy);
         }
         partitions.add(partition);
     }
@@ -664,7 +690,7 @@ public class StreamThread extends Thread {
                 streamsMetrics.punctuateTimeSensor.record(computeLatency(), timerStartedMs);
             }
         } catch (final KafkaException e) {
-            log.error("{} Failed to punctuate active task {}: ", logPrefix, task.id(), e);
+            log.error("{} Failed to punctuate active task {}: {}", logPrefix, task.id(), e);
             throw e;
         }
     }
@@ -738,10 +764,10 @@ public class StreamThread extends Thread {
             task.commit();
         } catch (final CommitFailedException e) {
             // commit failed. Just log it.
-            log.warn("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);
+            log.warn("{} Failed to commit {} {} state: {}", logPrefix, task.getClass().getSimpleName(), task.id(), e);
         } catch (final KafkaException e) {
             // commit failed due to an unexpected exception. Log it and rethrow the exception.
-            log.error("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);
+            log.error("{} Failed to commit {} {} state: {}", logPrefix, task.getClass().getSimpleName(), task.id(), e);
             throw e;
         }
 
@@ -798,7 +824,6 @@ public class StreamThread extends Thread {
      * Cleanup any states of the tasks that have been removed from this thread
      */
     protected void maybeClean(final long now) {
-
         if (now > lastCleanMs + cleanTimeMs) {
             stateDirectory.cleanRemovedTasks(cleanTimeMs);
             lastCleanMs = now;
@@ -900,7 +925,7 @@ public class StreamThread extends Thread {
     private synchronized void setState(final State newState) {
         final State oldState = state;
         if (!state.isValidTransition(newState)) {
-            log.warn("Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+            log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
         } else {
             log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
         }
@@ -927,9 +952,10 @@ public class StreamThread extends Thread {
      * @return A string representation of the StreamThread instance.
      */
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(indent + "StreamsThread appId: " + applicationId + "\n");
-        sb.append(indent).append("\tStreamsThread clientId: ").append(clientId).append("\n");
-        sb.append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
+        final StringBuilder sb = new StringBuilder()
+            .append(indent).append("StreamsThread appId: ").append(applicationId).append("\n")
+            .append(indent).append("\tStreamsThread clientId: ").append(clientId).append("\n")
+            .append(indent).append("\tStreamsThread threadId: ").append(getName()).append("\n");
 
         // iterate and print active tasks
         if (activeTasks != null) {
@@ -969,23 +995,23 @@ public class StreamThread extends Thread {
             try {
                 threadProducer.close();
             } catch (final Throwable e) {
-                log.error("{} Failed to close producer: ", logPrefix, e);
+                log.error("{} Failed to close producer: {}", logPrefix, e);
             }
         }
         try {
             consumer.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close consumer: ", logPrefix, e);
+            log.error("{} Failed to close consumer: {}", logPrefix, e);
         }
         try {
             restoreConsumer.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close restore consumer: ", logPrefix, e);
+            log.error("{} Failed to close restore consumer: {}", logPrefix, e);
         }
         try {
             partitionAssignor.close();
         } catch (final Throwable e) {
-            log.error("{} Failed to close KafkaStreamClient: ", logPrefix, e);
+            log.error("{} Failed to close KafkaStreamClient: {}", logPrefix, e);
         }
 
         removeStreamTasks();
@@ -1026,8 +1052,8 @@ public class StreamThread extends Thread {
      * soon the tasks will be assigned again
      */
     private void suspendTasksAndState()  {
-        log.debug("{} suspendTasksAndState: suspending all active tasks {} and standby tasks {}", logPrefix,
-            activeTasks.keySet(), standbyTasks.keySet());
+        log.debug("{} suspendTasksAndState: suspending all active tasks {} and standby tasks {}",
+            logPrefix, activeTasks.keySet(), standbyTasks.keySet());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
@@ -1054,7 +1080,7 @@ public class StreamThread extends Thread {
             // un-assign the change log partitions
             restoreConsumer.assign(Collections.<TopicPartition>emptyList());
         } catch (final RuntimeException e) {
-            log.error("{} Failed to un-assign change log partitions: ", logPrefix, e);
+            log.error("{} Failed to un-assign change log partitions: {}", logPrefix, e);
             return e;
         }
         return null;
@@ -1106,11 +1132,11 @@ public class StreamThread extends Thread {
             final StreamTask task = next.getValue();
             final Set<TopicPartition> assignedPartitionsForTask = newTaskAssignment.get(next.getKey());
             if (!task.partitions().equals(assignedPartitionsForTask)) {
-                log.debug("{} Closing suspended non-assigned active task {}", logPrefix, task.id);
+                log.debug("{} Closing suspended non-assigned active task {}", logPrefix, task.id());
                 try {
                     task.close();
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended task {}", logPrefix, next.getKey(), e);
+                    log.error("{} Failed to remove suspended task {}: {}", logPrefix, next.getKey(), e);
                 } finally {
                     suspendedTaskIterator.remove();
                 }
@@ -1125,11 +1151,11 @@ public class StreamThread extends Thread {
             final Map.Entry<TaskId, StandbyTask> suspendedTask = standByTaskIterator.next();
             if (!currentSuspendedTaskIds.contains(suspendedTask.getKey())) {
                 final StandbyTask task = suspendedTask.getValue();
-                log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, task.id);
+                log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, task.id());
                 try {
                     task.close();
                 } catch (final Exception e) {
-                    log.error("{} Failed to remove suspended standby task {}", logPrefix, task.id, e);
+                    log.error("{} Failed to remove suspended standby task {}: {}", logPrefix, task.id(), e);
                 } finally {
                     standByTaskIterator.remove();
                 }
@@ -1183,6 +1209,7 @@ public class StreamThread extends Thread {
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
 
         // collect newly assigned tasks and reopen re-assigned tasks
+        log.info("{} Resuming suspended re-assigned tasks", logPrefix);
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.activeTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
@@ -1191,7 +1218,6 @@ public class StreamThread extends Thread {
                 try {
                     final StreamTask task = findMatchingSuspendedTask(taskId, partitions);
                     if (task != null) {
-                        log.debug("{} resuming old task {}", logPrefix, taskId);
                         suspendedTasks.remove(taskId);
                         task.resume();
 
@@ -1204,7 +1230,7 @@ public class StreamThread extends Thread {
                         newTasks.put(taskId, partitions);
                     }
                 } catch (final StreamsException e) {
-                    log.error("{} Failed to create an active task {}: ", logPrefix, taskId, e);
+                    log.error("{} Failed to create an active task {}: {}", logPrefix, taskId, e);
                     throw e;
                 }
             } else {
@@ -1214,7 +1240,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedTasks(); eventually
-        log.debug("{} new active tasks to be created: {}", logPrefix, newTasks);
+        log.debug("{} New active tasks to be created: {}", logPrefix, newTasks);
 
         taskCreator.retryWithBackoff(newTasks, start);
     }
@@ -1248,6 +1274,7 @@ public class StreamThread extends Thread {
 
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
 
+        log.info("{} Resuming suspended standby tasks", logPrefix);
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
@@ -1255,7 +1282,6 @@ public class StreamThread extends Thread {
             final StandbyTask task = findMatchingSuspendedStandbyTask(taskId, partitions);
 
             if (task != null) {
-                log.debug("{} resuming old standby task {}", logPrefix, taskId);
                 suspendedStandbyTasks.remove(taskId);
                 task.resume();
             } else {
@@ -1267,7 +1293,7 @@ public class StreamThread extends Thread {
 
         // create all newly assigned standby tasks (guard against race condition with other thread via backoff and retry)
         // -> other thread will call removeSuspendedStandbyTasks(); eventually
-        log.debug("{} new standby tasks to be created: {}", logPrefix, newStandbyTasks);
+        log.debug("{} New standby tasks to be created: {}", logPrefix, newStandbyTasks);
 
         new StandbyTaskCreator(checkpointedOffsets).retryWithBackoff(newStandbyTasks, start);
 
@@ -1319,7 +1345,7 @@ public class StreamThread extends Thread {
             activeTasks.clear();
             activeTasksByPartition.clear();
         } catch (final Exception e) {
-            log.error("{} Failed to remove stream tasks: ", logPrefix, e);
+            log.error("{} Failed to remove stream tasks: {}", logPrefix, e);
         }
     }
 

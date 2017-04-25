@@ -407,7 +407,7 @@ public class StreamTaskTest {
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
             final String message = e.getMessage();
-            assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
     }

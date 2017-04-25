@@ -51,7 +51,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
 
-    private final String logPrefix;
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
     private final PunctuationQueue punctuationQueue;
@@ -72,7 +71,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
 
         public TaskMetrics(final StreamsMetrics metrics) {
-            final String name = id.toString();
+            final String name = id().toString();
             this.metrics = (StreamsMetricsImpl) metrics;
             taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG, "streams-task-id", name);
         }
@@ -125,8 +124,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
             partitionQueues.put(partition, queue);
         }
 
-        logPrefix = String.format("task [%s]", id);
-
         partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
 
         // initialize the consumed offset cache
@@ -138,7 +135,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
-        log.info("{} Initialize task", logPrefix);
+        log.debug("{} Initializing", logPrefix);
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         initTopology();
@@ -150,7 +147,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void resume() {
-        log.info("{} Resuming task", logPrefix);
+        log.debug("{} Resuming", logPrefix);
         initTopology();
     }
 
@@ -191,7 +188,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             }
         } catch (final KafkaException e) {
             throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
-                id.toString(),
+                id(),
                 processorContext.currentNode().name(),
                 record.topic(),
                 record.partition(),
@@ -220,7 +217,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         try {
             node.punctuate(timestamp);
         } catch (final KafkaException e) {
-            throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), e);
+            throw new StreamsException(String.format("%s Exception caught while punctuating processor '%s'", logPrefix,  node.name()), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
@@ -267,8 +264,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     private void commitOffsets() {
-        log.trace("{} Committing offsets", logPrefix);
         if (commitOffsetNeeded) {
+            log.trace("{} Committing offsets", logPrefix);
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
                 final TopicPartition partition = entry.getKey();
@@ -290,7 +287,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
-        log.info("{} Initializing processor nodes of the topology", logPrefix);
+        log.debug("{} Initializing processor nodes of the topology", logPrefix);
         for (final ProcessorNode node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
@@ -312,7 +309,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void suspend() {
-        log.info("{} Suspending task", logPrefix);
+        log.debug("{} Suspending", logPrefix);
         closeTopology();
         commit();
     }
@@ -354,7 +351,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @Override
     public void close() {
-        log.info("{} Closing task", logPrefix);
+        log.debug("{} Closing", logPrefix);
         try {
             suspend();
             closeStateManager(true);

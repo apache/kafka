@@ -37,7 +37,6 @@ public class StandbyTask extends AbstractTask {
 
     private static final Logger log = LoggerFactory.getLogger(StandbyTask.class);
     private final Map<TopicPartition, Long> checkpointedOffsets;
-    private final String logPrefix;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -65,13 +64,9 @@ public class StandbyTask extends AbstractTask {
         // initialize the topology with its own context
         processorContext = new StandbyContextImpl(id, applicationId, config, stateMgr, metrics);
 
-        logPrefix = String.format("Standby Task [%s]", id());
-
-        log.info("{} Initializing", logPrefix);
+        log.debug("{} Initializing", logPrefix);
         initializeStateStores();
-
         processorContext.initialized();
-
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
     }
 
@@ -82,8 +77,8 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void resume() {
-        log.info("{} " + "Resuming", logPrefix);
-        initializeOffsetLimits();
+        log.debug("{} " + "Resuming", logPrefix);
+        updateOffsetLimits();
     }
 
     /**
@@ -99,7 +94,7 @@ public class StandbyTask extends AbstractTask {
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
         // reinitialize offset limits
-        initializeOffsetLimits();
+        updateOffsetLimits();
     }
 
     /**
@@ -110,14 +105,14 @@ public class StandbyTask extends AbstractTask {
      */
     @Override
     public void suspend() {
-        log.info("{} Suspending", logPrefix);
+        log.debug("{} Suspending", logPrefix);
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
     }
 
     @Override
     public void close() {
-        log.info("{} Closing", logPrefix);
+        log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
             commit();
