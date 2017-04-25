@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -256,12 +257,12 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public Map<String, Object> appConfigs() {
-        return Collections.emptyMap();
+        return new StreamsConfig(props).originals();
     }
 
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-        return Collections.emptyMap();
+        return new StreamsConfig(props).originalsWithPrefix(prefix);
     }
 
     @Override
@@ -273,7 +274,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(final String storeName, final List<KeyValue<byte[], byte[]>> changeLog) {
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
         final StateRestoreCallback restoreCallback = restoreFuncs.get(storeName);
         for (final KeyValue<byte[], byte[]> entry : changeLog) {
             restoreCallback.restore(entry.key, entry.value);

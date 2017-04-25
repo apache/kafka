@@ -38,6 +38,9 @@ import static org.junit.Assert.fail;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
+    private final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
+    private final MockProcessorContext context = (MockProcessorContext) driver.context();
+
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
@@ -62,7 +65,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
         final KeyValueStore<K, V> store = (KeyValueStore<K, V>) factory.build().get();
         store.init(context, store);
-        driver.restoreEntries();
         return store;
     }
 
