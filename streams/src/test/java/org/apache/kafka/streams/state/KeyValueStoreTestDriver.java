@@ -241,7 +241,22 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
 
-        context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, cache);
+        context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, cache) {
+            @Override
+            public StreamsMetrics metrics() {
+                return streamsMetrics;
+            }
+
+            @Override
+            public Map<String, Object> appConfigs() {
+                return new StreamsConfig(props).originals();
+            }
+
+            @Override
+            public Map<String, Object> appConfigsWithPrefix(final String prefix) {
+                return new StreamsConfig(props).originalsWithPrefix(prefix);
+            }
+        };
     }
 
     private void recordFlushed(final K key, final V value) {
@@ -262,7 +277,7 @@ public class KeyValueStoreTestDriver<K, V> {
      *
      * @return the restore entries; never null but possibly a null iterator
      */
-    public Iterable<KeyValue<K, V>> restoredEntries() {
+    public Iterable<KeyValue<byte[], byte[]>> restoredEntries() {
         return restorableEntries;
     }
 
