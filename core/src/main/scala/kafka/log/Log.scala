@@ -1362,13 +1362,16 @@ object Log {
 
     def exception(dir: File): KafkaException = {
       new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
-        "'" + dir.getName + "' is not in the form of topic-partition\n" +
+        "'" + dir.getName + "' is not in the form of topic-partition or " +
+        "ongoing-deleting directory(topic-partition.uniqueId-delete)\n" +
         "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
         "directory")
     }
 
     val dirName = dir.getName
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
+      throw exception(dir)
+    if (dirName.endsWith(DeleteDirSuffix) && !dirName.matches("^(\\S+)-(\\S+)\\.(\\S+)" + DeleteDirSuffix))
       throw exception(dir)
 
     val name: String =
