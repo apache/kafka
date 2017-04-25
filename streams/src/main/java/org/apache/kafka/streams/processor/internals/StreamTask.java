@@ -122,7 +122,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
-        init();
+        log.info("{} Initialize task", logPrefix);
+        initializeStateStores();
+        stateMgr.registerGlobalStateStores(topology.globalStateStores());
+        initTopology();
         processorContext.initialized();
     }
 
@@ -212,6 +215,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         processorContext.setRecordContext(recordContext);
         processorContext.setCurrentNode(currNode);
     }
+
     /**
      * Possibly trigger registered punctuation functions if
      * current partition group timestamp has reached the defined stamp
@@ -287,14 +291,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
     public void suspend() {
         log.info("{} Suspending task", logPrefix);
         closeTopology();
-        log.debug("{} Committing offsets", logPrefix);
         commit();
     }
 
     /**
      * re-initialize the task
      */
-    @Override
     public void resume() {
         log.info("{} Resuming task", logPrefix);
         initTopology();
@@ -348,21 +350,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
 
         punctuationQueue.schedule(new PunctuationSchedule(processorContext.currentNode(), interval));
-    }
-
-    /**
-     * <pre>
-     * - initialize local stores
-     * - registers global stores
-     * - init topology
-     * </pre>
-     */
-    @Override
-    public void init() {
-        log.info("{} Initialize task", logPrefix);
-        initializeStateStores();
-        stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        initTopology();
     }
 
     private void initTopology() {
@@ -480,7 +467,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @Override
-    protected void flushState() {
+    void flushState() {
         log.trace("{} Flushing state and producer topology", logPrefix);
         super.flushState();
         recordCollector.flush();

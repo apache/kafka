@@ -947,7 +947,7 @@ public class StreamThread extends Thread {
                 try {
                     final StreamTask task = findMatchingSuspendedTask(taskId, partitions);
                     if (task != null) {
-                        log.debug("{} recycling old task {}", logPrefix, taskId);
+                        log.debug("{} resuming old task {}", logPrefix, taskId);
                         suspendedTasks.remove(taskId);
                         task.resume();
 
@@ -1011,9 +1011,8 @@ public class StreamThread extends Thread {
             final StandbyTask task = findMatchingSuspendedStandbyTask(taskId, partitions);
 
             if (task != null) {
-                log.debug("{} recycling old standby task {}", logPrefix, taskId);
+                log.debug("{} resuming old standby task {}", logPrefix, taskId);
                 suspendedStandbyTasks.remove(taskId);
-                task.init();
             } else {
                 newStandbyTasks.put(taskId, partitions);
             }

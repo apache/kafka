@@ -75,10 +75,6 @@ public class StandbyTask extends AbstractTask {
         return checkpointedOffsets;
     }
 
-    Collection<TopicPartition> changeLogPartitions() {
-        return checkpointedOffsets.keySet();
-    }
-
     /**
      * Updates a state store using records from one change log partition
      * @return a list of records not consumed
@@ -87,12 +83,6 @@ public class StandbyTask extends AbstractTask {
         log.debug("standby-task [{}] Updating standby replicas of its state store for partition [{}]", id(), partition);
         return stateMgr.updateStandbyStates(partition, records);
     }
-
-    @Override
-    public void init() {}
-
-    @Override
-    public void resume() {}
 
     @Override
     public void commit() {
