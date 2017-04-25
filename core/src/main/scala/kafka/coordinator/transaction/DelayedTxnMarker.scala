@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.Errors
   */
 private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
                                            completionCallback: Errors => Unit)
-  extends DelayedOperation(Long.MaxValue) { // TODO: if we set a timeout value, what should happen when it gets expired?
+  extends DelayedOperation(Long.MaxValue) {
 
   // overridden since tryComplete already synchronizes on the existing txn metadata. This makes it safe to
   // call purgatory operations while holding the group lock.
@@ -42,6 +42,7 @@ private[transaction] class DelayedTxnMarker(txnMetadata: TransactionMetadata,
     // this should never happen
     throw new IllegalStateException(s"Delayed write txn marker operation for metadata $txnMetadata has timed out, this should never happen.")
   }
+
   override def onComplete(): Unit = completionCallback(Errors.NONE)
 
 }
