@@ -588,10 +588,9 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
-    val str: Option[String] = zkUtils.readData(entityConfigPath, true)
+    val str: Option[String] = zkUtils.readDataMaybeNull(entityConfigPath)._1
     val props = new Properties()
-    str match {
-      case Some(data) =>
+    str.foreach { data =>
       Json.parseFull(data) match {
         case None => // there are no config overrides
         case Some(mapAnon: Map[_, _]) =>
@@ -610,7 +609,6 @@ object AdminUtils extends Logging with AdminUtilities {
 
         case _ => throw new IllegalArgumentException(s"Unexpected value in config:(${data}), entity_config_path: ${entityConfigPath}")
       }
-      case None =>
     }
     props
   }

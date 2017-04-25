@@ -653,17 +653,6 @@ class ZkUtils(val zkClient: ZkClient,
     (dataStr, stat)
   }
 
-  def readData(path: String, returnNoneIfPathNotExists: Boolean): Option[String] = {
-    val data: String =
-      try {
-        zkClient.readData(path, returnNoneIfPathNotExists)
-      } catch {
-        case x: ZkNoNodeException =>
-          throw x
-      }
-    Option(data)
-  }
-
   def readDataMaybeNull(path: String): (Option[String], Stat) = {
     val stat = new Stat()
     val dataAndStat = try {
