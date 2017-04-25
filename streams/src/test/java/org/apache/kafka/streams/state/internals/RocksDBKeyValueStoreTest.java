@@ -38,9 +38,6 @@ import static org.junit.Assert.fail;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
-    private final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-    private final MockProcessorContext context = (MockProcessorContext) driver.context();
-
     @SuppressWarnings("unchecked")
     @Override
     protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
@@ -78,22 +75,13 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
-    @After
-    public void after() {
-        store.close();
-        context.close();
-    }
-
     @Test
     public void shouldUseCustomRocksDbConfigSetter() throws Exception {
-        driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
         assertTrue(TheRocksDbConfigSetter.called);
     }
 
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
-        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -105,7 +93,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
-        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -117,7 +104,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() throws Exception {
-        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");

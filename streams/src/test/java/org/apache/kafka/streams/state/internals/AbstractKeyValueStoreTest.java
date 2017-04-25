@@ -180,6 +180,7 @@ public abstract class AbstractKeyValueStoreTest {
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 

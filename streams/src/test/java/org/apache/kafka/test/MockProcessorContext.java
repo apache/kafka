@@ -257,12 +257,12 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
 
     @Override
     public Map<String, Object> appConfigs() {
-        return new StreamsConfig(props).originals();
+        return Collections.emptyMap();
     }
 
     @Override
     public Map<String, Object> appConfigsWithPrefix(final String prefix) {
-        return new StreamsConfig(props).originalsWithPrefix(prefix);
+        return Collections.emptyMap();
     }
 
     @Override
@@ -299,5 +299,4 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     public void close() {
         metrics.close();
     }
-
 }

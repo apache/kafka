@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -223,9 +224,10 @@ public class KeyValueStoreTestDriver<K, V> {
         props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
         props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, serdes.keySerde().getClass());
         props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, serdes.valueSerde().getClass());
+        props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBKeyValueStoreTest.TheRocksDbConfigSetter.class);
 
         context = new MockProcessorContext(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
-            ThreadCache cache = new ThreadCache("testCache", 1 * 1024 * 1024L, metrics());
+            ThreadCache cache = new ThreadCache("testCache", 1024 * 1024L, metrics());
 
             @Override
             public ThreadCache getCache() {
@@ -327,7 +329,7 @@ public class KeyValueStoreTestDriver<K, V> {
         for (final KeyValue<byte[], byte[]> kv : restorableEntries) {
             if (kv != null) {
                 final V value = store.get(stateSerdes.keyFrom(kv.key));
-                if (!Objects.equals(value, kv.value)) {
+                if (!Objects.equals(value, stateSerdes.valueFrom(kv.value))) {
                     ++missing;
                 }
             }
@@ -395,9 +397,5 @@ public class KeyValueStoreTestDriver<K, V> {
         restorableEntries.clear();
         flushedEntries.clear();
         flushedRemovals.clear();
-    }
-
-    public void setConfig(final String configName, final Object configValue) {
-        props.put(configName, configValue);
     }
 }
