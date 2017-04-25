@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.concurrent._
 
-import com.yammer.metrics.core.Gauge
+import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.api.{ControlledShutdownRequest, RequestOrResponse}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaId
@@ -162,7 +162,7 @@ object RequestChannel extends Logging {
       val metricNames = fetchMetricNames :+ ApiKeys.forId(requestId).name
       metricNames.foreach { metricName =>
         val m = RequestMetrics.metricsMap(metricName)
-        m.requestRate.mark()
+        m.requestRate(header.apiVersion()).mark()
         m.requestQueueTimeHist.update(requestQueueTime)
         m.localTimeHist.update(apiLocalTime)
         m.remoteTimeHist.update(apiRemoteTime)
@@ -299,7 +299,8 @@ object RequestMetrics {
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val tags = Map("request" -> name)
-  val requestRate = newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags)
+  val requestRateInternal = new scala.collection.mutable.HashMap[Short, Meter]
+  // val requestRate = newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags)
   // time a request spent in a request queue
   val requestQueueTimeHist = newHistogram("RequestQueueTimeMs", biased = true, tags)
   // time a request takes to be processed at the local broker
@@ -313,4 +314,8 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   // time to send the response to the requester
   val responseSendTimeHist = newHistogram("ResponseSendTimeMs", biased = true, tags)
   val totalTimeHist = newHistogram("TotalTimeMs", biased = true, tags)
+
+  def requestRate(version: Short = 0): Meter = {
+    requestRateInternal.getOrElse(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+  }
 }
