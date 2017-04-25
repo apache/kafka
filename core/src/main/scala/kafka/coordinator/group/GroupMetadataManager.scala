@@ -430,7 +430,8 @@ class GroupMetadataManager(brokerId: Int,
 
       case Some(log) =>
         var currOffset = log.logStartOffset
-        val buffer = ByteBuffer.allocate(config.loadBufferSize)
+        lazy val buffer = ByteBuffer.allocate(config.loadBufferSize)
+
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, OffsetAndMetadata]()
         val removedOffsets = mutable.Set[GroupTopicPartition]()
@@ -438,17 +439,13 @@ class GroupMetadataManager(brokerId: Int,
         val removedGroups = mutable.Set[String]()
 
         while (currOffset < highWaterMark && !shuttingDown.get()) {
-          buffer.clear()
-          // We only add the READ_UNCOMMITTED parameter here because EasyMock in the GroupMetadataManagerTest
-          // cannot seem to deal with the default value for isolationLevel in log.read() -- it throws an
-          // IllegalStateException.
-
           val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true,
             isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
+              buffer.clear()
               val bufferRead = fileRecords.readInto(buffer, 0)
               MemoryRecords.readableRecords(bufferRead)
           }

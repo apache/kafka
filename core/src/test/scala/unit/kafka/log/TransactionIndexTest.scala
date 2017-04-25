@@ -74,7 +74,6 @@ class TransactionIndexTest extends JUnitSuite {
     result = index.collectAbortedTxns(20, 41)
     assertEquals(abortedTransactions.slice(2, 4), result.abortedTransactions)
     assertFalse(result.isComplete)
-
   }
 
   @Test

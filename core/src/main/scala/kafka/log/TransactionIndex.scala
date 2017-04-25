@@ -19,6 +19,7 @@ package kafka.log
 import java.io.{File, RandomAccessFile}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
@@ -58,7 +59,7 @@ private[log] class TransactionIndex(var file: File) extends Logging {
   }
 
   private def openChannel(): FileChannel = {
-    val channel = new RandomAccessFile(file, "rw").getChannel
+    val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE)
     maybeChannel = Some(channel)
     channel
   }

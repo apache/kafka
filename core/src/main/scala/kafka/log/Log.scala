@@ -619,16 +619,14 @@ class Log(@volatile var dir: File,
   }
 
   private def updateFirstUnstableOffset(): Unit = {
-    this.firstUnstableOffset = pidMap.firstUnstableOffset match {
-      case None => None
-      case Some(offset) =>
-        if (firstUnstableOffset.exists(_.messageOffset == offset)) {
-          firstUnstableOffset
-        } else {
-          val segment = segments.floorEntry(offset).getValue
-          val position  = segment.translateOffset(offset)
-          Some(LogOffsetMetadata(offset, segment.baseOffset, position.position))
-        }
+    this.firstUnstableOffset = pidMap.firstUnstableOffset.flatMap { offset =>
+      if (firstUnstableOffset.exists(_.messageOffset == offset)) {
+        firstUnstableOffset
+      } else {
+        val segment = segments.floorEntry(offset).getValue
+        val position  = segment.translateOffset(offset)
+        Some(LogOffsetMetadata(offset, segment.baseOffset, position.position))
+      }
     }
   }
 
@@ -847,21 +845,7 @@ class Log(@volatile var dir: File,
       } else {
         return isolationLevel match {
           case IsolationLevel.READ_UNCOMMITTED => fetchInfo
-          case IsolationLevel.READ_COMMITTED =>
-            val fetchSize = fetchInfo.records.sizeInBytes
-            val startOffsetPosition = OffsetPosition(startOffset, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
-            val upperBoundOffset = segment.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
-              val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
-              if (nextSegmentEntry != null)
-                nextSegmentEntry.getValue.baseOffset
-              else
-                logEndOffset
-            }
-            val abortedTransactions = collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry)
-            FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
-              records = fetchInfo.records,
-              firstEntryIncomplete = fetchInfo.firstEntryIncomplete,
-              abortedTransactions = Some(abortedTransactions))
+          case IsolationLevel.READ_COMMITTED => withAbortedTransactions(startOffset, segmentEntry, fetchInfo)
         }
       }
     }
@@ -870,6 +854,24 @@ class Log(@volatile var dir: File,
     // this can happen when all messages with offset larger than start offsets have been deleted.
     // In this case, we will return the empty set with log end offset metadata
     FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
+  }
+
+  private def withAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
+                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
+    val fetchSize = fetchInfo.records.sizeInBytes
+    val startOffsetPosition = OffsetPosition(startOffset, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
+    val upperBoundOffset = segmentEntry.getValue.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
+      val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
+      if (nextSegmentEntry != null)
+        nextSegmentEntry.getValue.baseOffset
+      else
+        logEndOffset
+    }
+    val abortedTransactions = collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry)
+    FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
+      records = fetchInfo.records,
+      firstEntryIncomplete = fetchInfo.firstEntryIncomplete,
+      abortedTransactions = Some(abortedTransactions))
   }
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
