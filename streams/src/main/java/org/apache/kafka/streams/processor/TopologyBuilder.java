@@ -144,23 +144,25 @@ public class TopologyBuilder {
     }
 
     private static abstract class NodeFactory {
-        public final String name;
+        final String name;
+        final String[] parents;
 
-        NodeFactory(String name) {
+        NodeFactory(final String name, final String[] parents) {
             this.name = name;
+            this.parents = parents;
         }
 
         public abstract ProcessorNode build();
+
+        abstract TopologyDescription.Node describe();
     }
 
     private static class ProcessorNodeFactory extends NodeFactory {
-        private final String[] parents;
         private final ProcessorSupplier<?, ?> supplier;
         private final Set<String> stateStoreNames = new HashSet<>();
 
         ProcessorNodeFactory(String name, String[] parents, ProcessorSupplier<?, ?> supplier) {
-            super(name);
-            this.parents = parents.clone();
+            super(name, parents.clone());
             this.supplier = supplier;
         }
 
@@ -171,6 +173,11 @@ public class TopologyBuilder {
         @Override
         public ProcessorNode build() {
             return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
+        }
+
+        @Override
+        TopologyDescription.Processor describe() {
+            return new TopologyDescription.Processor(name, new HashSet<>(stateStoreNames));
         }
     }
 
@@ -187,7 +194,7 @@ public class TopologyBuilder {
                                   final TimestampExtractor timestampExtractor,
                                   final Deserializer<?> keyDeserializer,
                                   final Deserializer<?> valDeserializer) {
-            super(name);
+            super(name, new String[0]);
             this.topics = topics != null ? Arrays.asList(topics) : new ArrayList<String>();
             this.pattern = pattern;
             this.keyDeserializer = keyDeserializer;
@@ -236,18 +243,30 @@ public class TopologyBuilder {
         private boolean isMatch(String topic) {
             return this.pattern.matcher(topic).matches();
         }
+
+        @Override
+        TopologyDescription.Source describe() {
+            String sourceTopics;
+
+            if (pattern == null) {
+                sourceTopics = topics.toString();
+                sourceTopics = sourceTopics.substring(1, sourceTopics.length() - 1); // trim first and last, ie. []
+            } else {
+                sourceTopics = pattern.toString();
+            }
+
+            return new TopologyDescription.Source(name, sourceTopics);
+        }
     }
 
     private class SinkNodeFactory<K, V> extends NodeFactory {
-        private final String[] parents;
         private final String topic;
         private final Serializer<K> keySerializer;
         private final Serializer<V> valSerializer;
         private final StreamPartitioner<? super K, ? super V> partitioner;
 
         private SinkNodeFactory(String name, String[] parents, String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, StreamPartitioner<? super K, ? super V> partitioner) {
-            super(name);
-            this.parents = parents.clone();
+            super(name, parents.clone());
             this.topic = topic;
             this.keySerializer = keySerializer;
             this.valSerializer = valSerializer;
@@ -262,6 +281,11 @@ public class TopologyBuilder {
             } else {
                 return new SinkNode<>(name, topic, keySerializer, valSerializer, partitioner);
             }
+        }
+
+        @Override
+        TopologyDescription.Sink describe() {
+            return new TopologyDescription.Sink(name, topic);
         }
     }
 
@@ -1602,95 +1626,25 @@ public class TopologyBuilder {
                                      final Integer subtopologyId,
                                      final Set<String> nodeNames) {
 
-        final HashMap<String, TopologyDescription.Node> nodesByName
-            = addAllNodesWithoutPredecessorsOrSuccessors(nodeNames);
-
-        connectAllNodesToTheirPredecessorsAndSuccessors(nodesByName);
-
-        description.subtopologies.add(new TopologyDescription.Subtopology(
-            subtopologyId,
-            new HashSet<>(nodesByName.values())));
-    }
-
-    private HashMap<String, TopologyDescription.Node> addAllNodesWithoutPredecessorsOrSuccessors(final Set<String> nodeNames) {
         final HashMap<String, TopologyDescription.Node> nodesByName = new HashMap<>();
 
+        // add all nodes
         for (final String nodeName : nodeNames) {
-            final NodeFactory nodeFactory = nodeFactories.get(nodeName);
-            final TopologyDescription.Node node;
-
-            if (nodeFactory instanceof SourceNodeFactory) {
-                node = new TopologyDescription.Source(
-                    nodeName,
-                    getSourceTopicListOrPatternAsString(nodeName));
-
-            } else if (nodeFactory instanceof ProcessorNodeFactory) {
-                node = new TopologyDescription.Processor(
-                    nodeName,
-                    getStoresOfNode(nodeName));
-
-            } else if (nodeFactory instanceof SinkNodeFactory) {
-                node = new TopologyDescription.Sink(
-                    nodeName,
-                    nodeToSinkTopic.get(nodeName));
-
-            } else {
-                throw new TopologyBuilderException("Unknown node type: " + nodeFactory.getClass().getName());
-            }
-
-            nodesByName.put(nodeName, node);
+            nodesByName.put(nodeName, nodeFactories.get(nodeName).describe());
         }
 
-        return nodesByName;
-    }
-
-    private String getSourceTopicListOrPatternAsString(final String sourceName) {
-        final Pattern sourcePattern = nodeToSourcePatterns.get(sourceName);
-
-        if (sourcePattern != null) {
-            return sourcePattern.pattern();
-        } else {
-            String sourceTopics = nodeToSourceTopics.get(sourceName).toString();
-            sourceTopics = sourceTopics.substring(1, sourceTopics.length() - 1); // trim first and last, ie. []
-
-            return sourceTopics;
-        }
-    }
-
-    private Set<String> getStoresOfNode(final String processorNode) {
-        final Set<String> stores = new HashSet<>();
-
-        for (final Map.Entry<String, StateStoreFactory> store : stateFactories.entrySet()) {
-            if (store.getValue().users.contains(processorNode)) {
-                stores.add(store.getKey());
-            }
-        }
-
-        return stores;
-    }
-
-    private void connectAllNodesToTheirPredecessorsAndSuccessors(final HashMap<String, TopologyDescription.Node> nodesByName) {
+        // connect each node to its predecessors and successors
         for (final TopologyDescription.Node node : nodesByName.values()) {
-            final NodeFactory nodeFactory = nodeFactories.get(node.name());
-
-            final String[] predecessorNames;
-            if (nodeFactory instanceof ProcessorNodeFactory) {
-                predecessorNames = ((ProcessorNodeFactory) nodeFactory).parents;
-
-            } else if (nodeFactory instanceof SinkNodeFactory) {
-                predecessorNames = ((SinkNodeFactory) nodeFactory).parents;
-
-            } else {
-                assert nodeFactory instanceof SourceNodeFactory;
-                continue;
-            }
-
-            for (final String predecessorName : predecessorNames) {
+            for (final String predecessorName : nodeFactories.get(node.name()).parents) {
                 final TopologyDescription.Node predecessor = nodesByName.get(predecessorName);
                 node.predecessors().add(predecessor);
                 predecessor.successors().add(node);
             }
         }
+
+        description.subtopologies().add(new TopologyDescription.Subtopology(
+            subtopologyId,
+            new HashSet<>(nodesByName.values())));
     }
 
     private void describeGlobalStores(final TopologyDescription description) {
@@ -1706,7 +1660,7 @@ public class TopologyBuilder {
                     it.remove(); // remove sourceNode from group
                     final String processorNode = nodes.iterator().next(); // get remaining processorNode
 
-                    description.globalStores.add(new TopologyDescription.GlobalStore(
+                    description.globalStores().add(new TopologyDescription.GlobalStore(
                         node,
                         processorNode,
                         ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
