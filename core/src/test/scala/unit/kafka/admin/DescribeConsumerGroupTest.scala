@@ -174,12 +174,35 @@ class DescribeConsumerGroupTest extends KafkaServerTestHarness {
 
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
     val consumerGroupService = new ZkConsumerGroupService(opts)
-
     val consumer = EasyMock.createMock(classOf[SimpleConsumer])
-
     val topicAndPartition = TopicAndPartition(topic, 0)
+
     val listOffsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
     val partitionResponse = PartitionOffsetsResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, Seq.empty[Long])
+    EasyMock.expect(consumer.getOffsetsBefore(listOffsetRequest))
+      .andReturn(OffsetResponse(0, Map(topicAndPartition -> partitionResponse)))
+
+    EasyMock.replay(consumer)
+
+    val (maybeErrMsg, result) = consumerGroupService.fetchLogEndOffset(new TopicPartition(topic, 0), consumer)
+    assertTrue(maybeErrMsg.isDefined)
+    assertEquals(LogEndOffsetResult.Ignore, result)
+  }
+
+  @Test
+  def testFetchingLogEndOffsetWithNoReturnedOffsets() {
+    // if there are no errors, we should get a valid offset, but this case ensures that the command
+    // does not just blow up if we don't
+
+    props.setProperty("zookeeper.connect", zkConnect)
+
+    val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect, "--describe", "--group", group))
+    val consumerGroupService = new ZkConsumerGroupService(opts)
+    val consumer = EasyMock.createMock(classOf[SimpleConsumer])
+    val topicAndPartition = TopicAndPartition(topic, 0)
+
+    val listOffsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+    val partitionResponse = PartitionOffsetsResponse(Errors.NONE, Seq.empty[Long])
     EasyMock.expect(consumer.getOffsetsBefore(listOffsetRequest))
       .andReturn(OffsetResponse(0, Map(topicAndPartition -> partitionResponse)))
 
