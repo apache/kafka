@@ -516,7 +516,8 @@ public class Sender implements Runnable {
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
-        if (transactionState != null && batch.producerId() == transactionState.pidAndEpoch().producerId) {
+        if (transactionState != null && !transactionState.isTransactional()
+                && batch.producerId() == transactionState.pidAndEpoch().producerId) {
             // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.

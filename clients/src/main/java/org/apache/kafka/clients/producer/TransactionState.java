@@ -83,7 +83,8 @@ public class TransactionState {
 
     private Node transactionCoordinator;
     private Node consumerGroupCoordinator;
-    private State currentState = State.UNINITIALIZED;
+    private volatile State currentState = State.UNINITIALIZED;
+    private Exception lastError = null;
 
     public enum State {
         UNINITIALIZED,
@@ -237,192 +238,6 @@ public class TransactionState {
         }
     }
 
-    public boolean hasPendingTransactionalRequests() {
-        return !(pendingTransactionalRequests.isEmpty()
-                && newPartitionsToBeAddedToTransaction.isEmpty());
-    }
-
-    public TransactionalRequest nextTransactionalRequest() {
-        if (!hasPendingTransactionalRequests())
-            return null;
-
-        if (!newPartitionsToBeAddedToTransaction.isEmpty())
-            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
-
-        return pendingTransactionalRequests.poll();
-    }
-
-    public boolean isInErrorState() {
-        return currentState == ERROR;
-    }
-
-
-    private boolean transitionTo(State target) {
-        if (currentState.isTransitionValid(currentState, target)) {
-            currentState = target;
-            return true;
-        } else {
-            log.error("Invalid transition attempted from state {} to state {}.", currentState.name(), target.name());
-        }
-        return false;
-    }
-
-    private void ensureTransactional() {
-        if (!isTransactional())
-            throw new IllegalStateException("Transactional method invoked on a non-transactional producer.");
-    }
-
-    public boolean isTransactional() {
-        return transactionalId != null && !transactionalId.isEmpty();
-    }
-
-    public String transactionalId() {
-        return transactionalId;
-    }
-
-    public boolean hasPid() {
-        return pidAndEpoch.isValid();
-    }
-
-    public boolean isFenced() {
-        return currentState == FENCED;
-    }
-
-    public void beginTransaction() {
-        ensureTransactional();
-        if (!transitionTo(IN_TRANSACTION))
-             throw new IllegalStateException("Producer isn't ready to begin a transaction.");
-    }
-
-    public boolean isCompletingTransaction() {
-        return currentState == COMMITTING_TRANSACTION || currentState == ABORTING_TRANSACTION;
-    }
-
-    public synchronized FutureTransactionalResult beginCommittingTransaction() {
-        ensureTransactional();
-        if (!transitionTo(COMMITTING_TRANSACTION))
-            throw new IllegalStateException("Cannot commit transaction, either because a transaction is already " +
-                    "being completed at the moment, or because there has been an error with a previous request.");
-        return beginCompletingTransaction(true);
-    }
-
-    public synchronized FutureTransactionalResult beginAbortingTransaction() {
-        ensureTransactional();
-        if (!transitionTo(ABORTING_TRANSACTION))
-            throw new IllegalStateException("Cannot abort transaction, either because a transaction is already " +
-                    "being completed at the moment, or because there has been an error with a previous request.");
-        return beginCompletingTransaction(false);
-    }
-
-    private FutureTransactionalResult beginCompletingTransaction(boolean isCommit) {
-        TransactionalRequestResult result = new TransactionalRequestResult();
-        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
-
-        if (!newPartitionsToBeAddedToTransaction.isEmpty()) {
-            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
-        }
-        pendingTransactionalRequests.add(endTxnRequest(isCommit, false, result));
-        return resultFuture;
-    }
-
-    public synchronized FutureTransactionalResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                                           String consumerGroupId) {
-        ensureTransactional();
-        if (!isInTransaction())
-            throw new IllegalStateException("Cannot send offsets to transaction either because the producer is not in an " +
-                    "active transaction or because there has been an error with one or more previous requests.");
-        TransactionalRequestResult result = new TransactionalRequestResult();
-        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
-        pendingTransactionalRequests.add(addOffsetsToTxnRequest(offsets, consumerGroupId, false, result));
-        return resultFuture;
-    }
-
-    public boolean isInTransaction() {
-        return currentState == IN_TRANSACTION || isCompletingTransaction();
-    }
-
-    public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (partitionsInTransaction.contains(topicPartition))
-            return;
-        newPartitionsToBeAddedToTransaction.add(topicPartition);
-    }
-
-    public void needsRetry(TransactionalRequest request) {
-        request.setRetry();
-        pendingTransactionalRequests.add(request);
-    }
-
-    public void reenqueue(TransactionalRequest request) {
-        pendingTransactionalRequests.add(request);
-    }
-
-    public Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
-        switch (type) {
-            case GROUP:
-                return consumerGroupCoordinator;
-            case TRANSACTION:
-                return transactionCoordinator;
-            default:
-                throw new IllegalStateException("Received an invalid coordinator type: " + type);
-        }
-    }
-
-    public void needsCoordinator(TransactionalRequest request) {
-        needsCoordinator(request.coordinatorType, request.coordinatorKey);
-    }
-
-    private void needsCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
-        switch (type) {
-            case GROUP:
-                consumerGroupCoordinator = null;
-                break;
-            case TRANSACTION:
-                transactionCoordinator = null;
-                break;
-            default:
-                throw new IllegalStateException("Got an invalid coordinator type: " + type);
-        }
-        pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, false));
-    }
-
-    public boolean maybeSetError(Exception exception) {
-        if (isTransactional() && (isInTransaction() || isCompletingTransaction())) {
-            if (exception instanceof ProducerFencedException)
-                transitionTo(FENCED);
-            else
-                transitionTo(ERROR);
-            return true;
-        }
-        return false;
-    }
-
-    public void setInFlightRequestCorrelationId(int correlationId) {
-        inFlightRequestCorrelationId = correlationId;
-    }
-
-    public void resetInFlightRequestCorrelationId() {
-        inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
-    }
-
-    public boolean hasInflightTransactionalRequest() {
-        return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
-    }
-
-    // visible for testing
-    public boolean transactionContainsPartition(TopicPartition topicPartition) {
-        return isInTransaction() && partitionsInTransaction.contains(topicPartition);
-    }
-
-    // visible for testing
-    public boolean hasPendingOffsetCommits() {
-        return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
-    }
-
-    // visible for testing
-    public boolean isReadyForTransaction() {
-        return isTransactional() && currentState == READY;
-    }
-
     public synchronized FutureTransactionalResult initializeTransactions() {
         ensureTransactional();
         if (!transitionTo(INITIALIZING))
@@ -441,6 +256,76 @@ public class TransactionState {
             result.done();
 
         return resultFuture;
+    }
+
+
+    public synchronized void beginTransaction() {
+        ensureTransactional();
+        if (!transitionTo(IN_TRANSACTION))
+             throw new IllegalStateException("Producer isn't ready to begin a transaction.");
+    }
+
+    public synchronized FutureTransactionalResult beginCommittingTransaction() {
+        ensureTransactional();
+        if (!transitionTo(COMMITTING_TRANSACTION)) {
+            String msg = "Cannot commit transaction, either because a transaction is already " +
+                    "being completed at the moment, or because there has been an error with a previous request.";
+            if (lastError != null)
+                throw new IllegalStateException(msg, lastError);
+            else
+                throw new IllegalStateException(msg);
+        }
+
+        return beginCompletingTransaction(true);
+    }
+
+    public synchronized FutureTransactionalResult beginAbortingTransaction() {
+        ensureTransactional();
+        if (!transitionTo(ABORTING_TRANSACTION)) {
+            String msg = "Cannot abort transaction, either because a transaction is already " +
+                    "being completed at the moment, or because there has been an error with a previous request.";
+            if (lastError != null)
+                throw new IllegalStateException(msg, lastError);
+            else
+                throw new IllegalStateException(msg);
+        }
+
+        return beginCompletingTransaction(false);
+    }
+
+    private FutureTransactionalResult beginCompletingTransaction(boolean isCommit) {
+        TransactionalRequestResult result = new TransactionalRequestResult();
+        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
+
+        if (!newPartitionsToBeAddedToTransaction.isEmpty()) {
+            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
+        }
+        pendingTransactionalRequests.add(endTxnRequest(isCommit, false, result));
+        return resultFuture;
+    }
+
+    public synchronized FutureTransactionalResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                                           String consumerGroupId) {
+        ensureTransactional();
+        if (currentState != IN_TRANSACTION) {
+            String msg = "Cannot send offsets to transaction either because the producer is not in an " +
+                    "active transaction or because there has been an error with one or more previous requests.";
+            if (lastError != null)
+                throw new IllegalStateException(msg, lastError);
+            else
+                throw new IllegalStateException(msg);
+        }
+
+        TransactionalRequestResult result = new TransactionalRequestResult();
+        FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
+        pendingTransactionalRequests.add(addOffsetsToTxnRequest(offsets, consumerGroupId, false, result));
+        return resultFuture;
+    }
+
+    public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
+        if (partitionsInTransaction.contains(topicPartition))
+            return;
+        newPartitionsToBeAddedToTransaction.add(topicPartition);
     }
 
     /**
@@ -480,7 +365,8 @@ public class TransactionState {
      */
     public synchronized void resetProducerId() {
         if (isTransactional())
-            return;
+            throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
+                    "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers.clear();
     }
@@ -506,8 +392,150 @@ public class TransactionState {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
+    public boolean hasPendingTransactionalRequests() {
+        return !(pendingTransactionalRequests.isEmpty()
+                && newPartitionsToBeAddedToTransaction.isEmpty());
+    }
+
+    public TransactionalRequest nextTransactionalRequest() {
+        if (!hasPendingTransactionalRequests())
+            return null;
+
+        if (!newPartitionsToBeAddedToTransaction.isEmpty())
+            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
+
+        return pendingTransactionalRequests.poll();
+    }
+
+    public String transactionalId() {
+        return transactionalId;
+    }
+
+    public boolean hasPid() {
+        return pidAndEpoch.isValid();
+    }
+
+    public boolean isTransactional() {
+        return transactionalId != null && !transactionalId.isEmpty();
+    }
+
+    public boolean isFenced() {
+        return currentState == FENCED;
+    }
+
+    public boolean isCompletingTransaction() {
+        return currentState == COMMITTING_TRANSACTION || currentState == ABORTING_TRANSACTION;
+    }
+
+    public boolean isInTransaction() {
+        return currentState == IN_TRANSACTION || isCompletingTransaction();
+    }
+
+    public boolean isInErrorState() {
+        return currentState == ERROR;
+    }
+
+
+    public void needsRetry(TransactionalRequest request) {
+        request.setRetry();
+        pendingTransactionalRequests.add(request);
+    }
+
+    public void reenqueue(TransactionalRequest request) {
+        pendingTransactionalRequests.add(request);
+    }
+
+    public Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
+        switch (type) {
+            case GROUP:
+                return consumerGroupCoordinator;
+            case TRANSACTION:
+                return transactionCoordinator;
+            default:
+                throw new IllegalStateException("Received an invalid coordinator type: " + type);
+        }
+    }
+
+    public void needsCoordinator(TransactionalRequest request) {
+        needsCoordinator(request.coordinatorType, request.coordinatorKey);
+    }
+
+    public synchronized boolean maybeSetError(Exception exception) {
+        if (isTransactional() && isInTransaction()) {
+            if (exception instanceof ProducerFencedException)
+                transitionTo(FENCED, exception);
+            else
+                transitionTo(ERROR, exception);
+            return true;
+        }
+        return false;
+    }
+
+    public void setInFlightRequestCorrelationId(int correlationId) {
+        inFlightRequestCorrelationId = correlationId;
+    }
+
+    public void resetInFlightRequestCorrelationId() {
+        inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
+    }
+
+    public boolean hasInflightTransactionalRequest() {
+        return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
+    }
+
+    private boolean transitionTo(State target) {
+        return transitionTo(target, null);
+    }
+
+    private boolean transitionTo(State target, Exception error) {
+        if (target == ERROR && error != null)
+            lastError = error;
+        if (currentState.isTransitionValid(currentState, target)) {
+            currentState = target;
+            return true;
+        } else {
+            log.error("Invalid transition attempted from state {} to state {}.", currentState.name(), target.name());
+        }
+        return false;
+    }
+
+    private void ensureTransactional() {
+        if (!isTransactional())
+            throw new IllegalStateException("Transactional method invoked on a non-transactional producer.");
+    }
+
+    private void needsCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
+        switch (type) {
+            case GROUP:
+                consumerGroupCoordinator = null;
+                break;
+            case TRANSACTION:
+                transactionCoordinator = null;
+                break;
+            default:
+                throw new IllegalStateException("Got an invalid coordinator type: " + type);
+        }
+        pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, false));
+    }
+
+    // visible for testing
+    public boolean transactionContainsPartition(TopicPartition topicPartition) {
+        return isInTransaction() && partitionsInTransaction.contains(topicPartition);
+    }
+
+    // visible for testing
+    public boolean hasPendingOffsetCommits() {
+        return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
+    }
+
+    // visible for testing
+    public boolean isReadyForTransaction() {
+        return isTransactional() && currentState == READY;
+    }
+
     private void completeTransaction() {
         transitionTo(READY);
+        lastError = null;
         partitionsInTransaction.clear();
     }
 
@@ -587,7 +615,7 @@ public class TransactionState {
                     result.done();
                 }
                 log.error("Could not execute transactional request because the broker isn't on the right version.");
-                transitionTo(ERROR);
+                transitionTo(ERROR, Errors.UNSUPPORTED_VERSION.exception());
             } else if (response.hasResponse()) {
                 handleResponse(response.responseBody());
             } else {
@@ -596,7 +624,7 @@ public class TransactionState {
                     result.done();
                 }
                 log.error("Could not execute transactional request for unknown reasons");
-                transitionTo(ERROR);
+                transitionTo(ERROR, Errors.UNKNOWN.exception());
             }
         }
 
@@ -618,6 +646,7 @@ public class TransactionState {
             if (error == Errors.NONE) {
                 setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
                 transitionTo(READY);
+                lastError = null;
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
@@ -625,7 +654,7 @@ public class TransactionState {
                 reenqueue();
             } else {
                 result.setError(error.exception());
-                transitionTo(ERROR);
+                transitionTo(ERROR, error.exception());
             }
 
             if (error == Errors.NONE || !result.isSuccessful())
@@ -659,15 +688,15 @@ public class TransactionState {
             } else if (error == Errors.INVALID_PID_MAPPING || error == Errors.INVALID_TXN_STATE) {
                 log.error("Seems like the broker has bad transaction state. producerId: {}, error: {}. message: {}",
                         pidAndEpoch.producerId, error, error.message());
-                transitionTo(ERROR);
+                transitionTo(ERROR, error.exception());
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(FENCED);
+                transitionTo(FENCED, error.exception());
                 log.error("Epoch has become invalid: producerId: {}. epoch: {}. Message: {}", pidAndEpoch.producerId, pidAndEpoch.epoch, error.message());
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                transitionTo(ERROR);
+                transitionTo(ERROR, error.exception());
                 log.error("No permissions add some partitions to the transaction: {}", error.message());
             } else {
-                transitionTo(ERROR);
+                transitionTo(ERROR, error.exception());
                 log.error("Could not add partitions to transaction due to unknown error: {}", error.message());
             }
         }
@@ -702,11 +731,11 @@ public class TransactionState {
             } else if (findCoordinatorResponse.error() == Errors.COORDINATOR_NOT_AVAILABLE) {
                 reenqueue();
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                transitionTo(ERROR);
+                transitionTo(ERROR, findCoordinatorResponse.error().exception());
                 log.error("Not authorized to access the group with type {} and key {}. Message: {} ", type,
                         coordinatorKey, findCoordinatorResponse.error().message());
             } else {
-                transitionTo(ERROR);
+                transitionTo(ERROR, findCoordinatorResponse.error().exception());
                 log.error("Could not find a coordinator with type {} for unknown reasons. coordinatorKey: {}", type,
                         coordinatorKey, findCoordinatorResponse.error().message());
             }
@@ -738,11 +767,11 @@ public class TransactionState {
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(FENCED);
+                transitionTo(FENCED, error.exception());
                 result.setError(error.exception());
             } else {
                 result.setError(error.exception());
-                transitionTo(ERROR);
+                transitionTo(ERROR, error.exception());
             }
 
             if (error == Errors.NONE || !result.isSuccessful())
@@ -777,10 +806,10 @@ public class TransactionState {
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(FENCED);
+                transitionTo(FENCED, error.exception());
                 result.setError(error.exception());
             } else {
-                transitionTo(ERROR);
+                transitionTo(ERROR, error.exception());
                 result.setError(error.exception());
             }
 
@@ -819,12 +848,12 @@ public class TransactionState {
                         needsCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
                     }
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                    transitionTo(FENCED);
+                    transitionTo(FENCED, error.exception());
                     result.setError(error.exception());
                     break;
                 } else {
                     result.setError(error.exception());
-                    transitionTo(ERROR);
+                    transitionTo(ERROR, error.exception());
                     break;
                 }
             }
