@@ -95,7 +95,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     ProducerIdEntry(epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp)
 }
 
-private[log] class CorruptSnapshotException(msg: String) extends KafkaException(msg)
+class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
 object ProducerIdMapping {
   private val PidSnapshotVersion: Short = 1
@@ -127,7 +127,7 @@ object ProducerIdMapping {
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
     new Field(PidEntriesField, new ArrayOf(PidSnapshotEntrySchema), "The entries in the PID table"))
 
-  private def readSnapshot(file: File): Iterable[(Long, ProducerIdEntry)] = {
+  def readSnapshot(file: File): Iterable[(Long, ProducerIdEntry)] = {
     val buffer = Files.readAllBytes(file.toPath)
     val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
 
@@ -138,7 +138,7 @@ object ProducerIdMapping {
     val crc = struct.getUnsignedInt(CrcField)
     val computedCrc =  Crc32C.compute(buffer, PidEntriesOffset, buffer.length - PidEntriesOffset)
     if (crc != computedCrc)
-      throw new CorruptSnapshotException(s"Snapshot file is corrupted (CRC is no longer valid). Stored crc: ${crc}. Computed crc: ${computedCrc}")
+      throw new CorruptSnapshotException(s"Snapshot file '$file' is corrupted (CRC is no longer valid). Stored crc: $crc. Computed crc: $computedCrc")
 
     struct.getArray(PidEntriesField).map { pidEntryObj =>
       val pidEntryStruct = pidEntryObj.asInstanceOf[Struct]
