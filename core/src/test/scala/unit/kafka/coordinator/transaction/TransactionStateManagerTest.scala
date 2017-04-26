@@ -318,7 +318,7 @@ class TransactionStateManagerTest {
     val endOffset = startOffset + records.records.asScala.size
 
     EasyMock.expect(replicaManager.getLog(topicPartition)).andStubReturn(Some(logMock))
-    EasyMock.expect(replicaManager.getHighWatermark(topicPartition)).andStubReturn(Some(endOffset))
+    EasyMock.expect(replicaManager.getLogEndOffset(topicPartition)).andStubReturn(Some(endOffset))
 
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset), EasyMock.anyInt(), EasyMock.eq(None), EasyMock.eq(true)))

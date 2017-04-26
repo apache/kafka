@@ -148,7 +148,7 @@ class TransactionStateManager(brokerId: Int,
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition) {
-    def highWaterMark = replicaManager.getHighWatermark(topicPartition).getOrElse(-1L)
+    def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     val startMs = time.milliseconds()
     replicaManager.getLog(topicPartition) match {

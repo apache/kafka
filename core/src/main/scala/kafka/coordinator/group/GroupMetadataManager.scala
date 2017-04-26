@@ -420,7 +420,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
-    def highWaterMark = replicaManager.getHighWatermark(topicPartition).getOrElse(-1L)
+    def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     val startMs = time.milliseconds()
     replicaManager.getLog(topicPartition) match {
