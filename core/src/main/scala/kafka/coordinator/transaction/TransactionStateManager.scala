@@ -360,10 +360,7 @@ class TransactionStateManager(brokerId: Int,
         }
       }
 
-      if (responseError != Errors.NONE) {
-        debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
-          s"has been appended to the log since the metadata does not match anymore.")
-      } else {
+      if (responseError == Errors.NONE) {
         def completeStateTransition(metadata: TransactionMetadata, newState: TransactionState): Boolean = {
           // there is no transition in this case
           if (metadata.state == Empty && newState == Empty)
@@ -374,8 +371,8 @@ class TransactionStateManager(brokerId: Int,
         if (isCoordinatorLoadingInProgress(transactionalId))
           responseError = Errors.COORDINATOR_LOAD_IN_PROGRESS
         else
-          // now try to update the cache: we need to update the status in-place instead of
-          // overwriting the whole object to ensure synchronization
+        // now try to update the cache: we need to update the status in-place instead of
+        // overwriting the whole object to ensure synchronization
           getTransactionState(transactionalId) match {
             case Some(metadata) =>
               metadata synchronized {

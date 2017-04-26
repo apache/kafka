@@ -285,7 +285,7 @@ public class Sender implements Runnable {
 
     private ClientResponse sendAndAwaitInitPidRequest(Node node) throws IOException {
         String nodeId = node.idString();
-        InitPidRequest.Builder builder = new InitPidRequest.Builder(null, Integer.MAX_VALUE);
+        InitPidRequest.Builder builder = new InitPidRequest.Builder(null);
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
