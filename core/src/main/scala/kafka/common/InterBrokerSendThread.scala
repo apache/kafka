@@ -41,6 +41,7 @@ class InterBrokerSendThread(name: String,
     for (request: RequestAndCompletionHandler <- requestsToSend) {
       val destination = Integer.toString(request.destination.id())
       val completionHandler = request.handler
+      // TODO: Need to check inter broker protocol and error if new request is not supported
       val clientRequest = networkClient.newClientRequest(destination,
         request.request,
         now,

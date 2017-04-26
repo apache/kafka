@@ -296,6 +296,7 @@ class TransactionStateManager(brokerId: Int,
       throw new KafkaException(s"Transaction topic number of partitions has changed from $transactionTopicPartitionCount to $curTransactionTopicPartitionCount")
   }
 
+  // TODO: check broker message format and error if < V2
   def appendTransactionToLog(transactionalId: String,
                              txnMetadata: TransactionMetadata,
                              responseCallback: Errors => Unit) {
