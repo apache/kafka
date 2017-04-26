@@ -20,8 +20,9 @@ import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, InterBrokerSendThread}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
-import kafka.utils.TestUtils
+import kafka.utils.{MockTime, TestUtils}
 import kafka.utils.timer.MockTimer
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
@@ -36,15 +37,22 @@ import scala.collection.mutable
 class TransactionMarkerChannelManagerTest {
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val interBrokerSendThread = EasyMock.createNiceMock(classOf[InterBrokerSendThread])
-  private val channel = new TransactionMarkerChannel(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), metadataCache)
-  private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name", new MockTimer, reaperEnabled = false)
+  private val networkClient = EasyMock.createNiceMock(classOf[NetworkClient])
+  private val channel = new TransactionMarkerChannel(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
+    metadataCache,
+    networkClient,
+    new MockTime())
+  private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
+    new MockTimer,
+    reaperEnabled = false)
   private val requestGenerator = TransactionMarkerChannelManager.requestGenerator(channel, purgatory)
   private val partition1 = new TopicPartition("topic1", 0)
   private val partition2 = new TopicPartition("topic1", 1)
   private val broker1 = new Node(1, "host", 10)
   private val broker2 = new Node(2, "otherhost", 10)
   private val metadataPartition = 0
-  private val channelManager = new TransactionMarkerChannelManager(KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+  private val channelManager = new TransactionMarkerChannelManager(
+    KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
     purgatory,
     interBrokerSendThread,

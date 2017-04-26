@@ -45,40 +45,42 @@ object TransactionMarkerChannelManager {
             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
             time: Time): TransactionMarkerChannelManager = {
 
-    val channel = new TransactionMarkerChannel(config.interBrokerListenerName, metadataCache)
+
+    val channelBuilder = ChannelBuilders.clientChannelBuilder(
+      config.interBrokerSecurityProtocol,
+      JaasContext.Type.SERVER,
+      config,
+      config.interBrokerListenerName,
+      config.saslMechanismInterBrokerProtocol,
+      config.saslInterBrokerHandshakeRequestEnable
+    )
+    val threadName = "TxnMarkerSenderThread-" + config.brokerId
+    val selector = new Selector(
+      NetworkReceive.UNLIMITED,
+      config.connectionsMaxIdleMs,
+      metrics,
+      time,
+      "txn-marker-channel",
+      Map("broker-id" -> config.brokerId.toString).asJava,
+      false,
+      channelBuilder
+    )
+    val networkClient = new NetworkClient(
+      selector,
+      new ManualMetadataUpdater(),
+      threadName,
+      1,
+      50,
+      Selectable.USE_DEFAULT_BUFFER_SIZE,
+      config.socketReceiveBufferBytes,
+      config.requestTimeoutMs,
+      time,
+      false,
+      new ApiVersions
+    )
+    val channel = new TransactionMarkerChannel(config.interBrokerListenerName, metadataCache, networkClient, time)
+
     val sendThread: InterBrokerSendThread = {
-      val threadName = "TxnMarkerSenderThread-" + config.brokerId
-      val channelBuilder = ChannelBuilders.clientChannelBuilder(
-        config.interBrokerSecurityProtocol,
-        JaasContext.Type.SERVER,
-        config,
-        config.interBrokerListenerName,
-        config.saslMechanismInterBrokerProtocol,
-        config.saslInterBrokerHandshakeRequestEnable
-      )
-      val selector = new Selector(
-        NetworkReceive.UNLIMITED,
-        config.connectionsMaxIdleMs,
-        metrics,
-        time,
-        "txn-marker-channel",
-        Map("broker-id" -> config.brokerId.toString).asJava,
-        false,
-        channelBuilder
-      )
-      val networkClient = new NetworkClient(
-        selector,
-        new ManualMetadataUpdater(),
-        threadName,
-        1,
-        50,
-        Selectable.USE_DEFAULT_BUFFER_SIZE,
-        config.socketReceiveBufferBytes,
-        config.requestTimeoutMs,
-        time,
-        false,
-        new ApiVersions
-      )
       networkClient.wakeup()
       new InterBrokerSendThread(threadName, networkClient, requestGenerator(channel, txnMarkerPurgatory), time)
     }

@@ -20,7 +20,9 @@ package kafka.coordinator.transaction
 import kafka.api.{LeaderAndIsr, PartitionStateInfo}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.{DelayedOperationPurgatory, MetadataCache}
+import kafka.utils.MockTime
 import kafka.utils.timer.MockTimer
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
@@ -35,9 +37,10 @@ import scala.collection.mutable
 class TransactionMarkerChannelTest {
 
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
+  private val networkClient = EasyMock.createNiceMock(classOf[NetworkClient])
   private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("name", new MockTimer, reaperEnabled = false)
   private val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-  private val channel = new TransactionMarkerChannel(listenerName, metadataCache)
+  private val channel = new TransactionMarkerChannel(listenerName, metadataCache, networkClient, new MockTime())
 
 
   @Test
@@ -105,6 +108,21 @@ class TransactionMarkerChannelTest {
 
     assertEquals(1, channel.queueForBroker(1).get.markersQueue.size)
     assertEquals(1, channel.queueForBroker(2).get.markersQueue.size)
+  }
+  @Test
+  def shouldWakeupNetworkClientWhenRequestsQueued(): Unit = {
+    val partition1 = new TopicPartition("topic1", 0)
+
+    EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
+    EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(new Node(1, "host", 10)))
+
+    EasyMock.expect(networkClient.wakeup())
+
+    EasyMock.replay(metadataCache, networkClient)
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    
+    EasyMock.verify(networkClient)
   }
 
   @Test

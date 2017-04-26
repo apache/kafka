@@ -22,6 +22,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import kafka.common.{BrokerEndPointNotAvailableException, RequestAndCompletionHandler}
 import kafka.server.{DelayedOperationPurgatory, MetadataCache}
 import kafka.utils.Logging
+import org.apache.kafka.clients.NetworkClient
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
@@ -34,7 +35,8 @@ import collection.JavaConversions._
 
 class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
                                metadataCache: MetadataCache,
-                               time: Time = Time.SYSTEM) extends Logging {
+                               networkClient: NetworkClient,
+                               time: Time) extends Logging {
 
   // we need the metadataPartition so we can clean up when Transaction Log partitions emigrate
   case class PendingTxnKey(metadataPartition: Int, producerId: Long)
@@ -129,6 +131,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
       val txnMarker = new TxnMarkerEntry(pid, epoch, result, topicPartitions.toList.asJava)
       addRequestForBroker(brokerId, CoordinatorEpochAndMarkers(metadataPartition, coordinatorEpoch, Utils.mkList(txnMarker)))
     }
+    networkClient.wakeup()
   }
 
   def maybeAddPendingRequest(metadataPartition: Int, metadata: TransactionMetadata): Boolean = {
