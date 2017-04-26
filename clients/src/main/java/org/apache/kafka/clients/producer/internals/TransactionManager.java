@@ -132,7 +132,7 @@ public class TransactionManager {
         this("", 0);
     }
 
-    public static class TransactionalRequest {
+    static class TransactionalRequest {
         private enum Priority {
             FIND_COORDINATOR(0),
             INIT_PRODUCER_ID(1),
@@ -174,31 +174,31 @@ public class TransactionManager {
             this.result = result;
         }
 
-        public AbstractRequest.Builder<?> requestBuilder() {
+        AbstractRequest.Builder<?> requestBuilder() {
             return requestBuilder;
         }
 
-        public boolean needsCoordinator() {
+        boolean needsCoordinator() {
             return coordinatorType != null;
         }
 
-        public FindCoordinatorRequest.CoordinatorType coordinatorType() {
+        FindCoordinatorRequest.CoordinatorType coordinatorType() {
             return coordinatorType;
         }
 
-        public RequestCompletionHandler responseHandler() {
+        RequestCompletionHandler responseHandler() {
             return handler;
         }
 
-        public boolean isRetry() {
+        boolean isRetry() {
             return isRetry;
         }
 
-        public boolean isEndTxnRequest() {
+        boolean isEndTxnRequest() {
             return priority == Priority.END_TXN;
         }
 
-        public boolean maybeTerminateWithError(RuntimeException error) {
+        boolean maybeTerminateWithError(RuntimeException error) {
             if (result != null) {
                 result.setError(error);
                 result.done();
@@ -216,7 +216,7 @@ public class TransactionManager {
         }
     }
 
-    public static class PidAndEpoch {
+    static class PidAndEpoch {
         public final long producerId;
         public final short epoch;
 
@@ -300,85 +300,6 @@ public class TransactionManager {
         newPartitionsToBeAddedToTransaction.add(topicPartition);
     }
 
-    /**
-     * Get the current pid and epoch without blocking. Callers must use {@link PidAndEpoch#isValid()} to
-     * verify that the result is valid.
-     *
-     * @return the current PidAndEpoch.
-     */
-    public PidAndEpoch pidAndEpoch() {
-        return pidAndEpoch;
-    }
-
-    /**
-     * Set the pid and epoch atomically. This method will signal any callers blocked on the `pidAndEpoch` method
-     * once the pid is set. This method will be called on the background thread when the broker responds with the pid.
-     */
-    public synchronized void setPidAndEpoch(long pid, short epoch) {
-        this.pidAndEpoch = new PidAndEpoch(pid, epoch);
-    }
-
-    /**
-     * This method is used when the producer needs to reset its internal state because of an irrecoverable exception
-     * from the broker.
-     *
-     * We need to reset the producer id and associated state when we have sent a batch to the broker, but we either get
-     * a non-retriable exception or we run out of retries, or the batch expired in the producer queue after it was already
-     * sent to the broker.
-     *
-     * In all of these cases, we don't know whether batch was actually committed on the broker, and hence whether the
-     * sequence number was actually updated. If we don't reset the producer state, we risk the chance that all future
-     * messages will return an OutOfOrderSequenceException.
-     *
-     * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
-     * for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and the user
-     * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
-     * produce error to the user and let them abort the transaction and close the producer explicitly.
-     */
-    public synchronized void resetProducerId() {
-        if (isTransactional())
-            throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
-                    "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
-        setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-        this.sequenceNumbers.clear();
-    }
-
-    /**
-     * Returns the next sequence number to be written to the given TopicPartition.
-     */
-    public synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
-        if (currentSequenceNumber == null) {
-            currentSequenceNumber = 0;
-            sequenceNumbers.put(topicPartition, currentSequenceNumber);
-        }
-        return currentSequenceNumber;
-    }
-
-    public synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
-        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
-        if (currentSequenceNumber == null)
-            throw new IllegalStateException("Attempt to increment sequence number for a partition with no current sequence.");
-
-        currentSequenceNumber += increment;
-        sequenceNumbers.put(topicPartition, currentSequenceNumber);
-    }
-
-    public boolean hasPendingTransactionalRequests() {
-        return !(pendingTransactionalRequests.isEmpty()
-                && newPartitionsToBeAddedToTransaction.isEmpty());
-    }
-
-    public TransactionalRequest nextTransactionalRequest() {
-        if (!hasPendingTransactionalRequests())
-            return null;
-
-        if (!newPartitionsToBeAddedToTransaction.isEmpty())
-            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
-
-        return pendingTransactionalRequests.poll();
-    }
-
     public Exception lastError() {
         return lastError;
     }
@@ -411,31 +332,6 @@ public class TransactionManager {
         return currentState == State.ERROR;
     }
 
-
-    public void needsRetry(TransactionalRequest request) {
-        request.setRetry();
-        pendingTransactionalRequests.add(request);
-    }
-
-    public void reenqueue(TransactionalRequest request) {
-        pendingTransactionalRequests.add(request);
-    }
-
-    public Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
-        switch (type) {
-            case GROUP:
-                return consumerGroupCoordinator;
-            case TRANSACTION:
-                return transactionCoordinator;
-            default:
-                throw new IllegalStateException("Received an invalid coordinator type: " + type);
-        }
-    }
-
-    public void needsCoordinator(TransactionalRequest request) {
-        needsCoordinator(request.coordinatorType, request.coordinatorKey);
-    }
-
     public synchronized boolean maybeSetError(Exception exception) {
         if (isTransactional() && isInTransaction()) {
             if (exception instanceof ProducerFencedException)
@@ -447,16 +343,137 @@ public class TransactionManager {
         return false;
     }
 
-    public void setInFlightRequestCorrelationId(int correlationId) {
+    /**
+     * Get the current pid and epoch without blocking. Callers must use {@link PidAndEpoch#isValid()} to
+     * verify that the result is valid.
+     *
+     * @return the current PidAndEpoch.
+     */
+    PidAndEpoch pidAndEpoch() {
+        return pidAndEpoch;
+    }
+
+    /**
+     * Set the pid and epoch atomically. This method will signal any callers blocked on the `pidAndEpoch` method
+     * once the pid is set. This method will be called on the background thread when the broker responds with the pid.
+     */
+    synchronized void setPidAndEpoch(long pid, short epoch) {
+        this.pidAndEpoch = new PidAndEpoch(pid, epoch);
+    }
+
+    /**
+     * This method is used when the producer needs to reset its internal state because of an irrecoverable exception
+     * from the broker.
+     *
+     * We need to reset the producer id and associated state when we have sent a batch to the broker, but we either get
+     * a non-retriable exception or we run out of retries, or the batch expired in the producer queue after it was already
+     * sent to the broker.
+     *
+     * In all of these cases, we don't know whether batch was actually committed on the broker, and hence whether the
+     * sequence number was actually updated. If we don't reset the producer state, we risk the chance that all future
+     * messages will return an OutOfOrderSequenceException.
+     *
+     * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
+     * for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and the user
+     * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
+     * produce error to the user and let them abort the transaction and close the producer explicitly.
+     */
+    synchronized void resetProducerId() {
+        if (isTransactional())
+            throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
+                    "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
+        setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.sequenceNumbers.clear();
+    }
+
+    /**
+     * Returns the next sequence number to be written to the given TopicPartition.
+     */
+    synchronized Integer sequenceNumber(TopicPartition topicPartition) {
+        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        if (currentSequenceNumber == null) {
+            currentSequenceNumber = 0;
+            sequenceNumbers.put(topicPartition, currentSequenceNumber);
+        }
+        return currentSequenceNumber;
+    }
+
+    synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
+        Integer currentSequenceNumber = sequenceNumbers.get(topicPartition);
+        if (currentSequenceNumber == null)
+            throw new IllegalStateException("Attempt to increment sequence number for a partition with no current sequence.");
+
+        currentSequenceNumber += increment;
+        sequenceNumbers.put(topicPartition, currentSequenceNumber);
+    }
+
+    boolean hasPendingTransactionalRequests() {
+        return !(pendingTransactionalRequests.isEmpty()
+                && newPartitionsToBeAddedToTransaction.isEmpty());
+    }
+
+    TransactionalRequest nextTransactionalRequest() {
+        if (!hasPendingTransactionalRequests())
+            return null;
+
+        if (!newPartitionsToBeAddedToTransaction.isEmpty())
+            pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
+
+        return pendingTransactionalRequests.poll();
+    }
+
+
+
+    void needsRetry(TransactionalRequest request) {
+        request.setRetry();
+        pendingTransactionalRequests.add(request);
+    }
+
+    void reenqueue(TransactionalRequest request) {
+        pendingTransactionalRequests.add(request);
+    }
+
+    Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
+        switch (type) {
+            case GROUP:
+                return consumerGroupCoordinator;
+            case TRANSACTION:
+                return transactionCoordinator;
+            default:
+                throw new IllegalStateException("Received an invalid coordinator type: " + type);
+        }
+    }
+
+    void needsCoordinator(TransactionalRequest request) {
+        needsCoordinator(request.coordinatorType, request.coordinatorKey);
+    }
+
+
+    void setInFlightRequestCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
     }
 
-    public void resetInFlightRequestCorrelationId() {
+    void resetInFlightRequestCorrelationId() {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    public boolean hasInflightTransactionalRequest() {
+    boolean hasInflightTransactionalRequest() {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
+    }
+
+    // visible for testing
+    boolean transactionContainsPartition(TopicPartition topicPartition) {
+        return isInTransaction() && partitionsInTransaction.contains(topicPartition);
+    }
+
+    // visible for testing
+    boolean hasPendingOffsetCommits() {
+        return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
+    }
+
+    // visible for testing
+    boolean isReadyForTransaction() {
+        return isTransactional() && currentState == State.READY;
     }
 
     private void transitionTo(State target) {
@@ -504,20 +521,6 @@ public class TransactionManager {
         pendingTransactionalRequests.add(findCoordinatorRequest(type, coordinatorKey, false));
     }
 
-    // visible for testing
-    boolean transactionContainsPartition(TopicPartition topicPartition) {
-        return isInTransaction() && partitionsInTransaction.contains(topicPartition);
-    }
-
-    // visible for testing
-    boolean hasPendingOffsetCommits() {
-        return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
-    }
-
-    // visible for testing
-    boolean isReadyForTransaction() {
-        return isTransactional() && currentState == State.READY;
-    }
 
     private void completeTransaction() {
         transitionTo(State.READY);
