@@ -151,6 +151,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   def removeStateForPartition(transactionStateTopicPartitionId: Int): Unit = {
     transactionMarkerChannel.removeStateForPartition(transactionStateTopicPartitionId)
+      .foreach{pid =>
+        txnMarkerPurgatory.cancelForKey(pid)
+      }
   }
 
 }

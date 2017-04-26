@@ -254,6 +254,30 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.verify(interBrokerSendThread)
   }
 
+  @Test
+  def shouldClearPurgatoryForPartitionWhenPartitionEmigrated(): Unit = {
+    val metadata1 = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0, 0)
+    purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata1, (error:Errors) => {}),Seq(0L))
+    channel.maybeAddPendingRequest(0, metadata1)
+
+    val metadata2 = new TransactionMetadata(1, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0, 0)
+    purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata2, (error:Errors) => {}),Seq(1L))
+    channel.maybeAddPendingRequest(0, metadata2)
+
+    val metadata3 = new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set[TopicPartition](partition1), 0, 0)
+    purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata3, (error:Errors) => {}),Seq(2L))
+    channel.maybeAddPendingRequest(1, metadata3)
+
+    channelManager.removeStateForPartition(0)
+
+    assertEquals(1, purgatory.watched)
+    // should not complete as they've been removed
+    purgatory.checkAndComplete(0L)
+    purgatory.checkAndComplete(1L)
+    
+    assertEquals(1, purgatory.watched)
+  }
+
   def completionCallback(errors: Errors): Unit = {
   }
 }

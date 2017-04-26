@@ -28,6 +28,7 @@ import kafka.utils._
 import kafka.utils.timer._
 
 import scala.collection._
+import scala.collection.mutable.ListBuffer
 
 /**
  * An operation whose processing needs to be delayed for at most the given delayMs. For example
@@ -251,6 +252,15 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
    */
   def delayed: Int = timeoutTimer.size
 
+  def cancelForKey(key: Any): List[T] = {
+    inWriteLock(removeWatchersLock) {
+      val watchers = watchersForKey.remove(key)
+      if (watchers != null)
+        watchers.cancel()
+      else
+        Nil
+    }
+  }
   /*
    * Return all the current watcher lists,
    * note that the returned watchers may be removed from the list by other threads
@@ -328,6 +338,18 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String,
         removeKeyIfEmpty(key, this)
 
       completed
+    }
+
+    def cancel(): List[T] = {
+      val iter = operations.iterator()
+      var cancelled = new ListBuffer[T]()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        curr.cancel()
+        iter.remove()
+        cancelled += curr
+      }
+      cancelled.toList
     }
 
     // traverse the list and purge elements that are already completed by others

@@ -152,14 +152,17 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     pendingTxnMap.clear()
   }
 
-  def removeStateForPartition(partition: Int): Unit = {
+  def removeStateForPartition(partition: Int): mutable.Iterable[Long] = {
     brokerStateMap.foreach {case(_, destinationAndQueue: DestinationBrokerAndQueuedMarkers) =>
       val allMarkers: java.util.List[CoordinatorEpochAndMarkers] = new util.ArrayList[CoordinatorEpochAndMarkers] ()
       destinationAndQueue.markersQueue.drainTo(allMarkers)
       destinationAndQueue.markersQueue.addAll(allMarkers.asScala.filter{ epochAndMarkers => epochAndMarkers.metadataPartition != partition}.asJava)
     }
-    pendingTxnMap.filter {case (key:PendingTxnKey, _) => key.metadataPartition == partition}
-      .foreach{case (key:PendingTxnKey, _) => pendingTxnMap.remove(key)}
+    pendingTxnMap.filter { case (key: PendingTxnKey, _) => key.metadataPartition == partition }
+      .map { case (key: PendingTxnKey, _) =>
+        pendingTxnMap.remove(key)
+        key.producerId
+      }
   }
 
 }

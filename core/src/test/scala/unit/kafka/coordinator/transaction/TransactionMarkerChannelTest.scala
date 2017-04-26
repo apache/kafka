@@ -41,6 +41,7 @@ class TransactionMarkerChannelTest {
   private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("name", new MockTimer, reaperEnabled = false)
   private val listenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
   private val channel = new TransactionMarkerChannel(listenerName, metadataCache, networkClient, new MockTime())
+  private val partition1 = new TopicPartition("topic1", 0)
 
 
   @Test
@@ -53,7 +54,6 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldUpdateDestinationBrokerNodeWhenUpdatingBroker(): Unit = {
-    val partition1 = new TopicPartition("topic1", 0)
     val newDestination = new Node(1, "otherhost", 100)
 
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
@@ -91,7 +91,6 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldAddRequestsToCorrectBrokerQueues(): Unit = {
-    val partition1 = new TopicPartition("topic1", 0)
     val partition2 = new TopicPartition("topic1", 1)
 
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
@@ -111,8 +110,6 @@ class TransactionMarkerChannelTest {
   }
   @Test
   def shouldWakeupNetworkClientWhenRequestsQueued(): Unit = {
-    val partition1 = new TopicPartition("topic1", 0)
-
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
     EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(new Node(1, "host", 10)))
@@ -127,8 +124,6 @@ class TransactionMarkerChannelTest {
 
   @Test
   def shouldAddNewBrokerQueueIfDoesntAlreadyExistWhenAddingRequest(): Unit = {
-    val partition1 = new TopicPartition("topic1", 0)
-
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
       .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
     EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(new Node(1, "host", 10)))
@@ -176,8 +171,9 @@ class TransactionMarkerChannelTest {
     val markersQueue = channel.queueForBroker(1).get.markersQueue
     assertEquals(1, markersQueue.size())
     assertEquals(0, markersQueue.peek().metadataPartition)
-
   }
+
+
 
   def errorCallback(error: Errors): Unit = {}
 }
