@@ -14,13 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer;
+package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.internals.FutureTransactionalResult;
-import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -59,8 +57,8 @@ import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 /**
  * A class which maintains state for transactions. Also keeps the state necessary to ensure idempotent production.
  */
-public class TransactionState {
-    private static final Logger log = LoggerFactory.getLogger(TransactionState.class);
+public class TransactionManager {
+    private static final Logger log = LoggerFactory.getLogger(TransactionManager.class);
 
     private static final int NO_INFLIGHT_REQUEST_CORRELATION_ID = -1;
 
@@ -111,7 +109,7 @@ public class TransactionState {
         }
     }
 
-    public TransactionState(String transactionalId, int transactionTimeoutMs) {
+    public TransactionManager(String transactionalId, int transactionTimeoutMs) {
         pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         sequenceNumbers = new HashMap<>();
         this.transactionalId = transactionalId;
@@ -130,7 +128,7 @@ public class TransactionState {
         this.pendingTxnOffsetCommits = new HashMap<>();
     }
 
-    public TransactionState() {
+    public TransactionManager() {
         this("", 0);
     }
 
@@ -516,17 +514,17 @@ public class TransactionState {
     }
 
     // visible for testing
-    public boolean transactionContainsPartition(TopicPartition topicPartition) {
+    boolean transactionContainsPartition(TopicPartition topicPartition) {
         return isInTransaction() && partitionsInTransaction.contains(topicPartition);
     }
 
     // visible for testing
-    public boolean hasPendingOffsetCommits() {
+    boolean hasPendingOffsetCommits() {
         return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
     }
 
     // visible for testing
-    public boolean isReadyForTransaction() {
+    boolean isReadyForTransaction() {
         return isTransactional() && currentState == State.READY;
     }
 

@@ -22,7 +22,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
@@ -110,7 +109,7 @@ public class Sender implements Runnable {
     private final ApiVersions apiVersions;
 
     /* all the state related to transactions, in particular the PID, epoch, and sequence numbers */
-    private final TransactionState transactionState;
+    private final TransactionManager transactionManager;
 
     public Sender(KafkaClient client,
                   Metadata metadata,
@@ -123,7 +122,7 @@ public class Sender implements Runnable {
                   Time time,
                   int requestTimeout,
                   long retryBackoffMs,
-                  TransactionState transactionState,
+                  TransactionManager transactionManager,
                   ApiVersions apiVersions) {
         this.client = client;
         this.accumulator = accumulator;
@@ -138,7 +137,7 @@ public class Sender implements Runnable {
         this.requestTimeout = requestTimeout;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
-        this.transactionState = transactionState;
+        this.transactionManager = transactionManager;
     }
 
     /**
@@ -242,14 +241,14 @@ public class Sender implements Runnable {
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
         for (ProducerBatch expiredBatch : expiredBatches) {
-            if (transactionState != null && expiredBatch.inRetry()) {
+            if (transactionManager != null && expiredBatch.inRetry()) {
                 needsTransactionStateReset = true;
             }
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
         }
 
         if (needsTransactionStateReset) {
-            transactionState.resetProducerId();
+            transactionManager.resetProducerId();
             return 0;
         }
 
@@ -275,22 +274,22 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionState != null && transactionState.hasInflightTransactionalRequest())
+        if (transactionManager != null && transactionManager.hasInflightTransactionalRequest())
             return true;
 
-        if (transactionState == null || !transactionState.hasPendingTransactionalRequests())
+        if (transactionManager == null || !transactionManager.hasPendingTransactionalRequests())
             return false;
 
-        TransactionState.TransactionalRequest nextRequest = transactionState.nextTransactionalRequest();
+        TransactionManager.TransactionalRequest nextRequest = transactionManager.nextTransactionalRequest();
 
-        if (nextRequest.isEndTxnRequest() && transactionState.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+        if (nextRequest.isEndTxnRequest() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
-            transactionState.reenqueue(nextRequest);
+            transactionManager.reenqueue(nextRequest);
             return false;
         }
 
-        if (nextRequest.isEndTxnRequest() && transactionState.isInErrorState()) {
+        if (nextRequest.isEndTxnRequest() && transactionManager.isInErrorState()) {
             nextRequest.maybeTerminateWithError(new KafkaException("Cannot commit transaction when there are " +
                     "request errors. Please check your logs for the details of the errors encountered."));
             return false;
@@ -301,13 +300,13 @@ public class Sender implements Runnable {
         while (targetNode == null) {
             try {
                 if (nextRequest.needsCoordinator()) {
-                    targetNode = transactionState.coordinator(nextRequest.coordinatorType());
+                    targetNode = transactionManager.coordinator(nextRequest.coordinatorType());
                     if (targetNode == null) {
-                        transactionState.needsCoordinator(nextRequest);
+                        transactionManager.needsCoordinator(nextRequest);
                         break;
                     }
                     if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
-                        transactionState.needsCoordinator(nextRequest);
+                        transactionManager.needsCoordinator(nextRequest);
                         targetNode = null;
                         break;
                     }
@@ -320,7 +319,7 @@ public class Sender implements Runnable {
                     }
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequest.requestBuilder(),
                             now, true, nextRequest.responseHandler());
-                    transactionState.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
                     client.send(clientRequest, now);
                     return true;
                 }
@@ -332,7 +331,7 @@ public class Sender implements Runnable {
         }
 
         if (targetNode == null)
-            transactionState.needsRetry(nextRequest);
+            transactionManager.needsRetry(nextRequest);
 
         return true;
     }
@@ -374,17 +373,17 @@ public class Sender implements Runnable {
     private void maybeWaitForPid() {
         // If this is a transactional producer, the PID will be received when recovering transactions in the
         // initTransactions() method of the producer.
-        if (transactionState == null || transactionState.isTransactional())
+        if (transactionManager == null || transactionManager.isTransactional())
             return;
 
-        while (!transactionState.hasPid()) {
+        while (!transactionManager.hasPid()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
                     if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
                         InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        transactionState.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+                        transactionManager.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
                     } else {
                         log.error("Received an unexpected response type for an InitPidRequest from {}. " +
                                 "We will back off and try again.", node);
@@ -456,17 +455,17 @@ public class Sender implements Runnable {
                         batch.topicPartition,
                         this.retries - batch.attempts() - 1,
                         error);
-                if (transactionState == null) {
+                if (transactionManager == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionState.pidAndEpoch().producerId == batch.producerId() && transactionState.pidAndEpoch().epoch == batch.producerEpoch()) {
+                } else if (transactionManager.pidAndEpoch().producerId == batch.producerId() && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
                     // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
-                            transactionState.sequenceNumber(batch.topicPartition));
+                            transactionManager.sequenceNumber(batch.topicPartition));
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionState.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                            transactionManager.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
                     this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
@@ -475,7 +474,7 @@ public class Sender implements Runnable {
                     exception = new TopicAuthorizationException(batch.topicPartition.topic());
                 else
                     exception = error.exception();
-                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionState.pidAndEpoch().producerId)
+                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionManager.pidAndEpoch().producerId)
                     log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
                                     "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
                             correlationId, batch.topicPartition, response.baseOffset);
@@ -493,11 +492,11 @@ public class Sender implements Runnable {
         } else {
             completeBatch(batch, response);
 
-            if (transactionState != null && transactionState.pidAndEpoch().producerId == batch.producerId()
-                    && transactionState.pidAndEpoch().epoch == batch.producerEpoch()) {
-                transactionState.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+            if (transactionManager != null && transactionManager.pidAndEpoch().producerId == batch.producerId()
+                    && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
+                transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
                 log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
-                        transactionState.sequenceNumber(batch.topicPartition));
+                        transactionManager.sequenceNumber(batch.topicPartition));
             }
         }
 
@@ -517,12 +516,12 @@ public class Sender implements Runnable {
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
-        if (transactionState != null && !transactionState.isTransactional()
-                && batch.producerId() == transactionState.pidAndEpoch().producerId) {
+        if (transactionManager != null && !transactionManager.isTransactional()
+                && batch.producerId() == transactionManager.pidAndEpoch().producerId) {
             // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
-            transactionState.resetProducerId();
+            transactionManager.resetProducerId();
         }
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);
@@ -578,8 +577,8 @@ public class Sender implements Runnable {
         }
 
         String transactionalId = null;
-        if (transactionState != null && transactionState.isTransactional()) {
-            transactionalId = transactionState.transactionalId();
+        if (transactionManager != null && transactionManager.isTransactional()) {
+            transactionalId = transactionManager.transactionalId();
         }
         ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(minUsedMagic, acks, timeout,
                 produceRecordsByPartition, transactionalId);
