@@ -27,10 +27,8 @@ import org.apache.kafka.common.network.NetworkSend
 object RequestOrResponseSend {
   def serialize(request: RequestOrResponse): ByteBuffer = {
     val buffer = ByteBuffer.allocate(request.sizeInBytes + request.requestId.fold(0)(_ => 2))
-    request.requestId match {
-      case Some(requestId) =>
+    request.requestId.foreach { requestId =>
         buffer.putShort(requestId)
-      case None =>
     }
     request.writeTo(buffer)
     buffer.rewind()

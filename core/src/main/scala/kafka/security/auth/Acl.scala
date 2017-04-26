@@ -57,8 +57,7 @@ object Acl {
       return collection.immutable.Set.empty[Acl]
 
     var acls: collection.mutable.HashSet[Acl] = new collection.mutable.HashSet[Acl]()
-    Json.parseFull(aclJson) match {
-      case Some(m) =>
+    Json.parseFull(aclJson).foreach { m =>
         val aclMap = m.asInstanceOf[Map[String, Any]]
         //the acl json version.
         require(aclMap(VersionKey) == CurrentVersion)
@@ -70,7 +69,6 @@ object Acl {
           val host: String = item(HostsKey).asInstanceOf[String]
           acls += new Acl(principal, permissionType, host, operation)
         })
-      case None =>
     }
     acls.toSet
   }

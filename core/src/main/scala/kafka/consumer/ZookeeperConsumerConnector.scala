@@ -218,9 +218,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         try {
           if (config.autoCommitEnable)
             scheduler.shutdown()
-          fetcher match {
-            case Some(f) => f.stopConnections
-            case None =>
+          fetcher.foreach { f =>
+            f.stopConnections
           }
           sendShutdownToAllQueues()
           if (config.autoCommitEnable)
@@ -778,8 +777,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                        messageStreams: Map[String,List[KafkaStream[_,_]]],
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
       val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
-      fetcher match {
-        case Some(f) =>
+      fetcher.foreach { f =>
           f.stopConnections
           clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
           /**
@@ -794,7 +792,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           info("Committing all offsets after clearing the fetcher queues")
           commitOffsets(true)
         }
-        case None =>
       }
     }
 
@@ -831,10 +828,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       info("Consumer " + consumerIdString + " selected partitions : " +
         allPartitionInfos.sortWith((s,t) => s.partitionId < t.partitionId).map(_.toString).mkString(","))
 
-      fetcher match {
-        case Some(f) =>
+      fetcher.foreach { f =>
           f.startConnections(allPartitionInfos, cluster)
-        case None =>
       }
     }
 

@@ -72,7 +72,6 @@ object ConsumerOffsetChecker extends Logging {
             val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
             println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, producerId, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
                                                                    owner match {case Some(ownerStr) => ownerStr case None => "none"}))
-          case None => // ignore
         }
       case None =>
         println("No broker for partition %s - %s".format(topic, producerId))
@@ -80,22 +79,18 @@ object ConsumerOffsetChecker extends Logging {
   }
 
   private def processTopic(zkUtils: ZkUtils, group: String, topic: String) {
-    topicPidMap.get(topic) match {
-      case Some(producerIds) =>
-        producerIds.sorted.foreach {
-          producerId => processPartition(zkUtils, group, topic, producerId)
+    topicPidMap.get(topic).foreach { producerIds =>
+      producerIds.sorted.foreach {
+        producerId => processPartition(zkUtils, group, topic, producerId)
         }
-      case None => // ignore
     }
   }
 
   private def printBrokerInfo() {
     println("BROKER INFO")
     for ((bid, consumerOpt) <- consumerMap)
-      consumerOpt match {
-        case Some(consumer) =>
+      consumerOpt.foreach { consumer =>
           println("%s -> %s:%d".format(bid, consumer.host, consumer.port))
-        case None => // ignore
       }
   }
 
@@ -197,9 +192,8 @@ object ConsumerOffsetChecker extends Logging {
         printBrokerInfo()
 
       for ((_, consumerOpt) <- consumerMap)
-        consumerOpt match {
-          case Some(consumer) => consumer.close()
-          case None => // ignore
+        consumerOpt.foreach { consumer =>
+          consumer.close()
         }
     }
     catch {
@@ -208,9 +202,8 @@ object ConsumerOffsetChecker extends Logging {
     }
     finally {
       for (consumerOpt <- consumerMap.values) {
-        consumerOpt match {
-          case Some(consumer) => consumer.close()
-          case None => // ignore
+        consumerOpt.foreach { consumer =>
+          consumer.close()
         }
       }
       if (zkUtils != null)

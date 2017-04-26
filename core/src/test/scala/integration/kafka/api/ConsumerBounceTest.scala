@@ -377,13 +377,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
       consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
       val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
-      maxCloseTimeMs match {
-        case Some(ms) => assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
-        case None =>
+      maxCloseTimeMs.foreach { ms =>
+        assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
       }
-      minCloseTimeMs match {
-        case Some(ms) => assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
-        case None =>
+      minCloseTimeMs.foreach { ms =>
+        assertTrue("Close finished too quickly " + timeTakenMs, timeTakenMs >= ms)
       }
       info("consumer.close() completed in " + timeTakenMs + " ms.")
     }, 0)

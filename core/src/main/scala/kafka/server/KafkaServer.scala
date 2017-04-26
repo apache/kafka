@@ -410,8 +410,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // Get the current controller info. This is to ensure we use the most recent info to issue the
           // controlled shutdown request
           val controllerId = zkUtils.getController()
-          zkUtils.getBrokerInfo(controllerId) match {
-            case Some(broker) =>
+          //If this method returns None ignore and try again
+          zkUtils.getBrokerInfo(controllerId).foreach { broker =>
               // if this is the first attempt, if the controller has changed or if an exception was thrown in a previous
               // attempt, connect to the most recent controller
               if (ioException || broker != prevController) {
@@ -424,7 +424,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 prevController = broker
                 metadataUpdater.setNodes(Seq(node(prevController)).asJava)
               }
-            case None => //ignore and try again
           }
 
           // 2. issue a controlled shutdown to the controller
@@ -483,8 +482,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           // Get the current controller info. This is to ensure we use the most recent info to issue the
           // controlled shutdown request
           val controllerId = zkUtils.getController()
-          zkUtils.getBrokerInfo(controllerId) match {
-            case Some(broker) =>
+          //If this method returns None ignore and try again
+          zkUtils.getBrokerInfo(controllerId).foreach { broker =>
               if (channel == null || prevController == null || !prevController.equals(broker)) {
                 // if this is the first attempt or if the controller has changed, create a channel to the most recent
                 // controller
@@ -500,7 +499,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 channel.connect()
                 prevController = broker
               }
-            case None => //ignore and try again
           }
 
           // 2. issue a controlled shutdown to the controller

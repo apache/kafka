@@ -53,8 +53,7 @@ object ReplicationUtils extends Logging {
       val writtenLeaderOpt = writtenLeaderAndIsrInfo._1
       val writtenStat = writtenLeaderAndIsrInfo._2
       val expectedLeader = parseLeaderAndIsr(expectedLeaderAndIsrInfo, path, writtenStat)
-      writtenLeaderOpt match {
-        case Some(writtenData) =>
+      writtenLeaderOpt.foreach { writtenData =>
           val writtenLeader = parseLeaderAndIsr(writtenData, path, writtenStat)
           (expectedLeader,writtenLeader) match {
             case (Some(expectedLeader),Some(writtenLeader)) =>
@@ -62,7 +61,6 @@ object ReplicationUtils extends Logging {
                 return (true, writtenStat.getVersion())
             case _ =>
           }
-        case None =>
       }
     } catch {
       case _: Exception =>
