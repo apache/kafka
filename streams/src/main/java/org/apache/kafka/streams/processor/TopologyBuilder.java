@@ -1196,12 +1196,8 @@ public class TopologyBuilder {
         for (final Map.Entry<Integer, Set<String>> nodeGroup : nodeGroups().entrySet()) {
             final Set<String> nodes = nodeGroup.getValue();
             for (String node : nodes) {
-                final NodeFactory nodeFactory = nodeFactories.get(node);
-                if (nodeFactory instanceof SourceNodeFactory) {
-                    final List<String> topics = ((SourceNodeFactory) nodeFactory).topics;
-                    if (topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0))) {
-                        globalGroups.addAll(nodes);
-                    }
+                if (isGlobalSource(node)) {
+                    globalGroups.addAll(nodes);
                 }
             }
         }
@@ -1558,4 +1554,168 @@ public class TopologyBuilder {
         setRegexMatchedTopicsToSourceNodes();
         setRegexMatchedTopicToStateStore();
     }
+
+    private boolean isGlobalSource(final String nodeName) {
+        final NodeFactory nodeFactory = nodeFactories.get(nodeName);
+
+        if (nodeFactory instanceof SourceNodeFactory) {
+            final List<String> topics = ((SourceNodeFactory) nodeFactory).topics;
+            if (topics != null && topics.size() == 1 && globalTopics.contains(topics.get(0))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    TopologyDescription describe() {
+        final TopologyDescription description = new TopologyDescription();
+
+        describeSubtopologies(description);
+        describeGlobalStores(description);
+
+        return description;
+    }
+
+    private void describeSubtopologies(final TopologyDescription description) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+
+            final Set<String> allNodesOfGroups = nodeGroup.getValue();
+            final boolean isNodeGroupOfGlobalStores = nodeGroupContainsGlobalSourceNode(allNodesOfGroups);
+
+            if (!isNodeGroupOfGlobalStores) {
+                describeSubtopology(description, nodeGroup.getKey(), allNodesOfGroups);
+            }
+        }
+    }
+
+    private boolean nodeGroupContainsGlobalSourceNode(final Set<String> allNodesOfGroups) {
+        for (final String node : allNodesOfGroups) {
+            if (isGlobalSource(node)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void describeSubtopology(final TopologyDescription description,
+                                     final Integer subtopologyId,
+                                     final Set<String> nodeNames) {
+
+        final HashMap<String, TopologyDescription.Node> nodesByName
+            = addAllNodesWithoutPredecessorsOrSuccessors(nodeNames);
+
+        connectAllNodesToTheirPredecessorsAndSuccessors(nodesByName);
+
+        description.subtopologies.add(new TopologyDescription.Subtopology(
+            subtopologyId,
+            new HashSet<>(nodesByName.values())));
+    }
+
+    private HashMap<String, TopologyDescription.Node> addAllNodesWithoutPredecessorsOrSuccessors(final Set<String> nodeNames) {
+        final HashMap<String, TopologyDescription.Node> nodesByName = new HashMap<>();
+
+        for (final String nodeName : nodeNames) {
+            final NodeFactory nodeFactory = nodeFactories.get(nodeName);
+            final TopologyDescription.Node node;
+
+            if (nodeFactory instanceof SourceNodeFactory) {
+                node = new TopologyDescription.Source(
+                    nodeName,
+                    getSourceTopicListOrPatternAsString(nodeName));
+
+            } else if (nodeFactory instanceof ProcessorNodeFactory) {
+                node = new TopologyDescription.Processor(
+                    nodeName,
+                    getStoresOfNode(nodeName));
+
+            } else if (nodeFactory instanceof SinkNodeFactory) {
+                node = new TopologyDescription.Sink(
+                    nodeName,
+                    nodeToSinkTopic.get(nodeName));
+
+            } else {
+                throw new TopologyBuilderException("Unknown node type: " + nodeFactory.getClass().getName());
+            }
+
+            nodesByName.put(nodeName, node);
+        }
+
+        return nodesByName;
+    }
+
+    private String getSourceTopicListOrPatternAsString(final String sourceName) {
+        final Pattern sourcePattern = nodeToSourcePatterns.get(sourceName);
+
+        if (sourcePattern != null) {
+            return sourcePattern.pattern();
+        } else {
+            String sourceTopics = nodeToSourceTopics.get(sourceName).toString();
+            sourceTopics = sourceTopics.substring(1, sourceTopics.length() - 1); // trim first and last, ie. []
+
+            return sourceTopics;
+        }
+    }
+
+    private Set<String> getStoresOfNode(final String processorNode) {
+        final Set<String> stores = new HashSet<>();
+
+        for (final Map.Entry<String, StateStoreFactory> store : stateFactories.entrySet()) {
+            if (store.getValue().users.contains(processorNode)) {
+                stores.add(store.getKey());
+            }
+        }
+
+        return stores;
+    }
+
+    private void connectAllNodesToTheirPredecessorsAndSuccessors(final HashMap<String, TopologyDescription.Node> nodesByName) {
+        for (final TopologyDescription.Node node : nodesByName.values()) {
+            final NodeFactory nodeFactory = nodeFactories.get(node.name());
+
+            final String[] predecessorNames;
+            if (nodeFactory instanceof ProcessorNodeFactory) {
+                predecessorNames = ((ProcessorNodeFactory) nodeFactory).parents;
+
+            } else if (nodeFactory instanceof SinkNodeFactory) {
+                predecessorNames = ((SinkNodeFactory) nodeFactory).parents;
+
+            } else {
+                assert nodeFactory instanceof SourceNodeFactory;
+                continue;
+            }
+
+            for (final String predecessorName : predecessorNames) {
+                final TopologyDescription.Node predecessor = nodesByName.get(predecessorName);
+                node.predecessors().add(predecessor);
+                predecessor.successors().add(node);
+            }
+        }
+    }
+
+    private void describeGlobalStores(final TopologyDescription description) {
+        for (final Map.Entry<Integer, Set<String>> nodeGroup : makeNodeGroups().entrySet()) {
+            final Set<String> nodes = nodeGroup.getValue();
+
+            final Iterator<String> it = nodes.iterator();
+            while (it.hasNext()) {
+                final String node = it.next();
+
+                if (isGlobalSource(node)) {
+                    // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
+                    it.remove(); // remove sourceNode from group
+                    final String processorNode = nodes.iterator().next(); // get remaining processorNode
+
+                    description.globalStores.add(new TopologyDescription.GlobalStore(
+                        node,
+                        processorNode,
+                        ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
+                        nodeToSourceTopics.get(node).get(0)
+                    ));
+                    break;
+                }
+            }
+        }
+    }
+
 }
