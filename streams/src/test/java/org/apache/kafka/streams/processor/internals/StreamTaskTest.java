@@ -114,8 +114,8 @@ public class StreamTaskTest {
     private final MockTime time = new MockTime();
     private File baseDir;
     private StateDirectory stateDirectory;
-    private RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
-    private ThreadCache testCache =  new ThreadCache("testCache", 0, streamsMetrics);
+    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
+    private final ThreadCache testCache =  new ThreadCache("testCache", 0, streamsMetrics);
     private StreamsConfig config;
     private StreamTask task;
 
@@ -151,7 +151,7 @@ public class StreamTaskTest {
         if (task != null) {
             try {
                 task.close();
-            } catch (Exception e) {
+            } catch (final Exception e) {
                 // ignore exceptions
             }
         }
@@ -206,17 +206,17 @@ public class StreamTaskTest {
 
     @Test
     public void testMetrics() throws Exception {
-        String name = task.id().toString();
-        String[] entities = {"all", name};
-        String operation = "commit";
+        final String name = task.id().toString();
+        final String[] entities = {"all", name};
+        final String operation = "commit";
 
-        String groupName = "stream-task-metrics";
-        Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
+        final String groupName = "stream-task-metrics";
+        final Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
 
         assertNotNull(metrics.getSensor(operation));
         assertNotNull(metrics.getSensor(name + "-" + operation));
 
-        for (String entity : entities) {
+        for (final String entity : entities) {
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
                 "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
@@ -340,7 +340,6 @@ public class StreamTaskTest {
         assertFalse(task.maybePunctuate());
 
         processor.supplier.checkAndClearPunctuateResult(20L, 30L, 40L);
-
     }
 
     @SuppressWarnings("unchecked")
@@ -375,14 +374,13 @@ public class StreamTaskTest {
         try {
             task.process();
             fail("Should've thrown StreamsException");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             final String message = e.getMessage();
             assertTrue("message=" + message + " should contain topic", message.contains("topic=" + topic1[0]));
             assertTrue("message=" + message + " should contain partition", message.contains("partition=" + partition1.partition()));
             assertTrue("message=" + message + " should contain offset", message.contains("offset=" + offset));
             assertTrue("message=" + message + " should contain processor", message.contains("processor=" + processorNode.name()));
         }
-
     }
 
     @SuppressWarnings("unchecked")
@@ -395,9 +393,7 @@ public class StreamTaskTest {
             }
 
             @Override
-            public void process(final Object key, final Object value) {
-                //
-            }
+            public void process(final Object key, final Object value) {}
 
             @Override
             public void punctuate(final long timestamp) {
@@ -409,12 +405,11 @@ public class StreamTaskTest {
         try {
             task.punctuate(punctuator, 1);
             fail("Should've thrown StreamsException");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             final String message = e.getMessage();
             assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
-
     }
 
     @Test
@@ -532,9 +527,9 @@ public class StreamTaskTest {
         task.close();
         task = createTaskThatThrowsExceptionOnClose();
         try {
-            task.closeTopology();
+            task.close();
             fail("should have thrown runtime exception");
-        } catch (RuntimeException e) {
+        } catch (final RuntimeException e) {
             // ok
         }
     }
@@ -544,8 +539,8 @@ public class StreamTaskTest {
         task.close();
         task = createTaskThatThrowsExceptionOnClose();
         try {
-            task.closeTopology();
-        } catch (RuntimeException e) {
+            task.close();
+        } catch (final RuntimeException e) {
             // expected
         }
         assertTrue(processor.closed);
@@ -553,15 +548,10 @@ public class StreamTaskTest {
         assertTrue(source2.closed);
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void shouldThrowWhenClosingProducerForNonEoS() {
-        task.closeProducer();
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseProducerWhenExactlyOneEnabled() {
-        final Map properties = this.config.values();
+        final Map properties = config.values();
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         final StreamsConfig config = new StreamsConfig(properties);
 
@@ -570,7 +560,7 @@ public class StreamTaskTest {
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
 
-        task.closeProducer();
+        task.close();
 
         assertTrue(producer.closed);
     }
@@ -593,12 +583,11 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-
         return new StreamTask(taskId00, applicationId, partitions,
                               topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
     }
 
-    private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
+    private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {
         return Arrays.asList(recs);
     }
 
@@ -613,7 +602,9 @@ public class StreamTaskTest {
 
         @Override
         public void flush() {
-            flushed.set(true);
+            if (flushed != null) {
+                flushed.set(true);
+            }
         }
 
         @Override
