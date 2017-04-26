@@ -501,7 +501,6 @@ public class TransactionManagerTest {
             if (exception != null && transactionManager != null) {
                 transactionManager.maybeSetError(exception);
             }
-
         }
     }
 

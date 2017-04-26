@@ -177,7 +177,7 @@ public class MemoryRecords extends AbstractRecords {
                 long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
                 MemoryRecordsBuilder builder = builder(slice, batch.magic(), batch.compressionType(), timestampType,
                         firstOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
-                        batch.partitionLeaderEpoch());
+                        batch.isTransactional(), batch.partitionLeaderEpoch());
 
                 for (Record record : retainedRecords)
                     builder.append(record);
