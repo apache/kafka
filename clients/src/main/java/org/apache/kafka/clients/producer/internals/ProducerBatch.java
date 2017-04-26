@@ -273,4 +273,8 @@ public final class ProducerBatch {
     public long producerId() {
         return recordsBuilder.producerId();
     }
+
+    public short producerEpoch() {
+        return recordsBuilder.producerEpoch();
+    }
 }

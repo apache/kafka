@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.internals.FutureTransactionalResult;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
@@ -473,7 +474,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         if (transactionState == null)
             throw new IllegalStateException("Cannot call initTransactions without setting a transactional id.");
-
         transactionState.initializeTransactions().get();
     }
 
@@ -505,7 +505,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                          String consumerGroupId) throws ProducerFencedException {
         if (transactionState == null)
             throw new IllegalStateException("Cannot send offsets to transaction since transactions are not enabled.");
-        transactionState.sendOffsetsToTransaction(offsets, consumerGroupId).get();
+        FutureTransactionalResult result = transactionState.sendOffsetsToTransaction(offsets, consumerGroupId);
+        sender.wakeup();
+        result.get();
     }
 
     /**
@@ -517,7 +519,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         if (transactionState == null)
             throw new IllegalStateException("Cannot commit transaction since transactions are not enabled");
-        transactionState.beginCommittingTransaction().get();
+        FutureTransactionalResult result = transactionState.beginCommittingTransaction();
+        sender.wakeup();
+        result.get();
     }
 
     /**
@@ -529,7 +533,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void abortTransaction() throws ProducerFencedException {
         if (transactionState == null)
             throw new IllegalStateException("Cannot abort transaction since transactions are not enabled.");
-        transactionState.beginAbortingTransaction().get();
+        FutureTransactionalResult result = transactionState.beginAbortingTransaction();
+        sender.wakeup();
+        result.get();
     }
 
     /**
@@ -625,17 +631,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
-        if (transactionState != null) {
-            if (transactionState.isTransactional() && !transactionState.hasPid())
-                throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions when transactions are enabled.");
-
-            if (transactionState.isFenced() && transactionState.isInTransaction())
-                throw new ProducerFencedException("The current producer has been fenced off by a another producer using the same transactional id.");
-
-            if (transactionState.isCompletingTransaction())
-                throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
-        }
-
+        ensureProperTransactionalState();
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
@@ -713,6 +709,30 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (this.interceptors != null)
                 this.interceptors.onSendError(record, tp, e);
             throw e;
+        }
+    }
+
+    private void ensureProperTransactionalState() {
+        if (transactionState == null)
+            return;
+
+        if (transactionState.isTransactional() && !transactionState.hasPid())
+            throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions when transactions are enabled.");
+
+        if (transactionState.isFenced())
+            throw new ProducerFencedException("The current producer has been fenced off by a another producer using the same transactional id.");
+
+        if (transactionState.isInTransaction()) {
+            if (transactionState.isInErrorState()) {
+                String errorMessage = "Cannot perform a transactional send because at least one previous transactional request has failed with errors.";
+                Exception lastError = transactionState.lastError();
+                if (lastError != null)
+                    throw new KafkaException(errorMessage, lastError);
+                else
+                    throw new KafkaException(errorMessage);
+            }
+            if (transactionState.isCompletingTransaction())
+                throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
         }
     }
 

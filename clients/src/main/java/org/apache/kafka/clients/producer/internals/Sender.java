@@ -24,11 +24,11 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
-import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -291,7 +291,7 @@ public class Sender implements Runnable {
         }
 
         if (nextRequest.isEndTxnRequest() && transactionState.isInErrorState()) {
-            nextRequest.maybeTerminateWithError(new InvalidTxnStateException("Cannot commit transaction when there are " +
+            nextRequest.maybeTerminateWithError(new KafkaException("Cannot commit transaction when there are " +
                     "request errors. Please check your logs for the details of the errors encountered."));
             return false;
         }
@@ -458,7 +458,7 @@ public class Sender implements Runnable {
                         error);
                 if (transactionState == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionState.pidAndEpoch().producerId == batch.producerId()) {
+                } else if (transactionState.pidAndEpoch().producerId == batch.producerId() && transactionState.pidAndEpoch().epoch == batch.producerEpoch()) {
                     // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
                             transactionState.sequenceNumber(batch.topicPartition));
@@ -493,7 +493,8 @@ public class Sender implements Runnable {
         } else {
             completeBatch(batch, response);
 
-            if (transactionState != null && transactionState.pidAndEpoch().producerId == batch.producerId()) {
+            if (transactionState != null && transactionState.pidAndEpoch().producerId == batch.producerId()
+                    && transactionState.pidAndEpoch().epoch == batch.producerEpoch()) {
                 transactionState.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
                 log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
                         transactionState.sequenceNumber(batch.topicPartition));

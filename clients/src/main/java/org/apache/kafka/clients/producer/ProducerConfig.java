@@ -346,6 +346,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(TRANSACTIONAL_ID_CONFIG,
                                         Type.STRING,
                                         null,
+                                        new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
                                         TRANSACTIONAL_ID_DOC);
     }

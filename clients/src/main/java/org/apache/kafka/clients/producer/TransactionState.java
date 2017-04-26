@@ -21,6 +21,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.FutureTransactionalResult;
 import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -92,7 +93,7 @@ public class TransactionState {
         private boolean isTransitionValid(State source, State target) {
             switch (target) {
                 case INITIALIZING:
-                    return source == UNINITIALIZED || source == READY || source == ERROR;
+                    return source == UNINITIALIZED || source == ERROR;
                 case READY:
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
@@ -234,7 +235,7 @@ public class TransactionState {
     public synchronized FutureTransactionalResult initializeTransactions() {
         ensureTransactional();
         if (!transitionTo(State.INITIALIZING))
-            throw new IllegalStateException("Could not initialize transactions. Either transactions have already been " +
+            throw new KafkaException("Could not initialize transactions. Either transactions have already been " +
                     "initialized or are being initialized.");
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers.clear();
@@ -253,35 +254,27 @@ public class TransactionState {
 
     public synchronized void beginTransaction() {
         ensureTransactional();
+        maybeFailWithError();
         if (!transitionTo(State.IN_TRANSACTION))
-             throw new IllegalStateException("Producer isn't ready to begin a transaction.");
+             throw new KafkaException("Producer isn't ready to begin a transaction, most likely because there is " +
+                     "already an ongoing transaction.");
     }
 
     public synchronized FutureTransactionalResult beginCommittingTransaction() {
         ensureTransactional();
-        if (!transitionTo(State.COMMITTING_TRANSACTION)) {
-            String msg = "Cannot commit transaction, either because a transaction is already " +
-                    "being completed at the moment, or because there has been an error with a previous request.";
-            if (lastError != null)
-                throw new IllegalStateException(msg, lastError);
-            else
-                throw new IllegalStateException(msg);
-        }
-
+        maybeFailWithError();
+        if (!transitionTo(State.COMMITTING_TRANSACTION))
+            throw new KafkaException("Cannot commit transaction, most likely because a transaction is already being completed.");
         return beginCompletingTransaction(true);
     }
 
     public synchronized FutureTransactionalResult beginAbortingTransaction() {
         ensureTransactional();
-        if (!transitionTo(State.ABORTING_TRANSACTION)) {
-            String msg = "Cannot abort transaction, either because a transaction is already " +
-                    "being completed at the moment, or because there has been an error with a previous request.";
-            if (lastError != null)
-                throw new IllegalStateException(msg, lastError);
-            else
-                throw new IllegalStateException(msg);
-        }
-
+        if (isFenced())
+            throw new ProducerFencedException("There is a newer producer using the same transactional.id.");
+        if (!transitionTo(State.ABORTING_TRANSACTION))
+            throw new KafkaException("Cannot abort transaction, either because a transaction is already " +
+                    "being completed at the moment, or because there has been an error with a previous request.");
         return beginCompletingTransaction(false);
     }
 
@@ -299,14 +292,10 @@ public class TransactionState {
     public synchronized FutureTransactionalResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                            String consumerGroupId) {
         ensureTransactional();
-        if (currentState != State.IN_TRANSACTION) {
-            String msg = "Cannot send offsets to transaction either because the producer is not in an " +
-                    "active transaction or because there has been an error with one or more previous requests.";
-            if (lastError != null)
-                throw new IllegalStateException(msg, lastError);
-            else
-                throw new IllegalStateException(msg);
-        }
+        maybeFailWithError();
+        if (currentState != State.IN_TRANSACTION)
+            throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
+                    "active transaction or because there has been an error with one or more previous requests.");
 
         TransactionalRequestResult result = new TransactionalRequestResult();
         FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
@@ -397,6 +386,10 @@ public class TransactionState {
             pendingTransactionalRequests.add(addPartitionsToTransactionRequest(false));
 
         return pendingTransactionalRequests.poll();
+    }
+
+    public Exception lastError() {
+        return lastError;
     }
 
     public String transactionalId() {
@@ -494,6 +487,18 @@ public class TransactionState {
     private void ensureTransactional() {
         if (!isTransactional())
             throw new IllegalStateException("Transactional method invoked on a non-transactional producer.");
+    }
+
+    private void maybeFailWithError() {
+        if (isFenced())
+            throw new ProducerFencedException("There is a newer producer instance using the same transactional id.");
+        if (isInErrorState()) {
+            String errorMessage = "Cannot execute transactional method because we are in an error state.";
+            if (lastError != null)
+                throw new KafkaException(errorMessage, lastError);
+            else
+                throw new KafkaException(errorMessage);
+        }
     }
 
     private void needsCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {

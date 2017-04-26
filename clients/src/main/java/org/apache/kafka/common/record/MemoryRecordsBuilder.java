@@ -660,4 +660,8 @@ public class MemoryRecordsBuilder {
     public long producerId() {
         return this.producerId;
     }
+
+    public short producerEpoch() {
+        return this.producerEpoch;
+    }
 }

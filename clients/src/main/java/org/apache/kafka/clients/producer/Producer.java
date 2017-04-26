@@ -37,57 +37,28 @@ import java.util.concurrent.TimeUnit;
 public interface Producer<K, V> extends Closeable {
 
     /**
-     * Needs to be called before any of the other transaction methods. Assumes that
-     * the transactional.id is specified in the producer configuration.
-     *
-     * This method does the following:
-     *   1. Ensures any transactions initiated by previous instances of the producer
-     *      are completed. If the previous instance had failed with a transaction in
-     *      progress, it will be aborted. If the last transaction had begun completion,
-     *      but not yet finished, this method awaits its completion.
-     *   2. Gets the internal producer id and epoch, used in all future transactional
-     *      messages issued by the producer.
-     *
-     * @throws IllegalStateException if the TransactionalId for the producer is not set
-     *         in the configuration.
+     * See {@link KafkaProducer#initTransactions()}
      */
     void initTransactions();
 
     /**
-     * Should be called before the start of each new transaction.
-     *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * See {@link KafkaProducer#beginTransaction()}
      */
     void beginTransaction() throws ProducerFencedException;
 
     /**
-     * Sends a list of consumed offsets to the consumer group coordinator, and also marks
-     * those offsets as part of the current transaction. These offsets will be considered
-     * consumed only if the transaction is committed successfully.
-     *
-     * This method should be used when you need to batch consumed and produced messages
-     * together, typically in a consume-transform-produce pattern.
-     *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * See {@link KafkaProducer#sendOffsetsToTransaction(Map, String)}
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                   String consumerGroupId) throws ProducerFencedException;
 
     /**
-     * Commits the ongoing transaction.
-     *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * See {@link KafkaProducer#commitTransaction()}
      */
     void commitTransaction() throws ProducerFencedException;
 
     /**
-     * Aborts the ongoing transaction.
-     *
-     * @throws ProducerFencedException if another producer with the same
-     *         transactional.id is active.
+     * See {@link KafkaProducer#abortTransaction()}
      */
     void abortTransaction() throws ProducerFencedException;
 

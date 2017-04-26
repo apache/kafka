@@ -472,7 +472,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     private long endTimestamp() {
-        return isolationLevel == IsolationLevel.READ_COMMITTED ? ListOffsetRequest.LSO_TIMESTAMP : ListOffsetRequest.LATEST_TIMESTAMP;
+        return ListOffsetRequest.LATEST_TIMESTAMP;
     }
 
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
@@ -999,6 +999,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeEnsureValid(currentBatch);
 
                     if (isolationLevel == IsolationLevel.READ_COMMITTED && isBatchAborted(currentBatch)) {
+                        nextFetchOffset = currentBatch.lastOffset() + 1;
                         continue;
                     }
 
@@ -1056,7 +1057,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     abortedProducerIds.add(batch.producerId());
                     abortedTransactions.poll();
                 }
-                log.trace("Skipping aborted record batch with producerId {} and base offset {}", batch.producerId(), batch.baseOffset());
+                log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition: {}", batch.producerId(), batch.baseOffset(), partition);
                 return true;
             }
             return false;
@@ -1086,7 +1087,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Record firstRecord = batchIterator.hasNext() ? batchIterator.next() : null;
             boolean containsAbortMarker = firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
             if (containsAbortMarker && batchIterator.hasNext())
-                throw new CorruptRecordException("A record batch containing a control message contained more than one record.");
+                throw new CorruptRecordException("A record batch containing a control message contained more than one record. partition: " + partition + ", offset: " + batch.baseOffset());
             return containsAbortMarker;
         }
     }

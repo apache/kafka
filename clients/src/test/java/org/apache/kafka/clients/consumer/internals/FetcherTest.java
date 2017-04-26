@@ -1332,9 +1332,45 @@ public class FetcherTest {
         assertTrue(fetchedRecords.containsKey(tp1));
     }
 
-    private int appendTransactionalRecords(ByteBuffer buffer, long pid, int baseOffset, SimpleRecord... records) {
+    @Test
+    public void testConsumerPositionUpdatedWhenSkippingAbortedTransactions() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        long currentOffset = 0;
+
+        currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
+                new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
+
+        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        buffer.flip();
+
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 0));
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        subscriptions.assignFromUser(singleton(tp1));
+
+        subscriptions.seek(tp1, 0);
+
+        // normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+
+        // Ensure that we don't return any of the aborted records, but yet advance the consumer position.
+        assertFalse(fetchedRecords.containsKey(tp1));
+        assertEquals(currentOffset, (long) subscriptions.position(tp1));
+    }
+
+    private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, (int) baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
         for (SimpleRecord record : records) {
             builder.append(record);
@@ -1351,9 +1387,9 @@ public class FetcherTest {
         return 1;
     }
 
-    private int abortTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
+    private int abortTransaction(ByteBuffer buffer, long pid, long baseOffset, long timestamp) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, (int) baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
         builder.appendControlRecord(timestamp, ControlRecordType.ABORT, null);
         builder.build();
         return 1;

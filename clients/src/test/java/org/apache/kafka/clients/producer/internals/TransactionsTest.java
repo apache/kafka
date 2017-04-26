@@ -24,9 +24,9 @@ import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -455,7 +455,7 @@ public class TransactionsTest {
             commitResult.get();
             fail();  // the get() must throw an exception.
         } catch (RuntimeException e) {
-            assertTrue(e instanceof InvalidTxnStateException);
+            assertTrue(e instanceof KafkaException);
         }
 
         // Commit is not allowed, so let's abort and try again.
