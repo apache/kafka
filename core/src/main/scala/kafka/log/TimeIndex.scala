@@ -207,7 +207,4 @@ class TimeIndex(file: File,
           " bytes which is not positive or not a multiple of 12.")
   }
 
-  def isEmpty: Boolean = inLock(lock) {
-    _entries == 0
-  }
 }

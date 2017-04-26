@@ -859,7 +859,7 @@ class Log(@volatile var dir: File,
       } else {
         return isolationLevel match {
           case IsolationLevel.READ_UNCOMMITTED => fetchInfo
-          case IsolationLevel.READ_COMMITTED => withAbortedTransactions(startOffset, segmentEntry, fetchInfo)
+          case IsolationLevel.READ_COMMITTED => addAbortedTransactions(startOffset, segmentEntry, fetchInfo)
         }
       }
     }
@@ -870,8 +870,8 @@ class Log(@volatile var dir: File,
     FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
   }
 
-  private def withAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
-                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
+  private def addAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
+                                     fetchInfo: FetchDataInfo): FetchDataInfo = {
     val fetchSize = fetchInfo.records.sizeInBytes
     val startOffsetPosition = OffsetPosition(startOffset, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
     val upperBoundOffset = segmentEntry.getValue.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {

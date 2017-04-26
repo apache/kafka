@@ -16,7 +16,7 @@
  */
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
@@ -24,6 +24,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.Utils
 
@@ -116,11 +117,10 @@ private[log] class TransactionIndex(var file: File) extends Logging {
           Utils.readFully(channel, buffer, position)
           buffer.flip()
 
-          // FIXME: IF we want to do this, we need to be able to reliably determine the size across versions
           val abortedTxn = new AbortedTxn(buffer)
           if (abortedTxn.version > AbortedTxn.CurrentVersion)
-            trace(s"Reading aborted txn entry with version ${abortedTxn.version} as current " +
-              s"version ${AbortedTxn.CurrentVersion}")
+            throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
+              s"current version is ${AbortedTxn.CurrentVersion}")
 
           if (abortedTxn.lastOffset >= fetchOffset && abortedTxn.firstOffset < upperBoundOffset)
             abortedTransactions += abortedTxn.asAbortedTransaction

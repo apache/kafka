@@ -27,7 +27,7 @@ import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.record.FileRecords.RecordBatchPosition
+import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 
@@ -154,7 +154,7 @@ class LogSegment(val log: FileRecords,
     *        message or null if no message meets this criteria.
    */
   @threadsafe
-  private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): RecordBatchPosition = {
+  private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): LogOffsetPosition = {
     val mapping = index.lookup(offset)
     log.searchForOffsetWithSize(offset, max(mapping.position, startingFilePosition))
   }
