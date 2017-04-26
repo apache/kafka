@@ -63,24 +63,8 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
-    private boolean requiresPoll = true;
     private final Time time;
     private final TaskMetrics metrics;
-    private final Runnable commitDelegate = new Runnable() {
-        @Override
-        public void run() {
-            // 1) flush local state
-            stateMgr.flush();
-
-            log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
-            // 2) flush produced records in the downstream and change logs of local states
-            recordCollector.flush();
-            // 3) write checkpoints for any local state
-            stateMgr.checkpoint(recordCollectorOffsets());
-            // 4) commit consumed offsets if it is dirty already
-            commitOffsets();
-        }
-    };
 
     /**
      * Create {@link StreamTask} with its assigned partitions
@@ -138,8 +122,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // initialize the topology with its own context
         processorContext = new ProcessorContextImpl(id, this, config, recordCollector, stateMgr, metrics, cache);
         this.time = time;
-        // initialize the state stores
-        log.info("{} Initializing state stores", logPrefix);
+        log.info("{} Initialize task", logPrefix);
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
         initTopology();
@@ -155,7 +138,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @return the number of added records
      */
     @SuppressWarnings("unchecked")
-    public int addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
+    public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         final int oldQueueSize = partitionGroup.numBuffered();
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
@@ -163,7 +146,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        if (newQueueSize > this.maxBufferedSize) {
+        if (newQueueSize > maxBufferedSize) {
             consumer.pause(singleton(partition));
         }
 
@@ -173,7 +156,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     /**
      * @return The number of records left in the buffer of this task's partition group
      */
-    public int numBuffered() {
+    int numBuffered() {
         return partitionGroup.numBuffered();
     }
 
@@ -185,20 +168,17 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @SuppressWarnings("unchecked")
     public boolean process() {
         // get the next record to process
-        StampedRecord record = partitionGroup.nextRecord(recordInfo);
+        final StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
         // if there is no record to process, return immediately
         if (record == null) {
-            requiresPoll = true;
             return false;
         }
-
-        requiresPoll = false;
 
         try {
             // process the record by passing to the source node of the topology
             final ProcessorNode currNode = recordInfo.node();
-            TopicPartition partition = recordInfo.partition();
+            final TopicPartition partition = recordInfo.partition();
 
             log.trace("{} Start processing one record [{}]", logPrefix, record);
             final ProcessorRecordContext recordContext = createRecordContext(record);
@@ -213,22 +193,17 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == this.maxBufferedSize) {
+            if (recordInfo.queue().size() == maxBufferedSize) {
                 consumer.resume(singleton(partition));
-                requiresPoll = true;
             }
-
-            if (partitionGroup.topQueueSize() <= this.maxBufferedSize) {
-                requiresPoll = true;
-            }
-        } catch (KafkaException ke) {
+        } catch (final KafkaException e) {
             throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
                                               id.toString(),
                                               processorContext.currentNode().name(),
                                               record.topic(),
                                               record.partition(),
                                               record.offset()
-                                              ), ke);
+                                              ), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
@@ -241,32 +216,30 @@ public class StreamTask extends AbstractTask implements Punctuator {
         processorContext.setCurrentNode(currNode);
     }
 
-    public boolean requiresPoll() {
-        return requiresPoll;
-    }
-
     /**
      * Possibly trigger registered punctuation functions if
      * current partition group timestamp has reached the defined stamp
      */
-    public boolean maybePunctuate() {
-        long timestamp = partitionGroup.timestamp();
+    boolean maybePunctuate() {
+        final long timestamp = partitionGroup.timestamp();
 
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
-        if (timestamp == TimestampTracker.NOT_KNOWN)
+        if (timestamp == TimestampTracker.NOT_KNOWN) {
             return false;
-        else
+        } else {
             return punctuationQueue.mayPunctuate(timestamp, this);
+        }
     }
 
     /**
      * @throws IllegalStateException if the current node is not null
      */
     @Override
-    public void punctuate(ProcessorNode node, long timestamp) {
-        if (processorContext.currentNode() != null)
+    public void punctuate(final ProcessorNode node, final long timestamp) {
+        if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
+        }
 
         final StampedRecord stampedRecord = new StampedRecord(DUMMY_RECORD, timestamp);
         updateProcessorContext(createRecordContext(stampedRecord), node);
@@ -275,30 +248,67 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
         try {
             node.punctuate(timestamp);
-        } catch (KafkaException ke) {
-            throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), ke);
+        } catch (final KafkaException e) {
+            throw new StreamsException(String.format("Exception caught in punctuate. taskId=%s processor=%s", id,  node.name()), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
     }
 
     /**
-     * Commit the current task state
+     * <pre>
+     *  - flush state and producer
+     *  - write checkpoint
+     *  - commit offsets
+     * </pre>
      */
+    @Override
     public void commit() {
-        metrics.metrics.measureLatencyNs(time, commitDelegate, metrics.taskCommitTimeSensor);
+        log.trace("{} Committing", logPrefix);
+        metrics.metrics.measureLatencyNs(
+            time,
+            new Runnable() {
+                @Override
+                public void run() {
+                    flushState();
+                    stateMgr.checkpoint(recordCollectorOffsets());
+                    commitOffsets();
+                }
+            },
+            metrics.taskCommitTimeSensor);
     }
 
     /**
-     * commit consumed offsets if needed
+     * <pre>
+     *  - close topology
+     *  - {@link #commit()}
+     *    - flush state and producer
+     *    - write checkpoint
+     *    - commit offsets
+     * </pre>
      */
     @Override
-    public void commitOffsets() {
+    public void suspend() {
+        log.info("{} Suspending task", logPrefix);
+        closeTopology();
+        commit();
+    }
+
+    /**
+     * re-initialize the task
+     */
+    public void resume() {
+        log.info("{} Resuming task", logPrefix);
+        initTopology();
+    }
+
+    private void commitOffsets() {
+        log.trace("{} Committing offsets", logPrefix);
         if (commitOffsetNeeded) {
-            Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
-            for (Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
-                TopicPartition partition = entry.getKey();
-                long offset = entry.getValue() + 1;
+            final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
+            for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+                final TopicPartition partition = entry.getKey();
+                final long offset = entry.getValue() + 1;
                 consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
                 stateMgr.putOffsetLimit(partition, offset);
             }
@@ -317,15 +327,15 @@ public class StreamTask extends AbstractTask implements Punctuator {
     /**
      * Whether or not a request has been made to commit the current state
      */
-    public boolean commitNeeded() {
-        return this.commitRequested;
+    boolean commitNeeded() {
+        return commitRequested;
     }
 
     /**
      * Request committing the current task's state
      */
-    public void needCommit() {
-        this.commitRequested = true;
+    void needCommit() {
+        commitRequested = true;
     }
 
     /**
@@ -334,18 +344,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param interval  the interval in milliseconds
      * @throws IllegalStateException if the current node is not null
      */
-    public void schedule(long interval) {
-        if (processorContext.currentNode() == null)
+    public void schedule(final long interval) {
+        if (processorContext.currentNode() == null) {
             throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
+        }
 
         punctuationQueue.schedule(new PunctuationSchedule(processorContext.currentNode(), interval));
     }
 
-    @Override
-    public void initTopology() {
+    private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.info("{} Initializing processor nodes of the topology", logPrefix);
-        for (ProcessorNode node : this.topology.processors()) {
+        for (final ProcessorNode node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.init(processorContext);
@@ -355,19 +365,19 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
     }
 
-    @Override
-    public void closeTopology() {
+    private void closeTopology() {
+        log.debug("{} Closing processor topology", logPrefix);
 
-        this.partitionGroup.clear();
+        partitionGroup.clear();
 
         // close the processors
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
-        for (ProcessorNode node : this.topology.processors()) {
+        for (final ProcessorNode node : topology.processors()) {
             processorContext.setCurrentNode(node);
             try {
                 node.close();
-            } catch (RuntimeException e) {
+            } catch (final RuntimeException e) {
                 exception = e;
             } finally {
                 processorContext.setCurrentNode(null);
@@ -380,26 +390,35 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     /**
-     * @throws RuntimeException if an error happens during closing of processor nodes
+     * <pre>
+     *  - {@link #suspend()}
+     *    - close topology
+     *    - {@link #commit()}
+     *      - flush state and producer
+     *      - write checkpoint
+     *      - commit offsets
+     *  - close state
+     * </pre>
      */
     @Override
     public void close() {
-        log.debug("{} Closing processor topology", logPrefix);
-
-        this.partitionGroup.close();
-        closeTopology();
-        metrics.removeAllSensors();
-    }
-
-    void closeProducer() {
-        if (exactlyOnceEnabled) {
-            try {
-                recordCollector.close();
-            } catch (final Throwable e) {
-                log.error("{} Failed to close producer: ", logPrefix, e);
+        log.info("{} Closing task", logPrefix);
+        try {
+            suspend();
+            closeStateManager(true);
+            partitionGroup.close();
+            metrics.removeAllSensors();
+        } catch (final RuntimeException e) {
+            closeStateManager(false);
+            throw e;
+        } finally {
+            if (exactlyOnceEnabled) {
+                try {
+                    recordCollector.close();
+                } catch (final Throwable e) {
+                    log.error("{} Failed to close producer: ", logPrefix, e);
+                }
             }
-        } else {
-            throw new IllegalStateException("Tasks should only close producers if exactly-once semantics is enabled.");
         }
     }
 
@@ -409,7 +428,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @SuppressWarnings("unchecked")
-    private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source, final TimestampExtractor timestampExtractor) {
+    private RecordQueue createRecordQueue(final TopicPartition partition, final SourceNode source, final TimestampExtractor timestampExtractor) {
         return new RecordQueue(partition, source, timestampExtractor);
     }
 
@@ -436,19 +455,20 @@ public class StreamTask extends AbstractTask implements Punctuator {
         final Sensor taskCommitTimeSensor;
 
 
-        public TaskMetrics(StreamsMetrics metrics) {
-            String name = id.toString();
+        public TaskMetrics(final StreamsMetrics metrics) {
+            final String name = id.toString();
             this.metrics = (StreamsMetricsImpl) metrics;
-            this.taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG, "streams-task-id", name);
+            taskCommitTimeSensor = metrics.addLatencyAndThroughputSensor("task", name, "commit", Sensor.RecordingLevel.DEBUG, "streams-task-id", name);
         }
 
-        public void removeAllSensors() {
+        void removeAllSensors() {
             metrics.removeSensor(taskCommitTimeSensor);
         }
     }
 
     @Override
-    public void flushState() {
+    void flushState() {
+        log.trace("{} Flushing state and producer topology", logPrefix);
         super.flushState();
         recordCollector.flush();
     }
