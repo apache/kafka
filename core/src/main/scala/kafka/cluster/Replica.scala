@@ -135,6 +135,7 @@ class Replica(val brokerId: Int,
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
       highWatermarkMetadata = newHighWatermark
+      log.foreach(_.onHighWatermarkIncremented(newHighWatermark.messageOffset))
       trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
     } else {
       throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")
@@ -153,8 +154,7 @@ class Replica(val brokerId: Int,
   def lastStableOffset: LogOffsetMetadata = {
     log.map { log =>
       log.firstUnstableOffset match {
-        case Some(logOffsetMetadata) if logOffsetMetadata.messageOffset < highWatermark.messageOffset =>
-          logOffsetMetadata
+        case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark.messageOffset => offsetMetadata
         case _ => highWatermark
       }
     }.getOrElse(throw new KafkaException(s"Cannot fetch last stable offset on partition $topicPartition's " +

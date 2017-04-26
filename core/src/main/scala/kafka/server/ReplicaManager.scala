@@ -663,7 +663,9 @@ class ReplicaManager(val config: KafkaConfig,
           getReplicaOrException(tp)
 
         // decide whether to only fetch committed data (i.e. messages below high watermark)
-        val maxOffsetOpt = if (readOnlyCommitted)
+        val maxOffsetOpt = if (isolationLevel == IsolationLevel.READ_COMMITTED)
+          Some(localReplica.lastStableOffset.messageOffset)
+        else if (readOnlyCommitted)
           Some(localReplica.highWatermark.messageOffset)
         else
           None

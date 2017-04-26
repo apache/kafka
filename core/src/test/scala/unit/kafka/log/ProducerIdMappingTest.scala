@@ -170,7 +170,40 @@ class ProducerIdMappingTest extends JUnitSuite {
   }
 
   @Test
-  def testExpirePids(): Unit = {
+  def testFirstUnstableOffsetAfterTruncation(): Unit = {
+    val epoch = 0.toShort
+    val sequence = 0
+
+    append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
+    assertEquals(Some(99), idMapping.firstUnstableOffset)
+    idMapping.maybeTakeSnapshot()
+
+    appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 105)
+    idMapping.ackTransactionsCompletedBefore(106)
+    assertEquals(None, idMapping.firstUnstableOffset)
+    idMapping.maybeTakeSnapshot()
+
+    append(idMapping, pid, sequence + 1, epoch, offset = 106)
+    idMapping.truncateAndReload(0L, 106, time.milliseconds())
+    assertEquals(None, idMapping.firstUnstableOffset)
+
+    idMapping.truncateAndReload(0L, 100L, time.milliseconds())
+    assertEquals(Some(99), idMapping.firstUnstableOffset)
+  }
+
+  @Test
+  def testFirstUnstableOffsetAfterEviction(): Unit = {
+    val epoch = 0.toShort
+    val sequence = 0
+    append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
+    assertEquals(Some(99), idMapping.firstUnstableOffset)
+    append(idMapping, 2L, 0, epoch, offset = 106)
+    idMapping.evictUnretainedPids(100)
+    assertEquals(None, idMapping.firstUnstableOffset)
+  }
+
+  @Test
+  def testEvictUnretainedPids(): Unit = {
     val epoch = 0.toShort
 
     append(idMapping, pid, 0, epoch, 0L)
@@ -183,7 +216,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     idMapping.maybeTakeSnapshot()
     assertEquals(Set(2, 4), currentSnapshotOffsets)
 
-    idMapping.expirePids(2)
+    idMapping.evictUnretainedPids(2)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(Set(anotherPid), idMapping.activePids.keySet)
     assertEquals(None, idMapping.lastEntry(pid))
@@ -192,12 +225,12 @@ class ProducerIdMappingTest extends JUnitSuite {
     assertTrue(maybeEntry.isDefined)
     assertEquals(3L, maybeEntry.get.lastOffset)
 
-    idMapping.expirePids(3)
+    idMapping.evictUnretainedPids(3)
     assertEquals(Set(anotherPid), idMapping.activePids.keySet)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(4, idMapping.mapEndOffset)
 
-    idMapping.expirePids(5)
+    idMapping.evictUnretainedPids(5)
     assertEquals(Set(), idMapping.activePids.keySet)
     assertEquals(Set(), currentSnapshotOffsets)
     assertEquals(5, idMapping.mapEndOffset)
@@ -254,20 +287,20 @@ class ProducerIdMappingTest extends JUnitSuite {
     val epoch = 5.toShort
     val sequence = 0
 
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUndecidedOffset)
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUndecidedOffset)
 
     val anotherPid = 2L
     append(idMapping, anotherPid, sequence, epoch, offset = 105, isTransactional = true)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUndecidedOffset)
 
     appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 109)
-    assertEquals(Some(105L), idMapping.firstUnstableOffset)
+    assertEquals(Some(105L), idMapping.firstUndecidedOffset)
 
     appendControl(idMapping, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUndecidedOffset)
   }
 
   @Test
@@ -276,13 +309,13 @@ class ProducerIdMappingTest extends JUnitSuite {
     val sequence = 0
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUndecidedOffset)
 
     time.sleep(maxPidExpirationMs + 1)
     idMapping.removeExpiredPids(time.milliseconds)
 
     assertTrue(idMapping.lastEntry(pid).isDefined)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUndecidedOffset)
 
     idMapping.removeExpiredPids(time.milliseconds)
     assertTrue(idMapping.lastEntry(pid).isDefined)
@@ -293,7 +326,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val epoch = 5.toShort
     val sequence = 0
 
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUndecidedOffset)
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
     appendControl(idMapping, pid, 3.toShort, ControlRecordType.COMMIT, offset=100)
@@ -309,6 +342,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val completedTxn = producerAppendInfo.appendControl(ControlRecord(controlType, pid, epoch, offset, timestamp))
     mapping.update(producerAppendInfo)
     mapping.completeTxn(completedTxn)
+    mapping.updateMapEndOffset(offset + 1)
   }
 
   private def append(mapping: ProducerIdMapping,

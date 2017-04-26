@@ -84,7 +84,15 @@ case class LogAppendInfo(var firstOffset: Long,
                          isDuplicate: Boolean = false)
 
 case class ControlRecord(controlType: ControlRecordType, pid: Long, epoch: Short, offset: Long, timestamp: Long)
-case class CompletedTxn(pid: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean)
+case class CompletedTxn(pid: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) extends Ordered[CompletedTxn] {
+  override def compare(that: CompletedTxn): Int = {
+    val res = this.firstOffset compare that.firstOffset
+    if (res == 0)
+      this.pid compare that.pid
+    else
+      res
+  }
+}
 
 /**
  * An append-only log for storing messages.
@@ -146,7 +154,6 @@ class Log(@volatile var dir: File,
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
-  /* Construct and load PID map */
   private val pidMap = new ProducerIdMapping(config, topicPartition, dir, maxPidExpirationMs)
 
   /* the actual segments of the log */
@@ -570,7 +577,6 @@ class Log(@volatile var dir: File,
           maxTimestampInMessages = appendInfo.maxTimestamp,
           maxOffsetInMessages = appendInfo.lastOffset)
 
-        // The incoming record doesn't have any duplicates. Append it to the local log.
         segment.append(firstOffset = appendInfo.firstOffset,
           largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
@@ -589,7 +595,7 @@ class Log(@volatile var dir: File,
         // The index must be updated before we can advance the LSO, but the LSO value must take
         // into account the completed transaction.
         for (completedTxn <- appendInfo.completedTransactions) {
-          val firstUnstableOffset = pidMap.firstUnstableOffset(completedTxn)
+          val firstUnstableOffset = pidMap.firstUndecidedOffsetExcluding(completedTxn)
           val lastStableOffset = firstUnstableOffset.getOrElse(completedTxn.lastOffset + 1)
           segment.updateTxnIndex(completedTxn, lastStableOffset)
           pidMap.completeTxn(completedTxn)
@@ -615,6 +621,13 @@ class Log(@volatile var dir: File,
       }
     } catch {
       case e: IOException => throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
+    }
+  }
+
+  def onHighWatermarkIncremented(highWatermark: Long): Unit = {
+    lock synchronized {
+      pidMap.ackTransactionsCompletedBefore(highWatermark)
+      updateFirstUnstableOffset()
     }
   }
 
@@ -800,7 +813,8 @@ class Log(@volatile var dir: File,
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None,
-           minOneMessage: Boolean = false, isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): FetchDataInfo = {
+           minOneMessage: Boolean = false,
+           isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
     // Because we don't use lock for reading, the synchronization is a little bit tricky.
@@ -974,7 +988,7 @@ class Log(@volatile var dir: File,
         deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearEarliest(logStartOffset)
-        pidMap.expirePids(logStartOffset)
+        pidMap.evictUnretainedPids(logStartOffset)
       }
     }
     numToDelete

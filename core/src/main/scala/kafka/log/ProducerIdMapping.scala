@@ -230,7 +230,7 @@ object ProducerIdMapping {
           .set(LastOffsetField, entry.lastOffset)
           .set(OffsetDeltaField, entry.offsetDelta)
           .set(TimestampField, entry.timestamp)
-          .set(CurrentTxnFirstOffsetField, -1L)
+          .set(CurrentTxnFirstOffsetField, entry.currentTxnFirstOffset)
         pidEntryStruct
     }.toArray
     struct.set(PidEntriesField, entriesArray)
@@ -278,17 +278,45 @@ class ProducerIdMapping(val config: LogConfig,
                         val maxPidExpirationMs: Int) extends Logging {
   import ProducerIdMapping._
 
-  private val pidMap = mutable.Map[Long, ProducerIdEntry]()
+  private val pidMap = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
 
   // ongoing transactions sorted by the first offset of the transaction
-  private val ongoingTransactions = mutable.TreeSet.empty[OngoingTxn]
+  private val ongoingTxns = mutable.TreeSet.empty[OngoingTxn]
 
-  def firstUnstableOffset: Option[Long] = ongoingTransactions.headOption.map(_.firstOffset)
+  // completed transactions whose markers are at offsets above the high watermark
+  private val unackedCompletedTxns = mutable.TreeSet.empty[CompletedTxn]
 
-  def firstUnstableOffset(withoutTxn: CompletedTxn): Option[Long] =
-    ongoingTransactions.find(txn => txn.firstOffset != withoutTxn.firstOffset).map(_.firstOffset)
+  /**
+   * An unstable offset is one which is either undecided (i.e. its ultimate outcome is not yet known),
+   * or one that is decided, but may not have been replicated (i.e. any transaction which has a COMMIT/ABORT
+   * marker written at a higher offset than the current high watermark).
+   */
+  def firstUnstableOffset: Option[Long] = {
+    val firstUnackedOffset = unackedCompletedTxns.headOption.map(_.firstOffset)
+    firstUndecidedOffset.map { offset =>
+      math.min(offset, firstUnackedOffset.getOrElse(Long.MaxValue))
+    }.orElse(firstUnackedOffset)
+  }
+
+  /**
+   * Acknowledge all transactions which have been completed before a given offset. This allows the LSO
+   * to advance to the next unstable offset.
+   */
+  def ackTransactionsCompletedBefore(offset: Long): Unit = unackedCompletedTxns.retain(_.lastOffset >= offset)
+
+  /**
+   * The first undecided offset is the earliest transactional message which has not yet been committed
+   * or aborted.
+   */
+  def firstUndecidedOffset: Option[Long] = ongoingTxns.headOption.map(_.firstOffset)
+
+  /**
+   * Get the next first undecided offset once the given transaction is completed.
+   */
+  def firstUndecidedOffsetExcluding(txn: CompletedTxn): Option[Long] =
+    ongoingTxns.find(txn => txn.firstOffset != txn.firstOffset).map(_.firstOffset)
 
   /**
    * Returns the last offset of this map
@@ -301,16 +329,17 @@ class ProducerIdMapping(val config: LogConfig,
   def activePids: immutable.Map[Long, ProducerIdEntry] = pidMap.toMap
 
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
-    pidMap.clear()
-
     while (true) {
       latestSnapshotFile match {
         case Some(file) =>
           try {
             info(s"Loading PID mapping from snapshot file ${file.getName} for partition $topicPartition")
             readSnapshot(file).foreach { case (pid, entry) =>
-              if (!isExpired(currentTime, entry))
+              if (!isExpired(currentTime, entry)) {
                 pidMap.put(pid, entry)
+                if (entry.currentTxnFirstOffset >= 0)
+                  ongoingTxns += OngoingTxn(pid, entry.currentTxnFirstOffset)
+              }
             }
 
             lastSnapOffset = Log.offsetFromFilename(file.getName)
@@ -344,13 +373,16 @@ class ProducerIdMapping(val config: LogConfig,
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     if (logEndOffset != mapEndOffset) {
+      pidMap.clear()
+      ongoingTxns.clear()
+      unackedCompletedTxns.clear()
       deleteSnapshotFiles { file =>
         val offset = Log.offsetFromFilename(file.getName)
         offset > logEndOffset || offset <= logStartOffset
       }
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
-      expirePids(logStartOffset)
+      evictUnretainedPids(logStartOffset)
     }
   }
 
@@ -362,7 +394,7 @@ class ProducerIdMapping(val config: LogConfig,
       throw new IllegalArgumentException("Invalid PID passed to update")
     val entry = appendInfo.lastEntry
     pidMap.put(appendInfo.pid, entry)
-    ongoingTransactions ++= appendInfo.startedTransactions
+    ongoingTxns ++= appendInfo.startedTransactions
   }
 
   def updateMapEndOffset(lastOffset: Long): Unit = {
@@ -398,10 +430,16 @@ class ProducerIdMapping(val config: LogConfig,
 
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and expires all pids which have a smaller last written offset.
+   * the new start offset and removes all pids which have a smaller last written offset.
    */
-  def expirePids(logStartOffset: Long) {
-    pidMap.retain((pid, entry) => entry.lastOffset >= logStartOffset)
+  def evictUnretainedPids(logStartOffset: Long) {
+    val evictedPidEntries = pidMap.filter(_._2.lastOffset < logStartOffset)
+    val evictedPids = evictedPidEntries.keySet
+
+    ongoingTxns.retain(txn => !evictedPids.contains(txn.pid))
+    unackedCompletedTxns.retain(txn => !evictedPids.contains(txn.pid))
+    pidMap --= evictedPids
+
     deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= logStartOffset)
     if (lastMapOffset < logStartOffset)
       lastMapOffset = logStartOffset
@@ -413,13 +451,17 @@ class ProducerIdMapping(val config: LogConfig,
    */
   def truncate() {
     pidMap.clear()
+    ongoingTxns.clear()
+    unackedCompletedTxns.clear()
     deleteSnapshotFiles()
     lastSnapOffset = 0L
     lastMapOffset = 0L
   }
 
-  def completeTxn(completedTxn: CompletedTxn): Unit =
-    ongoingTransactions.remove(OngoingTxn(completedTxn.pid, completedTxn.firstOffset))
+  def completeTxn(completedTxn: CompletedTxn): Unit = {
+    ongoingTxns -= OngoingTxn(completedTxn.pid, completedTxn.firstOffset)
+    unackedCompletedTxns += completedTxn
+  }
 
   private def maybeRemoveOldestSnapshot() {
     val list = listSnapshotFiles
