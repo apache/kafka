@@ -167,7 +167,7 @@ public class KStreamBuilderTest {
     @Test
     public void shouldStillMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
         builder.table("topic1", "table1");
-        builder.table("topic2", null);
+        builder.table("topic2", (String) null);
 
         final ProcessorTopology topology = builder.build(null);
 
