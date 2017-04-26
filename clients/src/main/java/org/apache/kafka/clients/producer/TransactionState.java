@@ -52,13 +52,6 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
 
-import static org.apache.kafka.clients.producer.TransactionState.State.ABORTING_TRANSACTION;
-import static org.apache.kafka.clients.producer.TransactionState.State.COMMITTING_TRANSACTION;
-import static org.apache.kafka.clients.producer.TransactionState.State.ERROR;
-import static org.apache.kafka.clients.producer.TransactionState.State.FENCED;
-import static org.apache.kafka.clients.producer.TransactionState.State.INITIALIZING;
-import static org.apache.kafka.clients.producer.TransactionState.State.IN_TRANSACTION;
-import static org.apache.kafka.clients.producer.TransactionState.State.READY;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
@@ -86,7 +79,7 @@ public class TransactionState {
     private volatile State currentState = State.UNINITIALIZED;
     private Exception lastError = null;
 
-    public enum State {
+    private enum State {
         UNINITIALIZED,
         INITIALIZING,
         READY,
@@ -240,7 +233,7 @@ public class TransactionState {
 
     public synchronized FutureTransactionalResult initializeTransactions() {
         ensureTransactional();
-        if (!transitionTo(INITIALIZING))
+        if (!transitionTo(State.INITIALIZING))
             throw new IllegalStateException("Could not initialize transactions. Either transactions have already been " +
                     "initialized or are being initialized.");
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
@@ -258,16 +251,15 @@ public class TransactionState {
         return resultFuture;
     }
 
-
     public synchronized void beginTransaction() {
         ensureTransactional();
-        if (!transitionTo(IN_TRANSACTION))
+        if (!transitionTo(State.IN_TRANSACTION))
              throw new IllegalStateException("Producer isn't ready to begin a transaction.");
     }
 
     public synchronized FutureTransactionalResult beginCommittingTransaction() {
         ensureTransactional();
-        if (!transitionTo(COMMITTING_TRANSACTION)) {
+        if (!transitionTo(State.COMMITTING_TRANSACTION)) {
             String msg = "Cannot commit transaction, either because a transaction is already " +
                     "being completed at the moment, or because there has been an error with a previous request.";
             if (lastError != null)
@@ -281,7 +273,7 @@ public class TransactionState {
 
     public synchronized FutureTransactionalResult beginAbortingTransaction() {
         ensureTransactional();
-        if (!transitionTo(ABORTING_TRANSACTION)) {
+        if (!transitionTo(State.ABORTING_TRANSACTION)) {
             String msg = "Cannot abort transaction, either because a transaction is already " +
                     "being completed at the moment, or because there has been an error with a previous request.";
             if (lastError != null)
@@ -307,7 +299,7 @@ public class TransactionState {
     public synchronized FutureTransactionalResult sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                                                            String consumerGroupId) {
         ensureTransactional();
-        if (currentState != IN_TRANSACTION) {
+        if (currentState != State.IN_TRANSACTION) {
             String msg = "Cannot send offsets to transaction either because the producer is not in an " +
                     "active transaction or because there has been an error with one or more previous requests.";
             if (lastError != null)
@@ -420,19 +412,19 @@ public class TransactionState {
     }
 
     public boolean isFenced() {
-        return currentState == FENCED;
+        return currentState == State.FENCED;
     }
 
     public boolean isCompletingTransaction() {
-        return currentState == COMMITTING_TRANSACTION || currentState == ABORTING_TRANSACTION;
+        return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
     public boolean isInTransaction() {
-        return currentState == IN_TRANSACTION || isCompletingTransaction();
+        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
     }
 
     public boolean isInErrorState() {
-        return currentState == ERROR;
+        return currentState == State.ERROR;
     }
 
 
@@ -463,9 +455,9 @@ public class TransactionState {
     public synchronized boolean maybeSetError(Exception exception) {
         if (isTransactional() && isInTransaction()) {
             if (exception instanceof ProducerFencedException)
-                transitionTo(FENCED, exception);
+                transitionTo(State.FENCED, exception);
             else
-                transitionTo(ERROR, exception);
+                transitionTo(State.ERROR, exception);
             return true;
         }
         return false;
@@ -488,7 +480,7 @@ public class TransactionState {
     }
 
     private boolean transitionTo(State target, Exception error) {
-        if (target == ERROR && error != null)
+        if (target == State.ERROR && error != null)
             lastError = error;
         if (currentState.isTransitionValid(currentState, target)) {
             currentState = target;
@@ -530,11 +522,11 @@ public class TransactionState {
 
     // visible for testing
     public boolean isReadyForTransaction() {
-        return isTransactional() && currentState == READY;
+        return isTransactional() && currentState == State.READY;
     }
 
     private void completeTransaction() {
-        transitionTo(READY);
+        transitionTo(State.READY);
         lastError = null;
         partitionsInTransaction.clear();
     }
@@ -603,7 +595,7 @@ public class TransactionState {
         public void onComplete(ClientResponse response) {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
                 log.error("Detected more than one inflight transactional request. This should never happen.");
-                transitionTo(ERROR);
+                transitionTo(State.ERROR);
             }
 
             resetInFlightRequestCorrelationId();
@@ -615,7 +607,7 @@ public class TransactionState {
                     result.done();
                 }
                 log.error("Could not execute transactional request because the broker isn't on the right version.");
-                transitionTo(ERROR, Errors.UNSUPPORTED_VERSION.exception());
+                transitionTo(State.ERROR, Errors.UNSUPPORTED_VERSION.exception());
             } else if (response.hasResponse()) {
                 handleResponse(response.responseBody());
             } else {
@@ -624,7 +616,7 @@ public class TransactionState {
                     result.done();
                 }
                 log.error("Could not execute transactional request for unknown reasons");
-                transitionTo(ERROR, Errors.UNKNOWN.exception());
+                transitionTo(State.ERROR, Errors.UNKNOWN.exception());
             }
         }
 
@@ -645,7 +637,7 @@ public class TransactionState {
             Errors error = initPidResponse.error();
             if (error == Errors.NONE) {
                 setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
-                transitionTo(READY);
+                transitionTo(State.READY);
                 lastError = null;
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
@@ -654,7 +646,7 @@ public class TransactionState {
                 reenqueue();
             } else {
                 result.setError(error.exception());
-                transitionTo(ERROR, error.exception());
+                transitionTo(State.ERROR, error.exception());
             }
 
             if (error == Errors.NONE || !result.isSuccessful())
@@ -688,15 +680,15 @@ public class TransactionState {
             } else if (error == Errors.INVALID_PID_MAPPING || error == Errors.INVALID_TXN_STATE) {
                 log.error("Seems like the broker has bad transaction state. producerId: {}, error: {}. message: {}",
                         pidAndEpoch.producerId, error, error.message());
-                transitionTo(ERROR, error.exception());
+                transitionTo(State.ERROR, error.exception());
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(FENCED, error.exception());
+                transitionTo(State.FENCED, error.exception());
                 log.error("Epoch has become invalid: producerId: {}. epoch: {}. Message: {}", pidAndEpoch.producerId, pidAndEpoch.epoch, error.message());
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                transitionTo(ERROR, error.exception());
+                transitionTo(State.ERROR, error.exception());
                 log.error("No permissions add some partitions to the transaction: {}", error.message());
             } else {
-                transitionTo(ERROR, error.exception());
+                transitionTo(State.ERROR, error.exception());
                 log.error("Could not add partitions to transaction due to unknown error: {}", error.message());
             }
         }
@@ -731,11 +723,11 @@ public class TransactionState {
             } else if (findCoordinatorResponse.error() == Errors.COORDINATOR_NOT_AVAILABLE) {
                 reenqueue();
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                transitionTo(ERROR, findCoordinatorResponse.error().exception());
+                transitionTo(State.ERROR, findCoordinatorResponse.error().exception());
                 log.error("Not authorized to access the group with type {} and key {}. Message: {} ", type,
                         coordinatorKey, findCoordinatorResponse.error().message());
             } else {
-                transitionTo(ERROR, findCoordinatorResponse.error().exception());
+                transitionTo(State.ERROR, findCoordinatorResponse.error().exception());
                 log.error("Could not find a coordinator with type {} for unknown reasons. coordinatorKey: {}", type,
                         coordinatorKey, findCoordinatorResponse.error().message());
             }
@@ -767,11 +759,11 @@ public class TransactionState {
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(FENCED, error.exception());
+                transitionTo(State.FENCED, error.exception());
                 result.setError(error.exception());
             } else {
                 result.setError(error.exception());
-                transitionTo(ERROR, error.exception());
+                transitionTo(State.ERROR, error.exception());
             }
 
             if (error == Errors.NONE || !result.isSuccessful())
@@ -806,10 +798,10 @@ public class TransactionState {
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                transitionTo(FENCED, error.exception());
+                transitionTo(State.FENCED, error.exception());
                 result.setError(error.exception());
             } else {
-                transitionTo(ERROR, error.exception());
+                transitionTo(State.ERROR, error.exception());
                 result.setError(error.exception());
             }
 
@@ -848,12 +840,12 @@ public class TransactionState {
                         needsCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
                     }
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                    transitionTo(FENCED, error.exception());
+                    transitionTo(State.FENCED, error.exception());
                     result.setError(error.exception());
                     break;
                 } else {
                     result.setError(error.exception());
-                    transitionTo(ERROR, error.exception());
+                    transitionTo(State.ERROR, error.exception());
                     break;
                 }
             }
