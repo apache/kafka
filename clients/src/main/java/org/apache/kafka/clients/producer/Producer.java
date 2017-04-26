@@ -51,7 +51,7 @@ public interface Producer<K, V> extends Closeable {
      * @throws IllegalStateException if the TransactionalId for the producer is not set
      *         in the configuration.
      */
-    void initTransactions() throws IllegalStateException;
+    void initTransactions();
 
     /**
      * Should be called before the start of each new transaction.

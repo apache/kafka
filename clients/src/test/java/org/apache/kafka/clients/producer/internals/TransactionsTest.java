@@ -20,11 +20,13 @@ import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -67,6 +69,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class TransactionsTest {
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
@@ -410,6 +413,73 @@ public class TransactionsTest {
         sender.run(time.milliseconds());  // send produce.
 
         responseFuture.get();
+    }
+
+    @Test
+    public void testDisallowCommitOnProduceFailure() throws InterruptedException {
+        client.setNode(brokerNode);
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        transactionState.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+
+        sender.run(time.milliseconds());  // find coordinator
+        assertEquals(brokerNode, transactionState.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+
+        sender.run(time.milliseconds());  // get pid.
+
+        assertTrue(transactionState.hasPid());
+        transactionState.beginTransaction();
+        transactionState.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), new MockCallback(transactionState), MAX_BLOCK_TIMEOUT).future;
+
+        FutureTransactionalResult commitResult = transactionState.beginCommittingTransaction();
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
+
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest
+        assertFalse(commitResult.isDone());
+
+        sender.run(time.milliseconds());  // Send Produce Request, returns OutOfOrderSequenceException.
+        sender.run(time.milliseconds());  // try to commit.
+        assertTrue(commitResult.isDone());  // commit should be cancelled with exception without being sent.
+
+        try {
+            commitResult.get();
+            fail();  // the get() must throw an exception.
+        } catch (RuntimeException e) {
+            assertTrue(e instanceof InvalidTxnStateException);
+        }
+
+        // Commit is not allowed, so let's abort and try again.
+        FutureTransactionalResult abortResult = transactionState.beginAbortingTransaction();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+        sender.run(time.milliseconds());  // Send abort request. It is valid to transition from ERROR to ABORT
+
+        assertTrue(abortResult.isDone());
+        assertTrue(abortResult.get().isSuccessful());
+        assertTrue(transactionState.isReadyForTransaction());  // make sure we are ready for a transaction now.
+    }
+
+    private static class MockCallback implements Callback {
+        private final TransactionState transactionState;
+        public MockCallback(TransactionState transactionState) {
+            this.transactionState = transactionState;
+        }
+        @Override
+        public void onCompletion(RecordMetadata metadata, Exception exception) {
+            if (exception != null && transactionState != null) {
+                transactionState.maybeSetError(exception);
+            }
+
+        }
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,

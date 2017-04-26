@@ -28,6 +28,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -285,30 +286,33 @@ public class Sender implements Runnable {
         if (nextRequest.isEndTxnRequest() && transactionState.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
-            transactionState.didNotSend(nextRequest);
+            transactionState.reenqueue(nextRequest);
+            return false;
+        }
+
+        if (nextRequest.isEndTxnRequest() && transactionState.isInErrorState()) {
+            nextRequest.maybeTerminateWithError(new InvalidTxnStateException("Cannot commit transaction when there are " +
+                    "request errors. Please check your logs for the details of the errors encountered."));
             return false;
         }
 
         Node targetNode = null;
-        long expiryTime = now + requestTimeout;
-        long nextIterationTime = now;
 
-        while (targetNode == null && nextIterationTime < expiryTime) {
+        while (targetNode == null) {
             try {
-                long timeRemaining = expiryTime - nextIterationTime;
                 if (nextRequest.needsCoordinator()) {
                     targetNode = transactionState.coordinator(nextRequest.coordinatorType());
                     if (targetNode == null) {
                         transactionState.needsCoordinator(nextRequest);
                         break;
                     }
-                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, timeRemaining)) {
+                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
                         transactionState.needsCoordinator(nextRequest);
                         targetNode = null;
                         break;
                     }
                 } else {
-                    targetNode = awaitLeastLoadedNodeReady(timeRemaining);
+                    targetNode = awaitLeastLoadedNodeReady(requestTimeout);
                 }
                 if (targetNode != null) {
                     if (nextRequest.isRetry()) {
@@ -325,7 +329,6 @@ public class Sender implements Runnable {
             }
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
-            nextIterationTime = time.milliseconds();
         }
 
         if (targetNode == null)
