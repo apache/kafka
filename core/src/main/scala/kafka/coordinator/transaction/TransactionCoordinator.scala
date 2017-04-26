@@ -18,6 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler, ZkUtils}
@@ -27,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 
 
 object TransactionCoordinator {
@@ -89,50 +91,53 @@ class TransactionCoordinator(brokerId: Int,
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
+  private val coordinatorLock = new ReentrantReadWriteLock
+
   def handleInitPid(transactionalId: String,
                     transactionTimeoutMs: Int,
-                    responseCallback: InitPidCallback): Unit = {
-    if (transactionalId == null || transactionalId.isEmpty) {
-      // if the transactional id is not specified, then always blindly accept the request
-      // and return a new pid from the pid manager
-      val pid = pidManager.nextPid()
-      responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
-    } else if (!txnManager.isCoordinatorFor(transactionalId)) {
-      // check if it is the assigned coordinator for the transactional id
-      responseCallback(initTransactionError(Errors.NOT_COORDINATOR))
-    } else if (txnManager.isCoordinatorLoadingInProgress(transactionalId)) {
-      responseCallback(initTransactionError(Errors.COORDINATOR_LOAD_IN_PROGRESS))
-    } else if (!txnManager.validateTransactionTimeoutMs(transactionTimeoutMs)) {
-      // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
-      responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
-    } else {
-      // only try to get a new pid and update the cache if the transactional id is unknown
-      txnManager.getTransactionState(transactionalId) match {
-        case None =>
-          val pid = pidManager.nextPid()
-          val newMetadata: TransactionMetadata = new TransactionMetadata(pid = pid,
-            producerEpoch = 0,
-            txnTimeoutMs = transactionTimeoutMs,
-            state = Empty,
-            topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            lastUpdateTimestamp = time.milliseconds())
+                    responseCallback: InitPidCallback): Unit =
+    inReadLock(coordinatorLock) {
+      if (transactionalId == null || transactionalId.isEmpty) {
+        // if the transactional id is not specified, then always blindly accept the request
+        // and return a new pid from the pid manager
+        val pid = pidManager.nextPid()
+        responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
+      } else if (!txnManager.isCoordinatorFor(transactionalId)) {
+        // check if it is the assigned coordinator for the transactional id
+        responseCallback(initTransactionError(Errors.NOT_COORDINATOR))
+      } else if (txnManager.isCoordinatorLoadingInProgress(transactionalId)) {
+        responseCallback(initTransactionError(Errors.COORDINATOR_LOAD_IN_PROGRESS))
+      } else if (!txnManager.validateTransactionTimeoutMs(transactionTimeoutMs)) {
+        // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
+        responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
+      } else {
+        // only try to get a new pid and update the cache if the transactional id is unknown
+        txnManager.getTransactionState(transactionalId) match {
+          case None =>
+            val pid = pidManager.nextPid()
+            val newMetadata: TransactionMetadata = new TransactionMetadata(pid = pid,
+              producerEpoch = 0,
+              txnTimeoutMs = transactionTimeoutMs,
+              state = Empty,
+              topicPartitions = collection.mutable.Set.empty[TopicPartition],
+              lastUpdateTimestamp = time.milliseconds())
 
-          val metadata = txnManager.addTransaction(transactionalId, newMetadata)
+            val metadata = txnManager.addTransaction(transactionalId, newMetadata)
 
-          // there might be a concurrent thread that has just updated the mapping
-          // with the transactional id at the same time; in this case we will
-          // treat it as the metadata has existed and update it accordingly
-          metadata synchronized {
-            if (!metadata.eq(newMetadata))
-              initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
-            else
-              appendMetadataToLog(transactionalId, metadata, responseCallback)
+            // there might be a concurrent thread that has just updated the mapping
+            // with the transactional id at the same time; in this case we will
+            // treat it as the metadata has existed and update it accordingly
+            metadata synchronized {
+              if (!metadata.eq(newMetadata))
+                initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
+              else
+                appendMetadataToLog(transactionalId, metadata, responseCallback)
 
-          }
-        case Some(metadata) =>
-          initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
+            }
+          case Some(metadata) =>
+            initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, responseCallback, metadata)
+        }
       }
-    }
   }
 
   private def appendMetadataToLog(transactionalId: String,
@@ -204,7 +209,8 @@ class TransactionCoordinator(brokerId: Int,
                                        pid: Long,
                                        epoch: Short,
                                        partitions: collection.Set[TopicPartition],
-                                       responseCallback: TxnMetadataUpdateCallback): Unit = {
+                                       responseCallback: TxnMetadataUpdateCallback): Unit =
+  inReadLock(coordinatorLock){
     val errors = validateTransactionalId(transactionalId)
     if (errors != Errors.NONE)
       responseCallback(errors)
@@ -254,20 +260,24 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleTxnImmigration(transactionStateTopicPartitionId: Int, coordinatorEpoch: Int) {
-    txnManager.loadTransactionsForPartition(transactionStateTopicPartitionId, coordinatorEpoch)
+    inWriteLock(coordinatorLock) {
+      txnManager.loadTransactionsForPartition(transactionStateTopicPartitionId, coordinatorEpoch)
+    }
   }
 
   def handleTxnEmigration(transactionStateTopicPartitionId: Int) {
-    txnManager.removeTransactionsForPartition(transactionStateTopicPartitionId)
-    txnMarkerChannelManager.removeStateForPartition(transactionStateTopicPartitionId)
+    inWriteLock(coordinatorLock) {
+      txnManager.removeTransactionsForPartition(transactionStateTopicPartitionId)
+      txnMarkerChannelManager.removeStateForPartition(transactionStateTopicPartitionId)
+    }
   }
 
   def handleEndTransaction(transactionalId: String,
                            pid: Long,
                            epoch: Short,
                            command: TransactionResult,
-                           responseCallback: EndTxnCallback): Unit = {
-
+                           responseCallback: EndTxnCallback): Unit =
+  inReadLock(coordinatorLock){
     val errors = validateTransactionalId(transactionalId)
     if (errors != Errors.NONE)
       responseCallback(errors)
