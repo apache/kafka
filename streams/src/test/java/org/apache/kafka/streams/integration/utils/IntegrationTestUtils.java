@@ -86,7 +86,7 @@ public class IntegrationTestUtils {
      */
     public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final long waitTime, final int maxMessages) {
         final List<KeyValue<K, V>> consumedValues;
-        try (Consumer<K,V> consumer = new KafkaConsumer<>(consumerConfig)) {
+        try (Consumer<K, V> consumer = new KafkaConsumer<>(consumerConfig)) {
             consumer.subscribe(Collections.singletonList(topic));
             final int pollIntervalMs = 100;
             consumedValues = new ArrayList<>();
