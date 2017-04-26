@@ -139,8 +139,10 @@ class TransactionCoordinator(brokerId: Int,
                              metadata: TransactionMetadata,
                              initPidCallback: InitPidCallback): Unit ={
     def callback(errors: Errors): Unit = {
-      if (errors == Errors.NONE) initPidCallback(initTransactionMetadata(metadata))
-      else initPidCallback(initTransactionError(errors))
+      if (errors == Errors.NONE)
+        initPidCallback(initTransactionMetadata(metadata))
+      else
+        initPidCallback(initTransactionError(errors))
     }
 
     txnManager.appendTransactionToLog(transactionalId, metadata, callback)

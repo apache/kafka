@@ -61,7 +61,7 @@ object TransactionMarkerChannelManager {
       metrics,
       time,
       "txn-marker-channel",
-      Map("broker-id" -> config.brokerId.toString).asJava,
+      Map.empty[String, String].asJava,
       false,
       channelBuilder
     )

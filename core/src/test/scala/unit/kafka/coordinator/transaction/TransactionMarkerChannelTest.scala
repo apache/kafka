@@ -121,7 +121,7 @@ class TransactionMarkerChannelTest {
 
     EasyMock.replay(metadataCache, networkClient)
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
-    
+
     EasyMock.verify(networkClient)
   }
 

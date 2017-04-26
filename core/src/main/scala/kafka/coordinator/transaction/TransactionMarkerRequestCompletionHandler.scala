@@ -66,7 +66,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
                   // TODO: probably need to respond with Errors.NOT_COORDINATOR
                   throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${epochAndMarkers.metadataPartition} has likely emigrated")
                 case Some(metadata) =>
-                // do not synchronize on this metadata since it will only be accessed by the sender thread
+                  // do not synchronize on this metadata since it will only be accessed by the sender thread
                   metadata.topicPartitions -= topicPartition
               }
             case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
