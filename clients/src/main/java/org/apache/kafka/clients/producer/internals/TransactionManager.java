@@ -232,9 +232,7 @@ public class TransactionManager {
 
     public synchronized FutureTransactionalResult initializeTransactions() {
         ensureTransactional();
-        if (!transitionTo(State.INITIALIZING))
-            throw new KafkaException("Could not initialize transactions. Either transactions have already been " +
-                    "initialized or are being initialized.");
+        transitionTo(State.INITIALIZING);
         setPidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers.clear();
         if (transactionCoordinator == null)
@@ -253,16 +251,13 @@ public class TransactionManager {
     public synchronized void beginTransaction() {
         ensureTransactional();
         maybeFailWithError();
-        if (!transitionTo(State.IN_TRANSACTION))
-             throw new KafkaException("Producer isn't ready to begin a transaction, most likely because there is " +
-                     "already an ongoing transaction.");
+        transitionTo(State.IN_TRANSACTION);
     }
 
     public synchronized FutureTransactionalResult beginCommittingTransaction() {
         ensureTransactional();
         maybeFailWithError();
-        if (!transitionTo(State.COMMITTING_TRANSACTION))
-            throw new KafkaException("Cannot commit transaction, most likely because a transaction is already being completed.");
+        transitionTo(State.COMMITTING_TRANSACTION);
         return beginCompletingTransaction(true);
     }
 
@@ -270,9 +265,7 @@ public class TransactionManager {
         ensureTransactional();
         if (isFenced())
             throw new ProducerFencedException("There is a newer producer using the same transactional.id.");
-        if (!transitionTo(State.ABORTING_TRANSACTION))
-            throw new KafkaException("Cannot abort transaction, either because a transaction is already " +
-                    "being completed at the moment, or because there has been an error with a previous request.");
+        transitionTo(State.ABORTING_TRANSACTION);
         return beginCompletingTransaction(false);
     }
 
@@ -293,7 +286,7 @@ public class TransactionManager {
         maybeFailWithError();
         if (currentState != State.IN_TRANSACTION)
             throw new KafkaException("Cannot send offsets to transaction either because the producer is not in an " +
-                    "active transaction or because there has been an error with one or more previous requests.");
+                    "active transaction");
 
         TransactionalRequestResult result = new TransactionalRequestResult();
         FutureTransactionalResult resultFuture = new FutureTransactionalResult(result);
@@ -466,20 +459,18 @@ public class TransactionManager {
         return inFlightRequestCorrelationId != NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
-    private boolean transitionTo(State target) {
-        return transitionTo(target, null);
+    private void transitionTo(State target) {
+        transitionTo(target, null);
     }
 
-    private boolean transitionTo(State target, Exception error) {
+    private void transitionTo(State target, Exception error) {
         if (target == State.ERROR && error != null)
             lastError = error;
         if (currentState.isTransitionValid(currentState, target)) {
             currentState = target;
-            return true;
         } else {
-            log.error("Invalid transition attempted from state {} to state {}.", currentState.name(), target.name());
+            throw new KafkaException("Invalid transition attempted from state " + currentState.name() + " to state " + target.name());
         }
-        return false;
     }
 
     private void ensureTransactional() {
