@@ -222,7 +222,7 @@ class TransactionCoordinator(brokerId: Int,
               (Errors.INVALID_PRODUCER_EPOCH, null)
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
-              (Errors.COORDINATOR_LOAD_IN_PROGRESS, null)
+              (Errors.CONCURRENT_TRANSACTIONS, null)
             } else if (metadata.state != Empty && metadata.state != Ongoing) {
               (Errors.INVALID_TXN_STATE, null)
             } else if (partitions.subsetOf(metadata.topicPartitions)) {

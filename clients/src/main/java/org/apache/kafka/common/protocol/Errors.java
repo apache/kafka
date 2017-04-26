@@ -19,6 +19,7 @@ package org.apache.kafka.common.protocol;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.ConcurrentTransactionsException;
 import org.apache.kafka.common.errors.ControllerMovedException;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.DuplicateSequenceNumberException;
@@ -186,7 +187,10 @@ public enum Errors {
         new InvalidPidMappingException("The PID mapping is invalid")),
     INVALID_TRANSACTION_TIMEOUT(50,
         new InvalidTxnTimeoutException("The transaction timeout is larger than the maximum value allowed by the broker " +
-            "(as configured by max.transaction.timeout.ms)."));
+            "(as configured by max.transaction.timeout.ms).")),
+    CONCURRENT_TRANSACTIONS(51,
+        new ConcurrentTransactionsException("The producer attempted to update a transaction " +
+             "while another concurrent operation on the same transaction was ongoing"));
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
