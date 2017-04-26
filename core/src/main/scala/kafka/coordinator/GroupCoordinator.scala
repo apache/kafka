@@ -153,12 +153,6 @@ class GroupCoordinator(val brokerId: Int,
             // coordinator OR the group is in a transient unstable phase. Let the member retry
             // joining without the specified member id,
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
-          case InitialRebalance =>
-            if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
-            } else {
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
-            }
           case PreparingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
@@ -218,7 +212,7 @@ class GroupCoordinator(val brokerId: Int,
             }
         }
 
-        if (group.is(PreparingRebalance))
+        if (group.is(PreparingRebalance) && group.generationId != 0)
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
       }
     }
@@ -258,7 +252,7 @@ class GroupCoordinator(val brokerId: Int,
           case Empty | Dead =>
             responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
 
-          case PreparingRebalance | InitialRebalance =>
+          case PreparingRebalance =>
             responseCallback(Array.empty, Errors.REBALANCE_IN_PROGRESS)
 
           case AwaitingSync =>
@@ -371,7 +365,7 @@ class GroupCoordinator(val brokerId: Int,
                 else
                   responseCallback(Errors.REBALANCE_IN_PROGRESS)
 
-              case PreparingRebalance | InitialRebalance =>
+              case PreparingRebalance =>
                 if (!group.has(memberId)) {
                   responseCallback(Errors.UNKNOWN_MEMBER_ID)
                 } else if (generationId != group.generationId) {
@@ -514,7 +508,7 @@ class GroupCoordinator(val brokerId: Int,
 
       previousState match {
         case Empty | Dead =>
-        case PreparingRebalance | InitialRebalance =>
+        case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
             if (member.awaitingJoinCallback != null) {
               member.awaitingJoinCallback(joinError(member.memberId, Errors.NOT_COORDINATOR))
@@ -626,7 +620,7 @@ class GroupCoordinator(val brokerId: Int,
       sessionTimeoutMs, protocolType, protocols)
     member.awaitingJoinCallback = callback
     // update the newMemberAdded flag to indicate that the join group can be further delayed
-    if (group.is(InitialRebalance))
+    if (group.is(PreparingRebalance) && group.generationId == 0)
       group.newMemberAdded = true
 
     group.add(member)
@@ -645,7 +639,6 @@ class GroupCoordinator(val brokerId: Int,
 
   private def maybePrepareRebalance(group: GroupMetadata) {
     group synchronized {
-      if (group.is(Empty)) group.transitionTo(InitialRebalance)
       if (group.canRebalance)
         prepareRebalance(group)
     }
@@ -656,27 +649,23 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(AwaitingSync))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
-    val (delay, timeout) = if (group.is(InitialRebalance) && group.size == 1) {
+    val delay = if (group.is(Empty)) {
       group.initialRebalanceTimeout = time.milliseconds() + group.rebalanceTimeoutMs
-      val joinDelay = scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.rebalanceTimeoutMs)
-      (joinDelay, group.initialRebalanceTimeout)
-    } else {
-      (group.rebalanceTimeoutMs, group.initialRebalanceTimeout)
-    }
+      scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.rebalanceTimeoutMs)
+    } else
+      group.rebalanceTimeoutMs
 
-    group.currentState match {
-      case InitialRebalance => // nothing to do
-      case _ => group.transitionTo(PreparingRebalance)
-    }
+    val previousState = group.currentState
+    group.transitionTo(PreparingRebalance)
 
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
     val delayedRebalance = new DelayedJoin(this, group, delay, group.initialRebalanceTimeout)
     val groupKey = GroupKey(group.groupId)
     // if this is the first member joining the group just watch the operation rather than trying to complete it
-    if (group.is(InitialRebalance) && group.size() == 1)
+    if (previousState.eq(Empty))
       joinPurgatory.watchOperation(delayedRebalance, Seq(groupKey))
-    else if(!group.is(InitialRebalance))
-      // try complete when the group is in not in the InitialRebalance state
+    else
+      // try complete when the group is in the non-empty state
       joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
@@ -686,7 +675,7 @@ class GroupCoordinator(val brokerId: Int,
     group.currentState match {
       case Dead | Empty =>
       case Stable | AwaitingSync => maybePrepareRebalance(group)
-      case PreparingRebalance | InitialRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+      case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
 
@@ -705,7 +694,7 @@ class GroupCoordinator(val brokerId: Int,
   def onCompleteJoin(group: GroupMetadata) {
     var delayedStore: Option[DelayedStore] = None
     group synchronized {
-      if (group.is(InitialRebalance)) {
+      if (group.generationId == 0) {
         if (group.newMemberAdded && time.milliseconds() < group.initialRebalanceTimeout) {
           group.newMemberAdded = false
           val delay = scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.initialRebalanceTimeout - time.milliseconds()).toInt
@@ -714,7 +703,6 @@ class GroupCoordinator(val brokerId: Int,
           return
         } else {
           group.newMemberAdded = false
-          group.transitionTo(PreparingRebalance)
         }
       }
       // remove any members who haven't joined the group yet
@@ -743,7 +731,11 @@ class GroupCoordinator(val brokerId: Int,
           for (member <- group.allMemberMetadata) {
             assert(member.awaitingJoinCallback != null)
             val joinResult = JoinGroupResult(
-              members = if (member.memberId == group.leaderId) { group.currentMemberMetadata } else { Map.empty },
+              members = if (member.memberId == group.leaderId) {
+                group.currentMemberMetadata
+              } else {
+                Map.empty
+              },
               memberId = member.memberId,
               generationId = group.generationId,
               subProtocol = group.protocol,

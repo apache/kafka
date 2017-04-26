@@ -303,7 +303,6 @@ class GroupMetadataManagerTest {
       protocolType, List(("protocol", Array[Byte]())))
     member.awaitingJoinCallback = _ => ()
     group.add(member)
-    group.transitionTo(InitialRebalance)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
@@ -333,7 +332,6 @@ class GroupMetadataManagerTest {
       protocolType, List(("protocol", Array[Byte]())))
     member.awaitingJoinCallback = _ => ()
     group.add(member)
-    group.transitionTo(InitialRebalance)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
@@ -709,7 +707,6 @@ class GroupMetadataManagerTest {
       protocolType, List(("protocol", Array[Byte]())))
     member.awaitingJoinCallback = _ => ()
     group.add(member)
-    group.transitionTo(InitialRebalance)
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
@@ -773,7 +770,6 @@ class GroupMetadataManagerTest {
 
   private def buildStableGroupRecordWithMember(memberId: String): SimpleRecord = {
     val group = new GroupMetadata(groupId)
-    group.transitionTo(InitialRebalance)
     group.transitionTo(PreparingRebalance)
     val memberProtocols = List(("roundrobin", Array.emptyByteArray))
     val member = new MemberMetadata(memberId, groupId, "clientId", "clientHost", 30000, 10000, "consumer", memberProtocols)
