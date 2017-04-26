@@ -15,9 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
-import kafka.message.{NoCompressionCodec, CompressionCodec}
+import kafka.message.{CompressionCodec, NoCompressionCodec}
 
 /**
  * Configuration settings for in-built offset management

@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class WriteTxnMarkersRequest extends AbstractRequest {
     private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
@@ -66,6 +67,33 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
         public List<TopicPartition> partitions() {
             return partitions;
+        }
+
+
+        @Override
+        public String toString() {
+            return "TxnMarkerEntry{" +
+                    "pid=" + producerId +
+                    ", epoch=" + producerEpoch +
+                    ", result=" + result +
+                    ", partitions=" + partitions +
+                    '}';
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final TxnMarkerEntry that = (TxnMarkerEntry) o;
+            return producerId == that.producerId &&
+                    producerEpoch == that.producerEpoch &&
+                    result == that.result &&
+                    Objects.equals(partitions, that.partitions);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(producerId, producerEpoch, result, partitions);
         }
     }
 
@@ -183,4 +211,17 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         return new WriteTxnMarkersRequest(ApiKeys.WRITE_TXN_MARKERS.parseRequest(version, buffer), version);
     }
 
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final WriteTxnMarkersRequest that = (WriteTxnMarkersRequest) o;
+        return coordinatorEpoch == that.coordinatorEpoch &&
+                Objects.equals(markers, that.markers);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(coordinatorEpoch, markers);
+    }
 }

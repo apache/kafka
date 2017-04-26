@@ -868,7 +868,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return partitionRecords;
     }
 
-    private ConsumerRecord<K, V> parseRecord(TopicPartition partition, RecordBatch batch, Record record) {
+
+    /**
+     * Parse the record entry, deserializing the key / value fields if necessary
+     */
+    private ConsumerRecord<K, V> parseRecord(TopicPartition partition,
+                                             RecordBatch batch,
+                                             Record record) {
         try {
             long offset = record.offset();
             long timestamp = record.timestamp();

@@ -21,7 +21,7 @@ import java.io._
 import java.nio.ByteBuffer
 
 import joptsimple.OptionParser
-import kafka.coordinator.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
+import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
