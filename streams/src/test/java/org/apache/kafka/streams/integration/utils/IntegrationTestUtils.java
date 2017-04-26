@@ -20,6 +20,7 @@ import kafka.api.PartitionStateInfo;
 import kafka.api.Request;
 import kafka.server.KafkaServer;
 import kafka.server.MetadataCache;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -84,20 +85,20 @@ public class IntegrationTestUtils {
      * @return The KeyValue elements retrieved via the consumer
      */
     public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final long waitTime, final int maxMessages) {
-        final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(consumerConfig);
-        consumer.subscribe(Collections.singletonList(topic));
-        final int pollIntervalMs = 100;
-        final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
-        int totalPollTimeMs = 0;
-        while (totalPollTimeMs < waitTime && continueConsuming(consumedValues.size(), maxMessages)) {
-            totalPollTimeMs += pollIntervalMs;
-            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
-            for (final ConsumerRecord<K, V> record : records) {
-                consumedValues.add(new KeyValue<>(record.key(), record.value()));
+        final List<KeyValue<K, V>> consumedValues;
+        try (Consumer<K,V> consumer = new KafkaConsumer<>(consumerConfig)) {
+            consumer.subscribe(Collections.singletonList(topic));
+            final int pollIntervalMs = 100;
+            consumedValues = new ArrayList<>();
+            int totalPollTimeMs = 0;
+            while (totalPollTimeMs < waitTime && continueConsuming(consumedValues.size(), maxMessages)) {
+                totalPollTimeMs += pollIntervalMs;
+                final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+                for (final ConsumerRecord<K, V> record : records) {
+                    consumedValues.add(new KeyValue<>(record.key(), record.value()));
+                }
             }
         }
-
-        consumer.close();
 
         return consumedValues;
     }
@@ -148,14 +149,14 @@ public class IntegrationTestUtils {
                                                                          final Properties producerConfig,
                                                                          final Long timestamp)
         throws ExecutionException, InterruptedException {
-        final Producer<K, V> producer = new KafkaProducer<>(producerConfig);
-        for (final KeyValue<K, V> record : records) {
-            final Future<RecordMetadata> f = producer.send(
-                new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
-            f.get();
+        try (Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            for (final KeyValue<K, V> record : records) {
+                final Future<RecordMetadata> f = producer.send(
+                    new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
+                f.get();
+            }
+            producer.flush();
         }
-        producer.flush();
-        producer.close();
     }
 
     public static <V> void produceValuesSynchronously(
