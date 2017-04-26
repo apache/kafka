@@ -95,8 +95,7 @@ class TransactionCoordinator(brokerId: Int,
 
   def handleInitPid(transactionalId: String,
                     transactionTimeoutMs: Int,
-                    responseCallback: InitPidCallback): Unit =
-    inReadLock(coordinatorLock) {
+                    responseCallback: InitPidCallback): Unit = {
       if (transactionalId == null || transactionalId.isEmpty) {
         // if the transactional id is not specified, then always blindly accept the request
         // and return a new pid from the pid manager
@@ -149,9 +148,7 @@ class TransactionCoordinator(brokerId: Int,
       else
         initPidCallback(initTransactionError(errors))
     }
-
-    txnManager.appendTransactionToLog(transactionalId, metadata, callback)
-
+    appendToLogInReadLock(transactionalId, metadata, callback)
   }
 
 
@@ -209,8 +206,7 @@ class TransactionCoordinator(brokerId: Int,
                                        pid: Long,
                                        epoch: Short,
                                        partitions: collection.Set[TopicPartition],
-                                       responseCallback: TxnMetadataUpdateCallback): Unit =
-  inReadLock(coordinatorLock){
+                                       responseCallback: TxnMetadataUpdateCallback): Unit = {
     val errors = validateTransactionalId(transactionalId)
     if (errors != Errors.NONE)
       responseCallback(errors)
@@ -252,7 +248,7 @@ class TransactionCoordinator(brokerId: Int,
       }
 
       if (newMetadata != null) {
-        txnManager.appendTransactionToLog(transactionalId, newMetadata, responseCallback)
+        appendToLogInReadLock(transactionalId, newMetadata, responseCallback)
       } else {
         responseCallback(error)
       }
@@ -276,8 +272,7 @@ class TransactionCoordinator(brokerId: Int,
                            pid: Long,
                            epoch: Short,
                            command: TransactionResult,
-                           responseCallback: EndTxnCallback): Unit =
-  inReadLock(coordinatorLock){
+                           responseCallback: EndTxnCallback): Unit = {
     val errors = validateTransactionalId(transactionalId)
     if (errors != Errors.NONE)
       responseCallback(errors)
@@ -311,6 +306,23 @@ class TransactionCoordinator(brokerId: Int,
       }
   }
 
+  private def appendToLogInReadLock(transactionalId: String,
+                                   metadata: TransactionMetadata,
+                                   callback: Errors =>Unit): Unit = {
+    def unlockCallback(errors:Errors): Unit = {
+      coordinatorLock.readLock().unlock()
+      callback(errors)
+    }
+    coordinatorLock.readLock().lock()
+    try {
+      txnManager.appendTransactionToLog(transactionalId,
+        metadata,
+        unlockCallback)
+    } catch {
+      case _:Throwable => coordinatorLock.readLock().unlock()
+    }
+
+  }
   private def commitOrAbort(transactionalId: String,
                             pid: Long,
                             epoch: Short,
@@ -359,13 +371,10 @@ class TransactionCoordinator(brokerId: Int,
                           case _ =>
                             warn(s"error: $error caught for transactionalId: $transactionalId when appending state: $completedState. retrying")
                             // retry until success
-                            txnManager.appendTransactionToLog(transactionalId,
-                              committedMetadata,
-                              writeCommittedTransactionCallback)
-                      }
-                      txnManager.appendTransactionToLog(transactionalId,
-                        committedMetadata,
-                        writeCommittedTransactionCallback)
+                            appendToLogInReadLock(transactionalId, committedMetadata, writeCommittedTransactionCallback)
+                        }
+
+                      appendToLogInReadLock(transactionalId, committedMetadata, writeCommittedTransactionCallback)
                     case None =>
                       // this one should be completed by the new coordinator
                       warn(s"no longer the coordinator for transactionalId: $transactionalId")
