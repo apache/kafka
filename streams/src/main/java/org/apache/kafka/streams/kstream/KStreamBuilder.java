@@ -27,7 +27,6 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -776,9 +775,7 @@ public class KStreamBuilder extends TopologyBuilder {
         final Deserializer<K> keyDeserializer = keySerde == null ? null : keySerde.deserializer();
         final Deserializer<V> valueDeserializer = valSerde == null ? null : valSerde.deserializer();
 
-        final StateStore store = storeSupplier.get();
-
-        addGlobalStore(store, sourceName, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
+        addGlobalStore(storeSupplier, sourceName, keyDeserializer, valueDeserializer, topic, processorName, tableSource);
         return new GlobalKTableImpl(new KTableSourceValueGetterSupplier<>(storeSupplier.name()));
     }
 
