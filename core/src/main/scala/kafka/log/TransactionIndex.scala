@@ -32,7 +32,7 @@ import scala.collection.mutable.ListBuffer
 
 private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTransaction], isComplete: Boolean)
 
-private[log] class TransactionIndex(var file: File) extends Logging {
+class TransactionIndex(var file: File) extends Logging {
   // note that the file is not created until we need it
   private var maybeChannel: Option[FileChannel] = None
   private val lock = new ReentrantLock
@@ -105,35 +105,42 @@ private[log] class TransactionIndex(var file: File) extends Logging {
     }
   }
 
-  def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = {
+  def iterator: Iterator[AbortedTxn] = {
     maybeChannel match {
-      case None => TxnIndexSearchResult(abortedTransactions = List.empty[AbortedTransaction], isComplete = false)
+      case None => Iterator.empty
       case Some(channel) =>
-        val abortedTransactions = ListBuffer[AbortedTransaction]()
-        var position = 0
         val lastPosition = channel.position()
+        var position = 0
 
-        while (lastPosition - position >= AbortedTxn.TotalSize) {
-          val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
-          Utils.readFully(channel, buffer, position)
-          buffer.flip()
+        new Iterator[AbortedTxn] {
+          override def hasNext: Boolean = lastPosition - position >= AbortedTxn.TotalSize
 
-          val abortedTxn = new AbortedTxn(buffer)
-          if (abortedTxn.version > AbortedTxn.CurrentVersion)
-            throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
-              s"current version is ${AbortedTxn.CurrentVersion}")
+          override def next(): AbortedTxn = {
+            val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
+            Utils.readFully(channel, buffer, position)
+            buffer.flip()
 
-          if (abortedTxn.lastOffset >= fetchOffset && abortedTxn.firstOffset < upperBoundOffset)
-            abortedTransactions += abortedTxn.asAbortedTransaction
-
-          if (abortedTxn.lastStableOffset >= upperBoundOffset)
-            return TxnIndexSearchResult(abortedTransactions = abortedTransactions.toList, isComplete = true)
-
-          position += AbortedTxn.TotalSize
+            val abortedTxn = new AbortedTxn(buffer)
+            if (abortedTxn.version > AbortedTxn.CurrentVersion)
+              throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
+                s"current version is ${AbortedTxn.CurrentVersion}")
+            position += AbortedTxn.TotalSize
+            abortedTxn
+          }
         }
-
-        TxnIndexSearchResult(abortedTransactions = abortedTransactions.toList, isComplete = false)
     }
+  }
+
+  def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = {
+    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
+    for (abortedTxn <- iterator) {
+      if (abortedTxn.lastOffset >= fetchOffset && abortedTxn.firstOffset < upperBoundOffset)
+        abortedTransactions += abortedTxn.asAbortedTransaction
+
+      if (abortedTxn.lastStableOffset >= upperBoundOffset)
+        return TxnIndexSearchResult(abortedTransactions.toList, isComplete = true)
+    }
+    TxnIndexSearchResult(abortedTransactions.toList, isComplete = false)
   }
 }
 

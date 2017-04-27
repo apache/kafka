@@ -105,6 +105,8 @@ object DumpLogSegments {
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
         case Log.PidSnapshotFileSuffix =>
           dumpPidSnapshot(file)
+        case Log.TxnIndexFileSuffix =>
+
         case _ =>
           System.err.println(s"Ignoring unknown file $file")
       }
@@ -128,6 +130,14 @@ object DumpLogSegments {
           System.err.println("  %d is followed by %d".format(m._1, m._2))
         })
       }
+    }
+  }
+
+  private def dumpTxnIndex(file: File): Unit = {
+    val index = new TransactionIndex(file)
+    for (abortedTxn <- index.iterator) {
+      println(s"version: ${abortedTxn.version} pid: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
+        s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
     }
   }
 
