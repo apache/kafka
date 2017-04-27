@@ -1208,7 +1208,7 @@ public class StreamThread extends Thread {
         final Map<TaskId, Set<TopicPartition>> newTasks = new HashMap<>();
 
         // collect newly assigned tasks and reopen re-assigned tasks
-        log.info("{} Resuming suspended re-assigned tasks", logPrefix);
+        log.info("{} Adding assigned tasks as active {}", logPrefix, partitionAssignor.activeTasks());
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.activeTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
             final Set<TopicPartition> partitions = entry.getValue();
@@ -1273,7 +1273,7 @@ public class StreamThread extends Thread {
 
         final Map<TaskId, Set<TopicPartition>> newStandbyTasks = new HashMap<>();
 
-        log.info("{} Resuming suspended standby tasks", logPrefix);
+        log.info("{} Adding assigned standby tasks {}", logPrefix, partitionAssignor.activeTasks());
         // collect newly assigned standby tasks and reopen re-assigned standby tasks
         for (final Map.Entry<TaskId, Set<TopicPartition>> entry : partitionAssignor.standbyTasks().entrySet()) {
             final TaskId taskId = entry.getKey();
