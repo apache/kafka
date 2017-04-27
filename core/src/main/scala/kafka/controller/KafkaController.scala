@@ -1394,9 +1394,12 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case object AutoPreferredReplicaLeaderElection extends ControllerEvent {
     override def process(): Unit = {
-      scheduleAutoLeaderRebalanceTask(delay = config.leaderImbalanceCheckIntervalSeconds, unit = TimeUnit.SECONDS)
       if (!isActive) return
-      checkAndTriggerPartitionRebalance()
+      try {
+        checkAndTriggerPartitionRebalance()
+      } finally {
+        scheduleAutoLeaderRebalanceTask(delay = config.leaderImbalanceCheckIntervalSeconds, unit = TimeUnit.SECONDS)
+      }
     }
   }
 
