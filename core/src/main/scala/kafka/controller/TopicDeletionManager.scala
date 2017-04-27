@@ -32,11 +32,9 @@ import scala.collection.{Set, mutable}
  *    for deletion in the following scenarios -
   *   3.1 broker hosting one of the replicas for that topic goes down
   *   3.2 partition reassignment for partitions of that topic is in progress
-  *   3.3 preferred replica election for partitions of that topic is in progress
  * 4. Topic deletion is resumed when -
  *    4.1 broker hosting one of the replicas for that topic is started
- *    4.2 preferred replica election for partitions of that topic completes
- *    4.3 partition reassignment for partitions of that topic completes
+ *    4.2 partition reassignment for partitions of that topic completes
  * 5. Every replica for a topic being deleted is in either of the 3 states -
  *    5.1 TopicDeletionStarted Replica enters TopicDeletionStarted phase when onPartitionDeletion is invoked.
  *        This happens when the child change watch for /admin/delete_topics fires on the controller. As part of this state
@@ -119,8 +117,6 @@ class TopicDeletionManager(controller: KafkaController, initialTopicsToBeDeleted
    * Invoked when any event that can possibly resume topic deletion occurs. These events include -
    * 1. New broker starts up. Any replicas belonging to topics queued up for deletion can be deleted since the broker is up
    * 2. Partition reassignment completes. Any partitions belonging to topics queued up for deletion finished reassignment
-   * 3. Preferred replica election completes. Any partitions belonging to topics queued up for deletion finished
-   *    preferred replica election
    * @param topics Topics for which deletion can be resumed
    */
   def resumeDeletionForTopics(topics: Set[String] = Set.empty) {
@@ -158,7 +154,6 @@ class TopicDeletionManager(controller: KafkaController, initialTopicsToBeDeleted
    * Halt delete topic if -
    * 1. replicas being down
    * 2. partition reassignment in progress for some partitions of the topic
-   * 3. preferred replica election in progress for some partitions of the topic
    * @param topics Topics that should be marked ineligible for deletion. No op if the topic is was not previously queued up for deletion
    */
   def markTopicIneligibleForDeletion(topics: Set[String]) {

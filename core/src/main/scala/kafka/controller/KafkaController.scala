@@ -1556,7 +1556,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
      * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
      */
     if(activeControllerId.get() != -1) {
-      debug("Broker %d has been elected as leader, so stopping the election process.".format(activeControllerId.get()))
+      debug("Broker %d has been elected as the controller, so stopping the election process.".format(activeControllerId.get()))
       return
     }
 
@@ -1566,7 +1566,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
                                                       controllerContext.zkUtils.zkConnection.getZookeeper,
                                                       controllerContext.zkUtils.isSecure)
       zkCheckedEphemeral.create()
-      info(config.brokerId + " successfully elected as leader")
+      info(config.brokerId + " successfully elected as the controller")
       activeControllerId.set(config.brokerId)
       onControllerFailover()
     } catch {
@@ -1575,12 +1575,12 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
         activeControllerId.set(getControllerID)
 
         if (activeControllerId.get() != -1)
-          debug("Broker %d was elected as leader instead of broker %d".format(activeControllerId.get(), config.brokerId))
+          debug("Broker %d was elected as controller instead of broker %d".format(activeControllerId.get(), config.brokerId))
         else
-          warn("A leader has been elected but just resigned, this will result in another round of election")
+          warn("A controller has been elected but just resigned, this will result in another round of election")
 
       case e2: Throwable =>
-        error("Error while electing or becoming leader on broker %d".format(config.brokerId), e2)
+        error("Error while electing or becoming controller on broker %d".format(config.brokerId), e2)
         triggerControllerMove()
     }
   }
