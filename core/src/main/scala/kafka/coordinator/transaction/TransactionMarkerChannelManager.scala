@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import java.util
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
@@ -24,19 +23,13 @@ import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.Node
-
-import java.util.concurrent.BlockingQueue
 
 import org.apache.kafka.common.protocol.Errors
 
 import collection.JavaConverters._
-
-case class CoordinatorEpochAndMarkers(metadataPartition: Int, coordinatorEpoch: Int, txnMarkerEntries: util.List[WriteTxnMarkersRequest.TxnMarkerEntry])
-case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[CoordinatorEpochAndMarkers])
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
