@@ -33,15 +33,17 @@ import kafka.common.TopicAndPartition
 import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
 import java.io.File
 import java.util
+import java.util.concurrent.LinkedBlockingQueue
 
 import kafka.utils.TestUtils._
 import kafka.admin.AdminUtils._
 
-import scala.collection.{Map, immutable}
+import scala.collection.{Map, Set, immutable}
 import kafka.utils.CoreUtils._
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
+import scala.util.Try
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -366,7 +368,10 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
     val controllerId = zkUtils.getController()
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
-    var partitionsRemaining = controller.shutdownBroker(2)
+    val resultQueue = new LinkedBlockingQueue[Try[Set[TopicAndPartition]]]()
+    val controlledShutdownCallback = (controlledShutdownResult: Try[Set[TopicAndPartition]]) => resultQueue.put(controlledShutdownResult)
+    controller.shutdownBroker(2, controlledShutdownCallback)
+    var partitionsRemaining = resultQueue.take().get
     var activeServers = servers.filter(s => s.config.brokerId != 2)
     try {
       // wait for the update metadata request to trickle to the brokers
@@ -380,7 +385,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       assertEquals(2, partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
       assertEquals(List(0,1), partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr)
 
-      partitionsRemaining = controller.shutdownBroker(1)
+      controller.shutdownBroker(1, controlledShutdownCallback)
+      partitionsRemaining = resultQueue.take().get
       assertEquals(0, partitionsRemaining.size)
       activeServers = servers.filter(s => s.config.brokerId == 0)
       partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
@@ -388,7 +394,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       assertEquals(0, leaderAfterShutdown)
 
       assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
-      partitionsRemaining = controller.shutdownBroker(0)
+      controller.shutdownBroker(0, controlledShutdownCallback)
+      partitionsRemaining = resultQueue.take().get
       assertEquals(1, partitionsRemaining.size)
       // leader doesn't change since all the replicas are shut down
       assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))

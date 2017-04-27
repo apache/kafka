@@ -25,7 +25,7 @@ import java.util
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
 import kafka.cluster.Partition
-import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata}
+import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
 import kafka.common.Topic.{GroupMetadataTopicName, TransactionStateTopicName, isInternal}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
@@ -34,7 +34,7 @@ import kafka.coordinator.transaction.{InitPidResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.{Response, Session}
-import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write, Topic}
+import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Topic, Write}
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.internals.FatalExitError
@@ -50,7 +50,7 @@ import org.apache.kafka.common.requests.SaslHandshakeResponse
 
 import scala.collection._
 import scala.collection.JavaConverters._
-
+import scala.util.{Failure, Success, Try}
 
 /**
  * Logic to handle the various Kafka requests
@@ -244,10 +244,17 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     authorizeClusterAction(request)
 
-    val partitionsRemaining = controller.shutdownBroker(controlledShutdownRequest.brokerId)
-    val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
-      Errors.NONE, partitionsRemaining)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
+    def controlledShutdownCallback(controlledShutdownResult: Try[Set[TopicAndPartition]]): Unit = {
+      controlledShutdownResult match {
+        case Success(partitionsRemaining) =>
+          val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
+            Errors.NONE, partitionsRemaining)
+          requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
+        case Failure(throwable) =>
+          controlledShutdownRequest.handleError(throwable, requestChannel, request)
+      }
+    }
+    controller.shutdownBroker(controlledShutdownRequest.brokerId, controlledShutdownCallback)
   }
 
   /**
