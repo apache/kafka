@@ -23,9 +23,13 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
@@ -306,6 +310,42 @@ public class KafkaProducerTest {
         PowerMock.replay(metadata);
         producer.send(extendedRecord, null);
         PowerMock.verify(metadata);
+    }
+
+    @Test
+    public void testTopicRefreshInMetadata() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        long refreshBackoffMs = 500L;
+        long metadataExpireMs = 60000L;
+        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, new ClusterResourceListeners());
+        final Time time = new MockTime();
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
+        final String topic = "topic";
+
+        Thread t = new Thread() {
+            @Override
+            public void run() {
+                long startTimeMs = System.currentTimeMillis();
+                for (int i = 0; i < 10; i++) {
+                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
+                        yield();
+                    metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
+                    time.sleep(60 * 1000L);
+                }
+            }
+        };
+        t.start();
+        try {
+            producer.partitionsFor(topic);
+            fail("Expect TimeoutException");
+        } catch (TimeoutException e) {
+            // skip
+        }
+        Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
 
 }

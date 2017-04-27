@@ -761,6 +761,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         // is stale and the number of partitions for this topic has increased in the meantime.
         do {
             log.trace("Requesting metadata update for topic {}.", topic);
+            metadata.add(topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
             try {
