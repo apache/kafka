@@ -67,15 +67,15 @@ trait SaslSetup {
       kdc.createPrincipal(clientKeytabFile, JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
     }
     if (withDefaultJaasContext) {
-      createJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
-      setJaasConfiguration()
+      setJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+      writeJaasConfigurationToFile()
     } else
-        createJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+        setJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
     if (mode == Both || mode == ZkSasl)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
   }
 
-  protected def createJaasConfiguration(mode: SaslSetupMode, kafkaServerEntryName: String,
+  protected def setJaasConfiguration(mode: SaslSetupMode, kafkaServerEntryName: String,
                                      kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String]) {
     val jaasSection = mode match {
       case ZkSasl => JaasTestUtils.zkSections
@@ -90,7 +90,7 @@ trait SaslSetup {
     jaasContext = jaasContext ++ jaasSection
   }
 
-  protected def setJaasConfiguration() {
+  protected def writeJaasConfigurationToFile() {
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, JaasTestUtils.writeJaasContextsToFile(jaasContext))

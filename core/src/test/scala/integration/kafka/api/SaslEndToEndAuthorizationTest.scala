@@ -43,10 +43,10 @@ abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   }
 
   // Use JAAS configuration properties for clients so that dynamic JAAS configuration is also tested by this set of tests
-  override protected def createJaasConfiguration(mode: SaslSetupMode, serverEntryName: String,
+  override protected def setJaasConfiguration(mode: SaslSetupMode, serverEntryName: String,
                                               serverMechanisms: List[String], clientMechanism: Option[String]) {
     // create static config with client login context with credentials for JaasTestUtils 'client2'
-    super.createJaasConfiguration(mode, serverEntryName, kafkaServerSaslMechanisms, clientMechanism)
+    super.setJaasConfiguration(mode, serverEntryName, kafkaServerSaslMechanisms, clientMechanism)
     // set dynamic properties with credentials for JaasTestUtils 'client1'
     val clientLoginContext = jaasClientLoginModule(kafkaClientSaslMechanism)
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)

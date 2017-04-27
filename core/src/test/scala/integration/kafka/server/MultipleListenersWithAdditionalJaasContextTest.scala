@@ -26,21 +26,23 @@ import org.apache.kafka.common.network.ListenerName
 
 class MultipleListenersWithAdditionalJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest{
 
+  import MultipleListenersWithSameSecurityProtocolBaseTest._
+
   override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
 
-    val gssapiSaslProperties = kafkaClientSaslProperties("GSSAPI", dynamicJaasConfig = true)
-    val plainSaslProperties = kafkaClientSaslProperties("PLAIN", dynamicJaasConfig = true)
+    val gssapiSaslProperties = kafkaClientSaslProperties(GssApi, dynamicJaasConfig = true)
+    val plainSaslProperties = kafkaClientSaslProperties(Plain, dynamicJaasConfig = true)
 
-    if (listenerName.value == "SECURE_INTERNAL")
-      Some(plainSaslProperties)
-    else if (listenerName.value == "SECURE_EXTERNAL")
-      Some(gssapiSaslProperties)
-    else None
+    listenerName.value match {
+      case SecureInternal => Some(plainSaslProperties)
+      case SecureExternal => Some(gssapiSaslProperties)
+      case _ => None
+    }
   }
 
   override def addJaasSection(): Unit = {
-    createJaasConfiguration(CustomKafkaServerSasl, "secure_external.KafkaServer", List("GSSAPI"), None)
-    createJaasConfiguration(CustomKafkaServerSasl, "secure_internal.KafkaServer", List("PLAIN"), None)
+    setJaasConfiguration(CustomKafkaServerSasl, "secure_external.KafkaServer", List(GssApi), None)
+    setJaasConfiguration(CustomKafkaServerSasl, "secure_internal.KafkaServer", List(Plain), None)
     removeJaasSection("KafkaServer")
   }
 }

@@ -24,11 +24,15 @@ import org.apache.kafka.common.network.ListenerName
 
 
 class MultipleListenersWithDefaultJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest {
-  override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
-    val plainSaslProperties = kafkaClientSaslProperties("PLAIN", dynamicJaasConfig = true)
 
-    if (listenerName.value == "SECURE_EXTERNAL" || listenerName.value == "SECURE_INTERNAL")
-      Some(plainSaslProperties)
-    else None
+  import MultipleListenersWithSameSecurityProtocolBaseTest._
+
+  override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
+    val plainSaslProperties = kafkaClientSaslProperties(Plain, dynamicJaasConfig = true)
+
+    listenerName.value match {
+      case SecureExternal | SecureInternal => Some(plainSaslProperties)
+      case _ => None
+    }
   }
 }
