@@ -580,7 +580,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       case e: Throwable => error("Error completing preferred replica leader election for partitions %s".format(partitions.mkString(",")), e)
     } finally {
       removePartitionsFromPreferredReplicaElection(partitions, isTriggeredByAutoRebalance)
-      topicDeletionManager.resumeDeletionForTopics(partitions.map(_.topic))
     }
   }
 
