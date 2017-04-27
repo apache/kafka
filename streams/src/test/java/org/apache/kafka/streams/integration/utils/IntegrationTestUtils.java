@@ -291,9 +291,18 @@ public class IntegrationTestUtils {
         return maxMessages <= 0 || messagesConsumed < maxMessages;
     }
 
+    /**
+     * Sets up a {@link KafkaConsumer} from a copy of the given configuration that has
+     * {@link ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} set to "earliest" and {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
+     * set to "true" to prevent missing events as well as repeat consumption.
+     * @param consumerConfig Consumer configuration
+     * @return Consumer
+     */
     private static <K, V> KafkaConsumer<K, V> createConsumer(final Properties consumerConfig) {
-        final Properties filtered = new Properties(consumerConfig);
-        filtered.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        final Properties filtered = new Properties();
+        filtered.putAll(consumerConfig);
+        filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
         return new KafkaConsumer<>(filtered);
     }
 }
