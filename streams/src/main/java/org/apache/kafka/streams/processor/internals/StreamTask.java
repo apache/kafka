@@ -258,14 +258,14 @@ public class StreamTask extends AbstractTask implements Punctuator {
 
     @Override
     protected void flushState() {
-        log.trace("{} Flushing state and producer topology", logPrefix);
+        log.trace("{} Flushing state and producer", logPrefix);
         super.flushState();
         recordCollector.flush();
     }
 
     private void commitOffsets() {
         if (commitOffsetNeeded) {
-            log.trace("{} Committing offsets", logPrefix);
+            log.debug("{} Committing offsets", logPrefix);
             final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
             for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
                 final TopicPartition partition = entry.getKey();

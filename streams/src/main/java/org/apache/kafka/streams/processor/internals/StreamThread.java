@@ -449,7 +449,7 @@ public class StreamThread extends Thread {
         streamsMetrics = new StreamsMetricsThreadImpl(metrics, "stream-metrics", "thread." + threadClientId,
             Collections.singletonMap("client-id", threadClientId));
         if (config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) < 0) {
-            log.warn("{} Negative cache size passed in thread [{}]. Reverting to cache size of 0 bytes.", logPrefix, threadClientId);
+            log.warn("{} Negative cache size passed in thread. Reverting to cache size of 0 bytes.", logPrefix);
         }
         cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
         exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals("exactly_once");
@@ -780,8 +780,7 @@ public class StreamThread extends Thread {
                 if (!standbyRecords.isEmpty()) {
                     final Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> remainingStandbyRecords = new HashMap<>();
 
-                    for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> entry :
-                        standbyRecords.entrySet()) {
+                    for (final Map.Entry<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> entry : standbyRecords.entrySet()) {
                         final TopicPartition partition = entry.getKey();
                         List<ConsumerRecord<byte[], byte[]>> remaining = entry.getValue();
                         if (remaining != null) {

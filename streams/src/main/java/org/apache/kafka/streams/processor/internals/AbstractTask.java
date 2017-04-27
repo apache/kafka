@@ -157,7 +157,7 @@ public abstract class AbstractTask {
     }
 
     protected void updateOffsetLimits() {
-        log.trace("{} Updating store offset limits", logPrefix);
+        log.debug("{} Updating store offset limits {}", logPrefix);
         for (final TopicPartition partition : partitions) {
             try {
                 final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
@@ -176,7 +176,6 @@ public abstract class AbstractTask {
      * Flush all state stores owned by this task
      */
     void flushState() {
-        log.trace("{} Flushing state store", logPrefix);
         stateMgr.flush();
     }
 
@@ -197,7 +196,7 @@ public abstract class AbstractTask {
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
      */
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
-        log.trace("{} Closing state stores", logPrefix);
+        log.trace("{} Closing state manager", logPrefix);
         stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
     }
 
