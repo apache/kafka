@@ -245,6 +245,43 @@ public class IntegrationTestUtils {
      * Returns up to `maxMessages` message-values from the topic.
      *
      * @param topic          Kafka topic to read messages from
+     * @param consumerConfig Kafka consumer config
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer.
+     * @return The values retrieved via the consumer.
+     */
+    public static <V> List<V> readValues(final String topic, final Properties consumerConfig,
+        final long waitTime, final int maxMessages) {
+        final List<V> returnList;
+        try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
+            returnList = readValues(topic, consumer, waitTime, maxMessages);
+        }
+        return returnList;
+    }
+
+    /**
+     * Returns up to `maxMessages` by reading via the provided consumer (the topic(s) to read from
+     * are already configured in the consumer).
+     *
+     * @param topic          Kafka topic to read messages from
+     * @param consumerConfig Kafka consumer config
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer
+     * @return The KeyValue elements retrieved via the consumer
+     */
+    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
+        final Properties consumerConfig, final long waitTime, final int maxMessages) {
+        final List<KeyValue<K, V>> consumedValues;
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            consumedValues = readKeyValues(topic, consumer, waitTime, maxMessages);
+        }
+        return consumedValues;
+    }
+
+    /**
+     * Returns up to `maxMessages` message-values from the topic.
+     *
+     * @param topic          Kafka topic to read messages from
      * @param consumer       Kafka consumer
      * @param waitTime       Maximum wait time in milliseconds
      * @param maxMessages    Maximum number of messages to read via the consumer.
