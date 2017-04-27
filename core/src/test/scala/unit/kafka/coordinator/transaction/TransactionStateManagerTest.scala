@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.loadTransactionsForPartition(partitionId, 0)
+    transactionManager.loadTransactionsForPartition(partitionId, 0, writeTxnMarkersCallback)
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -184,7 +184,7 @@ class TransactionStateManagerTest {
     assertEquals(None, transactionManager.getTransactionState(txnId2))
   }
 
-  @Test
+    @Test
   def testAppendTransactionToLog() {
     // first insert the initial transaction metadata
     transactionManager.addTransaction(txnId1, txnMetadata1)
@@ -293,7 +293,7 @@ class TransactionStateManagerTest {
     val coordinatorEpoch = 10
     EasyMock.expect(replicaManager.getLog(EasyMock.anyObject(classOf[TopicPartition]))).andReturn(None)
     EasyMock.replay(replicaManager)
-    transactionManager.loadTransactionsForPartition(partitionId, coordinatorEpoch)
+    transactionManager.loadTransactionsForPartition(partitionId, coordinatorEpoch, writeTxnMarkersCallback)
     val epoch = transactionManager.coordinatorEpochFor(txnId1).get
     assertEquals(coordinatorEpoch, epoch)
   }
@@ -301,6 +301,44 @@ class TransactionStateManagerTest {
   @Test
   def shouldReturnNoneIfTransactionIdPartitionNotOwned(): Unit = {
     assertEquals(None, transactionManager.coordinatorEpochFor(txnId1))
+  }
+
+  @Test
+  def shouldWriteTxnMarkersForTransactionInPreparedCommitState(): Unit = {
+    verifyWritesTxnMarkersInPrepareState(PrepareCommit)
+  }
+
+  @Test
+  def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
+    verifyWritesTxnMarkersInPrepareState(PrepareAbort)
+  }
+
+  private def verifyWritesTxnMarkersInPrepareState(state: TransactionState): Unit = {
+    txnMetadata1.state = state
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
+      new TopicPartition("topic1", 1)))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1))
+    val startOffset = 0L
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
+
+    prepareTxnLog(topicPartition, 0, records)
+
+    var receivedId: String = null
+
+    def callback(transactionalId: String,
+                 pid: Long,
+                 producerEpoch: Short,
+                 state: TransactionState,
+                 metadata: TransactionMetadata,
+                 coordinatorEpoch: Int): Unit = {
+      receivedId = transactionalId
+    }
+
+    transactionManager.loadTransactionsForPartition(partitionId, 0, callback)
+    scheduler.tick()
+
+    assertEquals(txnId1, receivedId)
   }
 
   private def assertCallback(error: Errors): Unit = {
@@ -351,4 +389,16 @@ class TransactionStateManagerTest {
 
     EasyMock.replay(replicaManager)
   }
+
+  def writeTxnMarkersCallback(transactionalId: String,
+                              pid: Long,
+                              producerEpoch: Short,
+                              state: TransactionState,
+                              metadata: TransactionMetadata,
+                              coordinatorEpoch: Int): Unit = {
+
+
+  }
+
+
 }
