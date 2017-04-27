@@ -30,7 +30,7 @@ import kafka.server._
 import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -236,7 +236,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   def onControllerFailover() {
     info("Broker %d starting become controller state transition".format(config.brokerId))
     readControllerEpochFromZookeeper()
-    incrementControllerEpoch(zkUtils.zkClient)
+    incrementControllerEpoch()
 
     // before reading source of truth from zookeeper, register the listeners to get broker/topic callbacks
     registerPartitionReassignmentListener()
@@ -608,7 +608,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, request, callback)
   }
 
-  def incrementControllerEpoch(zkClient: ZkClient) = {
+  def incrementControllerEpoch() = {
     try {
       var newControllerEpoch = controllerContext.epoch + 1
       val (updateSucceeded, newVersion) = zkUtils.conditionalUpdatePersistentPathIfExists(
