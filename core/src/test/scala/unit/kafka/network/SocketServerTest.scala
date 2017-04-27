@@ -32,7 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, NetworkSend}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.{AbstractRequest, ProduceRequest, RequestHeader}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
@@ -40,7 +40,7 @@ import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 
-import scala.collection.JavaConverters.mapAsScalaMapConverter
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 
 class SocketServerTest extends JUnitSuite {
@@ -56,6 +56,11 @@ class SocketServerTest extends JUnitSuite {
   val config = KafkaConfig.fromProps(props)
   val metrics = new Metrics
   val credentialProvider = new CredentialProvider(config.saslEnabledMechanisms)
+
+  // Clean-up any metrics left around by previous tests
+  for (metricName <- YammerMetrics.defaultRegistry.allMetrics.keySet.asScala)
+    YammerMetrics.defaultRegistry.removeMetric(metricName)
+
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider)
   server.startup()
   val sockets = new ArrayBuffer[Socket]
@@ -404,14 +409,14 @@ class SocketServerTest extends JUnitSuite {
   def testMetricCollectionAfterShutdown(): Unit = {
     server.shutdown()
 
-    val sum = YammerMetrics
+    val nonZeroMetricNamesAndValues = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
-      .collect { case (_, metric: Gauge[_]) => metric.value.asInstanceOf[Double] }
-      .sum
+      .collect { case (k, metric: Gauge[_]) => (k, metric.value().asInstanceOf[Double]) }
+      .filter { case (_, value) => value != 0.0 }
 
-    assertEquals(0, sum, 0)
+    assertEquals(Map.empty, nonZeroMetricNamesAndValues)
   }
 
 }
