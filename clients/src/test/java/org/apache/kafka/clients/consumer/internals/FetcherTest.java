@@ -1278,7 +1278,7 @@ public class FetcherTest {
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
 
         int currOffset = 0;
-        // Appends for producer 1 (evetually committed)
+        // Appends for producer 1 (eventually committed)
         currOffset += appendTransactionalRecords(buffer, 1L, currOffset,
                 new SimpleRecord(time.milliseconds(), "commit1-1".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "commit1-2".getBytes(), "value".getBytes()));
@@ -1335,12 +1335,11 @@ public class FetcherTest {
         assertTrue(fetchedRecords.containsKey(tp1));
         // There are only 3 committed records
         List<ConsumerRecord<byte[], byte[]>> fetchedConsumerRecords = fetchedRecords.get(tp1);
-        Set<String> committedKeys = new HashSet<>(Arrays.asList("commit1-1", "commit1-2", "commit2-1"));
-        Set<String> actuallyCommittedKeys = new HashSet<>();
+        Set<String> fetchedKeys = new HashSet<>();
         for (ConsumerRecord<byte[], byte[]> consumerRecord : fetchedConsumerRecords) {
-            actuallyCommittedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
+            fetchedKeys.add(new String(consumerRecord.key(), StandardCharsets.UTF_8));
         }
-        assertTrue(actuallyCommittedKeys.equals(committedKeys));
+        assertEquals(Utils.mkSet("commit1-1", "commit1-2", "commit2-1"), fetchedKeys);
     }
 
     @Test
@@ -1463,7 +1462,8 @@ public class FetcherTest {
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, (int) baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, (int) baseOffset, true,
+                RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
         for (SimpleRecord record : records) {
             builder.append(record);
@@ -1474,7 +1474,8 @@ public class FetcherTest {
 
     private int commitTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0,
+                RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
         builder.appendControlRecord(timestamp, ControlRecordType.COMMIT, null);
         builder.build();
         return 1;
@@ -1482,7 +1483,8 @@ public class FetcherTest {
 
     private int abortTransaction(ByteBuffer buffer, long pid, long baseOffset, long timestamp) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0, (int) baseOffset, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0,
+                RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
         builder.appendControlRecord(timestamp, ControlRecordType.ABORT, null);
         builder.build();
         return 1;
