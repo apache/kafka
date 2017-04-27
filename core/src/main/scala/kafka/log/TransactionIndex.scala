@@ -63,6 +63,7 @@ class TransactionIndex(var file: File) extends Logging {
     val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE,
       StandardOpenOption.CREATE)
     maybeChannel = Some(channel)
+    channel.position(channel.size)
     channel
   }
 

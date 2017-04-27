@@ -106,7 +106,7 @@ object DumpLogSegments {
         case Log.PidSnapshotFileSuffix =>
           dumpPidSnapshot(file)
         case Log.TxnIndexFileSuffix =>
-
+          dumpTxnIndex(file)
         case _ =>
           System.err.println(s"Ignoring unknown file $file")
       }
@@ -145,7 +145,8 @@ object DumpLogSegments {
     try {
       ProducerIdMapping.readSnapshot(file).foreach { case (pid, entry) =>
         println(s"pid: $pid epoch: ${entry.epoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
-          s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp}")
+          s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp} " +
+          s"currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")
       }
     } catch {
       case e: CorruptSnapshotException =>
