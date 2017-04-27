@@ -667,7 +667,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp, transactionManager);
 
             if (transactionManager != null && transactionManager.isInTransaction()) {
-                transactionManager.maybeAddPartitionToTransaction(new TopicPartition(record.topic(), record.partition()));
+                transactionManager.maybeAddPartitionToTransaction(tp);
             }
 
 
