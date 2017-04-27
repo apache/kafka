@@ -589,7 +589,8 @@ public class TransactionManager {
         public void onComplete(ClientResponse response) {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
                 log.error("Detected more than one inflight transactional request. This should never happen.");
-                transitionTo(State.ERROR);
+                transitionTo(State.ERROR, new RuntimeException("Detected more than one inflight transactional request. This should never happen."));
+                return;
             }
 
             resetInFlightRequestCorrelationId();
@@ -851,6 +852,7 @@ public class TransactionManager {
                 return;
             }
 
+            // retry the commits which failed with a retriable error.
             if (!pendingTxnOffsetCommits.isEmpty())
                 pendingTransactionalRequests.add(txnOffsetCommitRequest(consumerGroupId, true, result));
 
