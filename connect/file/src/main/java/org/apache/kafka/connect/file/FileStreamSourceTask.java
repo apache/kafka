@@ -22,6 +22,7 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -64,7 +65,7 @@ public class FileStreamSourceTask extends SourceTask {
             stream = System.in;
             // Tracking offset for stdin doesn't make sense
             streamOffset = null;
-            reader = new BufferedReader(new InputStreamReader(stream));
+            reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
         }
         topic = props.get(FileStreamSourceConnector.TOPIC_CONFIG);
         if (topic == null)
@@ -99,7 +100,7 @@ public class FileStreamSourceTask extends SourceTask {
                 } else {
                     streamOffset = 0L;
                 }
-                reader = new BufferedReader(new InputStreamReader(stream));
+                reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8));
                 log.debug("Opened {} for reading", logFilename());
             } catch (FileNotFoundException e) {
                 log.warn("Couldn't find file {} for FileStreamSourceTask, sleeping to wait for it to be created", logFilename());

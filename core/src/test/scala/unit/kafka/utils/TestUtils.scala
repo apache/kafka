@@ -37,6 +37,7 @@ import kafka.producer._
 import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.server._
+import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
@@ -49,11 +50,14 @@ import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.zookeeper.ZooDefs._
+import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.util.Try
 
 /**
  * Utility functions to help with testing
@@ -312,10 +316,29 @@ object TestUtils extends Logging {
   def singletonRecords(value: Array[Byte],
                        key: Array[Byte] = null,
                        codec: CompressionType = CompressionType.NONE,
-                       timestamp: Long = Record.NO_TIMESTAMP,
-                       magicValue: Byte = Record.CURRENT_MAGIC_VALUE) = {
-    val record = Record.create(magicValue, timestamp, key, value)
-    MemoryRecords.withRecords(codec, record)
+                       timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                       magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE): MemoryRecords = {
+    records(Seq(new SimpleRecord(timestamp, key, value)), magicValue = magicValue, codec = codec)
+  }
+
+  def recordsWithValues(magicValue: Byte,
+                        codec: CompressionType,
+                        values: Array[Byte]*): MemoryRecords = {
+    records(values.map(value => new SimpleRecord(value)), magicValue, codec)
+  }
+
+  def records(records: Iterable[SimpleRecord],
+              magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+              codec: CompressionType = CompressionType.NONE,
+              pid: Long = RecordBatch.NO_PRODUCER_ID,
+              epoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+              sequence: Int = RecordBatch.NO_SEQUENCE,
+              baseOffset: Long = 0L): MemoryRecords = {
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
+      System.currentTimeMillis, pid, epoch, sequence)
+    records.foreach(builder.append)
+    builder.build()
   }
 
   /**
@@ -681,30 +704,22 @@ object TestUtils extends Logging {
     new ProducerRequest(correlationId, clientId, acks.toShort, timeout, collection.mutable.Map(data:_*))
   }
 
-  def makeLeaderForPartition(zkUtils: ZkUtils, topic: String,
+  def makeLeaderForPartition(zkUtils: ZkUtils,
+                             topic: String,
                              leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
                              controllerEpoch: Int) {
-    leaderPerPartitionMap.foreach
-    {
-      leaderForPartition => {
-        val partition = leaderForPartition._1
-        val leader = leaderForPartition._2
-        try{
-          val currentLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topic, partition)
-          var newLeaderAndIsr: LeaderAndIsr = null
-          if(currentLeaderAndIsrOpt.isEmpty)
-            newLeaderAndIsr = new LeaderAndIsr(leader, List(leader))
-          else{
-            newLeaderAndIsr = currentLeaderAndIsrOpt.get
-            newLeaderAndIsr.leader = leader
-            newLeaderAndIsr.leaderEpoch += 1
-            newLeaderAndIsr.zkVersion += 1
-          }
-          zkUtils.updatePersistentPath(getTopicPartitionLeaderAndIsrPath(topic, partition),
-            zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
-        } catch {
-          case oe: Throwable => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
-        }
+    leaderPerPartitionMap.foreach { case (partition, leader) =>
+      try {
+        val newLeaderAndIsr = zkUtils.getLeaderAndIsrForPartition(topic, partition)
+          .map(_.newLeader(leader))
+          .getOrElse(LeaderAndIsr(leader, List(leader)))
+
+        zkUtils.updatePersistentPath(
+          getTopicPartitionLeaderAndIsrPath(topic, partition),
+          zkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
+        )
+      } catch {
+        case oe: Throwable => error(s"Error while electing leader for partition [$topic,$partition]", oe)
       }
     }
   }
@@ -840,6 +855,15 @@ object TestUtils extends Logging {
     leader
   }
 
+  def waitUntilControllerElected(zkUtils: ZkUtils, timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    var controllerIdTry: Try[Int] = null
+    TestUtils.waitUntilTrue(() => {
+      controllerIdTry = Try { zkUtils.getController() }
+      controllerIdTry.isSuccess
+    }, s"Controller not elected after $timeout ms", waitTime = timeout)
+    controllerIdTry.get
+  }
+
   def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
                              timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val tp = new TopicPartition(topic, partition)
@@ -916,11 +940,13 @@ object TestUtils extends Logging {
                    cleanerConfig = cleanerConfig,
                    ioThreads = 4,
                    flushCheckMs = 1000L,
-                   flushCheckpointMs = 10000L,
+                   flushRecoveryOffsetCheckpointMs = 10000L,
+                   flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
+                   maxPidExpirationMs = 60 * 60 * 1000,
                    scheduler = time.scheduler,
                    time = time,
-                   brokerState = new BrokerState())
+                   brokerState = BrokerState())
   }
 
   @deprecated("This method has been deprecated and it will be removed in a future release.", "0.10.0.0")
@@ -1022,7 +1048,7 @@ object TestUtils extends Logging {
           var i = 0
           while ((shouldGetAllMessages && iterator.hasNext()) || (i < nMessagesPerThread)) {
             assertTrue(iterator.hasNext)
-            val message = iterator.next.message // will throw a timeout exception if the message isn't there
+            val message = iterator.next().message // will throw a timeout exception if the message isn't there
             messages ::= message
             debug("received message: " + message)
             i += 1
@@ -1059,7 +1085,7 @@ object TestUtils extends Logging {
     // ensure that topic is removed from all cleaner offsets
     TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
       val checkpoints = server.getLogManager().logDirs.map { logDir =>
-        new OffsetCheckpoint(new File(logDir, "cleaner-offset-checkpoint")).read()
+        new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
     }), "Cleaner offset for deleted partition should have been removed")
@@ -1119,6 +1145,72 @@ object TestUtils extends Logging {
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls $expected but got ${authorizer.getAcls(resource)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+  }
+
+  /**
+   * Verifies that this ACL is the secure one.
+   */
+  def isAclSecure(acl: ACL, sensitive: Boolean): Boolean = {
+    debug(s"ACL $acl")
+    acl.getPerms match {
+      case Perms.READ => !sensitive && acl.getId.getScheme == "world"
+      case Perms.ALL => acl.getId.getScheme == "sasl"
+      case _ => false
+    }
+  }
+
+  /**
+   * Verifies that the ACL corresponds to the unsecure one that
+   * provides ALL access to everyone (world).
+   */
+  def isAclUnsecure(acl: ACL): Boolean = {
+    debug(s"ACL $acl")
+    acl.getPerms match {
+      case Perms.ALL => acl.getId.getScheme == "world"
+      case _ => false
+    }
+  }
+
+  private def secureZkPaths(zkUtils: ZkUtils): Seq[String] = {
+    def subPaths(path: String): Seq[String] = {
+      if (zkUtils.pathExists(path))
+        path +: zkUtils.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
+      else
+        Seq.empty
+    }
+    val topLevelPaths = ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths
+    topLevelPaths.flatMap(subPaths)
+  }
+
+  /**
+   * Verifies that all secure paths in ZK are created with the expected ACL.
+   */
+  def verifySecureZkAcls(zkUtils: ZkUtils, usersWithAccess: Int) {
+    secureZkPaths(zkUtils).foreach(path => {
+      if (zkUtils.pathExists(path)) {
+        val sensitive = ZkUtils.sensitivePath(path)
+        // usersWithAccess have ALL access to path. For paths that are
+        // not sensitive, world has READ access.
+        val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
+        val acls = zkUtils.zkConnection.getAcl(path).getKey
+        assertEquals(s"Invalid ACLs for $path $acls", aclCount, acls.size)
+        acls.asScala.foreach(acl => isAclSecure(acl, sensitive))
+      }
+    })
+  }
+
+  /**
+   * Verifies that secure paths in ZK have no access control. This is
+   * the case when zookeeper.set.acl=false and no ACLs have been configured.
+   */
+  def verifyUnsecureZkAcls(zkUtils: ZkUtils) {
+    secureZkPaths(zkUtils).foreach(path => {
+      if (zkUtils.pathExists(path)) {
+        val acls = zkUtils.zkConnection.getAcl(path).getKey
+        assertEquals(s"Invalid ACLs for $path $acls", 1, acls.size)
+        acls.asScala.foreach(isAclUnsecure)
+      }
+    })
   }
 
   /**

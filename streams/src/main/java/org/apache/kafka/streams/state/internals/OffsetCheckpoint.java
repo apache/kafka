@@ -23,11 +23,13 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
 import java.util.HashMap;
@@ -69,8 +71,8 @@ public class OffsetCheckpoint {
             File temp = new File(file.getAbsolutePath() + ".tmp");
 
             FileOutputStream fileOutputStream = new FileOutputStream(temp);
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(fileOutputStream));
-            try {
+            try (BufferedWriter writer = new BufferedWriter(
+                    new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
 
@@ -79,8 +81,6 @@ public class OffsetCheckpoint {
 
                 writer.flush();
                 fileOutputStream.getFD().sync();
-            } finally {
-                writer.close();
             }
 
             Utils.atomicMoveWithFallback(temp.toPath(), file.toPath());
@@ -116,7 +116,7 @@ public class OffsetCheckpoint {
         synchronized (lock) {
             BufferedReader reader;
             try {
-                reader = new BufferedReader(new FileReader(file));
+                reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
             } catch (FileNotFoundException e) {
                 return Collections.emptyMap();
             }

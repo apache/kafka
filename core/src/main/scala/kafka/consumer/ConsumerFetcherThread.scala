@@ -28,6 +28,7 @@ import ConsumerFetcherThread._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.EpochEndOffset
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
@@ -38,7 +39,8 @@ class ConsumerFetcherThread(name: String,
                                       clientId = config.clientId,
                                       sourceBroker = sourceBroker,
                                       fetchBackOffMs = config.refreshLeaderBackoffMs,
-                                      isInterruptible = true) {
+                                      isInterruptible = true,
+                                      includeLogTruncation = false) {
 
   type REQ = FetchRequest
   type PD = PartitionData
@@ -54,7 +56,7 @@ class ConsumerFetcherThread(name: String,
     replicaId(Request.OrdinaryConsumerId).
     maxWait(config.fetchWaitMaxMs).
     minBytes(config.fetchMinBytes).
-    requestVersion(kafka.api.FetchRequest.CurrentVersion)
+    requestVersion(3) // for now, the old consumer is pinned to the old message format through the fetch request
 
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
@@ -81,7 +83,6 @@ class ConsumerFetcherThread(name: String,
   def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
     val startTimestamp = config.autoOffsetReset match {
       case OffsetRequest.SmallestTimeString => OffsetRequest.EarliestTime
-      case OffsetRequest.LargestTimeString => OffsetRequest.LatestTime
       case _ => OffsetRequest.LatestTime
     }
     val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
@@ -100,9 +101,8 @@ class ConsumerFetcherThread(name: String,
 
   protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
     partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
-      if (partitionFetchState.isActive)
-        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.offset,
-          fetchSize)
+      if (partitionFetchState.isReadyForFetch)
+        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
     }
 
     new FetchRequest(fetchRequestBuilder.build())
@@ -112,6 +112,12 @@ class ConsumerFetcherThread(name: String,
     simpleConsumer.fetch(fetchRequest.underlying).data.map { case (TopicAndPartition(t, p), value) =>
       new TopicPartition(t, p) -> new PartitionData(value)
     }
+
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = { Map() }
+
+  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
+
+  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = { Map() }
 }
 
 object ConsumerFetcherThread {

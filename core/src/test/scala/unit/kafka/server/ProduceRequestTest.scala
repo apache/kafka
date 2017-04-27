@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record}
+import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -41,7 +41,7 @@ class ProduceRequestTest extends BaseRequestTest {
       val topicPartition = new TopicPartition("topic", partition)
       val partitionRecords = Map(topicPartition -> memoryRecords)
       val produceResponse = sendProduceRequest(leader,
-          new ProduceRequest.Builder(-1, 3000, partitionRecords.asJava).build())
+          new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build())
       assertEquals(1, produceResponse.responses.size)
       val (tp, partitionResponse) = produceResponse.responses.asScala.head
       assertEquals(topicPartition, tp)
@@ -51,12 +51,12 @@ class ProduceRequestTest extends BaseRequestTest {
       partitionResponse
     }
 
-    sendAndCheck(MemoryRecords.withRecords(
-      Record.create(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
+    sendAndCheck(MemoryRecords.withRecords(CompressionType.NONE,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes)), 0)
 
     sendAndCheck(MemoryRecords.withRecords(CompressionType.GZIP,
-      Record.create(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
-      Record.create(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
+      new SimpleRecord(System.currentTimeMillis(), "key1".getBytes, "value1".getBytes),
+      new SimpleRecord(System.currentTimeMillis(), "key2".getBytes, "value2".getBytes)), 1)
   }
 
   /* returns a pair of partition id and leader id */
@@ -72,13 +72,14 @@ class ProduceRequestTest extends BaseRequestTest {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val timestamp = 1000000
     val memoryRecords = MemoryRecords.withRecords(CompressionType.LZ4,
-      Record.create(timestamp, "key".getBytes, "value".getBytes))
-    // Change the lz4 checksum value so that it doesn't match the contents
-    memoryRecords.buffer.array.update(40, 0)
+      new SimpleRecord(timestamp, "key".getBytes, "value".getBytes))
+    // Change the lz4 checksum value (not the kafka record crc) so that it doesn't match the contents
+    val lz4ChecksumOffset = 6
+    memoryRecords.buffer.array.update(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset, 0)
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = Map(topicPartition -> memoryRecords)
     val produceResponse = sendProduceRequest(leader, 
-      new ProduceRequest.Builder(-1, 3000, partitionRecords.asJava).build())
+      new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build())
     assertEquals(1, produceResponse.responses.size)
     val (tp, partitionResponse) = produceResponse.responses.asScala.head
     assertEquals(topicPartition, tp)

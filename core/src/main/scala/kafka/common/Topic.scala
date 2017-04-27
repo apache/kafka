@@ -24,7 +24,8 @@ import scala.collection.immutable
 object Topic {
 
   val GroupMetadataTopicName = "__consumer_offsets"
-  val InternalTopics = immutable.Set(GroupMetadataTopicName)
+  val TransactionStateTopicName = "__transaction_state"
+  val InternalTopics = immutable.Set(GroupMetadataTopicName, TransactionStateTopicName)
 
   val legalChars = "[a-zA-Z0-9\\._\\-]"
   private val maxNameLength = 249

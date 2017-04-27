@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
@@ -65,6 +66,12 @@ class ChangeLoggingSegmentedBytesStore extends WrappedStateStore.AbstractStateSt
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         bytesStore.init(context, root);
-        changeLogger = new StoreChangeLogger<>(name(), context, WindowStoreUtils.INNER_SERDES);
+        changeLogger = new StoreChangeLogger<>(
+            name(),
+            context,
+            WindowStoreUtils.getInnerStateSerde(
+                ProcessorStateManager.storeChangelogTopic(
+                    context.applicationId(),
+                    bytesStore.name())));
     }
 }

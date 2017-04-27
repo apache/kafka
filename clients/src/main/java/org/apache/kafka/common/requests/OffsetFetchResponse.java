@@ -56,14 +56,14 @@ public class OffsetFetchResponse extends AbstractResponse {
      *   - UNKNOWN_TOPIC_OR_PARTITION (3)
      *
      * - Group or coordinator errors:
-     *   - GROUP_LOAD_IN_PROGRESS (14)
-     *   - NOT_COORDINATOR_FOR_GROUP (16)
+     *   - COORDINATOR_LOAD_IN_PROGRESS (14)
+     *   - COORDINATOR_NOT_AVAILABLE (15)
+     *   - NOT_COORDINATOR (16)
      *   - GROUP_AUTHORIZATION_FAILED (30)
      */
 
     private static final List<Errors> PARTITION_ERRORS = Arrays.asList(
-            Errors.UNKNOWN_TOPIC_OR_PARTITION,
-            Errors.TOPIC_AUTHORIZATION_FAILED);
+            Errors.UNKNOWN_TOPIC_OR_PARTITION);
 
     private final Map<TopicPartition, PartitionData> responseData;
     private final Errors error;

@@ -104,7 +104,7 @@
 
     <h4><a id="connect_transforms" href="#connect_transforms">Transformations</a></h4>
 
-    Connectors can be configured with transformations to make lightweight message-at-a-time modifications. They can be convenient for minor data massaging and routing changes.
+    Connectors can be configured with transformations to make lightweight message-at-a-time modifications. They can be convenient for data massaging and event routing.
 
     A transformation chain can be specified in the connector configuration.
 
@@ -114,7 +114,73 @@
         <li><code>transforms.$alias.$transformationSpecificConfig</code> Configuration properties for the transformation</li>
     </ul>
 
+    <p>For example, lets take the built-in file source connector and use a transformation to add a static field.</p>
+
+    <p>Throughout the example we'll use schemaless JSON data format. To use schemaless format, we changed the following two lines in <code>connect-standalone.properties</code> from true to false:</p>
+
+    <pre>
+        key.converter.schemas.enable
+        value.converter.schemas.enable
+    </pre>
+
+    The file source connector reads each line as a String. We will wrap each line in a Map and then add a second field to identify the origin of the event. To do this, we use two transformations:
+    <ul>
+        <li><b>HoistField</b> to place the input line inside a Map</li>
+        <li><b>InsertField</b> to add the static field. In this example we'll indicate that the record came from a file connector</li>
+    </ul>
+
+    After adding the transformations, <code>connect-file-source.properties</code> file looks as following:
+
+    <pre>
+        name=local-file-source
+        connector.class=FileStreamSource
+        tasks.max=1
+        file=test.txt
+        topic=connect-test
+        transforms=MakeMap, InsertSource
+        transforms.MakeMap.type=org.apache.kafka.connect.transforms.HoistField$Value
+        transforms.MakeMap.field=line
+        transforms.InsertSource.type=org.apache.kafka.connect.transforms.InsertField$Value
+        transforms.InsertSource.static.field=data_source
+        transforms.InsertSource.static.value=test-file-source
+    </pre>
+
+    <p>All the lines starting with <code>transforms</code> were added for the transformations. You can see the two transformations we created: "InsertSource" and "MakeMap" are aliases that we chose to give the transformations. The transformation types are based on the list of built-in transformations you can see below. Each transformation type has additional configuration: HoistField requires a configuration called "field", which is the name of the field in the map that will include the original String from the file. InsertField transformation lets us specify the field name and the value that we are adding.</p>
+
+    When we ran the file source connector on my sample file without the transformations, and then read them using <code>kafka-console-consumer.sh</code>, the results were:
+
+    <pre>
+        "foo"
+        "bar"
+        "hello world"
+   </pre>
+
+    We then create a new file connector, this time after adding the transformations to the configuration file. This time, the results will be:
+
+    <pre>
+        {"line":"foo","data_source":"test-file-source"}
+        {"line":"bar","data_source":"test-file-source"}
+        {"line":"hello world","data_source":"test-file-source"}
+    </pre>
+
+    You can see that the lines we've read are now part of a JSON map, and there is an extra field with the static value we specified. This is just one example of what you can do with transformations.
+
     Several widely-applicable data and routing transformations are included with Kafka Connect:
+
+    <ul>
+        <li>InsertField - Add a field using either static data or record metadata</li>
+        <li>ReplaceField - Filter or rename fields</li>
+        <li>MaskField - Replace field with valid null value for the type (0, empty string, etc)</li>
+        <li>ValueToKey</li>
+        <li>HoistField - Wrap the entire event as a single field inside a Struct or a Map</li>
+        <li>ExtractField - Extract a specific field from Struct and Map and include only this field in results</li>
+        <li>SetSchemaMetadata - modify the schema name or version</li>
+        <li>TimestampRouter - Modify the topic of a record based on original topic and timestamp. Useful when using a sink that needs to write to different tables or indexes based on timestamps</li>
+        <li>RegexpRouter - modify the topic of a record based on original topic, replacement string and a regular expression</li>
+    </ul>
+
+    Details on how to configure each transformation are listed below:
+
 
     <!--#include virtual="generated/connect_transforms.html" -->
 

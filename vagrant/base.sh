@@ -29,7 +29,17 @@ if [ -z `which javac` ]; then
     fi
 
     /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
-    apt-get -y install oracle-java7-installer oracle-java7-set-default
+
+    # oracle-javaX-installer runs wget with a dot progress indicator which ends up
+    # as one line per dot in the build logs.
+    # To avoid this noise we redirect all output to a file that we only show if apt-get fails.
+    echo "Installing JDK..."
+    if ! apt-get -y install oracle-java7-installer oracle-java7-set-default >/tmp/jdk_install.log 2>&1 ; then
+        cat /tmp/jdk_install.log
+        echo "ERROR: JDK install failed"
+        exit 1
+    fi
+    echo "JDK installed: $(javac -version 2>&1)"
 
     if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
         cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
@@ -42,6 +52,16 @@ if [ -h /opt/kafka-dev ]; then
     rm /opt/kafka-dev
 fi
 ln -s /vagrant /opt/kafka-dev
+
+# Verification to catch provisioning errors.
+if [[ ! -x /opt/kafka-dev/bin/kafka-run-class.sh ]]; then
+    echo "ERROR: kafka-run-class.sh not found/executable in /opt/kafka-dev/bin"
+    find /opt/kafka-dev
+    ls -la /opt/kafka-dev/bin/kafka-run-class.sh || true
+    exit 1
+fi
+
+
 
 get_kafka() {
     version=$1

@@ -124,7 +124,8 @@ trait BaseMessageSetTestCases extends JUnitSuite {
         val written = write(channel)
         assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
         val fileRecords = new FileRecords(file, channel, 0, Integer.MAX_VALUE, false)
-        assertEquals(set.asRecords.deepEntries.asScala.toVector, fileRecords.deepEntries.asScala.toVector)
+        assertEquals(set.asRecords.records.asScala.toVector, fileRecords.records.asScala.toVector)
+        checkEquals(set.asRecords.records.iterator, fileRecords.records.iterator)
       } finally channel.close()
     }
   }

@@ -129,7 +129,7 @@ case class QuotaEntity(quotaId: QuotaId, sanitizedUser: String, clientId: String
  * @param apiKey API Key for the request
  * @param time @Time object to use
  */
-class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
+final class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
                          private val apiKey: QuotaType,
                          private val time: Time) extends Logging {

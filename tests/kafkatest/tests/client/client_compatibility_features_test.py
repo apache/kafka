@@ -46,7 +46,7 @@ def run_command(node, cmd, ssh_log_file):
         except Exception as e:
             f.write("** Command failed!")
             print e
-            raise e
+            raise
 
 
 class ClientCompatibilityFeaturesTest(Test):
@@ -91,7 +91,7 @@ class ClientCompatibilityFeaturesTest(Test):
           run_command(node, cmd, ssh_log_file)
         except Exception as e:
           self.logger.info("** Command failed.  See %s for log messages." % ssh_log_file)
-          raise e
+          raise
 
     @parametrize(broker_version=str(DEV_BRANCH))
     @parametrize(broker_version=str(LATEST_0_10_0))

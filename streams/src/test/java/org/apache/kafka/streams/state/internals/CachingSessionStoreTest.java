@@ -51,6 +51,7 @@ public class CachingSessionStoreTest {
     private static final int MAX_CACHE_SIZE_BYTES = 600;
     private final StateSerdes<String, Long> serdes =
             new StateSerdes<>("name", Serdes.String(), Serdes.Long());
+    private MockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingSessionStore<String, Long> cachingStore;
     private ThreadCache cache;
@@ -58,19 +59,22 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, new SessionKeySchema());
+        final SessionKeySchema schema = new SessionKeySchema();
+        schema.init("topic");
+        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore,
                                                  Serdes.String(),
                                                  Serdes.Long());
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
+        context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
         cachingStore.init(context, cachingStore);
     }
 
     @After
     public void close() {
+        context.close();
         cachingStore.close();
     }
 
@@ -116,7 +120,7 @@ public class CachingSessionStoreTest {
         assertEquals(added.size() - 1, cache.size());
         final KeyValueIterator<Bytes, byte[]> iterator = underlying.fetch(Bytes.wrap(added.get(0).key.key().getBytes()), 0, 0);
         final KeyValue<Bytes, byte[]> next = iterator.next();
-        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()));
+        assertEquals(added.get(0).key, SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "dummy"));
         assertArrayEquals(serdes.rawValue(added.get(0).value), next.value);
     }
 

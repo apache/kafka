@@ -31,9 +31,6 @@ import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkException, ZkMars
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import org.I0Itec.zkclient.{ZkClient, ZkConnection}
 import org.apache.kafka.common.config.ConfigException
-import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback.{DataCallback, StringCallback}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -44,6 +41,7 @@ import scala.collection.JavaConverters._
 
 object ZkUtils {
 
+  private val UseDefaultAcls = new java.util.ArrayList[ACL]
 
   // Important: it is necessary to add any new top level Zookeeper path here
   val AdminPath = "/admin"
@@ -65,8 +63,8 @@ object ZkUtils {
   val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
   val ConfigChangesPath = s"$ConfigPath/changes"
-
-
+  val ConfigUsersPath = s"$ConfigPath/users"
+  val PidBlockPath = "/latest_pid_block"
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureZkRootPaths = Seq(AdminPath,
                               BrokersPath,
@@ -76,7 +74,12 @@ object ZkUtils {
                               ControllerEpochPath,
                               IsrChangeNotificationPath,
                               KafkaAclPath,
-                              KafkaAclChangesPath)
+                              KafkaAclChangesPath,
+                              PidBlockPath)
+
+  // Important: it is necessary to add any new top level Zookeeper path that contains
+  //            sensitive information that should not be world readable to the Seq
+  val SensitiveZkRootPaths = Seq(ConfigUsersPath)
 
   def apply(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int, isZkSecurityEnabled: Boolean): ZkUtils = {
     val (zkClient, zkConnection) = createZkClientAndConnection(zkUrl, sessionTimeout, connectionTimeout)
@@ -101,13 +104,23 @@ object ZkUtils {
     (zkClient, zkConnection)
   }
 
-  def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = if (isSecure) {
-    val list = new java.util.ArrayList[ACL]
-    list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
-    list.addAll(ZooDefs.Ids.READ_ACL_UNSAFE)
-    list
-  } else {
-    ZooDefs.Ids.OPEN_ACL_UNSAFE
+  def sensitivePath(path: String): Boolean = {
+    path != null && SensitiveZkRootPaths.exists(path.startsWith(_))
+  }
+
+  @deprecated("This is deprecated, use defaultAcls(isSecure, path) which doesn't make sensitive data world readable", since = "0.10.2.1")
+  def DefaultAcls(isSecure: Boolean): java.util.List[ACL] = defaultAcls(isSecure, "")
+
+  def defaultAcls(isSecure: Boolean, path: String): java.util.List[ACL] = {
+    if (isSecure) {
+      val list = new java.util.ArrayList[ACL]
+      list.addAll(ZooDefs.Ids.CREATOR_ALL_ACL)
+      if (!sensitivePath(path)) {
+        list.addAll(ZooDefs.Ids.READ_ACL_UNSAFE)
+      }
+      list
+    } else
+      ZooDefs.Ids.OPEN_ACL_UNSAFE
   }
 
   def maybeDeletePath(zkUrl: String, dir: String) {
@@ -190,6 +203,14 @@ object ZkUtils {
     topics
   }
 
+  def controllerZkData(brokerId: Int, timestamp: Long): String = {
+    Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp.toString))
+  }
+
+  def preferredReplicaLeaderElectionZkData(partitions: scala.collection.Set[TopicAndPartition]): String = {
+    Json.encode(Map("version" -> 1, "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))))
+  }
+
   def formatAsReassignmentJson(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
     Json.encode(Map(
       "version" -> 1,
@@ -217,9 +238,18 @@ class ZkUtils(val zkClient: ZkClient,
                               getEntityConfigRootPath(ConfigType.Client),
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
-                              IsrChangeNotificationPath)
+                              IsrChangeNotificationPath,
+                              PidBlockPath)
 
-  val DefaultAcls: java.util.List[ACL] = ZkUtils.DefaultAcls(isSecure)
+  // Visible for testing
+  val zkPath = new ZkPath(zkClient)
+
+  import ZkUtils._
+
+  @deprecated("This is deprecated, use defaultAcls(path) which doesn't make sensitive data world readable", since = "0.10.2.1")
+  val DefaultAcls: java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, "")
+
+  def defaultAcls(path: String): java.util.List[ACL] = ZkUtils.defaultAcls(isSecure, path)
 
   def getController(): Int = {
     readDataMaybeNull(ControllerPath)._1 match {
@@ -396,7 +426,6 @@ class ZkUtils(val zkClient: ZkClient,
     topicDirs.consumerOwnerDir + "/" + partition
   }
 
-
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
     Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
                     "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
@@ -412,36 +441,42 @@ class ZkUtils(val zkClient: ZkClient,
   /**
    *  make sure a persistent path exists in ZK. Create the path if not exist.
    */
-  def makeSurePersistentPathExists(path: String, acls: java.util.List[ACL] = DefaultAcls) {
+  def makeSurePersistentPathExists(path: String, acls: java.util.List[ACL] = UseDefaultAcls) {
     //Consumer path is kept open as different consumers will write under this node.
     val acl = if (path == null || path.isEmpty || path.equals(ConsumersPath)) {
       ZooDefs.Ids.OPEN_ACL_UNSAFE
-    } else acls
+    } else if (acls eq UseDefaultAcls) {
+      ZkUtils.defaultAcls(isSecure, path)
+    } else {
+      acls
+    }
 
     if (!zkClient.exists(path))
-      ZkPath.createPersistent(zkClient, path, createParents = true, acl) //won't throw NoNodeException or NodeExistsException
+      zkPath.createPersistent(path, createParents = true, acl) //won't throw NoNodeException or NodeExistsException
   }
 
   /**
    *  create the parent path
    */
-  private def createParentPath(path: String, acls: java.util.List[ACL] = DefaultAcls): Unit = {
+  private def createParentPath(path: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     val parentDir = path.substring(0, path.lastIndexOf('/'))
     if (parentDir.length != 0) {
-      ZkPath.createPersistent(zkClient, parentDir, createParents = true, acls)
+      zkPath.createPersistent(parentDir, createParents = true, acl)
     }
   }
 
   /**
    * Create an ephemeral node with the given path and data. Create parents if necessary.
    */
-  private def createEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = DefaultAcls): Unit = {
+  private def createEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      ZkPath.createEphemeral(zkClient, path, data, acls)
+      zkPath.createEphemeral(path, data, acl)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
-        ZkPath.createEphemeral(zkClient, path, data, acls)
+        zkPath.createEphemeral(path, data, acl)
     }
   }
 
@@ -449,9 +484,10 @@ class ZkUtils(val zkClient: ZkClient,
    * Create an ephemeral node with the given path and data.
    * Throw NodeExistException if node already exists.
    */
-  def createEphemeralPathExpectConflict(path: String, data: String, acls: java.util.List[ACL] = DefaultAcls): Unit = {
+  def createEphemeralPathExpectConflict(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      createEphemeralPath(path, data, acls)
+      createEphemeralPath(path, data, acl)
     } catch {
       case e: ZkNodeExistsException =>
         // this can happen when there is connection loss; make sure the data is what we intend to write
@@ -472,20 +508,22 @@ class ZkUtils(val zkClient: ZkClient,
   }
 
   /**
-   * Create an persistent node with the given path and data. Create parents if necessary.
+   * Create a persistent node with the given path and data. Create parents if necessary.
    */
-  def createPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = DefaultAcls): Unit = {
+  def createPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
-      ZkPath.createPersistent(zkClient, path, data, acls)
+      zkPath.createPersistent(path, data, acl)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
-        ZkPath.createPersistent(zkClient, path, data, acls)
+        zkPath.createPersistent(path, data, acl)
     }
   }
 
-  def createSequentialPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = DefaultAcls): String = {
-    ZkPath.createPersistentSequential(zkClient, path, data, acls)
+  def createSequentialPersistentPath(path: String, data: String = "", acls: java.util.List[ACL] = UseDefaultAcls): String = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
+    zkPath.createPersistentSequential(path, data, acl)
   }
 
   /**
@@ -493,14 +531,15 @@ class ZkUtils(val zkClient: ZkClient,
    * create parent directory if necessary. Never throw NodeExistException.
    * Return the updated path zkVersion
    */
-  def updatePersistentPath(path: String, data: String, acls: java.util.List[ACL] = DefaultAcls) = {
+  def updatePersistentPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls) = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
       zkClient.writeData(path, data)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
         try {
-          ZkPath.createPersistent(zkClient, path, data, acls)
+          zkPath.createPersistent(path, data, acl)
         } catch {
           case _: ZkNodeExistsException =>
             zkClient.writeData(path, data)
@@ -529,12 +568,12 @@ class ZkUtils(val zkClient: ZkClient,
           case Some(checker) => checker(this, path, data)
           case _ =>
             debug("Checker method is not passed skipping zkData match")
-            warn("Conditional update of path %s with data %s and expected version %d failed due to %s"
+            debug("Conditional update of path %s with data %s and expected version %d failed due to %s"
               .format(path, data,expectVersion, e1.getMessage))
             (false, -1)
         }
       case e2: Exception =>
-        warn("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+        debug("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
           expectVersion, e2.getMessage))
         (false, -1)
     }
@@ -563,13 +602,14 @@ class ZkUtils(val zkClient: ZkClient,
    * Update the value of a persistent node with the given path and data.
    * create parent directory if necessary. Never throw NodeExistException.
    */
-  def updateEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = DefaultAcls): Unit = {
+  def updateEphemeralPath(path: String, data: String, acls: java.util.List[ACL] = UseDefaultAcls): Unit = {
+    val acl = if (acls eq UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     try {
       zkClient.writeData(path, data)
     } catch {
       case _: ZkNoNodeException =>
         createParentPath(path)
-        ZkPath.createEphemeral(zkClient, path, data, acls)
+        zkPath.createEphemeral(path, data, acl)
     }
   }
 
@@ -622,6 +662,16 @@ class ZkUtils(val zkClient: ZkClient,
                           (None, stat)
                       }
     dataAndStat
+  }
+
+  def readDataAndVersionMaybeNull(path: String): (Option[String], Int) = {
+    val stat = new Stat()
+    try {
+      val data: String = zkClient.readData(path, stat)
+      (Option(data), stat.getVersion)
+    } catch {
+      case _: ZkNoNodeException => (None, stat.getVersion)
+    }
   }
 
   def getChildren(path: String): Seq[String] = zkClient.getChildren(path).asScala
@@ -717,6 +767,14 @@ class ZkUtils(val zkClient: ZkClient,
       debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
       topic -> partitionMap.keys.toSeq.sortWith((s, t) => s < t)
     }
+  }
+
+  def getTopicPartitionCount(topic: String): Option[Int] = {
+    val topicData = getPartitionAssignmentForTopics(Seq(topic))
+    if (topicData(topic).nonEmpty)
+      Some(topicData(topic).size)
+    else
+      None
   }
 
   def getPartitionsBeingReassigned(): Map[TopicAndPartition, ReassignedPartitionsContext] = {
@@ -818,13 +876,14 @@ class ZkUtils(val zkClient: ZkClient,
     * It uses the stat returned by the zookeeper and return the version. Every time
     * client updates the path stat.version gets incremented. Starting value of sequence number is 1.
     */
-  def getSequenceId(path: String, acls: java.util.List[ACL] = DefaultAcls): Int = {
+  def getSequenceId(path: String, acls: java.util.List[ACL] = UseDefaultAcls): Int = {
+    val acl = if (acls == UseDefaultAcls) ZkUtils.defaultAcls(isSecure, path) else acls
     def writeToZk: Int = zkClient.writeDataReturnStat(path, "", -1).getVersion
     try {
       writeToZk
     } catch {
       case _: ZkNoNodeException =>
-        makeSurePersistentPathExists(path)
+        makeSurePersistentPathExists(path, acl)
         writeToZk
     }
   }
@@ -935,11 +994,12 @@ class ZKConfig(props: VerifiableProperties) {
   val zkSyncTimeMs = props.getInt(ZkSyncTimeMsProp, 2000)
 }
 
-object ZkPath {
+class ZkPath(client: ZkClient) {
+
   @volatile private var isNamespacePresent: Boolean = false
 
-  def checkNamespace(client: ZkClient) {
-    if(isNamespacePresent)
+  def checkNamespace() {
+    if (isNamespacePresent)
       return
 
     if (!client.exists("/")) {
@@ -952,23 +1012,23 @@ object ZkPath {
     isNamespacePresent = false
   }
 
-  def createPersistent(client: ZkClient, path: String, data: Object, acls: java.util.List[ACL]) {
-    checkNamespace(client)
+  def createPersistent(path: String, data: Object, acls: java.util.List[ACL]) {
+    checkNamespace()
     client.createPersistent(path, data, acls)
   }
 
-  def createPersistent(client: ZkClient, path: String, createParents: Boolean, acls: java.util.List[ACL]) {
-    checkNamespace(client)
+  def createPersistent(path: String, createParents: Boolean, acls: java.util.List[ACL]) {
+    checkNamespace()
     client.createPersistent(path, createParents, acls)
   }
 
-  def createEphemeral(client: ZkClient, path: String, data: Object, acls: java.util.List[ACL]) {
-    checkNamespace(client)
+  def createEphemeral(path: String, data: Object, acls: java.util.List[ACL]) {
+    checkNamespace()
     client.createEphemeral(path, data, acls)
   }
 
-  def createPersistentSequential(client: ZkClient, path: String, data: Object, acls: java.util.List[ACL]): String = {
-    checkNamespace(client)
+  def createPersistentSequential(path: String, data: Object, acls: java.util.List[ACL]): String = {
+    checkNamespace()
     client.createPersistentSequential(path, data, acls)
   }
 }
@@ -990,6 +1050,7 @@ class ZKCheckedEphemeral(path: String,
   private val getDataCallback = new GetDataCallback
   val latch: CountDownLatch = new CountDownLatch(1)
   var result: Code = Code.OK
+  val defaultAcls = ZkUtils.defaultAcls(isSecure, path)
 
   private class CreateCallback extends StringCallback {
     def processResult(rc: Int,
@@ -1051,7 +1112,7 @@ class ZKCheckedEphemeral(path: String,
   private def createEphemeral() {
     zkHandle.create(path,
                     ZKStringSerializer.serialize(data),
-                    DefaultAcls(isSecure),
+                    defaultAcls,
                     CreateMode.EPHEMERAL,
                     createCallback,
                     null)
@@ -1064,7 +1125,7 @@ class ZKCheckedEphemeral(path: String,
     } else {
       zkHandle.create(prefix,
                       new Array[Byte](0),
-                      DefaultAcls(isSecure),
+                      defaultAcls,
                       CreateMode.PERSISTENT,
                       new StringCallback() {
                         def processResult(rc : Int,

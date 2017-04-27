@@ -24,8 +24,8 @@ import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.{CoreUtils, Logging, Os}
-import org.apache.kafka.common.utils.Utils
+import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.utils.{OperatingSystem, Utils}
 import sun.nio.ch.DirectBuffer
 
 import scala.math.ceil
@@ -104,8 +104,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       val position = mmap.position
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
-      if(Os.isWindows)
-        forceUnmap(mmap)
+      if (OperatingSystem.IS_WINDOWS)
+        forceUnmap(mmap);
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -216,12 +216,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * and this requires synchronizing reads.
    */
   protected def maybeLock[T](lock: Lock)(fun: => T): T = {
-    if(Os.isWindows)
+    if (OperatingSystem.IS_WINDOWS)
       lock.lock()
-    try {
-      fun
-    } finally {
-      if(Os.isWindows)
+    try fun
+    finally {
+      if (OperatingSystem.IS_WINDOWS)
         lock.unlock()
     }
   }
