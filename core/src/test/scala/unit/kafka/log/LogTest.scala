@@ -328,6 +328,34 @@ class LogTest {
   }
 
   @Test
+  def testRebuildTransactionalState(): Unit = {
+    val log = createLog(1024 * 1024)
+
+    val pid = 137L
+    val epoch = 5.toShort
+    val seq = 0
+
+    // add some transactional records
+    val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, pid, epoch, seq,
+      new SimpleRecord("foo".getBytes),
+      new SimpleRecord("bar".getBytes),
+      new SimpleRecord("baz".getBytes))
+    log.appendAsLeader(records, leaderEpoch = 0)
+    val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid, epoch),
+      isFromClient = false, leaderEpoch = 0)
+    log.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
+
+    // now there should be no first unstable offset
+    assertEquals(None, log.firstUnstableOffset)
+
+    log.close()
+
+    val reopenedLog = createLog(1024 * 1024)
+    reopenedLog.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
+    assertEquals(None, reopenedLog.firstUnstableOffset)
+  }
+
+  @Test
   def testPeriodicPidExpiration() {
     val maxPidExpirationMs = 200
     val expirationCheckInterval = 100

@@ -414,30 +414,13 @@ class Log(@volatile var dir: File,
   }
 
   private def loadPidsFromLog(records: Records): Unit = {
-    val pidsToLoad = mutable.Map[Long, ProducerAppendInfo]()
+    val pidsToLoad = mutable.Map.empty[Long, ProducerAppendInfo]
+    val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      if (batch.hasProducerId) {
-        val pid = batch.producerId
-        pidsToLoad.get(pid) match {
-          case None =>
-            val appendInfo = pidMap.lastEntry(pid) match {
-              case Some(lastEntry) =>
-                val appendInfo = new ProducerAppendInfo(pid, lastEntry)
-                appendInfo.append(batch)
-                appendInfo
-
-              case None =>
-                new ProducerAppendInfo(pid, batch)
-            }
-            pidsToLoad.put(pid, appendInfo)
-
-          case Some(appendInfo) =>
-            appendInfo.append(batch)
-        }
-      }
+      updateProducer(batch, pidsToLoad, completedTxns)
     }
-
     pidsToLoad.values.foreach(pidMap.update)
+    completedTxns.foreach(pidMap.completeTxn)
   }
 
   private[log] def activePids: Map[Long, ProducerIdEntry] = {
@@ -500,7 +483,7 @@ class Log(@volatile var dir: File,
     * @return Information about the appended messages including the first and last offset.
     */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
-    val appendInfo = analyzeAndValidateRecords(records, isFromClient = assignOffsets)
+    val appendInfo = analyzeAndValidateRecords(records, isFromClient)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
     if (appendInfo.shallowCount == 0 || appendInfo.isDuplicate)
@@ -684,8 +667,7 @@ class Log(@volatile var dir: File,
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    var isDuplicate = false
-    val producerAppendInfos = mutable.Map[Long, ProducerAppendInfo]()
+    val producerAppendInfos = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
 
     for (batch <- records.batches.asScala) {
@@ -730,54 +712,70 @@ class Log(@volatile var dir: File,
       if (messageCodec != NoCompressionCodec)
         sourceCodec = messageCodec
 
-      val pid = batch.producerId
-      if (pid != RecordBatch.NO_PRODUCER_ID) {
-        val maybeControlRecord = if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
-          val record = batch.iterator.next()
-          val controlRecordType = ControlRecordType.parse(record.key)
-          val controlRecord = ControlRecord(controlRecordType, pid, batch.producerEpoch,
-            record.offset, record.timestamp)
-          Some(controlRecord)
-        } else None
+      if (isFromClient) {
+        if (batch.hasProducerId) {
+          val pid = batch.producerId
+          val isDuplicate = pidMap.lastEntry(pid) match {
+            case Some(lastEntry) if lastEntry.isDuplicate(batch) =>
+              // This request is a duplicate so return the information about the existing entry. Note that for requests
+              // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
+              // of the loop and the values below will not be updated more than once.
+              firstOffset = lastEntry.firstOffset
+              lastOffset = lastEntry.lastOffset
+              maxTimestamp = lastEntry.timestamp
+              true
 
-        def appendTo(appendInfo: ProducerAppendInfo) =
-          maybeControlRecord match {
-            case Some(controlRecord) =>
-              val completedTxn = appendInfo.appendControl(controlRecord)
-              completedTxns += completedTxn
-            case None => appendInfo.append(batch)
+            case maybeLastEntry =>
+              val appendInfo = new ProducerAppendInfo(pid, maybeLastEntry)
+              appendInfo.append(batch)
+              producerAppendInfos.put(pid, appendInfo)
+              false
           }
 
-        producerAppendInfos.get(pid) match {
-          case Some(appendInfo) => appendTo(appendInfo)
-          case None =>
-            pidMap.lastEntry(pid) match {
-              case Some(lastEntry) if isFromClient && lastEntry.isDuplicate(batch) =>
-                // This request is a duplicate so return the information about the existing entry. Note that for requests
-                // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
-                // of the loop and the values below will not be updated more than once.
-                isDuplicate = true
-                firstOffset = lastEntry.firstOffset
-                lastOffset = lastEntry.lastOffset
-                maxTimestamp = lastEntry.timestamp
-                debug(s"Detected a duplicate for partition $topicPartition at (firstOffset, lastOffset): ($firstOffset, $lastOffset). " +
-                  "Ignoring the incoming record.")
-
-              case maybeLastEntry =>
-                val appendInfo = new ProducerAppendInfo(pid, maybeLastEntry)
-                producerAppendInfos.put(pid, appendInfo)
-                appendTo(appendInfo)
-            }
+          val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
+          return LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP,
+            sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap,
+            completedTxns.toList, isDuplicate = isDuplicate)
         }
+      } else {
+        updateProducer(batch, producerAppendInfos, completedTxns)
       }
     }
 
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
-
     LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
       targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap, completedTxns.toList,
-      isDuplicate)
+      isDuplicate = false)
+  }
+
+  private def updateProducer(batch: RecordBatch,
+                             producers: mutable.Map[Long, ProducerAppendInfo],
+                             completedTxns: ListBuffer[CompletedTxn]): Unit = {
+
+    if (batch.hasProducerId) {
+      val pid = batch.producerId
+      val maybeControlRecord = if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
+        val record = batch.iterator.next()
+        val controlRecordType = ControlRecordType.parse(record.key)
+        val controlRecord = ControlRecord(controlRecordType, pid, batch.producerEpoch,
+          record.offset, record.timestamp)
+        Some(controlRecord)
+      } else None
+
+      val appendInfo = producers.getOrElse(pid, {
+        val appendInfo = new ProducerAppendInfo(pid, pidMap.lastEntry(pid))
+        producers.put(pid, appendInfo)
+        appendInfo
+      })
+
+      maybeControlRecord match {
+        case Some(controlRecord) =>
+          val completedTxn = appendInfo.appendControl(controlRecord)
+          completedTxns += completedTxn
+        case None => appendInfo.append(batch)
+      }
+    }
   }
 
   /**
