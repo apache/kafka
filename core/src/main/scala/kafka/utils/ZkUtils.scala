@@ -701,8 +701,7 @@ class ZkUtils(val zkClient: ZkClient,
   : mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     for(topicAndPartition <- topicAndPartitions) {
-      ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic,
-        topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
+      ReplicationUtils.getLeaderIsrAndEpochForPartition(this, topicAndPartition.topic, topicAndPartition.partition).foreach { leaderIsrAndControllerEpoch =>
         ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
       }
     }
