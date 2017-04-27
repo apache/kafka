@@ -172,11 +172,7 @@ class Partition(val topic: String,
 
       //We cache the leader epoch here, persisting it only if it's local (hence having a log dir)
       leaderEpoch = partitionStateInfo.leaderEpoch
-      allReplicas.map(id => getOrCreateReplica(id))
-        .filter(_.isLocal)
-        .foreach { replica =>
-          replica.epochs.get.cacheLatestEpoch(leaderEpoch)
-        }
+      allReplicas.foreach(id => getOrCreateReplica(id))
 
       zkVersion = partitionStateInfo.zkVersion
       val isNewLeader =
@@ -474,7 +470,7 @@ class Partition(val topic: String,
               .format(topicPartition, inSyncSize, minIsr))
           }
 
-          val info = log.append(records, assignOffsets = true)
+          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch)
           // probably unblock some follower fetch requests since log end offset has been updated
           replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1

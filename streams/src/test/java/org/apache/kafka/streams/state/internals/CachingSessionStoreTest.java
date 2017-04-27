@@ -51,6 +51,7 @@ public class CachingSessionStoreTest {
     private static final int MAX_CACHE_SIZE_BYTES = 600;
     private final StateSerdes<String, Long> serdes =
             new StateSerdes<>("name", Serdes.String(), Serdes.Long());
+    private MockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingSessionStore<String, Long> cachingStore;
     private ThreadCache cache;
@@ -66,13 +67,14 @@ public class CachingSessionStoreTest {
                                                  Serdes.String(),
                                                  Serdes.Long());
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
+        context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));
         cachingStore.init(context, cachingStore);
     }
 
     @After
     public void close() {
+        context.close();
         cachingStore.close();
     }
 

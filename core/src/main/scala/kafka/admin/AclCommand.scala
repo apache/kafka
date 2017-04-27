@@ -19,7 +19,9 @@ package kafka.admin
 
 import joptsimple._
 import kafka.security.auth._
+import kafka.server.KafkaConfig
 import kafka.utils._
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Utils
 
@@ -59,12 +61,13 @@ object AclCommand {
   }
 
   def withAuthorizer(opts: AclCommandOptions)(f: Authorizer => Unit) {
+    val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSecurityEnabled)
     val authorizerProperties =
       if (opts.options.has(opts.authorizerPropertiesOpt)) {
         val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
-        CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+        defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
       } else {
-        Map.empty[String, Any]
+        defaultProps
       }
 
     val authorizerClass = opts.options.valueOf(opts.authorizerOpt)

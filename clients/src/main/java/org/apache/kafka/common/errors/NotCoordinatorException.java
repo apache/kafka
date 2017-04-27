@@ -14,17 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common;
+package org.apache.kafka.common.errors;
 
-import java.util.Locale;
+/**
+ * In the context of the group coordinator, the broker returns this error code if it receives an offset fetch
+ * or commit request for a group it's not the coordinator of.
+ *
+ * In the context of the transactional coordinator, it returns this error when it receives a transactional
+ * request with a transactionalId the coordinator doesn't own.
+ */
+public class NotCoordinatorException extends RetriableException {
 
-public final class Os {
-    public static final String NAME;
+    private static final long serialVersionUID = 1L;
 
-    public static final boolean IS_WINDOWS;
-
-    static {
-        NAME = System.getProperty("os.name").toLowerCase(Locale.ROOT);
-        IS_WINDOWS = NAME.startsWith("windows");
+    public NotCoordinatorException(String message) {
+        super(message);
     }
+
+    public NotCoordinatorException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

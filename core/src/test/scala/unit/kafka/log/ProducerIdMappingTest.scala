@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
-import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -39,21 +39,14 @@ class ProducerIdMappingTest extends JUnitSuite {
 
   @Before
   def setUp(): Unit = {
-    // Create configuration including number of snapshots to hold
-    val props = new Properties()
-    config = LogConfig(props)
-
-    // Create temporary directory
+    config = LogConfig(new Properties)
     idMappingDir = TestUtils.tempDir()
-
-    // Instantiate IdMapping
     idMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
   }
 
   @After
   def tearDown(): Unit = {
-    idMappingDir.listFiles().foreach(f => f.delete())
-    idMappingDir.deleteOnExit()
+    Utils.delete(idMappingDir)
   }
 
   @Test
@@ -106,7 +99,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     checkAndUpdate(idMapping, pid, 1, epoch, 1L, time.milliseconds)
     idMapping.maybeTakeSnapshot()
     val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-    recoveredMapping.truncateAndReload(3L, time.milliseconds)
+    recoveredMapping.truncateAndReload(0L, 3L, time.milliseconds)
 
     // entry added after recovery
     checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, time.milliseconds)
@@ -120,28 +113,97 @@ class ProducerIdMappingTest extends JUnitSuite {
 
     idMapping.maybeTakeSnapshot()
     val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-    recoveredMapping.truncateAndReload(1L, 70000)
+    recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
     // we should get an out of order sequence exception.
     checkAndUpdate(recoveredMapping, pid, 2, epoch, 2L, 70001)
   }
 
-
   @Test
   def testRemoveOldSnapshot(): Unit = {
     val epoch = 0.toShort
-    checkAndUpdate(idMapping, pid, 0, epoch, 0L, 1L)
-    checkAndUpdate(idMapping, pid, 1, epoch, 1L, 2L)
 
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(2), currentSnapshotOffsets)
+
+    checkAndUpdate(idMapping, pid, 2, epoch, 2L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(2, idMappingDir.listFiles().length)
+    assertEquals(Set(2, 3), currentSnapshotOffsets)
+
+    // we only retain two snapshot files, so the next snapshot should cause the oldest to be deleted
+    checkAndUpdate(idMapping, pid, 3, epoch, 3L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(2, idMappingDir.listFiles().length)
+    assertEquals(Set(3, 4), currentSnapshotOffsets)
+  }
+
+  @Test
+  def testTruncate(): Unit = {
+    val epoch = 0.toShort
+
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(2), currentSnapshotOffsets)
+
+    checkAndUpdate(idMapping, pid, 2, epoch, 2L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(2, idMappingDir.listFiles().length)
+    assertEquals(Set(2, 3), currentSnapshotOffsets)
+
+    idMapping.truncate()
+
+    assertEquals(0, idMappingDir.listFiles().length)
+    assertEquals(Set(), currentSnapshotOffsets)
+
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(1), currentSnapshotOffsets)
+  }
+
+  @Test
+  def testExpirePids(): Unit = {
+    val epoch = 0.toShort
+
+    checkAndUpdate(idMapping, pid, 0, epoch, 0L)
+    checkAndUpdate(idMapping, pid, 1, epoch, 1L)
     idMapping.maybeTakeSnapshot()
 
-    checkAndUpdate(idMapping, pid, 2, epoch, 2L, 3L)
+    val anotherPid = 2L
+    checkAndUpdate(idMapping, anotherPid, 0, epoch, 2L)
+    checkAndUpdate(idMapping, anotherPid, 1, epoch, 3L)
+    idMapping.maybeTakeSnapshot()
+    assertEquals(Set(2, 4), currentSnapshotOffsets)
+
+    idMapping.expirePids(2)
+    assertEquals(Set(4), currentSnapshotOffsets)
+    assertEquals(Set(anotherPid), idMapping.activePids.keySet)
+    assertEquals(None, idMapping.lastEntry(pid))
+
+    val maybeEntry = idMapping.lastEntry(anotherPid)
+    assertTrue(maybeEntry.isDefined)
+    assertEquals(3L, maybeEntry.get.lastOffset)
+
+    idMapping.expirePids(3)
+    assertEquals(Set(anotherPid), idMapping.activePids.keySet)
+    assertEquals(Set(4), currentSnapshotOffsets)
+    assertEquals(4, idMapping.mapEndOffset)
+
+    idMapping.expirePids(5)
+    assertEquals(Set(), idMapping.activePids.keySet)
+    assertEquals(Set(), currentSnapshotOffsets)
+    assertEquals(5, idMapping.mapEndOffset)
 
     idMapping.maybeTakeSnapshot()
-
-    assertEquals(s"number of snapshot files is incorrect: ${idMappingDir.listFiles().length}",
-               1, idMappingDir.listFiles().length)
+    // shouldn't be any new snapshot because the log is empty
+    assertEquals(Set(), currentSnapshotOffsets)
   }
 
   @Test
@@ -150,12 +212,13 @@ class ProducerIdMappingTest extends JUnitSuite {
     checkAndUpdate(idMapping, pid, 0, epoch, 0L, 0L)
 
     idMapping.maybeTakeSnapshot()
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(1), currentSnapshotOffsets)
 
     // nothing changed so there should be no new snapshot
     idMapping.maybeTakeSnapshot()
-
-    assertEquals(s"number of snapshot files is incorrect: ${idMappingDir.listFiles().length}",
-      1, idMappingDir.listFiles().length)
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(1), currentSnapshotOffsets)
   }
 
   @Test
@@ -170,7 +233,7 @@ class ProducerIdMappingTest extends JUnitSuite {
 
     intercept[OutOfOrderSequenceException] {
       val recoveredMapping = new ProducerIdMapping(config, partition, idMappingDir, maxPidExpirationMs)
-      recoveredMapping.truncateAndReload(1L, time.milliseconds)
+      recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
       checkAndUpdate(recoveredMapping, pid2, 1, epoch, 4L, 5L)
     }
   }
@@ -181,7 +244,7 @@ class ProducerIdMappingTest extends JUnitSuite {
     val sequence = 37
     checkAndUpdate(idMapping, pid, sequence, epoch, 1L)
     time.sleep(maxPidExpirationMs + 1)
-    idMapping.checkForExpiredPids(time.milliseconds)
+    idMapping.removeExpiredPids(time.milliseconds)
     checkAndUpdate(idMapping, pid, sequence + 1, epoch, 1L)
   }
 
@@ -214,11 +277,15 @@ class ProducerIdMappingTest extends JUnitSuite {
                              epoch: Short,
                              lastOffset: Long,
                              timestamp: Long = time.milliseconds()): Unit = {
-    val numRecords = 1
-    val incomingPidEntry = ProducerIdEntry(epoch, seq, lastOffset, numRecords, timestamp)
+    val offsetDelta = 0
+    val incomingPidEntry = ProducerIdEntry(epoch, seq, lastOffset, offsetDelta, timestamp)
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
     producerAppendInfo.append(incomingPidEntry)
     mapping.update(producerAppendInfo)
+    mapping.updateMapEndOffset(lastOffset + 1)
   }
+
+  private def currentSnapshotOffsets =
+    idMappingDir.listFiles().map(file => Log.offsetFromFilename(file.getName)).toSet
 
 }

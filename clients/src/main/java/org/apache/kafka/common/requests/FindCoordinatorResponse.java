@@ -23,35 +23,42 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class GroupCoordinatorResponse extends AbstractResponse {
+public class FindCoordinatorResponse extends AbstractResponse {
 
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String ERROR_MESSAGE_KEY_NAME = "error_message";
     private static final String COORDINATOR_KEY_NAME = "coordinator";
 
     /**
      * Possible error codes:
      *
-     * GROUP_COORDINATOR_NOT_AVAILABLE (15)
-     * NOT_COORDINATOR_FOR_GROUP (16)
+     * COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR (16)
      * GROUP_AUTHORIZATION_FAILED (30)
      */
-
 
     // coordinator level field names
     private static final String NODE_ID_KEY_NAME = "node_id";
     private static final String HOST_KEY_NAME = "host";
     private static final String PORT_KEY_NAME = "port";
 
+    private final String errorMessage;
     private final Errors error;
     private final Node node;
 
-    public GroupCoordinatorResponse(Errors error, Node node) {
+    public FindCoordinatorResponse(Errors error, Node node) {
         this.error = error;
         this.node = node;
+        this.errorMessage = null;
     }
 
-    public GroupCoordinatorResponse(Struct struct) {
+    public FindCoordinatorResponse(Struct struct) {
         error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
+            errorMessage = struct.getString(ERROR_MESSAGE_KEY_NAME);
+        else
+            errorMessage = null;
+
         Struct broker = (Struct) struct.get(COORDINATOR_KEY_NAME);
         int nodeId = broker.getInt(NODE_ID_KEY_NAME);
         String host = broker.getString(HOST_KEY_NAME);
@@ -69,8 +76,11 @@ public class GroupCoordinatorResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.GROUP_COORDINATOR.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
         struct.set(ERROR_CODE_KEY_NAME, error.code());
+        if (struct.hasField(ERROR_MESSAGE_KEY_NAME))
+            struct.set(ERROR_MESSAGE_KEY_NAME, errorMessage);
+
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
         coordinator.set(NODE_ID_KEY_NAME, node.id());
         coordinator.set(HOST_KEY_NAME, node.host());
@@ -79,7 +89,7 @@ public class GroupCoordinatorResponse extends AbstractResponse {
         return struct;
     }
 
-    public static GroupCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new GroupCoordinatorResponse(ApiKeys.GROUP_COORDINATOR.parseResponse(version, buffer));
+    public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
+        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer));
     }
 }

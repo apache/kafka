@@ -18,7 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.NotCoordinatorForGroupException;
+import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -63,9 +63,12 @@ public class RequestResponseTest {
 
     @Test
     public void testSerialization() throws Exception {
-        checkRequest(createGroupCoordinatorRequest());
-        checkErrorResponse(createGroupCoordinatorRequest(), new UnknownServerException());
-        checkResponse(createGroupCoordinatorResponse(), 0);
+        checkRequest(createFindCoordinatorRequest(0));
+        checkRequest(createFindCoordinatorRequest(1));
+        checkErrorResponse(createFindCoordinatorRequest(0), new UnknownServerException());
+        checkErrorResponse(createFindCoordinatorRequest(1), new UnknownServerException());
+        checkResponse(createFindCoordinatorResponse(), 0);
+        checkResponse(createFindCoordinatorResponse(), 1);
         checkRequest(createControlledShutdownRequest());
         checkResponse(createControlledShutdownResponse(), 1);
         checkErrorResponse(createControlledShutdownRequest(), new UnknownServerException());
@@ -100,7 +103,7 @@ public class RequestResponseTest {
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 0);
         checkRequest(OffsetFetchRequest.forAllPartitions("group1"));
-        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorForGroupException());
+        checkErrorResponse(OffsetFetchRequest.forAllPartitions("group1"), new NotCoordinatorException("Not Coordinator"));
         checkRequest(createOffsetFetchRequest(0));
         checkRequest(createOffsetFetchRequest(1));
         checkRequest(createOffsetFetchRequest(2));
@@ -260,6 +263,12 @@ public class RequestResponseTest {
         struct.writeTo(buffer);
         buffer.rewind();
         return buffer;
+    }
+
+    @Test(expected = UnsupportedVersionException.class)
+    public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.TRANSACTION, "foobar");
+        builder.build((short) 0);
     }
 
     @Test
@@ -495,12 +504,13 @@ public class RequestResponseTest {
         return new ResponseHeader(10);
     }
 
-    private GroupCoordinatorRequest createGroupCoordinatorRequest() {
-        return new GroupCoordinatorRequest.Builder("test-group").build();
+    private FindCoordinatorRequest createFindCoordinatorRequest(int version) {
+        return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
+                .build((short) version);
     }
 
-    private GroupCoordinatorResponse createGroupCoordinatorResponse() {
-        return new GroupCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
+    private FindCoordinatorResponse createFindCoordinatorResponse() {
+        return new FindCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
     }
 
     private FetchRequest createFetchRequest(int version) {
@@ -827,7 +837,7 @@ public class RequestResponseTest {
     }
 
     private InitPidRequest createInitPidRequest() {
-        return new InitPidRequest.Builder(null).build();
+        return new InitPidRequest.Builder(null, 100).build();
     }
 
     private InitPidResponse createInitPidResponse() {

@@ -100,15 +100,15 @@ class AdminClient(val time: Time,
 
   def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
     val startTime = time.milliseconds
-    val requestBuilder = new GroupCoordinatorRequest.Builder(groupId)
-    var response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+    val requestBuilder = new FindCoordinatorRequest.Builder(org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
+    var response = sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse]
 
-    while (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE && time.milliseconds - startTime < timeoutMs) {
+    while (response.error == Errors.COORDINATOR_NOT_AVAILABLE && time.milliseconds - startTime < timeoutMs) {
       Thread.sleep(retryBackoffMs)
-      response = sendAnyNode(ApiKeys.GROUP_COORDINATOR, requestBuilder).asInstanceOf[GroupCoordinatorResponse]
+      response = sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse]
     }
 
-    if (response.error == Errors.GROUP_COORDINATOR_NOT_AVAILABLE)
+    if (response.error == Errors.COORDINATOR_NOT_AVAILABLE)
       throw new TimeoutException("The consumer group command timed out while waiting for group to initialize: ", response.error.exception)
 
     response.error.maybeThrow()

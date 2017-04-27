@@ -166,6 +166,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public int lastSequence() {
+        int baseSequence = baseSequence();
+        if (baseSequence == RecordBatch.NO_SEQUENCE)
+            return RecordBatch.NO_SEQUENCE;
         return baseSequence() + lastOffsetDelta();
     }
 

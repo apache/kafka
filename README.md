@@ -156,17 +156,18 @@ You can run findbugs using:
     ./gradlew findbugsMain findbugsTest -x test
 
 The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
-directories. Currently, findbugs warnings do not cause the build to fail.
+directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
 
 ### Common build options ###
 
-The following options should be set with a `-D` switch, for example `./gradlew -Dorg.gradle.project.maxParallelForks=1 test`.
+The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
 
-* `org.gradle.project.mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
-* `org.gradle.project.maxParallelForks`: limits the maximum number of processes for each task.
-* `org.gradle.project.showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
-* `org.gradle.project.skipSigning`: skips signing of artifacts.
-* `org.gradle.project.testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -Dorg.gradle.project.testLoggingEvents=started,passed,skipped,failed test`
+* `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
+* `maxParallelForks`: limits the maximum number of processes for each task.
+* `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
+* `skipSigning`: skips signing of artifacts.
+* `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
+* `xmlFindBugsReport`: enable XML reports for findBugs. This also disables HTML reports as only one can be enabled at a time.
 
 ### Running in Vagrant ###
 

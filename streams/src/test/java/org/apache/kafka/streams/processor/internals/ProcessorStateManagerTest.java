@@ -24,12 +24,9 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockChangelogReader;
-import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockStateStoreSupplier;
-import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -219,10 +216,9 @@ public class ProcessorStateManagerTest {
             stateMgr.register(nonPersistentStore, true, nonPersistentStore.stateRestoreCallback);
         } finally {
             // close the state manager with the ack'ed offsets
-            stateMgr.flush(new MockProcessorContext(StateSerdes.withBuiltinTypes("foo", String.class, String.class), new NoOpRecordCollector()));
+            stateMgr.flush();
             stateMgr.close(ackedOffsets);
         }
-
         // make sure all stores are closed, and the checkpoint file is written.
         assertTrue(persistentStore.flushed);
         assertTrue(persistentStore.closed);

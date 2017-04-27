@@ -62,17 +62,38 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
             RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE: Redundant nullcheck of value known to be null.
             RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT: Return value of method without side effect is ignored.
             NM_CLASS_NAMING_CONVENTION: Class names should start with an upper case letter.
-            NM_METHOD_NAMING_CONVENTION: Method names should start with a lower case letter. -->
+            NM_METHOD_NAMING_CONVENTION: Method names should start with a lower case letter.
+            EC_NULL_ARG: Call to equals(null)
+            NP_ALWAYS_NULL: Null pointer dereference
+            MS_CANNOT_BE_FINAL: Field isn't final and can't be protected from malicious code -->
         <Source name="~.*\.scala" />
-        <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE,NP_NULL_ON_SOME_PATH,NP_NULL_PARAM_DEREF,SE_BAD_FIELD,DM_STRING_CTOR,DM_NEW_FOR_GETCLASS,ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD,DM_NUMBER_CTOR,RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE,RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE,RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE,RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT,NM_CLASS_NAMING_CONVENTION,NM_METHOD_NAMING_CONVENTION"/>
+        <Or>
+            <Bug pattern="NP_LOAD_OF_KNOWN_NULL_VALUE"/>
+            <Bug pattern="NP_NULL_ON_SOME_PATH"/>
+            <Bug pattern="NP_NULL_PARAM_DEREF"/>
+            <Bug pattern="SE_BAD_FIELD"/>
+            <Bug pattern="DM_STRING_CTOR"/>
+            <Bug pattern="DM_NEW_FOR_GETCLASS"/>
+            <Bug pattern="ST_WRITE_TO_STATIC_FROM_INSTANCE_METHOD"/>
+            <Bug pattern="DM_NUMBER_CTOR"/>
+            <Bug pattern="RCN_REDUNDANT_NULLCHECK_WOULD_HAVE_BEEN_A_NPE"/>
+            <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NONNULL_VALUE"/>
+            <Bug pattern="RCN_REDUNDANT_NULLCHECK_OF_NULL_VALUE"/>
+            <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+            <Bug pattern="NM_CLASS_NAMING_CONVENTION"/>
+            <Bug pattern="NM_METHOD_NAMING_CONVENTION"/>
+            <Bug pattern="EC_NULL_ARG"/>
+            <Bug pattern="NP_ALWAYS_NULL"/>
+            <Bug pattern="MS_CANNOT_BE_FINAL"/>
+        </Or>
     </Match>
 
     <Match>
         <!-- Add a suppression for KAFKA-4897: LogCleaner#cleanSegments should not ignore failures to delete files.
             TODO: remove this suppression when KAFKA-4897 is fixed. -->
-        <Class name="kafka.log.Cleaner"/>
-        <Method name="cleanSegments"/>
-        <Bug pattern="RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
+        <Package name="kafka.log"/>
+        <Source name="LogCleaner.scala"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
     </Match>
 
     <Match>
@@ -151,6 +172,15 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Class name="org.apache.kafka.connect.runtime.WorkerSourceTask"/>
         <Method name="execute"/>
         <Bug pattern="RV_RETURN_VALUE_IGNORED"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about ignoring the return value of await.
+             This is done intentionally because we use other clues to determine
+             if the wait was cut short. -->
+        <Package name="kafka.log"/>
+        <Source name="LogCleanerManager.scala"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
     </Match>
 
     <Match>
@@ -250,5 +280,36 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
             <Package name="org.apache.kafka.streams"/>
         </Or>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
+
+    <Match>
+        <!-- Ignore a warning about synchronizing on an AtomicBoolean -->
+        <Package name="kafka.metrics"/>
+        <Source name="KafkaMetricsReporter.scala"/>
+        <Method name="startReporters"/>
+        <Bug pattern="JLM_JSR166_UTILCONCURRENT_MONITORENTER"/>
+    </Match>
+
+    <Match>
+        <!-- Ignore a spurious warning about the types used in
+             AdminClient#deleteRecordsBefore -->
+        <Package name="kafka.admin"/>
+        <Source name="AdminClient.scala"/>
+        <Bug pattern="GC_UNRELATED_TYPES"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about an unreleased lock. -->
+        <Class name="kafka.utils.timer.SystemTimer"/>
+        <Method name="add"/>
+        <Bug pattern="UL_UNRELEASED_LOCK_EXCEPTION_PATH"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress a warning about an intentional infinite loop. -->
+        <Package name="kafka.utils"/>
+        <Source name="Throttler.scala"/>
+        <Method name="main"/>
+        <Bug pattern="IL_INFINITE_LOOP"/>
     </Match>
 </FindBugsFilter>
