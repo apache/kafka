@@ -295,7 +295,7 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (partitionsInTransaction.contains(topicPartition))
+        if (!isInTransaction() || partitionsInTransaction.contains(topicPartition))
             return;
         newPartitionsToBeAddedToTransaction.add(topicPartition);
     }
