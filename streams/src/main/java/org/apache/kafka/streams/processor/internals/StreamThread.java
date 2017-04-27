@@ -209,7 +209,6 @@ public class StreamThread extends Thread {
     final StateDirectory stateDirectory;
     private String originalReset;
     private StreamPartitionAssignor partitionAssignor;
-    private boolean cleanRun = false;
     private long timerStartedMs;
     private long lastCleanMs;
     private long lastCommitMs;
@@ -325,7 +324,6 @@ public class StreamThread extends Thread {
 
         try {
             runLoop();
-            cleanRun = true;
         } catch (final KafkaException e) {
             // just re-throw the exception as it should be logged already
             throw e;
