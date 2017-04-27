@@ -32,6 +32,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     //   InvalidTxnState
     //   InvalidPidMapping
     //   TopicAuthorizationFailed
+    //   InvalidProducerEpoch
 
     private final Errors error;
 

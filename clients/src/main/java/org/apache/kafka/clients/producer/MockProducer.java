@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -93,6 +95,27 @@ public class MockProducer<K, V> implements Producer<K, V> {
      */
     public MockProducer(boolean autoComplete, Partitioner partitioner, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
+    }
+
+    public void initTransactions() {
+
+    }
+
+    public void beginTransaction() throws ProducerFencedException {
+
+    }
+
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  String consumerGroupId) throws ProducerFencedException {
+
+    }
+
+    public void commitTransaction() throws ProducerFencedException {
+
+    }
+
+    public void abortTransaction() throws ProducerFencedException {
+
     }
 
     /**

@@ -21,7 +21,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -377,8 +376,8 @@ public class SenderTest {
     @Test
     public void testInitPidRequest() throws Exception {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
-        setupWithTransactionState(transactionState);
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
@@ -387,17 +386,17 @@ public class SenderTest {
             }
         }, new InitPidResponse(Errors.NONE, producerId, (short) 0));
         sender.run(time.milliseconds());
-        assertTrue(transactionState.hasPid());
-        assertEquals(producerId, transactionState.pidAndEpoch().producerId);
-        assertEquals((short) 0, transactionState.pidAndEpoch().epoch);
+        assertTrue(transactionManager.hasPid());
+        assertEquals(producerId, transactionManager.pidAndEpoch().producerId);
+        assertEquals((short) 0, transactionManager.pidAndEpoch().epoch);
     }
 
     @Test
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
-        transactionState.setPidAndEpoch(producerId, (short) 0);
-        setupWithTransactionState(transactionState);
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setPidAndEpoch(producerId, (short) 0);
+        setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
         int maxRetries = 10;
@@ -413,7 +412,7 @@ public class SenderTest {
                 time,
                 REQUEST_TIMEOUT,
                 50,
-                transactionState,
+                transactionManager,
                 apiVersions
         );
 
@@ -442,15 +441,15 @@ public class SenderTest {
 
         sender.run(time.milliseconds());  // receive response
         assertTrue(responseFuture.isDone());
-        assertEquals((long) transactionState.sequenceNumber(tp0), 1L);
+        assertEquals((long) transactionManager.sequenceNumber(tp0), 1L);
     }
 
     @Test
     public void testAbortRetryWhenPidChanges() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
-        transactionState.setPidAndEpoch(producerId, (short) 0);
-        setupWithTransactionState(transactionState);
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setPidAndEpoch(producerId, (short) 0);
+        setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
         int maxRetries = 10;
@@ -466,7 +465,7 @@ public class SenderTest {
                 time,
                 REQUEST_TIMEOUT,
                 50,
-                transactionState,
+                transactionManager,
                 apiVersions
         );
 
@@ -481,7 +480,7 @@ public class SenderTest {
         assertEquals(0, client.inFlightRequestCount());
         assertFalse("Client ready status should be false", client.isReady(node, 0L));
 
-        transactionState.setPidAndEpoch(producerId + 1, (short) 0);
+        transactionManager.setPidAndEpoch(producerId + 1, (short) 0);
         sender.run(time.milliseconds()); // receive error
         sender.run(time.milliseconds()); // reconnect
         sender.run(time.milliseconds()); // nothing to do, since the pid has changed. We should check the metrics for errors.
@@ -491,15 +490,15 @@ public class SenderTest {
         assertTrue("Expected non-zero value for record send errors", recordErrors.value() > 0);
 
         assertTrue(responseFuture.isDone());
-        assertEquals((long) transactionState.sequenceNumber(tp0), 0L);
+        assertEquals((long) transactionManager.sequenceNumber(tp0), 0L);
     }
 
     @Test
     public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
-        TransactionState transactionState = new TransactionState(new MockTime());
-        transactionState.setPidAndEpoch(producerId, (short) 0);
-        setupWithTransactionState(transactionState);
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setPidAndEpoch(producerId, (short) 0);
+        setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
         int maxRetries = 10;
@@ -515,7 +514,7 @@ public class SenderTest {
                 time,
                 REQUEST_TIMEOUT,
                 50,
-                transactionState,
+                transactionManager,
                 apiVersions
         );
 
@@ -529,7 +528,7 @@ public class SenderTest {
 
         sender.run(time.milliseconds());
         assertTrue(responseFuture.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionState.hasPid());
+        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasPid());
     }
 
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {
@@ -548,12 +547,12 @@ public class SenderTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
-    private void setupWithTransactionState(TransactionState transactionState) {
+    private void setupWithTransactionState(TransactionManager transactionManager) {
         Map<String, String> metricTags = new LinkedHashMap<>();
         metricTags.put("client-id", CLIENT_ID);
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.metrics = new Metrics(metricConfig, time);
-        this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionState);
+        this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
         this.sender = new Sender(this.client,
                 this.metadata,
                 this.accumulator,
@@ -565,7 +564,7 @@ public class SenderTest {
                 this.time,
                 REQUEST_TIMEOUT,
                 50,
-                transactionState,
+                transactionManager,
                 apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
     }

@@ -32,6 +32,7 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     //   InvalidPidMapping
     //   InvalidTxnState
     //   GroupAuthorizationFailed
+    //   InvalidProducerEpoch
 
     private final Errors error;
 

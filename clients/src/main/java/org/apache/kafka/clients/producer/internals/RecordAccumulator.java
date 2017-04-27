@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -82,7 +81,7 @@ public final class RecordAccumulator {
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
     private int drainIndex;
-    private final TransactionState transactionState;
+    private final TransactionManager transactionManager;
 
     /**
      * Create a new record accumulator
@@ -98,7 +97,7 @@ public final class RecordAccumulator {
      * @param metrics The metrics
      * @param time The time instance to use
      * @param apiVersions Request API versions for current connected brokers
-     * @param transactionState The shared transaction state object which tracks Pids, epochs, and sequence numbers per
+     * @param transactionManager The shared transaction state object which tracks Pids, epochs, and sequence numbers per
      *                         partition.
      */
     public RecordAccumulator(int batchSize,
@@ -109,7 +108,7 @@ public final class RecordAccumulator {
                              Metrics metrics,
                              Time time,
                              ApiVersions apiVersions,
-                             TransactionState transactionState) {
+                             TransactionManager transactionManager) {
         this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
@@ -125,7 +124,7 @@ public final class RecordAccumulator {
         this.muted = new HashSet<>();
         this.time = time;
         this.apiVersions = apiVersions;
-        this.transactionState = transactionState;
+        this.transactionManager = transactionManager;
         registerMetrics(metrics, metricGrpName);
     }
 
@@ -229,11 +228,14 @@ public final class RecordAccumulator {
     }
 
     private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
-        if (transactionState != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
+        if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                     "support the required message format (v2). The broker must be version 0.11 or later.");
         }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+        boolean isTransactional = false;
+        if (transactionManager != null)
+            isTransactional = transactionManager.isInTransaction();
+        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L, isTransactional);
     }
 
     /**
@@ -437,9 +439,9 @@ public final class RecordAccumulator {
                                         // request
                                         break;
                                     } else {
-                                        TransactionState.PidAndEpoch pidAndEpoch = null;
-                                        if (transactionState != null) {
-                                            pidAndEpoch = transactionState.pidAndEpoch();
+                                        TransactionManager.PidAndEpoch pidAndEpoch = null;
+                                        if (transactionManager != null) {
+                                            pidAndEpoch = transactionManager.pidAndEpoch();
                                             if (!pidAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the PID
                                                 break;
@@ -452,7 +454,7 @@ public final class RecordAccumulator {
                                             // the previous attempt may actually have been accepted, and if we change
                                             // the pid and sequence here, this attempt will also be accepted, causing
                                             // a duplicate.
-                                            int sequenceNumber = transactionState.sequenceNumber(batch.topicPartition);
+                                            int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
                                             log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
                                                     node, pidAndEpoch.producerId, pidAndEpoch.epoch,
                                                     batch.topicPartition, sequenceNumber);
@@ -540,6 +542,14 @@ public final class RecordAccumulator {
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
+    }
+
+    public boolean hasUnflushedBatches() {
+        for (Map.Entry<TopicPartition, Deque<ProducerBatch>> entry : this.batches().entrySet()) {
+            if (!entry.getValue().isEmpty())
+                return true;
+        }
+        return !this.incomplete.incomplete.isEmpty();
     }
 
     /**

@@ -899,6 +899,16 @@ public class ConfigDef {
         }
     }
 
+    public static class NonEmptyString implements Validator {
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s != null && s.isEmpty()) {
+                throw new ConfigException(name, o, "String must be non-empty");
+            }
+        }
+    }
+
     public static class ConfigKey {
         public final String name;
         public final Type type;
