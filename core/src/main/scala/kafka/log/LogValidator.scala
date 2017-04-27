@@ -108,14 +108,14 @@ private[kafka] object LogValidator extends Logging {
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
       CompressionType.NONE, records.records)
 
-    val (pid, epoch, sequence) = {
+    val (producerId, producerEpoch, sequence, isTransactional) = {
       val first = records.batches.asScala.head
-      (first.producerId, first.producerEpoch, first.baseSequence)
+      (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
     }
 
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
-      offsetCounter.value, now, pid, epoch, sequence, false, partitionLeaderEpoch)
+      offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
 
     for (batch <- records.batches.asScala) {
       validateBatch(batch, isFromClient)
@@ -250,15 +250,15 @@ private[kafka] object LogValidator extends Logging {
       }
 
       if (!inPlaceAssignment) {
-        val (pid, epoch, sequence) = {
+        val (producerId, producerEpoch, sequence, isTransactional) = {
           // note that we only reassign offsets for requests coming straight from a producer. For records with magic V2,
           // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
           // with older magic versions, there will never be a producer id, etc.
           val first = records.batches.asScala.head
-          (first.producerId, first.producerEpoch, first.baseSequence)
+          (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
         }
         buildRecordsAndAssignOffsets(magic, offsetCounter, timestampType, CompressionType.forId(targetCodec.codec), now,
-          validatedRecords, pid, epoch, sequence, partitionLeaderEpoch)
+          validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
       } else {
         // we can update the batch only and write the compressed payload as is
         val batch = records.batches.iterator.next()
@@ -282,14 +282,22 @@ private[kafka] object LogValidator extends Logging {
       }
   }
 
-  private def buildRecordsAndAssignOffsets(magic: Byte, offsetCounter: LongRef, timestampType: TimestampType,
-                                           compressionType: CompressionType, logAppendTime: Long,
+  private def buildRecordsAndAssignOffsets(magic: Byte,
+                                           offsetCounter: LongRef,
+                                           timestampType: TimestampType,
+                                           compressionType: CompressionType,
+                                           logAppendTime: Long,
                                            validatedRecords: Seq[Record],
-                                           producerId: Long, epoch: Short, baseSequence: Int, partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
-    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType, validatedRecords.asJava)
+                                           producerId: Long,
+                                           producerEpoch: Short,
+                                           baseSequence: Int,
+                                           isTransactional: Boolean,
+                                           partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
+    val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
+      validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
     val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
-      logAppendTime, producerId, epoch, baseSequence, false, partitionLeaderEpoch)
+      logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
 
     validatedRecords.foreach { record =>
       builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
