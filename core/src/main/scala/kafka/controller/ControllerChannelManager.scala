@@ -281,6 +281,12 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
     updateMetadataRequestPartitionInfoMap.clear()
   }
 
+  def clear() {
+    leaderAndIsrRequestMap.clear()
+    stopReplicaRequestMap.clear()
+    updateMetadataRequestMap.clear()
+  }
+
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int,
                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        replicas: Seq[Int], callback: AbstractResponse => Unit = null) {
