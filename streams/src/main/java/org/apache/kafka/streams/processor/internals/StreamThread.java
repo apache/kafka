@@ -602,7 +602,13 @@ public class StreamThread extends Thread {
 
                     for (TopicPartition partition : records.partitions()) {
                         StreamTask task = activeTasksByPartition.get(partition);
-                        numAddedRecords += task.addRecords(partition, records.records(partition));
+
+                        if (task == null) {
+                            log.error("Unexpected error: fetched partition {} does not belong to the active task partitions." +
+                                    "\n\t tasksByPartition: {}\n\t assignedPartitions: {}", partition, activeTasksByPartition, consumer.assignment());
+                        } else {
+                            numAddedRecords += task.addRecords(partition, records.records(partition));
+                        }
                     }
                     streamsMetrics.skippedRecordsSensor.record(records.count() - numAddedRecords, timerStartedMs);
                     polledRecords = true;
