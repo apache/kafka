@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -35,6 +34,7 @@ import java.util.Set;
  */
 public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractPartitionAssignor.class);
+    private Map<String, Subscription> subscriptions = null;
 
     /**
      * Perform the group assignment given the partition counts and member subscriptions
@@ -53,6 +53,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+        this.subscriptions = new HashMap<>(subscriptions);
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, List<String>> topicSubscriptions = new HashMap<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
@@ -75,12 +76,12 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
         // wrap the results along with any available user data
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
-            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue(), getUserData()));
+            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
         return assignments;
     }
 
-    protected ByteBuffer getUserData() {
-        return ByteBuffer.wrap(new byte[0]);
+    protected Map<String, Subscription> getSubscriptions() {
+        return subscriptions;
     }
 
     @Override

@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -36,6 +31,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,7 +39,9 @@ import org.slf4j.LoggerFactory;
 /**
  * The sticky assignor serves two purposes. First, it guarantees an assignment that is as balanced as possible, meaning either:
  * - the numbers of topic partitions assigned to consumers differ by at most one; or
- * - each consumer that has 2+ fewer topic partitions than some other consumer cannot get any of those topic partitions transfered to it.
+ * - each consumer that has 2+ fewer topic partitions than some other consumer cannot get any of those topic partitions transferred to it.
+ * Second, it preserved as many existing assignment as possible when a reassignment occurs. This helps in saving some of the
+ * overhead processing when topic partitions move from one consumer to another.
  *
  * Starting fresh it would work by distributing the partitions over consumers as evenly as possible. Even though this may sound similar to
  * how round robin assignor works, the second example below shows that it is not.
@@ -52,56 +50,132 @@ import org.slf4j.LoggerFactory;
  * 2. topic partitions stay with their previously assigned consumers as much as possible.
  * Of course, the first goal above takes precedence over the second one.
  *
- * Example 1. Suppose there are three consumers C0, C1, C2, four topics t0, t1, t2, t3, and each topic has 2 partitions,
- * resulting in partitions t0p0, t0p1, t1p0, t1p1, t2p0, t2p1, t3p0, t3p1. Each consumer is subscribed to all three topics.
+ * <b>Example 1.</b> Suppose there are three consumers <code>C0</code>, <code>C1</code>, <code>C2</code>,
+ * four topics <code>t0,</code> <code>t1</code>, <code>t2</code>, <code>t3</code>, and each topic has 2 partitions,
+ * resulting in partitions <code>t0p0</code>, <code>t0p1</code>, <code>t1p0</code>, <code>t1p1</code>, <code>t2p0</code>,
+ * <code>t2p1</code>, <code>t3p0</code>, <code>t3p1</code>. Each consumer is subscribed to all three topics.
  *
  * The assignment with both sticky and round robin assignors will be:
- * C0: [t0p0, t1p1, t3p0]
- * C1: [t0p1, t2p0, t3p1]
- * C2: [t1p0, t2p1]
+ * <ul>
+ * <li><code>C0: [t0p0, t1p1, t3p0]<code></li>
+ * <li><code>C1: [t0p1, t2p0, t3p1]<code></li>
+ * <li><code>C2: [t1p0, t2p1]<code></li>
+ * </ul>
  *
- * Now, let's assume C1 is removed and a reassignment is about to happen. The round robin assignor would produce:
- * C0: [t0p0, t1p0, t2p0, t3p0]
- * C2: [t0p1, t1p1, t2p1, t3p1]
+ * Now, let's assume <code>C1</code> is removed and a reassignment is about to happen. The round robin assignor would produce:
+ * <ul>
+ * <li><code>C0: [t0p0, t1p0, t2p0, t3p0]</code></li>
+ * <li><code>C2: [t0p1, t1p1, t2p1, t3p1]</code></li>
+ * </ul>
  *
  * while the sticky assignor would result in:
- * C0 [t0p0, t1p1, t3p0, t2p0]
- * C2 [t1p0, t2p1, t0p1, t3p1]
+ * <ul>
+ * <li><code>C0 [t0p0, t1p1, t3p0, t2p0]</code></li>
+ * <li><code>C2 [t1p0, t2p1, t0p1, t3p1]</code></li>
+ * </ul>
  * preserving all the previous assignments (unlike the round robin assignor).
  *
- * Example 2. There are three consumers C0, C1, C2, and three topics t0, t1, t2, with 1, 2, and 3 partitions respectively.
- * Therefore, the partitions are t0p0, t1p0, t1p1, t2p0, t2p1, t2p2.
- * C0 is subscribed to t0; C1 is subscribed to t0, t1; and C2 is subscribed to t0, t1, t2.
+ * <b>Example 2.</b> There are three consumers <code>C0</code>, <code>C1</code>, <code>C2</code>,
+ * and three topics <code>t0</code>, <code>t1</code>, <code>t2</code>, with 1, 2, and 3 partitions respectively.
+ * Therefore, the partitions are <code>t0p0</code>, <code>t1p0</code>, <code>t1p1</code>, <code>t2p0</code>,
+ * <code>t2p1</code>, <code>t2p2</code>. <code>C0</code> is subscribed to <code>t0</code>; <code>C1</code> is subscribed to
+ * <code>t0</code>, <code>t1</code>; and <code>C2</code> is subscribed to <code>t0</code>, <code>t1</code>, <code>t2</code>.
  *
  * The round robin assignor would come up with the following assignment:
- * C0 [t0p0]
- * C1 [t1p0]
- * C2 [t1p1, t2p0, t2p1, t2p2]
+ * <ul>
+ * <li><code>C0 [t0p0]</code></li>
+ * <li><code>C1 [t1p0]</code></li>
+ * <li><code>C2 [t1p1, t2p0, t2p1, t2p2]</code></li>
+ * </ul>
  *
  * which is not as balanced as the assignment suggested by sticky assignor:
- * C0 [t0p0]
- * C1 [t1p0, t1p1]
- * C2 [t2p0, t2p1, t2p2]
+ * <ul>
+ * <li><code>C0 [t0p0]</code></li>
+ * <li><code>C1 [t1p0, t1p1]</code></li>
+ * <li><code>C2 [t2p0, t2p1, t2p2]</code></li>
+ * </ul>
  *
- * Now, if consumer C0 is removed, these two assignors would produce the following assignments.
+ * Now, if consumer <code>C0</code> is removed, these two assignors would produce the following assignments.
  * Round Robin (preserves 3 partition assignments):
- * C1 [t0p0, t1p1]
- * C2 [t1p0, t2p0, t2p1, t2p2]
+ * <ul>
+ * <li><code>C1 [t0p0, t1p1]</code></li>
+ * <li><code>C2 [t1p0, t2p0, t2p1, t2p2]</code></li>
+ * </ul>
  *
  * Sticky (preserves 5 partition assignments):
- * C1 [t1p0, t1p1, t0p0]
- * C2 [t2p0, t2p1, t2p2]
+ * <ul>
+ * <li><code>C1 [t1p0, t1p1, t0p0]</code></li>
+ * <li><code>C2 [t2p0, t2p1, t2p2]</code></li>
+ * </ul>
+ *
+ * <h3>Impact on <code>ConsumerRebalanceListener</code></h3>
+ * The sticky assignment strategy can provide some optimization to those consumers that have some partition cleanup code
+ * in their <code>onPartitionsRevoked()</code> callback listeners. The cleanup code is placed in that callback listener
+ * because the consumer has no assumption or hope of preserving any of its assigned partitions after a rebalance when it
+ * is using range or round robin assignor. The listener code would look like this:
+ * <code>
+ * class TheOldRebalanceListener implements ConsumerRebalanceListener {
+ *
+ *   void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+ *     for (TopicPartition partition: partitions) {
+ *       commitOffsets(partition);
+ *       cleanupState(partition);
+ *     }
+ *   }
+ *
+ *   void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+ *     for (TopicPartition partition: partitions) {
+ *       initializeState(partition);
+ *       initializeOffset(partition);
+ *     }
+ *   }
+ * }
+ * </code>
+ *
+ * As mentioned above, one advantage of the sticky assignor is that, in general, it reduces the number of partitions that
+ * actually move from one consumer to another during a reassignment. Therefore, it allows consumers to do their cleanup
+ * more efficiently. Of course, they still can perform the partition cleanup in the <code>onPartitionsRevoked()</code>
+ * listener, but they can be more efficient and make a note of their partitions before and after the rebalance, and do the
+ * cleanup after the rebalance only on the partitions they have lost (which is normally not a lot). The code snippet below
+ * clarifies this point:
+ * <code>
+ * class TheNewRebalanceListener implements ConsumerRebalanceListener {
+ *   Collection<TopicPartition> lastAssignment = Collections.emptyList();
+ *
+ *   void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+ *     for (TopicPartition partition: partitions)
+ *       commitOffsets(partition);
+ *   }
+ *
+ *   void onPartitionsAssigned(Collection<TopicPartition> assignment) {
+ *     for (TopicPartition partition: difference(lastAssignment, assignment))
+ *       cleanupState(partition);
+ *
+ *     for (TopicPartition partition: difference(assignment, lastAssignment))
+ *       initializeState(partition);
+ *
+ *     for (TopicPartition partition: assignment)
+ *       initializeOffset(partition);
+ *
+ *     this.lastAssignment = assignment;
+ *   }
+ * }
+ * </code>
+ *
+ * Any consumer that uses sticky assignment can leverage this listener like this:
+ * <code>consumer.subscribe(topics, new TheNewRebalanceListener());</code>
  *
  */
 public class StickyAssignor extends AbstractPartitionAssignor {
 
     private static final Logger log = LoggerFactory.getLogger(StickyAssignor.class);
     protected Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
+    private List<TopicPartition> memberAssignment = null;
 
     private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {
         dest.clear();
         for (Entry<String, List<TopicPartition>> entry: source.entrySet())
-            dest.put(entry.getKey(), new ArrayList<TopicPartition>(entry.getValue()));
+            dest.put(entry.getKey(), new ArrayList<>(entry.getValue()));
     }
 
     private Map<String, List<TopicPartition>> deepCopy(Map<String, List<TopicPartition>> assignment) {
@@ -110,14 +184,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return copy;
     }
 
-    private HashMap<TopicPartition, String> deepCopy(HashMap<TopicPartition, String> source) {
-        HashMap<TopicPartition, String> copy = new HashMap<>();
-        copy.putAll(source);
-        return copy;
-    }
-
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-            Map<String, List<String>> subscriptions) {
+                                                    Map<String, List<String>> subscriptions) {
+        prepopulateCurrentAssignments();
         // make a deep copy of currentAssignment
         Map<String, List<TopicPartition>> oldAssignment = deepCopy(currentAssignment);
 
@@ -193,33 +262,29 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return currentAssignment;
     }
 
+    private void prepopulateCurrentAssignments() {
+        Map<String, Subscription> subscriptions = getSubscriptions();
+        if (subscriptions == null)
+            return;
 
-    @Override
-    protected ByteBuffer getUserData() {
-        try {
-            ByteArrayOutputStream bos = new ByteArrayOutputStream(2048);
-            ObjectOutputStream oos = new ObjectOutputStream(bos);
-            oos.writeObject(currentAssignment);
-            return ByteBuffer.wrap(bos.toByteArray());
-        } catch (Exception ioex) {
-            log.error("Failed to serialize currentAssignment", ioex);
-            return super.getUserData();
+        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
+            ByteBuffer userData = subscriptionEntry.getValue().userData();
+            if (userData != null && userData.hasRemaining())
+                currentAssignment.put(subscriptionEntry.getKey(), ConsumerProtocol.deserializeTopicPartitionAssignment(userData));
         }
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void onAssignment(Assignment assignment) {
-        try {
-            byte[] array = new byte[assignment.userData().remaining()];
-            assignment.userData().get(array);
-            ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(array));
-            currentAssignment = (Map<String, List<TopicPartition>>) ois.readObject();
-            log.debug("Got currentAssignment = " + currentAssignment);
-        } catch (IOException | ClassNotFoundException exc) {
-            log.error("Failed to deserialize assignment userdata into currentAssignment", exc);
-            currentAssignment.clear();
-        }
+        memberAssignment = assignment.partitions();
+    }
+
+    @Override
+    public Subscription subscription(Set<String> topics) {
+        if (memberAssignment == null)
+            return new Subscription(new ArrayList<>(topics));
+
+        return new Subscription(new ArrayList<>(topics), ConsumerProtocol.serializeTopicPartitionAssignment(memberAssignment));
     }
 
     @Override
@@ -377,19 +442,17 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     /**
-     * @param col a collection of elements that are lists themselves
+     * @param col a collection of elements of type list
      * @return true if all lists in the collection have the same members; false otherwise
      */
     private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
-        Set<Set<T>> set = new HashSet<Set<T>>(col.size());
-        for (List<T> l: col) {
-            final Set<T> s = new HashSet<>(l);
-            if (set.isEmpty())
-                set.add(s);
-            else {
-                if (set.add(s))
-                    return false;
-            }
+        Iterator<List<T>> it = col.iterator();
+        List<T> cur = it.next();
+        while (it.hasNext()) {
+            List<T> next = it.next();
+            if (!(cur.containsAll(next) && next.containsAll(cur)))
+                return false;
+            cur = next;
         }
         return true;
     }
@@ -415,7 +478,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     /**
      * Remove partition from partition assignments of the given consumer
      */
-    private void deassignPartition(TopicPartition partition, String consumer, TreeSet<String> sortedCurrentSubscriptions, HashMap<TopicPartition, String> currentPartitionConsumer) {
+    private void unassignPartition(TopicPartition partition, String consumer, TreeSet<String> sortedCurrentSubscriptions, HashMap<TopicPartition, String> currentPartitionConsumer) {
         sortedCurrentSubscriptions.remove(consumer);
         currentAssignment.get(consumer).remove(partition);
         currentPartitionConsumer.remove(partition);
@@ -486,7 +549,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
         // create a deep copy of the current assignment so we can revert to it if we do not get a more balanced assignment later
         Map<String, List<TopicPartition>> preBalanceAssignment = deepCopy(currentAssignment);
-        HashMap<TopicPartition, String> preBalancePartitionConsumers = deepCopy(currentPartitionConsumer);
+        HashMap<TopicPartition, String> preBalancePartitionConsumers = new HashMap<>(currentPartitionConsumer);
 
         reassignmentPerformed = performReassignments(sortedPartitions, sortedCurrentSubscriptions,
                 consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
@@ -538,7 +601,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 for (String otherConsumer: partition2AllPotentialConsumers.get(partition))
                     if (currentAssignment.get(consumer).size() > currentAssignment.get(otherConsumer).size() + 1) {
                         // de-assign partition from its current consumer
-                        deassignPartition(partition, consumer, sortedCurrentSubscriptions, currentPartitionConsumer);
+                        unassignPartition(partition, consumer, sortedCurrentSubscriptions, currentPartitionConsumer);
                         // reassign the partition to an eligible consumer with fewest assignments
                         assignPartition(partition, sortedCurrentSubscriptions, consumer2AllPotentialPartitions, currentPartitionConsumer);
                         reassignmentPerformed = true;
