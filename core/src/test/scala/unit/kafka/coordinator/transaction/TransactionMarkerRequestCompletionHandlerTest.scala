@@ -18,7 +18,6 @@ package kafka.coordinator.transaction
 
 import java.{lang, util}
 
-import kafka.coordinator.transaction._
 import kafka.server.DelayedOperationPurgatory
 import kafka.utils.timer.MockTimer
 import org.apache.kafka.clients.ClientResponse
@@ -37,19 +36,15 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val markerChannel = EasyMock.createNiceMock(classOf[TransactionMarkerChannel])
   private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name", new MockTimer, reaperEnabled = false)
   private val topic1 = new TopicPartition("topic1", 0)
-  private val epochAndMarkers = CoordinatorEpochAndMarkers(0,
-    0,
+  private val txnMarkers =
     Utils.mkList(
-      new WriteTxnMarkersRequest.TxnMarkerEntry(0,
-        0,
-        TransactionResult.COMMIT,
-        Utils.mkList(topic1))))
+      new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(topic1)))
 
-  private val handler = new TransactionMarkerRequestCompletionHandler(markerChannel, purgatory, epochAndMarkers,  0)
+  private val handler = new TransactionMarkerRequestCompletionHandler(markerChannel, purgatory, 0, txnMarkers, 0)
 
   @Test
   def shouldReEnqueuePartitionsWhenBrokerDisconnected(): Unit = {
-    EasyMock.expect(markerChannel.addRequestToSend(epochAndMarkers.metadataPartition, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
+    EasyMock.expect(markerChannel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, true, null, null))
@@ -76,7 +71,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
 
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
-    EasyMock.expect(markerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, 0))
+    EasyMock.expect(markerChannel.pendingTxnMetadata(0, 0))
       .andReturn(Some(metadata))
     EasyMock.replay(markerChannel)
 
@@ -96,7 +91,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
       completed = true
     }), Seq(0L))
 
-    EasyMock.expect(markerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, 0))
+    EasyMock.expect(markerChannel.pendingTxnMetadata(0, 0))
       .andReturn(Some(metadata))
 
     EasyMock.replay(markerChannel)
@@ -144,7 +139,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.UNKNOWN_TOPIC_OR_PARTITION))
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
 
-    EasyMock.expect(markerChannel.addRequestToSend(epochAndMarkers.metadataPartition, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
+    EasyMock.expect(markerChannel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))

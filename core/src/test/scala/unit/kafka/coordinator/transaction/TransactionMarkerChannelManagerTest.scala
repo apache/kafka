@@ -79,10 +79,10 @@ class TransactionMarkerChannelManagerTest {
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
 
-    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(0,
-      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
-    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(0,
-      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
+    val expectedBroker2Request = new WriteTxnMarkersRequest.Builder(
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = requestGenerator().map{ result =>
       (result.destination, result.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
@@ -99,38 +99,29 @@ class TransactionMarkerChannelManagerTest {
 
   @Test
   def shouldGenerateRequestPerPartitionPerBroker(): Unit ={
-    val partitionOneEpoch = 0
-    val partitionTwoEpoch = 1
-
     EasyMock.expect(metadataCache.getPartitionInfo(partition1.topic(), partition1.partition()))
-      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, partitionOneEpoch, List.empty, 0), 0), Set.empty)))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
 
 
     EasyMock.expect(metadataCache.getPartitionInfo(partition2.topic(), partition2.partition()))
-      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, partitionTwoEpoch, List.empty, 0), 0), Set.empty)))
+      .andReturn(Some(PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(1, 0, List.empty, 0), 0), Set.empty)))
     EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1)).anyTimes()
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, partitionOneEpoch, Set[TopicPartition](partition1))
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, partitionTwoEpoch, Set[TopicPartition](partition2))
+    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addRequestToSend(1, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition2))
 
-    val expectedPartition1Request = new WriteTxnMarkersRequest.Builder(0,
-      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
-    val expectedPartition2Request = new WriteTxnMarkersRequest.Builder(1,
-      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
+    val expectedPartition1Request = new WriteTxnMarkersRequest.Builder(
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
+    val expectedPartition2Request = new WriteTxnMarkersRequest.Builder(
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
 
     val requests = requestGenerator().map { result =>
       val markersRequest = result.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build()
-      (markersRequest.coordinatorEpoch(), (result.destination, markersRequest))
-    }.toMap
+      (result.destination, markersRequest)
+    }.toList
 
-    val request1 = requests(partitionOneEpoch)
-    val request2 = requests(partitionTwoEpoch)
-    assertEquals(broker1, request1._1)
-    assertEquals(broker1, request2._1)
-    assertEquals(2, requests.size)
-    assertEquals(expectedPartition1Request, request1._2)
-    assertEquals(expectedPartition2Request, request2._2)
+    assertEquals(List((broker1, expectedPartition1Request), (broker1, expectedPartition2Request)), requests)
   }
 
   @Test
@@ -142,8 +133,10 @@ class TransactionMarkerChannelManagerTest {
 
     channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
-    assertTrue(requestGenerator().nonEmpty)
-    assertTrue(requestGenerator().isEmpty)
+    val result = requestGenerator()
+    assertTrue(result.nonEmpty)
+    val result2 = requestGenerator()
+    assertTrue(result2.isEmpty)
   }
 
   @Test
