@@ -463,7 +463,7 @@ public class QueryableStateIntegrationTest {
         };
         final KTable<String, Long> t1 = builder.table(streamOne);
         final KTable<String, Long> t2 = t1.filter(filterPredicate, "queryFilter");
-        final KTable<String, Long> t3 = t1.filterNot(filterPredicate, "queryFilterNot");
+        t1.filterNot(filterPredicate, "queryFilterNot");
         t2.to(outputTopic);
 
         kafkaStreams = new KafkaStreams(builder, streamsConfiguration);

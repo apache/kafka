@@ -40,7 +40,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public Processor<K, Change<V>> get() {
-        return queryableName != null ? new MaterializedKTableFilterProcessor() : new KTableFilterProcessor();
+        return new KTableFilterProcessor();
     }
 
     @Override
@@ -76,23 +76,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         return newValue;
     }
 
-
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
-
-        @Override
-        public void process(K key, Change<V> change) {
-            V newValue = computeValue(key, change.newValue);
-            V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
-
-            if (sendOldValues && oldValue == null && newValue == null)
-                return; // unnecessary to forward here.
-
-            context().forward(key, new Change<>(newValue, oldValue));
-        }
-
-    }
-
-    private class MaterializedKTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
         private KeyValueStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
 
@@ -100,8 +84,10 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            if (queryableName != null) {
+                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            }
         }
 
         @Override
@@ -112,8 +98,12 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             if (sendOldValues && oldValue == null && newValue == null)
                 return; // unnecessary to forward here.
 
-            store.put(key, newValue);
-            tupleForwarder.maybeForward(key, newValue, oldValue);
+            if (queryableName != null) {
+                store.put(key, newValue);
+                tupleForwarder.maybeForward(key, newValue, oldValue);
+            } else {
+                context().forward(key, new Change<>(newValue, oldValue));
+            }
         }
 
     }

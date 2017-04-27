@@ -38,7 +38,7 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     @Override
     public Processor<K, Change<V>> get() {
-        return queryableName != null ? new MaterializedKTableKTableJoinMergeProcessor() : new KTableKTableJoinMergeProcessor<>();
+        return new KTableKTableJoinMergeProcessor<>();
     }
 
     @Override
@@ -53,15 +53,7 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         sendOldValues = true;
     }
 
-    private static final class KTableKTableJoinMergeProcessor<K, V>
-        extends AbstractProcessor<K, Change<V>> {
-        @Override
-        public void process(K key, Change<V> value) {
-            context().forward(key, value);
-        }
-    }
-
-    private class MaterializedKTableKTableJoinMergeProcessor<K, V>
+    private class KTableKTableJoinMergeProcessor<K, V>
         extends AbstractProcessor<K, Change<V>> {
         private KeyValueStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
@@ -70,17 +62,23 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-            tupleForwarder = new TupleForwarder<>(store, context,
-                new ForwardingCacheFlushListener<K, V>(context, sendOldValues),
-                sendOldValues);
+            if (queryableName != null) {
+                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TupleForwarder<>(store, context,
+                    new ForwardingCacheFlushListener<K, V>(context, sendOldValues),
+                    sendOldValues);
+            }
         }
 
         @Override
         public void process(K key, Change<V> value) {
 
-            store.put(key, value.newValue);
-            tupleForwarder.maybeForward(key, value.newValue, value.oldValue);
+            if (queryableName != null) {
+                store.put(key, value.newValue);
+                tupleForwarder.maybeForward(key, value.newValue, value.oldValue);
+            } else {
+                context().forward(key, value);
+            }
         }
     }
 

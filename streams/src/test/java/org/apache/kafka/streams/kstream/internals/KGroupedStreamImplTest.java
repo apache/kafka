@@ -82,7 +82,7 @@ public class KGroupedStreamImplTest {
     }
 
     @Test
-    public void shouldAllowStoreNameOnReduce() throws Exception {
+    public void shouldAllowNullStoreNameOnReduce() throws Exception {
         groupedStream.reduce(MockReducer.STRING_ADDER, (String) null);
     }
 

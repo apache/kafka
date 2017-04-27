@@ -50,7 +50,7 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
  *     final KafkaStreams streams = ...;
  *     streams.start()
  *     ...
- *     final String queryableStoreName = table.getQueryableName(); // returns null if KTable is not queryable
+ *     final String queryableStoreName = table.queryableStoreName(); // returns null if KTable is not queryable
  *     ReadOnlyKeyValueStore view = streams.store(queryableStoreName, QueryableStoreTypes.keyValueStore());
  *     view.get(key);
  *}</pre>
@@ -109,7 +109,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableName, QueryableStoreTypes.<K, V>keyValueStore());
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
      * K key = "some-word";
      * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -118,14 +118,14 @@ public interface KTable<K, V> {
      * <p>
      *
      * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
-     *                      used to subsequently query the operation results; valid characters are ASCII
-     *                      alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
-     *                      (i.e., that would be equivalent to calling {@link KTable#filter(Predicate)}.
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
+     *                          used to subsequently query the operation results; valid characters are ASCII
+     *                          alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
+     *                          (i.e., that would be equivalent to calling {@link KTable#filter(Predicate)}.
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
-    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String queryableName);
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String queryableStoreName);
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
@@ -147,7 +147,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableName, QueryableStoreTypes.<K, V>keyValueStore());
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
      * K key = "some-word";
      * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -156,7 +156,7 @@ public interface KTable<K, V> {
      * <p>
      *
      * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
@@ -204,7 +204,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableName, QueryableStoreTypes.<K, V>keyValueStore());
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
      * K key = "some-word";
      * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -212,7 +212,7 @@ public interface KTable<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate)
      */
@@ -238,7 +238,7 @@ public interface KTable<K, V> {
      * {@link KafkaStreams#store(String, QueryableStoreType) KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // filtering words
-     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableName, QueryableStoreTypes.<K, V>keyValueStore());
+     * ReadOnlyKeyValueStore<K,V> localStore = streams.store(queryableStoreName, QueryableStoreTypes.<K, V>keyValueStore());
      * K key = "some-word";
      * V valueForKey = localStore.get(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
@@ -246,14 +246,14 @@ public interface KTable<K, V> {
      * query the value of the key on a parallel running instance of your Kafka Streams application.
      * <p>
      * @param predicate a filter {@link Predicate} that is applied to each record
-     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
      * used to subsequently query the operation results; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      * (i.e., that would be equivalent to calling {@link KTable#filterNot(Predicate)}.
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate)
      */
-    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final String queryableName);
+    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final String queryableStoreName);
 
 
     /**
@@ -326,7 +326,7 @@ public interface KTable<K, V> {
      * delete the corresponding record in the result {@code KTable}.
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
-     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
      * used to subsequently query the operation results; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      * (i.e., that would be equivalent to calling {@link KTable#mapValues(ValueMapper)}.
@@ -335,7 +335,7 @@ public interface KTable<K, V> {
      *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
-    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper, final Serde<VR> valueSerde, final String queryableName);
+    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper, final Serde<VR> valueSerde, final String queryableStoreName);
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -373,9 +373,8 @@ public interface KTable<K, V> {
      *
      * @param mapper a {@link ValueMapper} that computes a new output value
      * @param valueSerde serializer for new value type
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @param <VR>   the value type of the result {@code KTable}
-     *
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
@@ -638,12 +637,12 @@ public interface KTable<K, V> {
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
-     * @param queryableName the state store name used for the result {@code KTable}; valid characters are ASCII
-     *                  alphanumerics, '.', '_' and '-'
+     * @param queryableStoreName the state store name used for the result {@code KTable}; valid characters are ASCII
+     *                  alphanumerics, '.', '_' and '-'. If {@code null} then an internal store name will be created.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final String topic,
-                         final String queryableName);
+                         final String queryableStoreName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
@@ -659,7 +658,7 @@ public interface KTable<K, V> {
      * The store name must be a valid Kafka topic name and cannot contain characters other than ASCII alphanumerics, '.', '_' and '-'.
      *
      * @param topic     the topic name
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final String topic,
@@ -719,12 +718,13 @@ public interface KTable<K, V> {
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
-     * @param queryableName   the state store name used for the result {@code KTable}
+     * @param queryableStoreName   the state store name used for the result {@code KTable}.
+     *                             If {@code null} then an internal store name will be created.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
-                         final String queryableName);
+                         final String queryableStoreName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using default
@@ -742,7 +742,7 @@ public interface KTable<K, V> {
      * @param partitioner the function used to determine how records are distributed among partitions of the topic,
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -768,12 +768,13 @@ public interface KTable<K, V> {
      * @param valSerde  value serde used to send key-value pairs,
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name
-     * @param queryableName the state store name used for the result {@code KTable}
+     * @param queryableStoreName the state store name used for the result {@code KTable}.
+     *                           If {@code null} then an internal store name will be created.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
                          final String topic,
-                         final String queryableName);
+                         final String queryableStoreName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic.
@@ -794,7 +795,7 @@ public interface KTable<K, V> {
      * @param valSerde  value serde used to send key-value pairs,
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
@@ -847,14 +848,15 @@ public interface KTable<K, V> {
      *                    {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
      *                    be used
      * @param topic      the topic name
-     * @param queryableName  the state store name used for the result {@code KTable}
+     * @param queryableStoreName  the state store name used for the result {@code KTable}.
+     *                            If {@code null} then an internal store name will be created.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde,
                          final Serde<V> valSerde,
                          final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
-                         final String queryableName);
+                         final String queryableStoreName);
 
     /**
      * Materialize this changelog stream to a topic and creates a new {@code KTable} from the topic using a customizable
@@ -878,7 +880,7 @@ public interface KTable<K, V> {
      *                    {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} will
      *                    be used
      * @param topic      the topic name
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde,
@@ -1182,7 +1184,7 @@ public interface KTable<K, V> {
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
      * @param joinSerde serializer for join result value type
-     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
      * used to subsequently query the operation results; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      * (i.e., that would be equivalent to calling {@link KTable#join(KTable, ValueJoiner)}.
@@ -1194,7 +1196,7 @@ public interface KTable<K, V> {
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                 final Serde<VR> joinSerde,
-                                final String queryableName);
+                                final String queryableStoreName);
 
     /**
      * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
@@ -1263,7 +1265,7 @@ public interface KTable<K, V> {
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
      * @param joinSerde serializer for join result value type
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner)
@@ -1431,7 +1433,7 @@ public interface KTable<K, V> {
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
      * @param joinSerde serializer for join result value type
-     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
      * used to subsequently query the operation results; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      * (i.e., that would be equivalent to calling {@link KTable#leftJoin(KTable, ValueJoiner)}.
@@ -1444,7 +1446,7 @@ public interface KTable<K, V> {
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                     final Serde<VR> joinSerde,
-                                    final String queryableName);
+                                    final String queryableStoreName);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1520,7 +1522,7 @@ public interface KTable<K, V> {
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
      * @param joinSerde serializer for join result value type
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * left {@code KTable}
@@ -1687,7 +1689,7 @@ public interface KTable<K, V> {
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
      * @param joinSerde serializer for join result value type
-     * @param queryableName a user-provided name of the underlying {@link KTable} that can be
+     * @param queryableStoreName a user-provided name of the underlying {@link KTable} that can be
      * used to subsequently query the operation results; valid characters are ASCII
      * alphanumerics, '.', '_' and '-'. If {@code null} then the results cannot be queried
      * (i.e., that would be equivalent to calling {@link KTable#outerJoin(KTable, ValueJoiner)}.
@@ -1700,7 +1702,7 @@ public interface KTable<K, V> {
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final Serde<VR> joinSerde,
-                                     final String queryableName);
+                                     final String queryableStoreName);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1775,7 +1777,7 @@ public interface KTable<K, V> {
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
      * @param joinSerde serializer for join result value type
-     * @param storeSupplier user defined state store supplier
+     * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * both {@code KTable}s
@@ -1792,5 +1794,5 @@ public interface KTable<K, V> {
      *
      * @return the underlying state store name, or {@code null} if this {@code KTable} cannot be queried.
      */
-    String getQueryableName();
+    String queryableStoreName();
 }

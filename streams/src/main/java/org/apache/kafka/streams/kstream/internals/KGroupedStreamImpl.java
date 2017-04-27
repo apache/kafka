@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -60,17 +59,16 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         this.repartitionRequired = repartitionRequired;
     }
 
+
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
-                               final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        return reduce(reducer, keyValueStore(keySerde, valSerde, internalStoreName));
+                               final String queryableStoreName) {
+        return reduce(reducer, keyValueStore(keySerde, valSerde, getOrCreateName(queryableStoreName, REDUCE_NAME)));
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer) {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        return reduce(reducer, keyValueStore(keySerde, valSerde, internalStoreName));
+        return reduce(reducer, (String) null);
     }
 
     @Override
@@ -89,17 +87,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows,
-                                                            final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, internalStoreName));
+                                                            final String queryableStoreName) {
+        return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, getOrCreateName(queryableStoreName, REDUCE_NAME)));
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows) {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        return reduce(reducer, windows, windowedStore(keySerde, valSerde, windows, internalStoreName));
+        return reduce(reducer, windows, (String) null);
     }
 
     @SuppressWarnings("unchecked")
@@ -121,17 +117,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> aggregator,
                                       final Serde<T> aggValueSerde,
-                                      final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, internalStoreName));
+                                      final String queryableStoreName) {
+        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
     @Override
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> aggregator,
                                       final Serde<T> aggValueSerde) {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        return aggregate(initializer, aggregator, keyValueStore(keySerde, aggValueSerde, internalStoreName));
+        return aggregate(initializer, aggregator, aggValueSerde, null);
     }
 
     @Override
@@ -153,9 +147,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde,
-                                                                  final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, internalStoreName));
+                                                                  final String queryableStoreName) {
+        return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
     @SuppressWarnings("unchecked")
@@ -164,8 +157,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde) {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        return aggregate(initializer, aggregator, windows, windowedStore(keySerde, aggValueSerde, windows, internalStoreName));
+        return aggregate(initializer, aggregator, windows, aggValueSerde, null);
     }
 
     @SuppressWarnings("unchecked")
@@ -186,17 +178,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     }
 
     @Override
-    public KTable<K, Long> count(final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
-        return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
+    public KTable<K, Long> count(final String queryableStoreName) {
+        return count(keyValueStore(keySerde, Serdes.Long(), getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
     @Override
     public KTable<K, Long> count() {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
-        return count(keyValueStore(keySerde, Serdes.Long(), internalStoreName));
+        return count((String) null);
     }
 
     @Override
@@ -216,15 +204,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
-                                                              final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        return count(windows, windowedStore(keySerde, Serdes.Long(), windows, internalStoreName));
+                                                              final String queryableStoreName) {
+        return count(windows, windowedStore(keySerde, Serdes.Long(), windows, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows) {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        return count(windows, windowedStore(keySerde, Serdes.Long(), windows, internalStoreName));
+        return count(windows, (String) null);
     }
 
     @Override
@@ -253,15 +239,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 final Merger<? super K, T> sessionMerger,
                                                 final SessionWindows sessionWindows,
                                                 final Serde<T> aggValueSerde,
-                                                final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
+                                                final String queryableStoreName) {
         return aggregate(initializer,
                          aggregator,
                          sessionMerger,
                          sessionWindows,
                          aggValueSerde,
-                         storeFactory(keySerde, aggValueSerde, internalStoreName)
+                         storeFactory(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME))
                           .sessionWindowed(sessionWindows.maintainMs()).build());
 
 
@@ -274,18 +258,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 final Merger<? super K, T> sessionMerger,
                                                 final SessionWindows sessionWindows,
                                                 final Serde<T> aggValueSerde) {
-
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
-        return aggregate(initializer,
-            aggregator,
-            sessionMerger,
-            sessionWindows,
-            aggValueSerde,
-            storeFactory(keySerde, aggValueSerde, internalStoreName)
-                .sessionWindowed(sessionWindows.maintainMs()).build());
-
-
+        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, aggValueSerde, (String) null);
     }
 
     @SuppressWarnings("unchecked")
@@ -310,20 +283,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     }
 
     @SuppressWarnings("unchecked")
-    public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String storeName) {
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
+    public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows, final String queryableStoreName) {
         return count(sessionWindows,
-                     storeFactory(keySerde, Serdes.Long(), internalStoreName)
+                     storeFactory(keySerde, Serdes.Long(), getOrCreateName(queryableStoreName, AGGREGATE_NAME))
                              .sessionWindowed(sessionWindows.maintainMs()).build());
     }
 
     public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows) {
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
-        return count(sessionWindows,
-            storeFactory(keySerde, Serdes.Long(), internalStoreName)
-                .sessionWindowed(sessionWindows.maintainMs()).build());
+        return count(sessionWindows, (String) null);
     }
 
     @SuppressWarnings("unchecked")
@@ -359,12 +326,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                          final SessionWindows sessionWindows,
-                                         final String storeName) {
+                                         final String queryableStoreName) {
 
-        final String internalStoreName = storeName != null ? storeName : topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
         return reduce(reducer, sessionWindows,
-                      storeFactory(keySerde, valSerde, internalStoreName)
+                      storeFactory(keySerde, valSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME))
                               .sessionWindowed(sessionWindows.maintainMs()).build());
     }
 
@@ -373,11 +338,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                          final SessionWindows sessionWindows) {
 
-        final String internalStoreName = topology.newStoreName(AGGREGATE_NAME);
-        Topic.validate(internalStoreName);
-        return reduce(reducer, sessionWindows,
-            storeFactory(keySerde, valSerde, internalStoreName)
-                .sessionWindowed(sessionWindows.maintainMs()).build());
+        return reduce(reducer, sessionWindows, (String) null);
     }
 
     @Override
@@ -438,10 +399,10 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired(final String storeName) {
+    private String repartitionIfRequired(final String queryableStoreName) {
         if (!repartitionRequired) {
             return this.name;
         }
-        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde, storeName);
+        return KStreamImpl.createReparitionedSource(this, keySerde, valSerde, queryableStoreName);
     }
 }
