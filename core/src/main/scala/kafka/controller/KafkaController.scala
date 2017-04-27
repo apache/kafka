@@ -1101,7 +1101,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   private def checkAndTriggerPartitionRebalance(): Unit = {
     trace("checking need to trigger partition rebalance")
-    // get all the active brokers
     var preferredReplicasForTopicsByBrokers: Map[Int, Map[TopicAndPartition, Seq[Int]]] = controllerContext.partitionReplicaAssignment
       .filterNot(p => topicDeletionManager.isTopicQueuedUpForDeletion(p._1.topic)).groupBy {
         case (_, assignedReplicas) => assignedReplicas.head
