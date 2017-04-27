@@ -159,7 +159,7 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
-        assertEquals(Utils.mkSet(partition2), new HashSet<>(task.changeLogPartitions()));
+        assertEquals(Utils.mkSet(partition2), new HashSet<>(task.checkpointedOffsets().keySet()));
 
     }
 
@@ -169,7 +169,7 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
-        restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
+        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         task.update(partition1,
                 records(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue))
@@ -183,7 +183,7 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
-        restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
+        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
                 new ConsumerRecord<>(partition2.topic(), partition2.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, 100),
@@ -241,7 +241,7 @@ public class StandbyTaskTest {
         StreamsConfig config = createConfig(baseDir);
         StandbyTask task = new StandbyTask(taskId, applicationId, ktablePartitions, ktableTopology, consumer, changelogReader, config, null, stateDirectory);
 
-        restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
+        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         for (ConsumerRecord<Integer, Integer> record : Arrays.asList(
                 new ConsumerRecord<>(ktable.topic(), ktable.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, 1, 100),
@@ -362,7 +362,7 @@ public class StandbyTaskTest {
         );
 
 
-        restoreStateConsumer.assign(new ArrayList<>(task.changeLogPartitions()));
+        restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         final byte[] serializedValue = Serdes.Integer().serializer().serialize("", 1);
         task.update(ktable, Collections.singletonList(new ConsumerRecord<>(ktable.topic(),

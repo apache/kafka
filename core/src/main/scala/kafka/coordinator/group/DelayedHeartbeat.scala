@@ -15,31 +15,26 @@
  * limitations under the License.
  */
 
-package kafka.coordinator
+package kafka.coordinator.group
 
 import kafka.server.DelayedOperation
 
 /**
- * Delayed rebalance operations that are added to the purgatory when group is preparing for rebalance
- *
- * Whenever a join-group request is received, check if all known group members have requested
- * to re-join the group; if yes, complete this operation to proceed rebalance.
- *
- * When the operation has expired, any known members that have not requested to re-join
- * the group are marked as failed, and complete this operation to proceed rebalance with
- * the rest of the group.
+ * Delayed heartbeat operations that are added to the purgatory for session timeout checking.
+ * Heartbeats are paused during rebalance.
  */
-private[coordinator] class DelayedJoin(coordinator: GroupCoordinator,
-                                       group: GroupMetadata,
-                                       delayMs: Int,
-                                       val rebalanceTimeOut: Long)
-  extends DelayedOperation(delayMs) {
+private[group] class DelayedHeartbeat(coordinator: GroupCoordinator,
+                                      group: GroupMetadata,
+                                      member: MemberMetadata,
+                                      heartbeatDeadline: Long,
+                                      sessionTimeout: Long)
+  extends DelayedOperation(sessionTimeout) {
 
   // overridden since tryComplete already synchronizes on the group. This makes it safe to
   // call purgatory operations while holding the group lock.
   override def safeTryComplete(): Boolean = tryComplete()
 
-  override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete)
-  override def onExpiration() = coordinator.onExpireJoin()
-  override def onComplete() = coordinator.onCompleteJoin(group)
+  override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, member, heartbeatDeadline, forceComplete)
+  override def onExpiration() = coordinator.onExpireHeartbeat(group, member, heartbeatDeadline)
+  override def onComplete() = coordinator.onCompleteHeartbeat()
 }

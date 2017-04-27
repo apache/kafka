@@ -21,7 +21,7 @@ import java.io._
 import java.nio.ByteBuffer
 
 import joptsimple.OptionParser
-import kafka.coordinator.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
+import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.log._
 import kafka.serializer.Decoder
 import kafka.utils._
@@ -92,15 +92,21 @@ object DumpLogSegments {
 
     for(arg <- files) {
       val file = new File(arg)
-      if(file.getName.endsWith(Log.LogFileSuffix)) {
-        println("Dumping " + file)
-        dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
-      } else if(file.getName.endsWith(Log.IndexFileSuffix)) {
-        println("Dumping " + file)
-        dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
-      } else if(file.getName.endsWith(Log.TimeIndexFileSuffix)) {
-        println("Dumping " + file)
-        dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
+      println(s"Dumping $file")
+
+      val filename = file.getName
+      val suffix = filename.substring(filename.lastIndexOf("."))
+      suffix match {
+        case Log.LogFileSuffix =>
+          dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
+        case Log.IndexFileSuffix =>
+          dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
+        case Log.TimeIndexFileSuffix =>
+          dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
+        case Log.PidSnapshotFileSuffix =>
+          dumpPidSnapshot(file)
+        case _ =>
+          System.err.println(s"Ignoring unknown file $file")
       }
     }
 
@@ -117,11 +123,23 @@ object DumpLogSegments {
 
     nonConsecutivePairsForLogFilesMap.foreach {
       case (fileName, listOfNonConsecutivePairs) => {
-        System.err.println("Non-secutive offsets in :" + fileName)
+        System.err.println("Non-consecutive offsets in :" + fileName)
         listOfNonConsecutivePairs.foreach(m => {
           System.err.println("  %d is followed by %d".format(m._1, m._2))
         })
       }
+    }
+  }
+
+  private def dumpPidSnapshot(file: File): Unit = {
+    try {
+      ProducerIdMapping.readSnapshot(file).foreach { case (pid, entry) =>
+        println(s"pid: $pid epoch: ${entry.epoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
+          s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp}")
+      }
+    } catch {
+      case e: CorruptSnapshotException =>
+        System.err.println(e.getMessage)
     }
   }
 

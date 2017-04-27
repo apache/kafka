@@ -76,28 +76,48 @@ class DelayedOperationTest {
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
     purgatory.tryCompleteElseWatch(r3, Array("test1", "test2", "test3"))
 
-    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed())
-    assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched())
+    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed)
+    assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched)
 
     // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed(), 2, purgatory.delayed())
+    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed, 2, purgatory.delayed)
 
     r3.completable = true
     r3.tryComplete()
-    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed(), 1, purgatory.delayed())
+    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed, 1, purgatory.delayed)
 
     // checking a watch should purge the watch list
     purgatory.checkAndComplete("test1")
-    assertEquals("Purgatory should have 4 watched elements instead of " + purgatory.watched(), 4, purgatory.watched())
+    assertEquals("Purgatory should have 4 watched elements instead of " + purgatory.watched, 4, purgatory.watched)
 
     purgatory.checkAndComplete("test2")
-    assertEquals("Purgatory should have 2 watched elements instead of " + purgatory.watched(), 2, purgatory.watched())
+    assertEquals("Purgatory should have 2 watched elements instead of " + purgatory.watched, 2, purgatory.watched)
 
     purgatory.checkAndComplete("test3")
-    assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched(), 1, purgatory.watched())
+    assertEquals("Purgatory should have 1 watched elements instead of " + purgatory.watched, 1, purgatory.watched)
   }
+
+  @Test
+  def shouldCancelForKeyReturningCancelledOperations() {
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key2"))
+
+    val cancelledOperations = purgatory.cancelForKey("key")
+    assertEquals(2, cancelledOperations.size)
+    assertEquals(1, purgatory.delayed)
+    assertEquals(1, purgatory.watched)
+  }
+
+  @Test
+  def shouldReturnNilOperationsOnCancelForKeyWhenKeyDoesntExist() {
+    val cancelledOperations = purgatory.cancelForKey("key")
+    assertEquals(Nil, cancelledOperations)
+  }
+
+
 
   class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
     var completable = false

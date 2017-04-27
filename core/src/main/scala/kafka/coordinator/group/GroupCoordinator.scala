@@ -14,20 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.group
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.common.{OffsetAndMetadata, OffsetMetadataAndError, TopicAndPartition}
+import kafka.common.OffsetAndMetadata
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{OffsetFetchResponse, JoinGroupRequest}
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, immutable}
 
@@ -659,7 +659,7 @@ class GroupCoordinator(val brokerId: Int,
     group.transitionTo(PreparingRebalance)
 
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
-    val delayedRebalance = new DelayedJoin(this, group, delay, group.initialRebalanceTimeout)
+    val delayedRebalance = new DelayedJoin(this, group, delay)
     val groupKey = GroupKey(group.groupId)
     // if this is the first member joining the group just watch the operation rather than trying to complete it
     if (previousState.eq(Empty))
@@ -699,7 +699,7 @@ class GroupCoordinator(val brokerId: Int,
           group.newMemberAdded = false
           val delay = scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.initialRebalanceTimeout - time.milliseconds()).toInt
           val groupKey = GroupKey(group.groupId)
-          joinPurgatory.watchOperation(new DelayedJoin(this, group, delay, group.initialRebalanceTimeout), Seq(groupKey))
+          joinPurgatory.watchOperation(new DelayedJoin(this, group, delay), Seq(groupKey))
           return
         } else {
           group.newMemberAdded = false
@@ -804,7 +804,7 @@ object GroupCoordinator {
     apply(config, zkUtils, replicaManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
-  private[coordinator] def offsetConfig(config: KafkaConfig) = OffsetConfig(
+  private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
     maxMetadataSize = config.offsetMetadataMaxSize,
     loadBufferSize = config.offsetsLoadBufferSize,
     offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
