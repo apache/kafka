@@ -21,9 +21,9 @@ import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -39,7 +39,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
@@ -289,18 +288,15 @@ public class Sender implements Runnable {
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
 
-        if (nextRequestHandler.isEndTxn()) {
-            if (transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
-                if (!accumulator.flushInProgress())
-                    accumulator.beginFlush();
-                transactionManager.reenqueue(nextRequestHandler);
-                return false;
-            } else if (transactionManager.isInErrorState()) {
-                nextRequestHandler.fatal(new KafkaException("Cannot commit transaction when there are " +
-                        "request errors. Please check your logs for the details of the errors encountered."));
-                return false;
-            }
+        if (nextRequestHandler.isEndTxn() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+            if (!accumulator.flushInProgress())
+                accumulator.beginFlush();
+            transactionManager.reenqueue(nextRequestHandler);
+            return false;
         }
+
+        if (transactionManager.maybeTerminateRequestWithError(nextRequestHandler))
+            return false;
 
         Node targetNode = null;
 

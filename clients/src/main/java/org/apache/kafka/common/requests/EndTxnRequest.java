@@ -42,6 +42,10 @@ public class EndTxnRequest extends AbstractRequest {
             this.result = result;
         }
 
+        public TransactionResult result() {
+            return result;
+        }
+
         @Override
         public EndTxnRequest build(short version) {
             return new EndTxnRequest(version, transactionalId, producerId, producerEpoch, result);

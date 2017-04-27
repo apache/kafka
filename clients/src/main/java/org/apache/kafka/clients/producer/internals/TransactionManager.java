@@ -256,6 +256,23 @@ public class TransactionManager {
             transitionTo(State.ERROR, exception);
     }
 
+    boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
+        if (isInErrorState() && requestHandler.isEndTxn()) {
+            // We shouldn't terminate abort requests from error states.
+            EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
+            if (endTxnHandler.builder.result() == TransactionResult.ABORT)
+                return false;
+            String errorMessage = "Cannot commit transaction because at least one previous transactional request " +
+                    "was not completed successfully.";
+            if (lastError != null)
+                requestHandler.fatal(new KafkaException(errorMessage, lastError));
+            else
+                requestHandler.fatal(new KafkaException(errorMessage));
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Get the current producer id and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
      * verify that the result is valid.
