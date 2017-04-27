@@ -422,8 +422,6 @@ public class TransactionManager {
         return pendingTransactionalRequests.poll();
     }
 
-
-
     void needsRetry(TransactionalRequest request) {
         request.setRetry();
         pendingTransactionalRequests.add(request);
@@ -447,7 +445,6 @@ public class TransactionManager {
     void needsCoordinator(TransactionalRequest request) {
         needsCoordinator(request.coordinatorType, request.coordinatorKey);
     }
-
 
     void setInFlightRequestCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
@@ -639,7 +636,7 @@ public class TransactionManager {
             } else if (error == Errors.NOT_COORDINATOR || error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else {
                 result.setError(error.exception());
@@ -672,7 +669,7 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PID_MAPPING || error == Errors.INVALID_TXN_STATE) {
                 log.error("Seems like the broker has bad transaction state. producerId: {}, error: {}. message: {}",
@@ -753,7 +750,7 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 transitionTo(State.FENCED, error.exception());
@@ -792,7 +789,7 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 needsCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 transitionTo(State.FENCED, error.exception());
