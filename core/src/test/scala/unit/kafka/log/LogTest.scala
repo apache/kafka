@@ -2030,8 +2030,9 @@ class LogTest {
     assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
 
     // now transaction is committed
-    log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.COMMIT, pid, epoch),
+    val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.COMMIT, pid, epoch),
       isFromClient = false, leaderEpoch = 0)
+    log.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
     assertEquals(None, log.firstUnstableOffset)
@@ -2072,15 +2073,17 @@ class LogTest {
     assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
 
     // now first producer's transaction is aborted
-    log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid1, epoch),
+    val abortAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid1, epoch),
       isFromClient = false, leaderEpoch = 0)
+    log.onHighWatermarkIncremented(abortAppendInfo.lastOffset + 1)
 
     // LSO should now point to one less than the first offset of the second transaction
     assertEquals(Some(secondAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
 
     // commit the second transaction
-    log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid2, epoch),
+    val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.COMMIT, pid2, epoch),
       isFromClient = false, leaderEpoch = 0)
+    log.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
     assertEquals(None, log.firstUnstableOffset)
@@ -2114,14 +2117,17 @@ class LogTest {
     assertEquals(3L, log.logEndOffsetMetadata.segmentBaseOffset)
 
     // now abort the transaction
-    log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid, epoch),
+    val appendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid, epoch),
       isFromClient = false, leaderEpoch = 0)
+    log.onHighWatermarkIncremented(appendInfo.lastOffset + 1)
     assertEquals(None, log.firstUnstableOffset.map(_.messageOffset))
 
     // now check that a fetch includes the aborted transaction
     val fetchDataInfo = log.read(0L, 2048, isolationLevel = IsolationLevel.READ_COMMITTED)
     assertEquals(1, fetchDataInfo.abortedTransactions.size)
-    assertEquals(new AbortedTransaction(pid, 0), fetchDataInfo.abortedTransactions.head)
+
+    assertTrue(fetchDataInfo.abortedTransactions.isDefined)
+    assertEquals(new AbortedTransaction(pid, 0), fetchDataInfo.abortedTransactions.get.head)
   }
 
   private def createLog(messageSizeInBytes: Int, retentionMs: Int = -1, retentionBytes: Int = -1,
