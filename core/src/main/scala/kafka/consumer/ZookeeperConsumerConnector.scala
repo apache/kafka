@@ -218,9 +218,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         try {
           if (config.autoCommitEnable)
             scheduler.shutdown()
-          fetcher.foreach { f =>
-            f.stopConnections
-          }
+          fetcher.foreach(_.stopConnections())
           sendShutdownToAllQueues()
           if (config.autoCommitEnable)
             commitOffsets(true)
@@ -778,7 +776,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
       val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
       fetcher.foreach { f =>
-          f.stopConnections
+          f.stopConnections()
           clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
           /**
           * here, we need to commit offsets before stopping the consumer from returning any more messages
@@ -828,9 +826,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       info("Consumer " + consumerIdString + " selected partitions : " +
         allPartitionInfos.sortWith((s,t) => s.partitionId < t.partitionId).map(_.toString).mkString(","))
 
-      fetcher.foreach { f =>
-          f.startConnections(allPartitionInfos, cluster)
-      }
+      fetcher.foreach(_.startConnections(allPartitionInfos, cluster))
     }
 
     private def reflectPartitionOwnershipDecision(partitionAssignment: Map[TopicAndPartition, ConsumerThreadId]): Boolean = {

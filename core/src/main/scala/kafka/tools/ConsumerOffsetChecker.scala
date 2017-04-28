@@ -62,8 +62,7 @@ object ConsumerOffsetChecker extends Logging {
     zkUtils.getLeaderForPartition(topic, producerId) match {
       case Some(bid) =>
         val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(zkUtils, bid))
-        consumerOpt match {
-          case Some(consumer) =>
+        consumerOpt.foreach { consumer =>
             val topicAndPartition = TopicAndPartition(topic, producerId)
             val request =
               OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))

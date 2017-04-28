@@ -142,15 +142,14 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         case NewReplica =>
           // start replica as a follower to the current leader for its partition
           val leaderIsrAndControllerEpochOpt = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkUtils, topic, partition)
-          leaderIsrAndControllerEpochOpt match {
-            case Some(leaderIsrAndControllerEpoch) =>
+          //if None new leader request will be sent to this replica when one gets elected
+          leaderIsrAndControllerEpochOpt.foreach { leaderIsrAndControllerEpoch =>
               if(leaderIsrAndControllerEpoch.leaderAndIsr.leader == replicaId)
                 throw new StateChangeFailedException("Replica %d for partition %s cannot be moved to NewReplica"
                   .format(replicaId, topicAndPartition) + "state as it is being requested to become leader")
               brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
                                                                   topic, partition, leaderIsrAndControllerEpoch,
                                                                   replicaAssignment)
-            case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put(partitionAndReplica, NewReplica)
           stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
@@ -190,15 +189,14 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                                                 targetState))
             case _ =>
               // check if the leader for this partition ever existed
-              controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
-                case Some(leaderIsrAndControllerEpoch) =>
+              // None means the partition was never in OnlinePartition state, this means the broker never
+              // started a log for that partition and does not have a high watermark value for this partition
+              controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { leaderIsrAndControllerEpoch =>
                   brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId), topic, partition, leaderIsrAndControllerEpoch,
                     replicaAssignment)
                   replicaState.put(partitionAndReplica, OnlineReplica)
                   stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
                     .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
-                case None => // that means the partition was never in OnlinePartition state, this means the broker never
-                  // started a log for that partition and does not have a high watermark value for this partition
               }
           }
           replicaState.put(partitionAndReplica, OnlineReplica)

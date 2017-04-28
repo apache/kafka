@@ -1287,8 +1287,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     override def process(): Unit = {
       if (!isActive) return
         // check if this partition is still being reassigned or not
-      controllerContext.partitionsBeingReassigned.get(topicAndPartition) match {
-        case Some(reassignedPartitionContext) =>
+      controllerContext.partitionsBeingReassigned.get(topicAndPartition).foreach { reassignedPartitionContext =>
           // need to re-read leader and isr from zookeeper since the zkclient callback doesn't return the Stat object
           val newLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topicAndPartition.topic, topicAndPartition.partition)
           newLeaderAndIsrOpt match {
@@ -1309,7 +1308,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
             case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
               .format(topicAndPartition, reassignedReplicas.mkString(",")))
           }
-        case None =>
       }
     }
   }
