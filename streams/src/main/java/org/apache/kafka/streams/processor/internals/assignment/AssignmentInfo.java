@@ -120,9 +120,11 @@ public class AssignmentInfo {
     public static AssignmentInfo decode(ByteBuffer data) {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();
-        DataInputStream in = new DataInputStream(new ByteBufferInputStream(data));
-
-        try {
+        
+        try (
+            ByteBufferInputStream bbis = new ByteBufferInputStream(data);
+            DataInputStream in = new DataInputStream(bbis)
+        ) {
             // Decode version
             int version = in.readInt();
             if (version < 0 || version > CURRENT_VERSION) {
