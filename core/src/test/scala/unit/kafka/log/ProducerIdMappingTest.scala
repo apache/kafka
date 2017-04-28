@@ -339,9 +339,9 @@ class ProducerIdMappingTest extends JUnitSuite {
                             offset: Long,
                             timestamp: Long = time.milliseconds()): Unit = {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
-    val completedTxn = producerAppendInfo.appendControl(ControlRecord(controlType, pid, epoch, offset, timestamp))
+    val maybeCompletedTxn = producerAppendInfo.appendControl(ControlRecord(controlType, pid, epoch, offset, timestamp))
     mapping.update(producerAppendInfo)
-    mapping.completeTxn(completedTxn)
+    maybeCompletedTxn.foreach(mapping.completeTxn)
     mapping.updateMapEndOffset(offset + 1)
   }
 

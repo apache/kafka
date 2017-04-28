@@ -417,7 +417,7 @@ class Log(@volatile var dir: File,
     val pidsToLoad = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      updateProducer(batch, pidsToLoad, completedTxns)
+      updateProducer(batch, pidsToLoad, completedTxns, loadingFromLog = true)
     }
     pidsToLoad.values.foreach(pidMap.update)
     completedTxns.foreach(pidMap.completeTxn)
@@ -726,7 +726,7 @@ class Log(@volatile var dir: File,
               true
 
             case maybeLastEntry =>
-              val appendInfo = new ProducerAppendInfo(pid, maybeLastEntry)
+              val appendInfo = new ProducerAppendInfo(pid, maybeLastEntry, loadingFromLog = false)
               appendInfo.append(batch)
               producerAppendInfos.put(pid, appendInfo)
               false
@@ -738,7 +738,7 @@ class Log(@volatile var dir: File,
             completedTxns.toList, isDuplicate = isDuplicate)
         }
       } else {
-        updateProducer(batch, producerAppendInfos, completedTxns)
+        updateProducer(batch, producerAppendInfos, completedTxns, loadingFromLog = false)
       }
     }
 
@@ -751,7 +751,8 @@ class Log(@volatile var dir: File,
 
   private def updateProducer(batch: RecordBatch,
                              producers: mutable.Map[Long, ProducerAppendInfo],
-                             completedTxns: ListBuffer[CompletedTxn]): Unit = {
+                             completedTxns: ListBuffer[CompletedTxn],
+                             loadingFromLog: Boolean): Unit = {
 
     if (batch.hasProducerId) {
       val pid = batch.producerId
@@ -764,15 +765,16 @@ class Log(@volatile var dir: File,
       } else None
 
       val appendInfo = producers.getOrElse(pid, {
-        val appendInfo = new ProducerAppendInfo(pid, pidMap.lastEntry(pid))
+        val appendInfo = new ProducerAppendInfo(pid, pidMap.lastEntry(pid), loadingFromLog)
         producers.put(pid, appendInfo)
         appendInfo
       })
 
       maybeControlRecord match {
         case Some(controlRecord) =>
-          val completedTxn = appendInfo.appendControl(controlRecord)
-          completedTxns += completedTxn
+          appendInfo.appendControl(controlRecord).foreach { completedTxn =>
+            completedTxns += completedTxn
+          }
         case None => appendInfo.append(batch)
       }
     }

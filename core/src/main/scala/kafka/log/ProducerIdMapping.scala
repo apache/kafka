@@ -48,7 +48,7 @@ private[log] case class ProducerIdEntry(pid: Long, epoch: Short, lastSeq: Int, l
   }
 }
 
-private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEntry) {
+private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
   // the initialEntry here is the last successful appended batch. we validate incoming entries transitively, starting
   // with the last appended entry.
   private var epoch = initialEntry.epoch
@@ -59,13 +59,8 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
   private val startedTxns = ListBuffer.empty[OngoingTxn]
 
-  def this(pid: Long, initialEntry: Option[ProducerIdEntry]) =
-    this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty))
-
-  def this(pid: Long, initialBatch: RecordBatch) =
-    this(pid, ProducerIdEntry(pid, initialBatch.producerEpoch, initialBatch.lastSequence, initialBatch.lastOffset,
-      initialBatch.lastSequence - initialBatch.baseSequence, initialBatch.maxTimestamp,
-      if (initialBatch.isTransactional) initialBatch.baseOffset else -1))
+  def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
+    this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
 
   private def validateAppend(epoch: Short, firstSeq: Int, lastSeq: Int) = {
     if (this.epoch > epoch) {
@@ -99,7 +94,9 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
   }
 
   def append(epoch: Short, firstSeq: Int, lastSeq: Int, lastTimestamp: Long, lastOffset: Long, isTransactional: Boolean) {
-    validateAppend(epoch, firstSeq, lastSeq)
+    if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
+      validateAppend(epoch, firstSeq, lastSeq)
+
     this.epoch = epoch
     this.firstSeq = firstSeq
     this.lastSeq = lastSeq
@@ -121,7 +118,11 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
       batch.isTransactional)
 
-  def appendControl(controlRecord: ControlRecord): CompletedTxn = {
+  def appendControl(controlRecord: ControlRecord): Option[CompletedTxn] = {
+    if (loadingFromLog && this.epoch == RecordBatch.NO_PRODUCER_EPOCH)
+      // we have a dangling marker in the log (i.e. a marker with no associated transaction data)
+      return None
+
     if (this.epoch > controlRecord.epoch)
       throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${controlRecord.epoch} (request epoch), ${this.epoch}")
 
@@ -134,7 +135,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
 
         currentTxnFirstOffset = -1
         maxTimestamp = controlRecord.timestamp
-        CompletedTxn(pid, firstOffset, lastOffset, controlRecord.controlType == ControlRecordType.ABORT)
+        Some(CompletedTxn(pid, firstOffset, lastOffset, controlRecord.controlType == ControlRecordType.ABORT))
 
       case unhandled => throw new IllegalArgumentException(s"Unhandled control type $unhandled")
     }
