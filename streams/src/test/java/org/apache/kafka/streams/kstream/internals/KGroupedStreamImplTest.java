@@ -97,6 +97,17 @@ public class KGroupedStreamImplTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnCount() throws Exception {
+        groupedStream.count((StateStoreSupplier<KeyValueStore>) null);
+    }
+
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnWindowedCount() throws Exception {
+        groupedStream.count(TimeWindows.of(10), (StateStoreSupplier<WindowStore>) null);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerWithWindowedReduce() throws Exception {
         groupedStream.reduce(null, TimeWindows.of(10), "store");
     }

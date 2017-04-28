@@ -638,7 +638,7 @@ public interface KTable<K, V> {
      *
      * @param topic     the topic name
      * @param queryableStoreName the state store name used for the result {@code KTable}; valid characters are ASCII
-     *                  alphanumerics, '.', '_' and '-'. If {@code null} then an internal store name will be created.
+     *                  alphanumerics, '.', '_' and '-'. If {@code null} this is the equivalent of {@link KTable#through(String)()}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final String topic,
@@ -719,7 +719,7 @@ public interface KTable<K, V> {
      *                    if not specified producer's {@link DefaultPartitioner} will be used
      * @param topic       the topic name
      * @param queryableStoreName   the state store name used for the result {@code KTable}.
-     *                             If {@code null} then an internal store name will be created.
+     *                             If {@code null} this is the equivalent of {@link KTable#through(StreamPartitioner, String)}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
@@ -769,7 +769,7 @@ public interface KTable<K, V> {
      *                  if not specified the default value serde defined in the configuration will be used
      * @param topic     the topic name
      * @param queryableStoreName the state store name used for the result {@code KTable}.
-     *                           If {@code null} then an internal store name will be created.
+     *                           If {@code null} this is the equivalent of {@link KTable#through(Serde, Serde, String)()}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
@@ -849,7 +849,7 @@ public interface KTable<K, V> {
      *                    be used
      * @param topic      the topic name
      * @param queryableStoreName  the state store name used for the result {@code KTable}.
-     *                            If {@code null} then an internal store name will be created.
+     *                            If {@code null} this is the equivalent of {@link KTable#through(Serde, Serde, StreamPartitioner, String)()}
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final Serde<K> keySerde,

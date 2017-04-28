@@ -77,7 +77,7 @@ public interface KGroupedTable<K, V> {
      * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
      *
      * @param queryableStoreName     the name of the underlying {@link KTable} state store; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} an internal store name will be automatically created.
+     * alphanumerics, '.', '_' and '-'. If {@code null} this is the equivalent of {@link KGroupedTable#count()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
@@ -214,7 +214,7 @@ public interface KGroupedTable<K, V> {
      * @param adder      a {@link Reducer} that adds a new value to the aggregate result
      * @param subtractor a {@link Reducer} that removed an old value from the aggregate result
      * @param queryableStoreName     the name of the underlying {@link KTable} state store; valid characters are ASCII alphanumerics,
-     * '.', '_' and '-'. If {@code null} an internal store name will be automatically created.
+     * '.', '_' and '-'. If {@code null} this is the equivalent of {@link KGroupedTable#reduce(Reducer, Reducer)} ()}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
@@ -421,7 +421,7 @@ public interface KGroupedTable<K, V> {
      * @param adder       a {@link Aggregator} that adds a new record to the aggregate result
      * @param subtractor  a {@link Aggregator} that removed an old record from the aggregate result
      * @param queryableStoreName   the name of the underlying {@link KTable} state store.
-     *                             If {@code null} an internal store name will be automatically created.
+     *                             If {@code null} this is the equivalent of {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator)} ()}.
      * @param <VR>        the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
@@ -576,7 +576,7 @@ public interface KGroupedTable<K, V> {
      * @param aggValueSerde aggregate value serdes for materializing the aggregated table,
      *                      if not specified the default serdes defined in the configs will be used
      * @param queryableStoreName     the name of the underlying {@link KTable} state store; valid characters are ASCII
-     * alphanumerics, '.', '_' and '-'. If {@code null} an internal store name will be automatically created.
+     * alphanumerics, '.', '_' and '-'. If {@code null} this is the equivalent of {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator, Serde)} ()}.
      * @param <VR>          the value type of the aggregated {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
