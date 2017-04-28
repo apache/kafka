@@ -187,7 +187,7 @@ object ReassignPartitionsCommand extends Logging {
     if (partitionsToBeReassigned.isEmpty)
       throw new AdminCommandFailedException("Partition reassignment data file is empty")
     if (partitionsToBeReassigned.exists(_._2.isEmpty)) {
-      throw new AdminCommandFailedException("Partition replica list should not be empty")
+      throw new AdminCommandFailedException("Partition replica list cannot be empty")
     }
     val duplicateReassignedPartitions = CoreUtils.duplicates(partitionsToBeReassigned.map { case (tp, _) => tp })
     if (duplicateReassignedPartitions.nonEmpty)
