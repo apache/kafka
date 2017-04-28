@@ -193,7 +193,7 @@ public class StreamThreadStateStoreProviderTest {
                               new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
                               streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
             @Override
-            protected void initializeOffsetLimits() {
+            protected void updateOffsetLimits() {
 
             }
         };

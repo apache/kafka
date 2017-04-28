@@ -42,21 +42,21 @@ public class AbstractTaskTest {
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() throws Exception {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() throws Exception {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() throws Exception {
         final Consumer consumer = mockConsumer(new WakeupException());
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     private AbstractTask createTask(final Consumer consumer) {
