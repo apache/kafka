@@ -17,8 +17,9 @@
 
 package kafka.log
 
-import kafka.utils._
 import kafka.message._
+import kafka.server.BrokerState
+import kafka.utils._
 import org.scalatest.junit.JUnitSuite
 import org.junit._
 import org.junit.Assert._
@@ -38,6 +39,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime(0, 0)
   val logConfig = LogConfig()
+  val brokerState = new BrokerState()
 
   @After
   def tearDown() {
@@ -52,8 +54,9 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
     val messageCompressionCode = CompressionCodec.getCompressionCodec(messageCompression)
     val logProps = new Properties()
     logProps.put(LogConfig.CompressionTypeProp, brokerCompression)
-    /*configure broker-side compression  */
-    val log = new Log(logDir, LogConfig(logProps), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    /* configure broker-side compression  */
+    val log = new Log(logDir, LogConfig(logProps), logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time,
+      brokerState = brokerState)
 
     /* append two messages */
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.forId(messageCompressionCode.codec), 0,

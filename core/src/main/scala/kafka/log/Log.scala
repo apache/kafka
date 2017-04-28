@@ -26,7 +26,7 @@ import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, Time
 import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogOffsetMetadata}
+import kafka.server.{BrokerState, BrokerTopicStats, FetchDataInfo, LogOffsetMetadata, RecoveringFromUncleanShutdown}
 import kafka.utils._
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
@@ -112,7 +112,8 @@ class Log(@volatile var dir: File,
           time: Time = Time.SYSTEM,
           val maxPidExpirationMs: Int = 60 * 60 * 1000,
           val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
-          val pidSnapshotIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val pidSnapshotIntervalMs: Int = 60 * 1000,
+          val brokerState: BrokerState) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -345,13 +346,8 @@ class Log(@volatile var dir: File,
   }
 
   private def recoverLog() {
-    // if we have the clean shutdown marker, skip recovery
-    if(hasCleanShutdownFile) {
-      this.recoveryPoint = activeSegment.nextOffset
-      return
-    }
-
     // okay we need to actually recovery this log
+    brokerState.newState(RecoveringFromUncleanShutdown)
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
       val curr = unflushed.next
@@ -408,11 +404,6 @@ class Log(@volatile var dir: File,
       pidMap.activePids
     }
   }
-
-  /**
-   * Check if we have the "clean shutdown" file
-   */
-  private def hasCleanShutdownFile = new File(dir.getParentFile, CleanShutdownFile).exists()
 
   /**
    * The number of segments in the log.
@@ -1290,11 +1281,6 @@ object Log {
 
   /** A temporary file used when swapping files into the log */
   val SwapFileSuffix = ".swap"
-
-  /** Clean shutdown file that indicates the broker was cleanly shutdown in 0.8. This is required to maintain backwards compatibility
-   * with 0.8 and avoid unnecessary log recovery when upgrading from 0.8 to 0.8.1 */
-  /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
-  val CleanShutdownFile = ".kafka_cleanshutdown"
 
   /** a directory that is scheduled to be deleted */
   val DeleteDirSuffix = "-delete"

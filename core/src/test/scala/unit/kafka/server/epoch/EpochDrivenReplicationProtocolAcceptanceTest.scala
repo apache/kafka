@@ -153,9 +153,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     //Stop the brokers
     brokers.foreach { b => b.shutdown() }
 
-    //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
-
     //Delete 5 messages from the leader's log on 100
     deleteMessagesFromLogFile(5 * msg.length, brokers(0), 0)
 
@@ -202,9 +199,6 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Stop the brokers
     brokers.foreach { b => b.shutdown() }
-
-    //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
 
     //Delete half the messages from the log file
     deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)

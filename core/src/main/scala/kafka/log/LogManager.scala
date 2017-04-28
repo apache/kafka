@@ -35,11 +35,11 @@ import scala.collection._
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
  * All read and write operations are delegated to the individual log instances.
- * 
+ *
  * The log manager maintains logs in one or more directories. New logs are created in the data directory
  * with the fewest logs. No attempt is made to move partitions after the fact or balance based on
  * size or I/O rate.
- * 
+ *
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
@@ -77,13 +77,13 @@ class LogManager(val logDirs: Array[File],
       new LogCleaner(cleanerConfig, logDirs, logs, time = time)
     else
       null
-  
+
   /**
    * Create and check validity of the given directories, specifically:
    * <ol>
    * <li> Ensure that there are no duplicates in the directory list
    * <li> Create each directory if it doesn't exist
-   * <li> Check that each path is a readable directory 
+   * <li> Check that each path is a readable directory
    * </ol>
    */
   private def createAndValidateLogDirs(dirs: Seq[File]) {
@@ -100,7 +100,7 @@ class LogManager(val logDirs: Array[File],
         throw new KafkaException(dir.getAbsolutePath + " is not a readable log directory.")
     }
   }
-  
+
   /**
    * Lock all the given directories
    */
@@ -108,12 +108,12 @@ class LogManager(val logDirs: Array[File],
     dirs.map { dir =>
       val lock = new FileLock(new File(dir, LockFile))
       if(!lock.tryLock())
-        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath + 
+        throw new KafkaException("Failed to acquire lock on file .lock in " + lock.file.getParentFile.getAbsolutePath +
                                ". A Kafka instance in another process or thread is using this directory.")
       lock
     }
   }
-  
+
   /**
    * Recover and load all logs in the given data directories
    */
@@ -121,25 +121,14 @@ class LogManager(val logDirs: Array[File],
     info("Loading logs.")
     val startMs = time.milliseconds
     val threadPools = mutable.ArrayBuffer.empty[ExecutorService]
-    val jobs = mutable.Map.empty[File, Seq[Future[_]]]
+    val jobs = mutable.ArrayBuffer.empty[Future[_]]
 
     for (dir <- this.logDirs) {
       val pool = Executors.newFixedThreadPool(ioThreads)
       threadPools.append(pool)
 
-      val cleanShutdownFile = new File(dir, Log.CleanShutdownFile)
-
-      if (cleanShutdownFile.exists) {
-        debug(
-          "Found clean shutdown file. " +
-          "Skipping recovery for all logs in data directory: " +
-          dir.getAbsolutePath)
-      } else {
-        // log recovery itself is being performed by `Log` class during initialization
-        brokerState.newState(RecoveringFromUncleanShutdown)
-      }
-
       var recoveryPoints = Map[TopicPartition, Long]()
+
       try {
         recoveryPoints = this.recoveryPointCheckpoints(dir).read
       } catch {
@@ -175,7 +164,8 @@ class LogManager(val logDirs: Array[File],
             recoveryPoint = logRecoveryPoint,
             maxPidExpirationMs = maxPidExpirationMs,
             scheduler = scheduler,
-            time = time)
+            time = time,
+            brokerState = brokerState)
           if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
             this.logsToBeDeleted.add(current)
           } else {
@@ -188,16 +178,13 @@ class LogManager(val logDirs: Array[File],
           }
         }
       }
-
-      jobs(cleanShutdownFile) = jobsForDir.map(pool.submit).toSeq
+      jobs ++= jobsForDir.map(pool.submit).toSeq
     }
 
 
     try {
-      for ((cleanShutdownFile, dirJobs) <- jobs) {
-        dirJobs.foreach(_.get)
-        cleanShutdownFile.delete()
-      }
+      // TODO proper block on set of futures
+      jobs.foreach(_.get)
     } catch {
       case e: ExecutionException => {
         error("There was an error in one of the threads during logs loading: " + e.getCause)
@@ -223,10 +210,10 @@ class LogManager(val logDirs: Array[File],
                          period = retentionCheckMs,
                          TimeUnit.MILLISECONDS)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
-      scheduler.schedule("kafka-log-flusher", 
-                         flushDirtyLogs, 
-                         delay = InitialTaskDelayMs, 
-                         period = flushCheckMs, 
+      scheduler.schedule("kafka-log-flusher",
+                         flushDirtyLogs,
+                         delay = InitialTaskDelayMs,
+                         period = flushCheckMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-recovery-point-checkpoint",
                          checkpointRecoveryPointOffsets,
@@ -293,10 +280,6 @@ class LogManager(val logDirs: Array[File],
 
         debug("Updating log start offsets at " + dir)
         checkpointLogStartOffsetsInDir(dir)
-
-        // mark that the shutdown was clean by creating marker file
-        debug("Writing clean shutdown marker at " + dir)
-        CoreUtils.swallow(Files.createFile(new File(dir, Log.CleanShutdownFile).toPath))
       }
     } catch {
       case e: ExecutionException => {
@@ -358,7 +341,7 @@ class LogManager(val logDirs: Array[File],
   }
 
   /**
-   * Write out the current recovery point for all logs to a text file in the log directory 
+   * Write out the current recovery point for all logs to a text file in the log directory
    * to avoid recovering the whole log on startup.
    */
   def checkpointRecoveryPointOffsets() {
@@ -418,7 +401,8 @@ class LogManager(val logDirs: Array[File],
           recoveryPoint = 0L,
           maxPidExpirationMs = maxPidExpirationMs,
           scheduler = scheduler,
-          time = time)
+          time = time,
+          brokerState = brokerState)
         logs.put(topicPartition, log)
         info("Created log for partition [%s,%d] in %s with properties {%s}."
           .format(topicPartition.topic,
@@ -451,14 +435,14 @@ class LogManager(val logDirs: Array[File],
         }
       }
     } catch {
-      case e: Throwable => 
+      case e: Throwable =>
         error(s"Exception in kafka-delete-logs thread.", e)
     }
 }
 
   /**
-    * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and 
-    * add it in the queue for deletion. 
+    * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and
+    * add it in the queue for deletion.
     * @param topicPartition TopicPartition that needs to be deleted
     */
   def asyncDelete(topicPartition: TopicPartition) = {
@@ -511,7 +495,7 @@ class LogManager(val logDirs: Array[File],
       val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
       val zeros = logDirs.map(dir => (dir.getPath, 0)).toMap
       val dirCounts = (zeros ++ logCounts).toBuffer
-    
+
       // choose the directory with the least logs in it
       val leastLoaded = dirCounts.sortBy(_._2).head
       new File(leastLoaded._1)

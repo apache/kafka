@@ -114,7 +114,6 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
       (key, count)
     }
   }
-
 }
 
 object LogCleanerLagIntegrationTest {

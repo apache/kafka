@@ -20,6 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
+import kafka.server.BrokerState
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -181,17 +182,23 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val config = LogConfig(logProps)
     val partitionDir = new File(logDir, "log-0")
+    val brokerState = new BrokerState()
     val log = new Log(partitionDir,
       config,
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      brokerState = brokerState)
     log
   }
 
-  private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+  private def makeLog(dir: File = logDir, config: LogConfig = logConfig) = {
+    val brokerState = new BrokerState()
+
+    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time,
+      brokerState = brokerState)
+  }
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))
