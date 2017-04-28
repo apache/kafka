@@ -512,6 +512,13 @@ public class RequestResponseTest {
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
     
+    @Test
+    public void testJoinGroupRequestVersion0RebalanceTimeout() throws Exception {
+        final short version = 0;
+        JoinGroupRequest jgr = createJoinGroupRequest(version);
+        assertEquals(jgr.sessionTimeout(), jgr.rebalanceTimeout());
+    }
+
     private RequestHeader createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
     }
