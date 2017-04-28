@@ -319,7 +319,8 @@ class TransactionCoordinator(brokerId: Int,
         metadata,
         unlockCallback)
     } catch {
-      case _:Throwable => coordinatorLock.readLock().unlock()
+      case t:Throwable => coordinatorLock.readLock().unlock()
+        throw t
     }
 
   }
