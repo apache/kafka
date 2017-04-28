@@ -25,7 +25,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -34,6 +33,8 @@ import org.apache.kafka.streams.processor.DefaultPartitionGrouper;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -66,16 +67,27 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  *
  * StreamsConfig streamsConfig = new StreamsConfig(streamsProperties);
  * }</pre>
- * Kafka Streams required to set at least properties {@link #APPLICATION_ID_CONFIG "application.id"} and
- * {@link #BOOTSTRAP_SERVERS_CONFIG "bootstrap.servers"}.
- * Furthermore, it is not allowed to enable {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} that
- * is disabled by Kafka Streams by default.
+ * 
+ * Kafka Streams require at least the following properties to be set:<br>
+ * <ul>
+ *  <li>{@link #APPLICATION_ID_CONFIG "application.id"}</li>
+ *  <li>{@link #BOOTSTRAP_SERVERS_CONFIG "bootstrap.servers"}</li>
+ * </ul>
+ * 
+ * <br>Kafka Streams do not allow the following properties to be overwritten (default values
+ * set for these properties by Kafka Streams will be used instead):<br>
+ * <ul>
+ *  <li>{@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG "enable.auto.commit"} &nbsp-&nbsp disabled by default</li>
+ * </ul>
+ *
  *
  * @see KafkaStreams#KafkaStreams(org.apache.kafka.streams.processor.TopologyBuilder, StreamsConfig)
  * @see ConsumerConfig
  * @see ProducerConfig
  */
 public class StreamsConfig extends AbstractConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
     private static final ConfigDef CONFIG;
 
@@ -213,6 +225,8 @@ public class StreamsConfig extends AbstractConfig {
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC;
 
+    private static final String[] NON_CONFIGURABLE_CONSUMER_CONFIGS = new String[] {ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG};
+    
     static {
         CONFIG = new ConfigDef()
             .define(APPLICATION_ID_CONFIG, // required with no default value
@@ -456,15 +470,10 @@ public class StreamsConfig extends AbstractConfig {
         super(CONFIG, props);
     }
 
-    private Map<String, Object> getCommonConsumerConfigs() throws ConfigException {
+    private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
 
-        // disable auto commit and throw exception if there is user overridden values,
-        // this is necessary for streams commit semantics
-        if (clientProvidedProps.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
-            throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG
-                + ", as the streams client will always turn off auto committing.");
-        }
+        checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps);
 
         final Map<String, Object> consumerProps = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
         consumerProps.putAll(clientProvidedProps);
@@ -476,7 +485,23 @@ public class StreamsConfig extends AbstractConfig {
 
         return consumerProps;
     }
-
+                 
+    private void checkIfUnexpectedUserSpecifiedConsumerConfig(Map clientProvidedProps) {
+        // Streams do not allow users to configure certain consumer configurations, for example,
+        // enable_auto_commit. In cases where user tries to override such non-configurable
+        // consumer configurations, log a warning and remove the user defined value from the Map.
+        // Thus the default values for these consumer configurations that are suitable for
+        // streams will be used instead.
+        for (int index = 0; index < NON_CONFIGURABLE_CONSUMER_CONFIGS.length; index++) {
+            String consumerConfig = NON_CONFIGURABLE_CONSUMER_CONFIGS[index];
+            if (clientProvidedProps.containsKey(consumerConfig)) {
+                log.warn("Unexpected user-specified consumer config  " + consumerConfig
+                    + ", as the streams client will always use the default.");
+                clientProvidedProps.remove(consumerConfig);
+            }
+        }
+    }
+    
     /**
      * Get the configs to the {@link KafkaConsumer consumer}.
      * Properties using the prefix {@link #CONSUMER_PREFIX} will be used in favor over their non-prefixed versions
@@ -491,7 +516,7 @@ public class StreamsConfig extends AbstractConfig {
      */
     public Map<String, Object> getConsumerConfigs(final StreamThread streamThread,
                                                   final String groupId,
-                                                  final String clientId) throws ConfigException {
+                                                  final String clientId) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // add client id with stream client id prefix, and group id
@@ -520,7 +545,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return Map of the consumer configuration.
      * @throws ConfigException if {@code "enable.auto.commit"} was set to {@code false} by the user
      */
-    public Map<String, Object> getRestoreConsumerConfigs(final String clientId) throws ConfigException {
+    public Map<String, Object> getRestoreConsumerConfigs(final String clientId) {
         final Map<String, Object> consumerProps = getCommonConsumerConfigs();
 
         // no need to set group id for a restore consumer
