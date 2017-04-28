@@ -14,20 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server
+package org.apache.kafka.common.errors;
 
-import kafka.utils.Logging
+public class ConcurrentTransactionsException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-/**
- * This trait defines a leader elector If the existing leader is dead, this class will handle automatic
- * re-election and if it succeeds, it invokes the leader state change callback
- */
-trait LeaderElector extends Logging {
-  def startup
-
-  def amILeader : Boolean
-
-  def elect: Boolean
-
-  def close
+    public ConcurrentTransactionsException(final String message) {
+        super(message);
+    }
 }

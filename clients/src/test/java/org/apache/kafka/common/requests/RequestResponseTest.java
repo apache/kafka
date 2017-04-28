@@ -568,7 +568,7 @@ public class RequestResponseTest {
     }
 
     private ListGroupsResponse createListGroupsResponse() {
-        List<ListGroupsResponse.Group> groups = asList(new ListGroupsResponse.Group("test-group", "consumer"));
+        List<ListGroupsResponse.Group> groups = Collections.singletonList(new ListGroupsResponse.Group("test-group", "consumer"));
         return new ListGroupsResponse(Errors.NONE, groups);
     }
 
@@ -843,6 +843,7 @@ public class RequestResponseTest {
     private InitPidResponse createInitPidResponse() {
         return new InitPidResponse(Errors.NONE, 3332, (short) 3);
     }
+
 
     private OffsetsForLeaderEpochRequest createLeaderEpochRequest() {
         Map<TopicPartition, Integer> epochs = new HashMap<>();

@@ -494,6 +494,9 @@ public class TopologyBuilder {
         if (storeSupplier.loggingEnabled()) {
             throw new TopologyBuilderException("StateStore " + storeSupplier.name() + " for global table must not have logging enabled.");
         }
+        if (sourceName.equals(processorName)) {
+            throw new TopologyBuilderException("sourceName and processorName must be different.");
+        }
 
         validateTopicNotAlreadyRegistered(topic);
 

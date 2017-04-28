@@ -273,7 +273,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         return Collections.unmodifiableMap(storeMap);
     }
 
-    public void restore(final String storeName, final List<KeyValue<byte[], byte[]>> changeLog) {
+    public void restore(final String storeName, final Iterable<KeyValue<byte[], byte[]>> changeLog) {
         final StateRestoreCallback restoreCallback = restoreFuncs.get(storeName);
         for (final KeyValue<byte[], byte[]> entry : changeLog) {
             restoreCallback.restore(entry.key, entry.value);
@@ -298,5 +298,4 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
     public void close() {
         metrics.close();
     }
-
 }

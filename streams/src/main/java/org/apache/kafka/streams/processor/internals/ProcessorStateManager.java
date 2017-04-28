@@ -227,6 +227,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     void putOffsetLimit(final TopicPartition partition, final long limit) {
+        log.trace("{} Updating store offset limit for partition {} to {}", logPrefix, partition, limit);
         offsetLimits.put(partition, limit);
     }
 

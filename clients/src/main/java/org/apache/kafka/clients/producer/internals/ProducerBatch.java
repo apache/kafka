@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.AbstractRecords;
@@ -231,7 +230,7 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
-    public void setProducerState(TransactionState.PidAndEpoch pidAndEpoch, int baseSequence) {
+    public void setProducerState(TransactionManager.PidAndEpoch pidAndEpoch, int baseSequence) {
         recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
     }
 
@@ -272,5 +271,9 @@ public final class ProducerBatch {
      */
     public long producerId() {
         return recordsBuilder.producerId();
+    }
+
+    public short producerEpoch() {
+        return recordsBuilder.producerEpoch();
     }
 }

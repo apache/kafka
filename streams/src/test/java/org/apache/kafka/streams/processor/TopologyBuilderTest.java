@@ -730,4 +730,17 @@ public class TopologyBuilderTest {
         assertTrue(topics.contains("topic-3"));
         assertFalse(topics.contains("topic-A"));
     }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
+        final String sameNameForSourceAndProcessor = "sameName";
+        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+            .addGlobalStore(new MockStateStoreSupplier("anyName", false, false),
+                sameNameForSourceAndProcessor,
+                null,
+                null,
+                "anyTopicName",
+                sameNameForSourceAndProcessor,
+                new MockProcessorSupplier());
+    }
 }

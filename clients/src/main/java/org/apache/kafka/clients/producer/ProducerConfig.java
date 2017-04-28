@@ -232,6 +232,18 @@ public class ProducerConfig extends AbstractConfig {
                                                         + "<code>" + RETRIES_CONFIG + "</code> cannot be zero. Additionally " + ACKS_CONFIG + " must be set to 'all'. If these values "
                                                         + "are left at their defaults, we will override the default to be suitable. "
                                                         + "If the values are set to something incompatible with the idempotent producer, a ConfigException will be thrown.";
+
+    /** <code> transaction.timeout.ms </code> */
+    public static final String TRANSACTION_TIMEOUT_CONFIG = "transaction.timeout.ms";
+    public static final String TRANSACTION_TIMEOUT_DOC = "The maximum amount of time in ms that the transaction coordinator will wait for a transaction status update from the producer before proactively aborting the ongoing transaction." +
+            "If this value is larger than the max.transaction.timeout.ms setting in the broker, the request will fail with a `InvalidTransactionTimeout` error.";
+
+    /** <code> transactional.id </code> */
+    public static final String TRANSACTIONAL_ID_CONFIG = "transactional.id";
+    public static final String TRANSACTIONAL_ID_DOC = "The TransactionalId to use for transactional delivery. This enables reliability semantics which span multiple producer sessions since it allows the client to guarantee that transactions using the same TransactionalId have been completed prior to starting any new transactions. If no TransactionalId is provided, then the producer is limited to idempotent delivery. " +
+            "Note that enable.idempotence must be enabled if a TransactionalId is configured. " +
+            "The default is empty, which means transactions cannot be used.";
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
@@ -325,7 +337,18 @@ public class ProducerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         false,
                                         Importance.LOW,
-                                        ENABLE_IDEMPOTENCE_DOC);
+                                        ENABLE_IDEMPOTENCE_DOC)
+                                .define(TRANSACTION_TIMEOUT_CONFIG,
+                                        Type.INT,
+                                        60000,
+                                        Importance.LOW,
+                                        TRANSACTION_TIMEOUT_DOC)
+                                .define(TRANSACTIONAL_ID_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        new ConfigDef.NonEmptyString(),
+                                        Importance.LOW,
+                                        TRANSACTIONAL_ID_DOC);
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,

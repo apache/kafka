@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.coordinator
+package kafka.coordinator.group
 
-import java.util
+import java.util.Arrays
 
 import org.junit.Assert._
 import org.junit.Test
@@ -33,7 +33,7 @@ class MemberMetadataTest extends JUnitSuite {
 
 
   @Test
-  def testMatchesSupportedProtocols {
+  def testMatchesSupportedProtocols() {
     val protocols = List(("range", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -45,7 +45,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testVoteForPreferredProtocol {
+  def testVoteForPreferredProtocol() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -55,17 +55,17 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testMetadata {
+  def testMetadata() {
     val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
-    assertTrue(util.Arrays.equals(Array[Byte](0), member.metadata("range")))
-    assertTrue(util.Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
+    assertTrue(Arrays.equals(Array[Byte](0), member.metadata("range")))
+    assertTrue(Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testMetadataRaisesOnUnsupportedProtocol {
+  def testMetadataRaisesOnUnsupportedProtocol() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
@@ -75,7 +75,7 @@ class MemberMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalArgumentException])
-  def testVoteRaisesOnNoSupportedProtocols {
+  def testVoteRaisesOnNoSupportedProtocols() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,

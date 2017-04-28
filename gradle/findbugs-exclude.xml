@@ -291,6 +291,15 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
     </Match>
 
     <Match>
+        <!-- Ignore spurious warning about imbalanced synchronization on a cached Exception. Some accesses of the
+             variable must occur in synchronized blocks, while some need not, because of the nature of the producer.
+             This seems to throw the static checker off. -->
+        <Package name="org.apache.kafka.clients.producer" />
+        <Source name="TransactionState.java" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
         <!-- Ignore a spurious warning about the types used in
              AdminClient#deleteRecordsBefore -->
         <Package name="kafka.admin"/>

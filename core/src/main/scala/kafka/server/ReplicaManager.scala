@@ -1057,9 +1057,9 @@ class ReplicaManager(val config: KafkaConfig,
   private def getLeaderPartitions: List[Partition] =
     allPartitions.values.filter(_.leaderReplicaIfLocal.isDefined).toList
 
-  def getHighWatermark(topicPartition: TopicPartition): Option[Long] = {
-    getPartition(topicPartition).flatMap { partition =>
-      partition.leaderReplicaIfLocal.map(_.highWatermark.messageOffset)
+  def getLogEndOffset(topicPartition: TopicPartition): Option[Long] = {
+    getPartition(topicPartition).flatMap{ partition =>
+      partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset)
     }
   }
 

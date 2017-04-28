@@ -40,7 +40,7 @@ import java.util.Set;
 public abstract class AbstractTask {
     private static final Logger log = LoggerFactory.getLogger(AbstractTask.class);
 
-    protected final TaskId id;
+    private final TaskId id;
     protected final String applicationId;
     protected final ProcessorTopology topology;
     protected final Consumer consumer;
@@ -48,6 +48,8 @@ public abstract class AbstractTask {
     protected final Set<TopicPartition> partitions;
     InternalProcessorContext processorContext;
     protected final ThreadCache cache;
+    final String logPrefix;
+
     /**
      * @throws ProcessorStateException if the state manager cannot be created
      */
@@ -67,24 +69,20 @@ public abstract class AbstractTask {
         this.consumer = consumer;
         this.cache = cache;
 
+        logPrefix = String.format("%s [%s]", isStandby ? "standby-task" : "task", id());
+
         // create the processor state manager
         try {
             stateMgr = new ProcessorStateManager(id, partitions, isStandby, stateDirectory, topology.storeToChangelogTopic(), changelogReader);
         } catch (final IOException e) {
-            throw new ProcessorStateException(String.format("task [%s] Error while creating the state manager", id), e);
+            throw new ProcessorStateException(String.format("%s Error while creating the state manager", logPrefix), e);
         }
     }
 
-    void initializeStateStores() {
-        // set initial offset limits
-        initializeOffsetLimits();
-
-        for (final StateStore store : topology.stateStores()) {
-            log.trace("task [{}] Initializing store {}", id(), store.name());
-            store.init(processorContext, store);
-        }
-
-    }
+    public abstract void resume();
+    public abstract void commit();
+    public abstract void suspend();
+    public abstract void close();
 
     public final TaskId id() {
         return id;
@@ -110,38 +108,6 @@ public abstract class AbstractTask {
         return cache;
     }
 
-    public abstract void resume();
-    public abstract void commit();
-    public abstract void suspend();
-    public abstract void close();
-
-    /**
-     * @throws ProcessorStateException if there is an error while closing the state manager
-     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
-     */
-    void closeStateManager(final boolean writeCheckpoint) {
-        log.trace("task [{}] Closing", id);
-        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
-    }
-
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
-        return Collections.emptyMap();
-    }
-
-    protected void initializeOffsetLimits() {
-        for (final TopicPartition partition : partitions) {
-            try {
-                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
-                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
-            } catch (final AuthorizationException e) {
-                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
-            } catch (final WakeupException e) {
-                throw e;
-            } catch (final KafkaException e) {
-                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
-            }
-        }
-    }
 
     public StateStore getStore(final String name) {
         return stateMgr.getStore(name);
@@ -163,7 +129,11 @@ public abstract class AbstractTask {
      * @return A string representation of the StreamTask instance.
      */
     public String toString(final String indent) {
-        final StringBuilder sb = new StringBuilder(indent + "StreamsTask taskId: " + id + "\n");
+        final StringBuilder sb = new StringBuilder();
+        sb.append(indent);
+        sb.append("StreamsTask taskId: ");
+        sb.append(id);
+        sb.append("\n");
 
         // print topology
         if (topology != null) {
@@ -182,10 +152,53 @@ public abstract class AbstractTask {
         return sb.toString();
     }
 
+    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+        return Collections.emptyMap();
+    }
+
+    protected void updateOffsetLimits() {
+        log.debug("{} Updating store offset limits {}", logPrefix);
+        for (final TopicPartition partition : partitions) {
+            try {
+                final OffsetAndMetadata metadata = consumer.committed(partition); // TODO: batch API?
+                stateMgr.putOffsetLimit(partition, metadata != null ? metadata.offset() : 0L);
+            } catch (final AuthorizationException e) {
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", id, partition), e);
+            } catch (final WakeupException e) {
+                throw e;
+            } catch (final KafkaException e) {
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", id, partition), e);
+            }
+        }
+    }
+
     /**
      * Flush all state stores owned by this task
      */
     void flushState() {
         stateMgr.flush();
     }
+
+    void initializeStateStores() {
+        log.debug("{} Initializing state stores", logPrefix);
+
+        // set initial offset limits
+        updateOffsetLimits();
+
+        for (final StateStore store : topology.stateStores()) {
+            log.trace("task [{}] Initializing store {}", id(), store.name());
+            store.init(processorContext, store);
+        }
+    }
+
+    /**
+     * @throws ProcessorStateException if there is an error while closing the state manager
+     * @param writeCheckpoint boolean indicating if a checkpoint file should be written
+     */
+    void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+        log.trace("{} Closing state manager", logPrefix);
+        stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+    }
+
+
 }

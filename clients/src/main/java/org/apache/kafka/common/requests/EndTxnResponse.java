@@ -31,6 +31,7 @@ public class EndTxnResponse extends AbstractResponse {
     //   CoordinatorLoadInProgress
     //   InvalidTxnState
     //   InvalidPidMapping
+    //   InvalidProducerEpoch
 
     private final Errors error;
 

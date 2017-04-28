@@ -22,8 +22,8 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.clients.producer.TransactionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -109,7 +109,7 @@ public class Sender implements Runnable {
     private final ApiVersions apiVersions;
 
     /* all the state related to transactions, in particular the PID, epoch, and sequence numbers */
-    private final TransactionState transactionState;
+    private final TransactionManager transactionManager;
 
     public Sender(KafkaClient client,
                   Metadata metadata,
@@ -122,7 +122,7 @@ public class Sender implements Runnable {
                   Time time,
                   int requestTimeout,
                   long retryBackoffMs,
-                  TransactionState transactionState,
+                  TransactionManager transactionManager,
                   ApiVersions apiVersions) {
         this.client = client;
         this.accumulator = accumulator;
@@ -137,7 +137,7 @@ public class Sender implements Runnable {
         this.requestTimeout = requestTimeout;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
-        this.transactionState = transactionState;
+        this.transactionManager = transactionManager;
     }
 
     /**
@@ -187,8 +187,16 @@ public class Sender implements Runnable {
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
-        Cluster cluster = metadata.fetch();
+        long pollTimeout = 0;
+        if (!maybeSendTransactionalRequest(now))
+            pollTimeout = sendProducerData(now);
 
+        this.client.poll(pollTimeout, now);
+    }
+
+
+    private long sendProducerData(long now) {
+        Cluster cluster = metadata.fetch();
         maybeWaitForPid();
 
         // get the list of partitions with data ready to send
@@ -233,15 +241,15 @@ public class Sender implements Runnable {
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
         for (ProducerBatch expiredBatch : expiredBatches) {
-            if (transactionState != null && expiredBatch.inRetry()) {
+            if (transactionManager != null && expiredBatch.inRetry()) {
                 needsTransactionStateReset = true;
             }
             this.sensors.recordErrors(expiredBatch.topicPartition.topic(), expiredBatch.recordCount);
         }
 
         if (needsTransactionStateReset) {
-            transactionState.resetProducerId();
-            return;
+            transactionManager.resetProducerId();
+            return 0;
         }
 
         sensors.updateProduceRequestMetrics(batches);
@@ -253,15 +261,79 @@ public class Sender implements Runnable {
         long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
         if (!result.readyNodes.isEmpty()) {
             log.trace("Nodes with data ready to send: {}", result.readyNodes);
+            // if some partitions are already ready to be sent, the select time would be 0;
+            // otherwise if some partition already has some data accumulated but not ready yet,
+            // the select time will be the time difference between now and its linger expiry time;
+            // otherwise the select time will be the time difference between now and the metadata expiry time;
             pollTimeout = 0;
         }
         sendProduceRequests(batches, now);
 
-        // if some partitions are already ready to be sent, the select time would be 0;
-        // otherwise if some partition already has some data accumulated but not ready yet,
-        // the select time will be the time difference between now and its linger expiry time;
-        // otherwise the select time will be the time difference between now and the metadata expiry time;
-        this.client.poll(pollTimeout, now);
+        return pollTimeout;
+
+    }
+
+    private boolean maybeSendTransactionalRequest(long now) {
+        if (transactionManager != null && transactionManager.hasInflightTransactionalRequest())
+            return true;
+
+        if (transactionManager == null || !transactionManager.hasPendingTransactionalRequests())
+            return false;
+
+        TransactionManager.TransactionalRequest nextRequest = transactionManager.nextTransactionalRequest();
+
+        if (nextRequest.isEndTxnRequest() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+            if (!accumulator.flushInProgress())
+                accumulator.beginFlush();
+            transactionManager.reenqueue(nextRequest);
+            return false;
+        }
+
+        if (nextRequest.isEndTxnRequest() && transactionManager.isInErrorState()) {
+            nextRequest.maybeTerminateWithError(new KafkaException("Cannot commit transaction when there are " +
+                    "request errors. Please check your logs for the details of the errors encountered."));
+            return false;
+        }
+
+        Node targetNode = null;
+
+        while (targetNode == null) {
+            try {
+                if (nextRequest.needsCoordinator()) {
+                    targetNode = transactionManager.coordinator(nextRequest.coordinatorType());
+                    if (targetNode == null) {
+                        transactionManager.needsCoordinator(nextRequest);
+                        break;
+                    }
+                    if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
+                        transactionManager.needsCoordinator(nextRequest);
+                        targetNode = null;
+                        break;
+                    }
+                } else {
+                    targetNode = awaitLeastLoadedNodeReady(requestTimeout);
+                }
+                if (targetNode != null) {
+                    if (nextRequest.isRetry()) {
+                        time.sleep(retryBackoffMs);
+                    }
+                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequest.requestBuilder(),
+                            now, true, nextRequest.responseHandler());
+                    transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    client.send(clientRequest, now);
+                    return true;
+                }
+            } catch (IOException e) {
+                log.warn("Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", e);
+            }
+            time.sleep(retryBackoffMs);
+            metadata.requestUpdate();
+        }
+
+        if (targetNode == null)
+            transactionManager.needsRetry(nextRequest);
+
+        return true;
     }
 
     /**
@@ -299,17 +371,19 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForPid() {
-        if (transactionState == null)
+        // If this is a transactional producer, the PID will be received when recovering transactions in the
+        // initTransactions() method of the producer.
+        if (transactionManager == null || transactionManager.isTransactional())
             return;
 
-        while (!transactionState.hasPid()) {
+        while (!transactionManager.hasPid()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
                     if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
                         InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        transactionState.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+                        transactionManager.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
                     } else {
                         log.error("Received an unexpected response type for an InitPidRequest from {}. " +
                                 "We will back off and try again.", node);
@@ -381,17 +455,17 @@ public class Sender implements Runnable {
                         batch.topicPartition,
                         this.retries - batch.attempts() - 1,
                         error);
-                if (transactionState == null) {
+                if (transactionManager == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionState.pidAndEpoch().producerId == batch.producerId()) {
+                } else if (transactionManager.pidAndEpoch().producerId == batch.producerId() && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
                     // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
-                            transactionState.sequenceNumber(batch.topicPartition));
+                            transactionManager.sequenceNumber(batch.topicPartition));
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionState.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                            transactionManager.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
                     this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
@@ -400,7 +474,7 @@ public class Sender implements Runnable {
                     exception = new TopicAuthorizationException(batch.topicPartition.topic());
                 else
                     exception = error.exception();
-                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionState.pidAndEpoch().producerId)
+                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionManager.pidAndEpoch().producerId)
                     log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
                                     "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
                             correlationId, batch.topicPartition, response.baseOffset);
@@ -418,10 +492,11 @@ public class Sender implements Runnable {
         } else {
             completeBatch(batch, response);
 
-            if (transactionState != null && transactionState.pidAndEpoch().producerId == batch.producerId()) {
-                transactionState.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+            if (transactionManager != null && transactionManager.pidAndEpoch().producerId == batch.producerId()
+                    && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
+                transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
                 log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
-                        transactionState.sequenceNumber(batch.topicPartition));
+                        transactionManager.sequenceNumber(batch.topicPartition));
             }
         }
 
@@ -441,11 +516,12 @@ public class Sender implements Runnable {
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
-        if (transactionState != null && batch.producerId() == transactionState.pidAndEpoch().producerId) {
+        if (transactionManager != null && !transactionManager.isTransactional()
+                && batch.producerId() == transactionManager.pidAndEpoch().producerId) {
             // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
-            transactionState.resetProducerId();
+            transactionManager.resetProducerId();
         }
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);
@@ -500,8 +576,12 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
 
+        String transactionalId = null;
+        if (transactionManager != null && transactionManager.isTransactional()) {
+            transactionalId = transactionManager.transactionalId();
+        }
         ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(minUsedMagic, acks, timeout,
-                produceRecordsByPartition);
+                produceRecordsByPartition, transactionalId);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
                 handleProduceResponse(response, recordsByPartition, time.milliseconds());
