@@ -62,14 +62,14 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     }
 
     def eachMetadataPartition[B](f:(Int, BlockingQueue[TxnMarkerEntry]) => B): mutable.Iterable[B] =
-      requestsPerMetadataPartition.filter{case(_, queue:BlockingQueue[TxnMarkerEntry]) => !queue.isEmpty}
+      requestsPerMetadataPartition.filter{ case(_, queue) => !queue.isEmpty}
         .map{case(partition:Int, queue:BlockingQueue[TxnMarkerEntry]) => f(partition, queue)}
 
 
     def node: Node = destination
 
     def totalQueuedRequests(): Int =
-      requestsPerMetadataPartition.map {case(_, queue:BlockingQueue[TxnMarkerEntry]) => queue.size()}
+      requestsPerMetadataPartition.map { case(_, queue) => queue.size()}
         .sum
 
   }
@@ -88,7 +88,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
   private[transaction]
   def drainQueuedTransactionMarkers(txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): Iterable[RequestAndCompletionHandler] = {
     brokerStateMap.flatMap {case (brokerId: Int, brokerRequestQueue: BrokerRequestQueue) =>
-      brokerRequestQueue.eachMetadataPartition{ case(partitionId:Int, queue:BlockingQueue[TxnMarkerEntry]) =>
+      brokerRequestQueue.eachMetadataPartition{ case(partitionId, queue) =>
         val markersToSend: java.util.List[TxnMarkerEntry] = new util.ArrayList[TxnMarkerEntry]()
         queue.drainTo(markersToSend)
         val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(this, txnMarkerPurgatory, partitionId, markersToSend, brokerId)
@@ -173,7 +173,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
   }
 
   def removeStateForPartition(partition: Int): mutable.Iterable[Long] = {
-    brokerStateMap.foreach {case(_, brokerQueue: BrokerRequestQueue) =>
+    brokerStateMap.foreach { case(_, brokerQueue) =>
       brokerQueue.removeRequestsForPartition(partition)
     }
     pendingTxnMap.filter { case (key: PendingTxnKey, _) => key.metadataPartition == partition }
