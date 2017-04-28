@@ -30,7 +30,7 @@ import collection.JavaConversions._
 
 class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: TransactionMarkerChannel,
                                                 txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-                                                metadataPartition: Int,
+                                                txnTopicPartition: Int,
                                                 txnMarkerEntries: java.util.List[TxnMarkerEntry],
                                                 brokerId: Int) extends RequestCompletionHandler with Logging {
   override def onComplete(response: ClientResponse): Unit = {
@@ -40,7 +40,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
       // re-enqueue the markers
       for (txnMarker: TxnMarkerEntry <- txnMarkerEntries) {
         transactionMarkerChannel.addRequestToSend(
-          metadataPartition,
+          txnTopicPartition,
           txnMarker.producerId(),
           txnMarker.producerEpoch(),
           txnMarker.transactionResult(),
@@ -62,10 +62,10 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
         for ((topicPartition: TopicPartition, error: Errors) <- errors) {
           error match {
             case Errors.NONE =>
-              transactionMarkerChannel.pendingTxnMetadata(metadataPartition, txnMarker.producerId()) match {
+              transactionMarkerChannel.pendingTxnMetadata(txnTopicPartition, txnMarker.producerId()) match {
                 case None =>
                   // TODO: probably need to respond with Errors.NOT_COORDINATOR
-                  throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${metadataPartition} has likely emigrated")
+                  throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${txnTopicPartition} has likely emigrated")
                 case Some(metadata) =>
                   // do not synchronize on this metadata since it will only be accessed by the sender thread
                   metadata.topicPartitions -= topicPartition
@@ -80,7 +80,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
           if (retryPartitions.nonEmpty) {
             // re-enqueue with possible new leaders of the partitions
             transactionMarkerChannel.addRequestToSend(
-              metadataPartition,
+              txnTopicPartition,
               txnMarker.producerId(),
               txnMarker.producerEpoch(),
               txnMarker.transactionResult,

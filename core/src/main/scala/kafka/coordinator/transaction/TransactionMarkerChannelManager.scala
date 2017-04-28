@@ -114,10 +114,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
 
-  def addTxnMarkerRequest(coordinatorPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
+  def addTxnMarkerRequest(txnTopicPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
     val metadataToWrite = metadata synchronized metadata.copy()
 
-    if (!transactionMarkerChannel.maybeAddPendingRequest(coordinatorPartition, metadata))
+    if (!transactionMarkerChannel.maybeAddPendingRequest(txnTopicPartition, metadata))
       // TODO: Not sure this is the correct response here?
       completionCallback(Errors.INVALID_TXN_STATE)
     else {
@@ -129,7 +129,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
         case PrepareAbort => TransactionResult.ABORT
         case s => throw new IllegalStateException("Unexpected txn metadata state while writing markers: " + s)
       }
-      transactionMarkerChannel.addRequestToSend(coordinatorPartition,
+      transactionMarkerChannel.addRequestToSend(txnTopicPartition,
         metadataToWrite.pid,
         metadataToWrite.producerEpoch,
         result,
@@ -138,8 +138,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  def removeCompleted(metadataPartition: Int, pid: Long): Unit = {
-    transactionMarkerChannel.removeCompletedTxn(metadataPartition, pid)
+  def removeCompleted(txnTopicPartition: Int, pid: Long): Unit = {
+    transactionMarkerChannel.removeCompletedTxn(txnTopicPartition, pid)
   }
 
   def removeStateForPartition(transactionStateTopicPartitionId: Int): Unit = {
