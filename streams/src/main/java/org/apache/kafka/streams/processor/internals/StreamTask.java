@@ -450,11 +450,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         return processorContext;
     }
 
-    // visible for testing only
-    Producer<byte[], byte[]> producer() {
-        return ((RecordCollectorImpl) recordCollector).producer();
-    }
-
     // for testing only
     RecordCollector recordCollector() {
         return recordCollector;

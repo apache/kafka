@@ -55,7 +55,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private Map<TopicPartition, Long> offsets;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
-    private boolean flushed;
     private boolean closed;
 
     /**
@@ -108,6 +107,15 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
     }
 
+    /**
+     * Create a new mock producer with invented metadata.
+     *
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), false, null, null, null)}
+     */
+    public MockProducer() {
+        this(Cluster.empty(), false, null, null, null);
+    }
+
     public void initTransactions() {
 
     }
@@ -127,15 +135,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     public void abortTransaction() throws ProducerFencedException {
 
-    }
-
-    /**
-     * Create a new mock producer with invented metadata.
-     *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), false, null, null, null)}
-     */
-    public MockProducer() {
-        this(Cluster.empty(), false, null, null, null);
     }
 
     /**
@@ -189,14 +188,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void flush() {
-        while (!this.completions.isEmpty()) {
+        while (!this.completions.isEmpty())
             completeNext();
-        }
-        flushed = true;
-    }
-
-    public boolean flushed() {
-        return flushed;
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {
