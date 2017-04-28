@@ -91,8 +91,6 @@ class TransactionCoordinator(brokerId: Int,
   /* Active flag of the coordinator */
   private val isActive = new AtomicBoolean(false)
 
-  private val coordinatorLock = new ReentrantReadWriteLock
-
   def handleInitPid(transactionalId: String,
                     transactionTimeoutMs: Int,
                     responseCallback: InitPidCallback): Unit = {
@@ -148,7 +146,7 @@ class TransactionCoordinator(brokerId: Int,
       else
         initPidCallback(initTransactionError(errors))
     }
-    appendToLogInReadLock(transactionalId, metadata, callback)
+    txnManager.appendTransactionToLog(transactionalId, metadata, callback)
   }
 
 
@@ -168,18 +166,11 @@ class TransactionCoordinator(brokerId: Int,
             if (errors != Errors.NONE) {
               responseCallback(initTransactionError(errors))
             } else {
-              // init pid again
-              handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
+              responseCallback(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
             }
           })
       } else if (metadata.state == PrepareAbort || metadata.state == PrepareCommit) {
-        // wait for the commit to complete and then init pid again
-        txnMarkerPurgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, (errors: Errors) => {
-          if (errors != Errors.NONE)
-            responseCallback(initTransactionError(errors))
-          else
-            handleInitPid(transactionalId, transactionTimeoutMs, responseCallback)
-        }), Seq(metadata.pid))
+        responseCallback(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
       } else {
         metadata.producerEpoch = (metadata.producerEpoch + 1).toShort
         metadata.txnTimeoutMs = transactionTimeoutMs
@@ -227,28 +218,34 @@ class TransactionCoordinator(brokerId: Int,
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
               (Errors.CONCURRENT_TRANSACTIONS, null)
-            } else if (metadata.state != Empty && metadata.state != Ongoing) {
-              (Errors.INVALID_TXN_STATE, null)
-            } else if (partitions.subsetOf(metadata.topicPartitions)) {
-              // this is an optimization: if the partitions are already in the metadata reply OK immediately
-              (Errors.NONE, null)
+            } else if (metadata.state == PrepareCommit || metadata.state == PrepareAbort) {
+              (Errors.CONCURRENT_TRANSACTIONS, null)
             } else {
-              val now = time.milliseconds()
-              val newMetadata = new TransactionMetadata(pid,
-                epoch,
-                metadata.txnTimeoutMs,
-                Ongoing,
-                metadata.topicPartitions ++ partitions,
-                if (metadata.state == Empty) now else metadata.transactionStartTime,
-                now)
-              metadata.prepareTransitionTo(Ongoing)
-              (Errors.NONE, newMetadata)
+              if (metadata.state == CompleteAbort || metadata.state == CompleteCommit)
+                metadata.topicPartitions.clear()
+              if (partitions.subsetOf(metadata.topicPartitions)) {
+                // this is an optimization: if the partitions are already in the metadata reply OK immediately
+                (Errors.NONE, null)
+              } else {
+                val now = time.milliseconds()
+                val newMetadata = new TransactionMetadata(pid,
+                  epoch,
+                  metadata.txnTimeoutMs,
+                  Ongoing,
+                  metadata.topicPartitions ++ partitions,
+                  if (metadata.state == Empty || metadata.state == CompleteCommit || metadata.state == CompleteAbort)
+                    now
+                  else metadata.transactionStartTime,
+                  now)
+                metadata.prepareTransitionTo(Ongoing)
+                (Errors.NONE, newMetadata)
+              }
             }
           }
       }
 
       if (newMetadata != null) {
-        appendToLogInReadLock(transactionalId, newMetadata, responseCallback)
+        txnManager.appendTransactionToLog(transactionalId, newMetadata, responseCallback)
       } else {
         responseCallback(error)
       }
@@ -256,16 +253,12 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleTxnImmigration(transactionStateTopicPartitionId: Int, coordinatorEpoch: Int) {
-    inWriteLock(coordinatorLock) {
       txnManager.loadTransactionsForPartition(transactionStateTopicPartitionId, coordinatorEpoch)
-    }
   }
 
   def handleTxnEmigration(transactionStateTopicPartitionId: Int) {
-    inWriteLock(coordinatorLock) {
       txnManager.removeTransactionsForPartition(transactionStateTopicPartitionId)
       txnMarkerChannelManager.removeStateForPartition(transactionStateTopicPartitionId)
-    }
   }
 
   def handleEndTransaction(transactionalId: String,
@@ -306,23 +299,6 @@ class TransactionCoordinator(brokerId: Int,
       }
   }
 
-  private def appendToLogInReadLock(transactionalId: String,
-                                   metadata: TransactionMetadata,
-                                   callback: Errors =>Unit): Unit = {
-    def unlockCallback(errors:Errors): Unit = {
-      coordinatorLock.readLock().unlock()
-      callback(errors)
-    }
-    coordinatorLock.readLock().lock()
-    try {
-      txnManager.appendTransactionToLog(transactionalId,
-        metadata,
-        unlockCallback)
-    } catch {
-      case _:Throwable => coordinatorLock.readLock().unlock()
-    }
-
-  }
   private def commitOrAbort(transactionalId: String,
                             pid: Long,
                             epoch: Short,
@@ -364,6 +340,7 @@ class TransactionCoordinator(brokerId: Int,
                       def writeCommittedTransactionCallback(error: Errors): Unit =
                         error match {
                           case Errors.NONE =>
+                            trace(s"completed txn for transactionalId: $transactionalId state after commit: ${txnManager.getTransactionState(transactionalId)}")
                             txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionalId), pid)
                           case Errors.NOT_COORDINATOR =>
                             // this one should be completed by the new coordinator
@@ -371,10 +348,10 @@ class TransactionCoordinator(brokerId: Int,
                           case _ =>
                             warn(s"error: $error caught for transactionalId: $transactionalId when appending state: $completedState. retrying")
                             // retry until success
-                            appendToLogInReadLock(transactionalId, committedMetadata, writeCommittedTransactionCallback)
+                            txnManager.appendTransactionToLog(transactionalId, committedMetadata, writeCommittedTransactionCallback)
                         }
 
-                      appendToLogInReadLock(transactionalId, committedMetadata, writeCommittedTransactionCallback)
+                      txnManager.appendTransactionToLog(transactionalId, committedMetadata, writeCommittedTransactionCallback)
                     case None =>
                       // this one should be completed by the new coordinator
                       warn(s"no longer the coordinator for transactionalId: $transactionalId")

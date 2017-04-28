@@ -152,8 +152,7 @@ private[coordinator] class TransactionMetadata(val pid: Long,
   def copy(): TransactionMetadata =
     new TransactionMetadata(pid, producerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, lastUpdateTimestamp)
 
-  override def toString: String =
-    s"(pid: $pid, epoch: $producerEpoch, transactionTimeoutMs: $txnTimeoutMs, transactionState: $state, topicPartitions: ${topicPartitions.mkString("(",",",")")})"
+  override def toString = s"TransactionMetadata($pendingState, $pid, $producerEpoch, $txnTimeoutMs, $state, $topicPartitions, $transactionStartTime, $lastUpdateTimestamp)"
 
   override def equals(that: Any): Boolean = that match {
     case other: TransactionMetadata =>
