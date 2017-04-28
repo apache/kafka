@@ -52,8 +52,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     }
 
     def maybeUpdateNode(node: Node): Unit = {
-      if (!destination.equals(node))
-        destination = node
+      destination = node
     }
 
     def addRequests(txnTopicPartition: Int, txnMarkerEntry: TxnMarkerEntry): Unit = {
