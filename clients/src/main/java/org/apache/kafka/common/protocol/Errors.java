@@ -458,7 +458,7 @@ public enum Errors {
             new ApiExceptionBuilder() {
                 @Override
                 public ApiException build(String message) {
-                    new ConcurrentTransactionsException(message);
+                    return new ConcurrentTransactionsException(message);
                 }
             });
              
