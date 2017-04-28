@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * Options for the apiVersions call.
  */
+@InterfaceStability.Unstable
 public class ApiVersionsOptions {
     private Integer timeoutMs = null;
 

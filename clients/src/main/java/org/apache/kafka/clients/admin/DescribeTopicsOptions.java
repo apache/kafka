@@ -17,6 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+/**
+ * Options for describeTopics.
+ */
+@InterfaceStability.Unstable
 public class DescribeTopicsOptions {
     private Integer timeoutMs = null;
 

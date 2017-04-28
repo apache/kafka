@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * Options for newTopics.
  */
+@InterfaceStability.Unstable
 public class CreateTopicsOptions {
     private Integer timeoutMs = null;
     private boolean validateOnly = false;

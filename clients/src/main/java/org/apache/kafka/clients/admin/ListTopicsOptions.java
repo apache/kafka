@@ -17,6 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+/**
+ * Options for listTopics.
+ */
+@InterfaceStability.Unstable
 public class ListTopicsOptions {
     private Integer timeoutMs = null;
     private boolean listInternal = false;

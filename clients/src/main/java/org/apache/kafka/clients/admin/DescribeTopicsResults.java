@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,6 +27,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * The results of the describeTopic call.
  */
+@InterfaceStability.Unstable
 public class DescribeTopicsResults {
     private final Map<String, KafkaFuture<TopicDescription>> futures;
 

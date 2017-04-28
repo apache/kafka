@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
@@ -25,6 +26,7 @@ import java.util.Map;
 /**
  * The result of the listTopics call.
  */
+@InterfaceStability.Unstable
 public class ListTopicsResults {
     final KafkaFuture<Map<String, TopicListing>> future;
 

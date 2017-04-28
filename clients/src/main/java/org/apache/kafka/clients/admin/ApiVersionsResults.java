@@ -20,6 +20,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -28,6 +29,7 @@ import java.util.concurrent.ExecutionException;
 /**
  * Results of the apiVersions call.
  */
+@InterfaceStability.Unstable
 public class ApiVersionsResults {
     private final Map<Node, KafkaFuture<NodeApiVersions>> futures;
 

@@ -18,9 +18,9 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -29,6 +29,7 @@ import java.util.Map;
  *
  * @see KafkaAdminClient
  */
+@InterfaceStability.Unstable
 public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a new AdminClient with the given configuration.
@@ -44,27 +45,6 @@ public abstract class AdminClient implements AutoCloseable {
      * Close the AdminClient and release all associated resources.
      */
     public abstract void close();
-
-    /**
-     * Create a new topic with the default options.
-     *
-     * @param newTopic          The new topic to create.
-     * @return                  The CreateTopicsResults.
-     */
-    public CreateTopicResults createTopic(NewTopic newTopic) {
-        return createTopic(newTopic, new CreateTopicsOptions());
-    }
-
-    /**
-     * Create a single new topic.
-     *
-     * @param newTopic          The new topic to create.
-     * @param options           The options to use when creating the new topic.
-     * @return                  The CreateTopicsResults.
-     */
-    public CreateTopicResults createTopic(NewTopic newTopic, CreateTopicsOptions options) {
-        return createTopics(Collections.singleton(newTopic), options);
-    }
 
     /**
      * Create a batch of new topics with the default options.
@@ -90,29 +70,6 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public abstract CreateTopicResults createTopics(Collection<NewTopic> newTopics,
                                                     CreateTopicsOptions options);
-
-    /**
-     * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions),
-     * but deletes a single topic and uses the default options.
-     *
-     * @param topic             The topic name to delete.
-     * @return                  The DeleteTopicsResults.
-     */
-    public DeleteTopicResults deleteTopic(String topic) {
-        return deleteTopic(topic, new DeleteTopicsOptions());
-    }
-
-    /**
-     * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions),
-     * but deletes a single topic.
-     *
-     * @param topic             The topic name to delete.
-     * @param options           The options to use when deleting the topics.
-     * @return                  The DeleteTopicsResults.
-     */
-    public DeleteTopicResults deleteTopic(String topic, DeleteTopicsOptions options) {
-        return deleteTopics(Collections.singleton(topic), options);
-    }
 
     /**
      * Similar to #{@link AdminClient#deleteTopics(Collection<String>, DeleteTopicsOptions),
@@ -161,28 +118,8 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract ListTopicsResults listTopics(ListTopicsOptions options);
 
     /**
-     * See {@link AdminClient#describeTopics(Collection<String>, DescribeTopicsOptions)}
+     * Descripe an individual topic in the cluster, with the default options.
      *
-     * @param topicName         The name of the topic to describe.
-     *
-     * @return                  The DescribeTopicsResults.
-     */
-    public DescribeTopicsResults describeTopic(String topicName) {
-        return describeTopics(Collections.singleton(topicName));
-    }
-
-    /**
-     * See {@link AdminClient#describeTopics(Collection<String>, DescribeTopicsOptions)}
-     *
-     * @param topicName         The name of the topic to describe.
-     *
-     * @return                  The DescribeTopicsResults.
-     */
-    public DescribeTopicsResults describeTopic(String topicName, DescribeTopicsOptions options) {
-        return describeTopics(Collections.singleton(topicName), options);
-    }
-
-    /**
      * See {@link AdminClient#describeTopics(Collection<String>, DescribeTopicsOptions)}
      *
      * @param topicNames        The names of the topics to describe.
@@ -228,28 +165,8 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract DescribeClusterResults describeCluster(DescribeClusterOptions options);
 
     /**
-     * Get information about the api versions of a node in the cluster with the default options.
-     *
-     * @param node              The node to get information about.
-     * @return                  The ApiVersionsResults.
-     */
-    public ApiVersionsResults apiVersion(Node node) {
-        return apiVersion(node, new ApiVersionsOptions());
-    }
-
-    /**
-     * Get information about the api versions of a node in the cluster.
-     *
-     * @param node              The node to get information about.
-     * @param options           The options to use when getting api versions of the node.
-     * @return                  The ApiVersionsResults.
-     */
-    public ApiVersionsResults apiVersion(Node node, ApiVersionsOptions options) {
-        return apiVersions(Collections.singleton(node), options);
-    }
-
-    /**
      * Get information about the api versions of nodes in the cluster with the default options.
+     * See {@link AdminClient#apiVersions(Collection<Node>, ApiVersionsOptions)}
      *
      * @param nodes             The nodes to get information about, or null to get information about all nodes.
      * @return                  The ApiVersionsResults.

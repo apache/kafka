@@ -17,12 +17,14 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
  * The result of newTopics.
  */
+@InterfaceStability.Unstable
 public class CreateTopicResults {
     private final Map<String, KafkaFuture<Void>> futures;
 

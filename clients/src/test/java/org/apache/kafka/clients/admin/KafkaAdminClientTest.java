@@ -50,7 +50,8 @@ import static org.junit.Assert.fail;
 /**
  * A unit test for KafkaAdminClient.
  *
- * See KafkaAdminClientIntegrationTest for an integration test of the KafkaAdminClient.
+ * See for an integration test of the KafkaAdminClient.
+ * Also see KafkaAdminClientIntegrationTest for a unit test of the admin client.
  */
 public class KafkaAdminClientTest {
     @Rule
@@ -179,9 +180,9 @@ public class KafkaAdminClientTest {
                     put("myTopic", new Error(Errors.NONE, ""));
                 }}));
             KafkaFuture<Void> future = ctx.client.
-                createTopic(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
+                createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
                         put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
-                    }}), new CreateTopicsOptions().timeoutMs(1000)).all();
+                    }})), new CreateTopicsOptions().timeoutMs(1000)).all();
             assertFutureError(future, TimeoutException.class);
         }
     }
@@ -196,9 +197,9 @@ public class KafkaAdminClientTest {
                     put("myTopic", new Error(Errors.NONE, ""));
                 }}));
             KafkaFuture<Void> future = ctx.client.
-                createTopic(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
+                createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
                         put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
-                    }}), new CreateTopicsOptions().timeoutMs(10000)).all();
+                    }})), new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
     }

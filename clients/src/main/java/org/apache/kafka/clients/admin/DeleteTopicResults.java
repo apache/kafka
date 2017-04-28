@@ -18,12 +18,14 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Map;
 
 /**
  * The result of the deleteTopics call.
  */
+@InterfaceStability.Unstable
 public class DeleteTopicResults {
     final Map<String, KafkaFuture<Void>> futures;
 

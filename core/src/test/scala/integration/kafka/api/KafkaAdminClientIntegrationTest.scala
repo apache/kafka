@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.{After, Before, Rule, Test}
+import org.junit.{After, Rule, Test}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
@@ -38,7 +38,7 @@ import scala.collection.JavaConverters._
 /**
  * An integration test of the KafkaAdminClient.
  *
- * Also see KafkaAdminClientUnitTest for a unit test of the admin client.
+ * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
 class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   @Rule

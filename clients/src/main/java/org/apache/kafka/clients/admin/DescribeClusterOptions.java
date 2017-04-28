@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * Options for the describeCluster call.
  */
+@InterfaceStability.Unstable
 public class DescribeClusterOptions {
     private Integer timeoutMs = null;
 

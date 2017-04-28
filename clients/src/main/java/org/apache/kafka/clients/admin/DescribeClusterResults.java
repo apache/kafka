@@ -19,12 +19,14 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 
 /**
  * The results of the describeCluster call.
  */
+@InterfaceStability.Unstable
 public class DescribeClusterResults {
     private final KafkaFuture<Collection<Node>> future;
 

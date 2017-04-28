@@ -17,9 +17,12 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.annotation.InterfaceStability;
+
 /**
  * Options for deleteTopics.
  */
+@InterfaceStability.Unstable
 public class DeleteTopicsOptions {
     private Integer timeoutMs = null;
 
