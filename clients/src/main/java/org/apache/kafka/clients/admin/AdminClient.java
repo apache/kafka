@@ -24,7 +24,9 @@ import java.util.Collections;
 import java.util.Map;
 
 /**
- * The interface for the {@link AdminClient}
+ * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
+ * brokers, and configurations.
+ *
  * @see KafkaAdminClient
  */
 public abstract class AdminClient implements AutoCloseable {

@@ -463,7 +463,7 @@ public enum Errors {
             });
              
     private interface ApiExceptionBuilder {
-        public ApiException build(String message);
+        ApiException build(String message);
     }
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
@@ -503,6 +503,11 @@ public enum Errors {
      * @return           The exception.
      */
     public ApiException exception(String message) {
+        if (message == null) {
+            // If no error message was specified, return an exception with the default error message.
+            return exception;
+        }
+        // Return an exception with the given error message.
         return builder.build(message);
     }
 

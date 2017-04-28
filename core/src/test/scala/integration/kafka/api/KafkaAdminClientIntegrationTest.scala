@@ -20,6 +20,7 @@ import java.util
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
+import org.apache.kafka.common.utils.Utils
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import org.apache.kafka.clients.admin._
@@ -28,8 +29,8 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.{Before, Rule, Test}
-import org.junit.rules.Timeout;
+import org.junit.{After, Before, Rule, Test}
+import org.junit.rules.Timeout
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
@@ -42,6 +43,16 @@ import scala.collection.JavaConverters._
 class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
   @Rule
   def globalTimeout = Timeout.millis(120000);
+
+  var client: AdminClient = null
+
+  @After
+  def closeClient(): Unit = {
+    if (client != null) {
+      Utils.closeQuietly(client, "AdminClient");
+      client = null;
+    }
+  }
 
   val brokerCount = 3
   lazy val serverConfig = new Properties
@@ -73,14 +84,15 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCloseAdministrativeClient(): Unit = {
+  def testClose(): Unit = {
     val client = AdminClient.create(createConfig())
     client.close()
+    client.close() // double close has no effect
   }
 
   @Test
   def testListNodes(): Unit = {
-    val client = AdminClient.create(createConfig())
+    client = AdminClient.create(createConfig())
     val brokerStrs = brokerList.split(",").toList.sorted
     var nodeStrs : List[String] = null
     do {
@@ -93,7 +105,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testCreateDeleteTopics(): Unit = {
-    val client = AdminClient.create(createConfig())
+    client = AdminClient.create(createConfig())
     val newTopics : List[NewTopic] = List(
         new NewTopic("mytopic", 1, 1),
         new NewTopic("mytopic2", 1, 1))
@@ -119,7 +131,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testGetAllBrokerVersions(): Unit = {
-    val client = AdminClient.create(createConfig())
+    client = AdminClient.create(createConfig())
     val nodes = client.describeCluster().nodes().get()
     val nodesToVersions = client.apiVersions(nodes).all().get()
     val brokers = brokerList.split(",")

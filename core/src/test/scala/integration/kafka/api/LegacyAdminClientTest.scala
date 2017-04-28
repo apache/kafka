@@ -33,6 +33,9 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import scala.collection.JavaConverters._
 
+/**
+  * Tests for the deprecated Scala AdminClient.
+  */
 class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1

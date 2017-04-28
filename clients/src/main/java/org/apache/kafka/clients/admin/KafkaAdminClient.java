@@ -42,6 +42,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
@@ -200,7 +201,7 @@ public class KafkaAdminClient extends AdminClient {
      */
     static String generateClientId(AdminClientConfig config) {
         String clientId = config.getString(AdminClientConfig.CLIENT_ID_CONFIG);
-        if (clientId.length() > 0)
+        if (!clientId.isEmpty())
             return clientId;
         return "adminclient-" + ADMIN_CLIENT_ID_SEQUENCE.getAndIncrement();
     }
@@ -216,7 +217,6 @@ public class KafkaAdminClient extends AdminClient {
     private long calcDeadlineMs(long now, Integer optionTimeoutMs) {
         if (optionTimeoutMs != null)
             return now + Math.max(0, optionTimeoutMs);
-        // If optionTimeoutMs is less than 0, we use the default timeout.
         return now + defaultTimeoutMs;
     }
 
@@ -255,6 +255,7 @@ public class KafkaAdminClient extends AdminClient {
             metricTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricTags);
             reporters.add(new JmxReporter(JMX_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time);

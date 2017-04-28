@@ -134,6 +134,10 @@
       <allow pkg="org.apache.kafka.clients.consumer" />
       <allow pkg="org.apache.kafka.clients.producer" />
     </subpackage>
+
+    <subpackage name="admin">
+      <allow pkg="org.apache.kafka.clients.admin" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="server">
