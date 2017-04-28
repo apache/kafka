@@ -383,6 +383,7 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp1));
         subscriptions.seek(tp1, 1);
 
+        // Returns 3 records while `max.poll.records` is configured to 2
         client.prepareResponse(matchesOffset(tp1, 1), fetchResponse(tp1, this.records, Errors.NONE, 100L, 0));
 
         assertEquals(1, fetcher.sendFetches());
