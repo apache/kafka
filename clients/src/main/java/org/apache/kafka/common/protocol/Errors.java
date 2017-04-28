@@ -447,20 +447,20 @@ public enum Errors {
         }),
     INVALID_TRANSACTION_TIMEOUT(50, "The transaction timeout is larger than the maximum value allowed by " +
                 "the broker (as configured by max.transaction.timeout.ms).",
-            new ApiExceptionBuilder() {
-                @Override
-                public ApiException build(String message) {
-                    return new InvalidTxnTimeoutException(message);
-                }
-            }),
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new InvalidTxnTimeoutException(message);
+            }
+        }),
     CONCURRENT_TRANSACTIONS(51, "The producer attempted to update a transaction " +
                 "while another concurrent operation on the same transaction was ongoing",
-            new ApiExceptionBuilder() {
-                @Override
-                public ApiException build(String message) {
-                    return new ConcurrentTransactionsException(message);
-                }
-            });
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new ConcurrentTransactionsException(message);
+            }
+        });
              
     private interface ApiExceptionBuilder {
         ApiException build(String message);
