@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -29,6 +29,7 @@ class EmbeddedZookeeper() {
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
   val tickTime = 500
+  sys.props.put("zookeeper.observer.syncEnabled", "false")
   val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
   val factory = new NIOServerCnxnFactory()
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
@@ -52,5 +53,5 @@ class EmbeddedZookeeper() {
     Utils.delete(logDir)
     Utils.delete(snapshotDir)
   }
-  
+
 }
