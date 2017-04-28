@@ -187,7 +187,8 @@ public class ResetIntegrationTest {
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
-        assertThat(resultRerun2, equalTo(result2));
+        final int maxToCompare = Math.max(result2.size(), resultRerun2.size());
+        assertThat(resultRerun2.subList(0, maxToCompare), equalTo(result2.subList(0, maxToCompare)));
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
                 "Reset Tool consumer group did not time out after " + (TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT) + " ms.");
