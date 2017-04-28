@@ -359,7 +359,7 @@ class ProducerIdMapping(val config: LogConfig,
     }
   }
 
-  private def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry) : Boolean =
+  private def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry): Boolean =
     producerIdEntry.currentTxnFirstOffset < 0 && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
 
   def removeExpiredPids(currentTimeMs: Long) {
