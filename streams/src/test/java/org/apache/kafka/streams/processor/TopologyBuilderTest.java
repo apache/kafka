@@ -730,5 +730,4 @@ public class TopologyBuilderTest {
         assertTrue(topics.contains("topic-3"));
         assertFalse(topics.contains("topic-A"));
     }
-
 }
