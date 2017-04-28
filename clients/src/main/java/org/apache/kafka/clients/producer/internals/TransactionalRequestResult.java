@@ -21,8 +21,18 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public final class TransactionalRequestResult {
-    private final CountDownLatch latch = new CountDownLatch(1);
+    static final TransactionalRequestResult COMPLETE = new TransactionalRequestResult(new CountDownLatch(0));
+
+    private final CountDownLatch latch;
     private RuntimeException error = null;
+
+    public TransactionalRequestResult() {
+        this(new CountDownLatch(1));
+    }
+
+    private TransactionalRequestResult(CountDownLatch latch) {
+        this.latch = latch;
+    }
 
     public void setError(RuntimeException error) {
         this.error = error;
@@ -43,6 +53,9 @@ public final class TransactionalRequestResult {
                 // Keep waiting until done, we have no other option for these transactional requests.
             }
         }
+
+        if (!isSuccessful())
+            throw error();
     }
 
     public boolean await(long timeout, TimeUnit unit) throws InterruptedException {

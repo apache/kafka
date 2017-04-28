@@ -49,6 +49,14 @@ public class FindCoordinatorRequest extends AbstractRequest {
             return new FindCoordinatorRequest(coordinatorType, coordinatorKey, version);
         }
 
+        public String coordinatorKey() {
+            return coordinatorKey;
+        }
+
+        public CoordinatorType coordinatorType() {
+            return coordinatorType;
+        }
+
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();

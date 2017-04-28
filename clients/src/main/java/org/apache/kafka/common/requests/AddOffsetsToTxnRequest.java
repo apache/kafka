@@ -42,6 +42,10 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
             this.consumerGroupId = consumerGroupId;
         }
 
+        public String consumerGroupId() {
+            return consumerGroupId;
+        }
+
         @Override
         public AddOffsetsToTxnRequest build(short version) {
             return new AddOffsetsToTxnRequest(version, transactionalId, producerId, producerEpoch, consumerGroupId);
