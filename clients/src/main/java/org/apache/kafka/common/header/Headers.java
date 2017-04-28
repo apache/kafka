@@ -38,16 +38,16 @@ public interface Headers extends Iterable<Header> {
     Headers add(String key, byte[] value) throws IllegalStateException;
 
     /**
-     * Removes ALL HEADERS for the given key returning if the operation succeeded.
+     * Removes all headers for the given key returning if the operation succeeded.
      * 
-     * @param key to remove ALL HEADERS for.
+     * @param key to remove all headers for.
      * @return this instance of the Headers, once the header is added.
      * @throws IllegalStateException is thrown if headers are in a read-only state.
      */
     Headers remove(String key) throws IllegalStateException;
 
     /**
-     * Returns JUST ONE (the very last) header for the given key, if present.
+     * Returns just one (the very last) header for the given key, if present.
      * 
      * @param key to get the last header for.
      * @return this last header matching the given key, returns none if not present.
@@ -55,15 +55,15 @@ public interface Headers extends Iterable<Header> {
     Header lastHeader(String key);
 
     /**
-     * Returns ALL headers for the given key, in the order they were added in, if present.
+     * Returns all headers for the given key, in the order they were added in, if present.
      *
      * @param key to return the headers for.
-     * @return ALL headers for the given key, in the order they were added in, if NO headers are present an empty iterable is returned. 
+     * @return all headers for the given key, in the order they were added in, if NO headers are present an empty iterable is returned. 
      */
     Iterable<Header> headers(String key);
 
     /**
-     * Returns ALL headers as an array, in the order they were added in.
+     * Returns all headers as an array, in the order they were added in.
      *
      * @return the headers as a Header[], mutating this array will not affect the Headers, if NO headers are present an empty array is returned.
      */

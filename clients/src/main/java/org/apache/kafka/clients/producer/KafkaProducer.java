@@ -42,6 +42,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -61,8 +62,6 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -667,7 +666,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             int partition = partition(record, serializedKey, serializedValue, cluster);
 
-            closeHeaders(record.headers());
+            setReadOnly(record.headers());
             Header[] headers = record.headers().toArray();
 
             int serializedSize = AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
@@ -749,13 +748,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
     }
 
-    private void closeHeaders(Headers headers) {
-        if (headers instanceof Closeable) {
-            try {
-                ((Closeable) headers).close();
-            } catch (IOException ioe) {
-                throw new KafkaException("Failed to close headers", ioe);
-            }
+    private void setReadOnly(Headers headers) {
+        if (headers instanceof RecordHeaders) {
+            ((RecordHeaders) headers).setReadOnly();
         }
     }
 

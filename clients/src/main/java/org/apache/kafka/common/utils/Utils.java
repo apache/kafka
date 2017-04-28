@@ -186,7 +186,7 @@ public class Utils {
     }
 
     /**
-     * Read a byte array from front its current position given the size in the buffer
+     * Read a byte array from its current position given the size in the buffer
      * @param buffer The buffer to read from
      * @param size The number of bytes to read into the array
      */

@@ -430,6 +430,7 @@ public class MemoryRecordsBuilder {
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
+     * @param headers The record headers if there are any
      * @return crc of the record
      */
     public long append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
@@ -452,6 +453,7 @@ public class MemoryRecordsBuilder {
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
+     * @param headers The record headers if there are any
      * @return crc of the record
      */
     public long append(long timestamp, byte[] key, byte[] value, Header[] headers) {

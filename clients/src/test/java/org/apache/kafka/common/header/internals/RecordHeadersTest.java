@@ -18,10 +18,12 @@ package org.apache.kafka.common.header.internals;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Iterator;
 
 import org.apache.kafka.common.header.Header;
@@ -36,12 +38,11 @@ public class RecordHeadersTest {
         headers.add(new RecordHeader("key", "value".getBytes()));
 
         Header header = headers.iterator().next();
-        assertEquals("key", header.key());
-        assertEquals("value", new String(header.value()));
-
+        assertHeader("key", "value", header);
 
         headers.add(new RecordHeader("key2", "value2".getBytes()));
 
+        assertHeader("key2", "value2", headers.lastHeader("key2"));
         assertEquals(2, getCount(headers));
     }
 
@@ -58,21 +59,79 @@ public class RecordHeadersTest {
     }
 
     @Test
+    public void testAddRemoveInterleaved() {
+        Headers headers = new RecordHeaders();
+        headers.add(new RecordHeader("key", "value".getBytes()));
+        headers.add(new RecordHeader("key2", "value2".getBytes()));
+
+        assertTrue(headers.iterator().hasNext());
+
+        headers.remove("key");
+
+        assertEquals(1, getCount(headers));
+
+        headers.add(new RecordHeader("key3", "value3".getBytes()));
+        
+        assertNull(headers.lastHeader("key"));
+
+        assertHeader("key2", "value2", headers.lastHeader("key2"));
+
+        assertHeader("key3", "value3", headers.lastHeader("key3"));
+
+        assertEquals(2, getCount(headers));
+
+        headers.remove("key2");
+
+        assertNull(headers.lastHeader("key"));
+
+        assertNull(headers.lastHeader("key2"));
+
+        assertHeader("key3", "value3", headers.lastHeader("key3"));
+
+        assertEquals(1, getCount(headers));
+
+        headers.add(new RecordHeader("key3", "value4".getBytes()));
+
+        assertHeader("key3", "value4", headers.lastHeader("key3"));
+
+        assertEquals(2, getCount(headers));
+
+        headers.add(new RecordHeader("key", "valueNew".getBytes()));
+
+        assertEquals(3, getCount(headers));
+
+
+        assertHeader("key", "valueNew", headers.lastHeader("key"));
+
+        headers.remove("key3");
+
+        assertEquals(1, getCount(headers));
+
+        assertNull(headers.lastHeader("key2"));
+
+        headers.remove("key");
+
+        assertFalse(headers.iterator().hasNext());
+    }
+
+    @Test
     public void testLastHeader() {
         Headers headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
         headers.add(new RecordHeader("key", "value2".getBytes()));
         headers.add(new RecordHeader("key", "value3".getBytes()));
 
-        assertEquals("value3", new String(headers.lastHeader("key").value()));
+        assertHeader("key", "value3", headers.lastHeader("key"));
+        assertEquals(3, getCount(headers));
+
     }
 
     @Test
-    public void testClose() throws IOException {
+    public void testReadOnly() throws IOException {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
         Iterator<Header> headerIteratorBeforeClose = headers.iterator();
-        headers.close();
+        headers.setReadOnly();
         try {
             headers.add(new RecordHeader("key", "value".getBytes()));
             fail("IllegalStateException expected as headers are closed");
@@ -115,16 +174,16 @@ public class RecordHeadersTest {
 
 
         Iterator<Header> keyHeaders = headers.headers("key").iterator();
-        assertEquals("value", new String(keyHeaders.next().value()));
-        assertEquals("value2", new String(keyHeaders.next().value()));
+        assertHeader("key", "value", keyHeaders.next());
+        assertHeader("key", "value2", keyHeaders.next());
         assertFalse(keyHeaders.hasNext());
 
         keyHeaders = headers.headers("key1").iterator();
-        assertEquals("key1value", new String(keyHeaders.next().value()));
+        assertHeader("key1", "key1value", keyHeaders.next());
         assertFalse(keyHeaders.hasNext());
 
         keyHeaders = headers.headers("key2").iterator();
-        assertEquals("key2value", new String(keyHeaders.next().value()));
+        assertHeader("key2", "key2value", keyHeaders.next());
         assertFalse(keyHeaders.hasNext());
 
     }
@@ -133,17 +192,17 @@ public class RecordHeadersTest {
     public void testNew() throws IOException {
         RecordHeaders headers = new RecordHeaders();
         headers.add(new RecordHeader("key", "value".getBytes()));
-        headers.close();
+        headers.setReadOnly();
 
         RecordHeaders newHeaders = new RecordHeaders(headers);
         newHeaders.add(new RecordHeader("key", "value2".getBytes()));
 
         //Ensure existing headers are not modified
-        assertEquals("value", new String(headers.lastHeader("key").value()));
+        assertHeader("key", "value", headers.lastHeader("key"));
         assertEquals(1, getCount(headers));
 
         //Ensure new headers are modified
-        assertEquals("value2", new String(newHeaders.lastHeader("key").value()));
+        assertHeader("key", "value2", newHeaders.lastHeader("key"));
         assertEquals(2, getCount(newHeaders));
     }
 
@@ -155,6 +214,11 @@ public class RecordHeadersTest {
             count++;
         }
         return count;
+    }
+    
+    static void assertHeader(String key, String value, Header actual) {
+        assertEquals(key, actual.key());
+        assertTrue(Arrays.equals(value.getBytes(), actual.value()));
     }
 
 }

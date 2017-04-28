@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.header.internals;
 
-import java.io.Closeable;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -29,10 +27,10 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.AbstractIterator;
 
-public class RecordHeaders implements Headers, Closeable {
+public class RecordHeaders implements Headers {
     
     private final List<Header> headers;
-    private volatile boolean isClosed = false;
+    private volatile boolean isReadOnly = false;
 
     public RecordHeaders() {
         this((Iterable<Header>) null);
@@ -42,23 +40,19 @@ public class RecordHeaders implements Headers, Closeable {
         if (headers == null) {
             this.headers = new ArrayList<>();
         } else {
-            //new ArrayList using efficient Arrays.copyOf the given the Arrays.asList wrapper.
             this.headers = new ArrayList<>(Arrays.asList(headers));
         }
     }
     
     public RecordHeaders(Iterable<Header> headers) {
+        //Use efficient copy constructor if possible, fallback to iteration otherwise
         if (headers == null) {
-            //new ArrayList, empty as no headers
             this.headers = new ArrayList<>();
         } else if (headers instanceof RecordHeaders) {
-            //new ArrayList using efficient Arrays.copyOf the backing list in given RecordHeaders
             this.headers = new ArrayList<>(((RecordHeaders) headers).headers);
         } else if (headers instanceof Collection) {
-            //new ArrayList using efficient Arrays.copyOf the given collection.
             this.headers = new ArrayList<>((Collection<Header>) headers);
         } else {
-            //new ArrayList iterating through to copy the headers.
             this.headers = new ArrayList<>();
             Iterator<Header> iterator = headers.iterator();
             while (iterator.hasNext()) {
@@ -69,7 +63,7 @@ public class RecordHeaders implements Headers, Closeable {
 
     @Override
     public Headers add(Header header) throws IllegalStateException {
-        checkClosed();
+        canWrite();
         headers.add(header);
         return this;
     }
@@ -81,7 +75,7 @@ public class RecordHeaders implements Headers, Closeable {
 
     @Override
     public Headers remove(String key) throws IllegalStateException {
-        checkClosed();
+        canWrite();
         checkKey(key);
         Iterator<Header> iterator = iterator();
         while (iterator.hasNext()) {
@@ -120,9 +114,8 @@ public class RecordHeaders implements Headers, Closeable {
         return closeAware(headers.iterator());
     }
 
-    @Override
-    public void close() throws IOException {
-        this.isClosed = true;
+    public void setReadOnly() {
+        this.isReadOnly = true;
     }
 
     public Header[] toArray() {
@@ -135,8 +128,8 @@ public class RecordHeaders implements Headers, Closeable {
         }
     }
     
-    private void checkClosed() {
-        if (isClosed) {
+    private void canWrite() {
+        if (isReadOnly) {
             throw new IllegalStateException("RecordHeaders has been closed.");
         }
     }
@@ -154,7 +147,7 @@ public class RecordHeaders implements Headers, Closeable {
 
             @Override
             public void remove() {
-                checkClosed();
+                canWrite();
                 original.remove();
             }
         };
@@ -183,7 +176,7 @@ public class RecordHeaders implements Headers, Closeable {
     public String toString() {
         return "RecordHeaders(" +
                "headers = " + headers +
-               ", isClosed = " + isClosed +
+               ", isReadOnly = " + isReadOnly +
                ')';
     }
     

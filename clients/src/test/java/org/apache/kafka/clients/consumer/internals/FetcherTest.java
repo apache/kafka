@@ -73,7 +73,6 @@ import org.junit.Test;
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -347,12 +346,12 @@ public class FetcherTest {
         builder.append(0L, "key".getBytes(), "value-1".getBytes());
 
         Header[] headersArray = new Header[1];
-        headersArray[0] = new RecordHeader("headerKey", "headerValue".getBytes(Charset.forName("UTF-8")));
+        headersArray[0] = new RecordHeader("headerKey", "headerValue".getBytes(StandardCharsets.UTF_8));
         builder.append(0L, "key".getBytes(), "value-2".getBytes(), headersArray);
 
         Header[] headersArray2 = new Header[2];
-        headersArray2[0] = new RecordHeader("headerKey", "headerValue".getBytes(Charset.forName("UTF-8")));
-        headersArray2[1] = new RecordHeader("headerKey", "headerValue2".getBytes(Charset.forName("UTF-8")));
+        headersArray2[0] = new RecordHeader("headerKey", "headerValue".getBytes(StandardCharsets.UTF_8));
+        headersArray2[1] = new RecordHeader("headerKey", "headerValue2".getBytes(StandardCharsets.UTF_8));
         builder.append(0L, "key".getBytes(), "value-3".getBytes(), headersArray2);
 
         MemoryRecords memoryRecords = builder.build();
@@ -375,10 +374,12 @@ public class FetcherTest {
         assertNull(record.headers().lastHeader("headerKey"));
         
         record = recordIterator.next();
-        assertEquals("headerValue", new String(record.headers().lastHeader("headerKey").value(), Charset.forName("UTF-8")));
+        assertEquals("headerValue", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
+        assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
 
         record = recordIterator.next();
-        assertEquals("headerValue2", new String(record.headers().lastHeader("headerKey").value(), Charset.forName("UTF-8")));
+        assertEquals("headerValue2", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
+        assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
     }
 
     @Test
