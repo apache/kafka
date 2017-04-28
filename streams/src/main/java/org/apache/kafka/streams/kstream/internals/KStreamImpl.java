@@ -144,7 +144,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
                 new KeyValueMapper<K, V, KeyValue<K1, V>>() {
                     @Override
                     public KeyValue<K1, V> apply(K key, V value) {
-                        return new KeyValue<>(mapper.apply(key, value), value);
+                        return new KeyValue<K1, V>(mapper.apply(key, value), value);
                     }
                 }
             ),
@@ -224,9 +224,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         }
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
-        try {
-            PrintWriter printWriter = null;
-            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+        try (PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name())) {
             topology.addProcessor(name, new KeyValuePrinter<>(printWriter, keySerde, valSerde, streamName), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
