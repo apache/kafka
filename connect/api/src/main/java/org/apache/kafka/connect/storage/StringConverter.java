@@ -36,7 +36,7 @@ import java.util.Map;
  * this class can also be configured to use the same encoding for both encoding and decoding with the converter.encoding
  * setting.
  */
-public class StringConverter implements Converter {
+public class StringConverter implements Converter, SubjectConverter {
     private final StringSerializer serializer = new StringSerializer();
     private final StringDeserializer deserializer = new StringDeserializer();
 
@@ -58,6 +58,16 @@ public class StringConverter implements Converter {
 
         serializer.configure(serializerConfigs, isKey);
         deserializer.configure(deserializerConfigs, isKey);
+    }
+
+    @Override
+    public byte[] fromConnectData(String topic, String subject, Schema schema, Object value) {
+        return fromConnectData(topic, schema, value);
+    }
+
+    @Override
+    public SchemaAndValue toConnectData(String topic, String subject, byte[] value) {
+        return toConnectData(topic, value);
     }
 
     @Override

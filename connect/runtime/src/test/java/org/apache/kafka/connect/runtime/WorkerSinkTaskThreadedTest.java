@@ -33,6 +33,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.SubjectConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
@@ -103,6 +104,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     private WorkerConfig workerConfig;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
+    @Mock private SubjectConverter subjectConverter;
     @Mock private TransformationChain transformationChain;
     private WorkerSinkTask workerTask;
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
@@ -120,6 +122,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("header.converter", "org.apache.kafka.connect.storage.SubjectConverter");
         workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("internal.key.converter.schemas.enable", "false");
@@ -128,7 +131,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, TransformationChain.<SinkRecord>noOp(), time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, subjectConverter, TransformationChain.<SinkRecord>noOp(), time);
 
         recordsReturned = 0;
     }

@@ -26,14 +26,17 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.connector.ConnectHeader;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.SubjectConverter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
@@ -61,6 +64,7 @@ class WorkerSinkTask extends WorkerTask {
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final SubjectConverter headerConverter;
     private final TransformationChain<SinkRecord> transformationChain;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
@@ -82,6 +86,7 @@ class WorkerSinkTask extends WorkerTask {
                           WorkerConfig workerConfig,
                           Converter keyConverter,
                           Converter valueConverter,
+                          SubjectConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
                           Time time) {
         super(id, statusListener, initialState);
@@ -90,6 +95,7 @@ class WorkerSinkTask extends WorkerTask {
         this.task = task;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.time = time;
         this.messageBatch = new ArrayList<>();
@@ -398,12 +404,17 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
             SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
             SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
+            List<ConnectHeader> connectHeaders = new ArrayList<>();
+            for(Header header : msg.headers()) {
+                SchemaAndValue headerValueAndSchema = headerConverter.toConnectData(msg.topic(), header.key(), header.value());
+                connectHeaders.add(new ConnectHeader(header.key(), headerValueAndSchema.schema(), headerValueAndSchema.value()));
+            }
             SinkRecord record = new SinkRecord(msg.topic(), msg.partition(),
                     keyAndSchema.schema(), keyAndSchema.value(),
                     valueAndSchema.schema(), valueAndSchema.value(),
                     msg.offset(),
                     ConnectUtils.checkAndConvertTimestamp(msg.timestamp()),
-                    msg.timestampType());
+                    msg.timestampType(), connectHeaders);
             record = transformationChain.apply(record);
             if (record != null) {
                 messageBatch.add(record);

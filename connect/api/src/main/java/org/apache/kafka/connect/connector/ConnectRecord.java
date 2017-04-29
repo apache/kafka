@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.connect.connector;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.apache.kafka.connect.data.Schema;
 
 /**
@@ -34,11 +37,12 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     private final Schema valueSchema;
     private final Object value;
     private final Long timestamp;
+    private final List<ConnectHeader> headers;
 
     public ConnectRecord(String topic, Integer kafkaPartition,
                          Schema keySchema, Object key,
                          Schema valueSchema, Object value,
-                         Long timestamp) {
+                         Long timestamp, List<ConnectHeader> headers) {
         this.topic = topic;
         this.kafkaPartition = kafkaPartition;
         this.keySchema = keySchema;
@@ -46,6 +50,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         this.valueSchema = valueSchema;
         this.value = value;
         this.timestamp = timestamp;
+        this.headers = headers == null ? new ArrayList<ConnectHeader>() : new ArrayList<>(headers);
     }
 
     public String topic() {
@@ -71,13 +76,22 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
     public Schema valueSchema() {
         return valueSchema;
     }
+    
+    public List<ConnectHeader> headers() {
+        return headers;
+    }
 
     public Long timestamp() {
         return timestamp;
     }
 
     /** Generate a new record of the same type as itself, with the specified parameter values. **/
-    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp);
+    public R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
+        return newRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, timestamp, this.headers());
+    }
+
+    /** Generate a new record of the same type as itself, with the specified parameter values. **/
+    public abstract R newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, List<ConnectHeader> headers);
 
     @Override
     public String toString() {
@@ -87,7 +101,8 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
                 ", key=" + key +
                 ", value=" + value +
                 ", timestamp=" + timestamp +
-                '}';
+                ", headers=" + headers +
+               '}';
     }
 
     @Override
@@ -113,6 +128,8 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
             return false;
         if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
             return false;
+        if (!headers.equals(that.headers))
+            return false;
 
         return true;
     }
@@ -126,6 +143,7 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
         result = 31 * result + (valueSchema != null ? valueSchema.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);
+        result = 31 * result + headers.hashCode();
         return result;
     }
 }
