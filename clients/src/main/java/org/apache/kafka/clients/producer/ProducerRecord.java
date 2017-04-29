@@ -74,6 +74,18 @@ public class ProducerRecord<K, V> {
     }
 
     /**
+     * Creates a record with a key, a value and a timestamp
+     *
+     * @param topic The topic the record will be appended to
+     * @param key The key that will be included in the record
+     * @param value The record contents
+     * @param timestamp The timestamp of the record
+     */
+    public ProducerRecord(String topic, K key, V value, Long timestamp) {
+        this(topic, null, timestamp, key, value);
+    }
+
+    /**
      * Creates a record to be sent to a specified topic and partition
      *
      * @param topic The topic the record will be appended to
@@ -94,6 +106,16 @@ public class ProducerRecord<K, V> {
      */
     public ProducerRecord(String topic, K key, V value) {
         this(topic, null, null, key, value);
+    }
+
+    /**
+     * Create a record with no key (null) and a timestamp
+     *
+     * @param topic The topic this record should be sent to
+     * @param value The record contents
+     */
+    public ProducerRecord(String topic, V value, Long timestamp) {
+        this(topic, null, timestamp, null, value);
     }
 
     /**
