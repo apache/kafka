@@ -186,6 +186,15 @@ public class Utils {
     }
 
     /**
+     * Read a byte array from its current position given the size in the buffer
+     * @param buffer The buffer to read from
+     * @param size The number of bytes to read into the array
+     */
+    public static byte[] toArray(ByteBuffer buffer, int size) {
+        return toArray(buffer, 0, size);
+    }
+
+    /**
      * Convert a ByteBuffer to a nullable array.
      * @param buffer The buffer to convert
      * @return The resulting array or null if the buffer is null

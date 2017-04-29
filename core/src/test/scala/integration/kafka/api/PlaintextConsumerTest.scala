@@ -23,8 +23,9 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
@@ -36,6 +37,95 @@ import scala.collection.mutable.Buffer
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
 
+  @Test
+  def testHeaders() {
+    val numRecords = 1
+    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+    
+    record.headers().add(s"headerKey", s"headerValue".getBytes)
+    
+    this.producers.head.send(record)
+    
+    assertEquals(0, this.consumers.head.assignment.size)
+    this.consumers.head.assign(List(tp).asJava)
+    assertEquals(1, this.consumers.head.assignment.size)
+
+    this.consumers.head.seek(tp, 0)
+    val records = consumeRecords(consumer = this.consumers.head, numRecords = numRecords)
+
+    assertEquals(numRecords, records.size)
+
+    for (i <- 0 until numRecords) {
+      val record = records(i)
+      val header = record.headers().lastHeader(s"headerKey")
+      assertEquals(s"headerValue", if (header == null) null else new String(header.value()))
+    }
+  }
+  
+  @Test
+  def testHeadersExtendedSerializerDeserializer() {
+    val numRecords = 1
+    val record = new ProducerRecord(tp.topic(), tp.partition(), null, s"key".getBytes, s"value".getBytes)
+
+    val extendedSerializer = new ExtendedSerializer[Array[Byte]] {
+      
+      var serializer = new ByteArraySerializer()
+      
+      override def serialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+        headers.add(s"content-type", s"application/octet-stream".getBytes)
+        serializer.serialize(topic, data)
+      }
+
+      override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = serializer.configure(configs, isKey)
+      
+      override def close(): Unit = serializer.close()
+
+      override def serialize(topic: String, data: Array[Byte]): Array[Byte] = {
+        fail("method should not be invoked")
+        null
+      }
+    }
+
+
+    val extendedDeserializer = new ExtendedDeserializer[Array[Byte]] {
+      
+      var deserializer = new ByteArrayDeserializer()
+      
+      override def deserialize(topic: String, headers: Headers, data: Array[Byte]): Array[Byte] = {
+        var header = headers.lastHeader(s"content-type")
+        assertEquals(s"application/octet-stream", if (header == null) null else new String(header.value()))
+        deserializer.deserialize(topic, data)
+      }
+
+      override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = deserializer.configure(configs, isKey)
+
+
+      override def close(): Unit = deserializer.close()
+
+      override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = {
+        fail("method should not be invoked")
+        null
+      }
+
+    }
+    
+    val producer0 = new KafkaProducer(this.producerConfig, new ByteArraySerializer(), extendedSerializer)
+    producers += producer0
+    producer0.send(record)
+
+    val consumer0 = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), extendedDeserializer)
+    consumers += consumer0
+
+    assertEquals(0, consumer0.assignment.size)
+    consumer0.assign(List(tp).asJava)
+    assertEquals(1, consumer0.assignment.size)
+
+    consumer0.seek(tp, 0)
+    val records = consumeRecords(consumer = consumer0, numRecords = numRecords)
+
+    assertEquals(numRecords, records.size)
+  }
+  
   @Test
   def testMaxPollRecords() {
     val maxPollRecords = 2
