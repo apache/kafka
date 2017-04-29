@@ -35,13 +35,17 @@ public class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, C
 
     @Override
     public Processor<K, Change<V>> get() {
-        return new KStreamCogroupProcessor<>();
+        return new KStreamCogroupProcessor();
     }
     
-    private static final class KStreamCogroupProcessor<K, V> extends AbstractProcessor<K, Change<V>> {
+    private final class KStreamCogroupProcessor extends AbstractProcessor<K, Change<V>> {
         @Override
         public void process(K key, Change<V> value) {
-            context().forward(key, value);
+            if (sendOldValues) {
+                context().forward(key, value);
+            } else {
+                context().forward(key, new Change<>(value.newValue, null));
+            }
         }
     }
 
