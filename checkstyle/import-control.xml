@@ -93,11 +93,17 @@
 
     <subpackage name="record">
       <allow pkg="net.jpountz" />
+      <allow pkg="org.apache.kafka.common.header" />
       <allow pkg="org.apache.kafka.common.record" />
       <allow pkg="org.apache.kafka.common.network" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.protocol.types" />
       <allow pkg="org.apache.kafka.common.errors" />
+    </subpackage>
+
+    <subpackage name="header">
+      <allow pkg="org.apache.kafka.common.header" />
+      <allow pkg="org.apache.kafka.common.record" />
     </subpackage>
 
     <subpackage name="requests">
@@ -110,6 +116,7 @@
 
     <subpackage name="serialization">
       <allow class="org.apache.kafka.common.errors.SerializationException" />
+      <allow class="org.apache.kafka.common.header.Headers" />
     </subpackage>
   </subpackage>
 

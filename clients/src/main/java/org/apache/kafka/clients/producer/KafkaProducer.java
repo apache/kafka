@@ -40,6 +40,9 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -51,6 +54,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -156,8 +160,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final CompressionType compressionType;
     private final Sensor errors;
     private final Time time;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
+    private final ExtendedSerializer<K> keySerializer;
+    private final ExtendedSerializer<V> valueSerializer;
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
     private final int requestTimeoutMs;
@@ -238,21 +242,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             if (keySerializer == null) {
-                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                        Serializer.class);
+                this.keySerializer = ensureExtended(config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                                                                                         Serializer.class));
                 this.keySerializer.configure(config.originals(), true);
             } else {
                 config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
-                this.keySerializer = keySerializer;
+                this.keySerializer = ensureExtended(keySerializer);
             }
             if (valueSerializer == null) {
-                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                        Serializer.class);
+                this.valueSerializer = ensureExtended(config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                                                                                           Serializer.class));
                 this.valueSerializer.configure(config.originals(), false);
             } else {
                 config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-                this.valueSerializer = valueSerializer;
+                this.valueSerializer = ensureExtended(valueSerializer);
             }
+            
 
             // load interceptors and make sure they get clientId
             userProvidedConfigs.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
@@ -324,6 +329,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
         }
+    }
+
+    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
+        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     private static long configureMaxBlockTime(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
@@ -641,7 +650,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
-                serializedKey = keySerializer.serialize(record.topic(), record.key());
+                serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
@@ -649,16 +658,19 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             byte[] serializedValue;
             try {
-                serializedValue = valueSerializer.serialize(record.topic(), record.value());
+                serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
-
             int partition = partition(record, serializedKey, serializedValue, cluster);
+
+            setReadOnly(record.headers());
+            Header[] headers = record.headers().toArray();
+
             int serializedSize = AbstractRecords.sizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
-                    serializedKey, serializedValue);
+                    serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
             tp = new TopicPartition(record.topic(), partition);
             long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
@@ -670,7 +682,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 transactionManager.maybeAddPartitionToTransaction(tp);
 
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,
-                    serializedValue, interceptCallback, remainingWaitMs);
+                    serializedValue, headers, interceptCallback, remainingWaitMs);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -723,7 +735,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (transactionManager.isInTransaction()) {
             if (transactionManager.isInErrorState()) {
-                String errorMessage = "Cannot perform a transactional send because at least one previous transactional request has failed with errors.";
+                String errorMessage =
+                    "Cannot perform a transactional send because at least one previous transactional request has failed with errors.";
                 Exception lastError = transactionManager.lastError();
                 if (lastError != null)
                     throw new KafkaException(errorMessage, lastError);
@@ -732,6 +745,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             if (transactionManager.isCompletingTransaction())
                 throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
+        }
+    }
+
+    private void setReadOnly(Headers headers) {
+        if (headers instanceof RecordHeaders) {
+            ((RecordHeaders) headers).setReadOnly();
         }
     }
 

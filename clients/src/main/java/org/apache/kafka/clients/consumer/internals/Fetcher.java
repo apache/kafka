@@ -37,6 +37,8 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -58,6 +60,7 @@ import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.ExtendedDeserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -103,8 +106,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
-    private final Deserializer<K> keyDeserializer;
-    private final Deserializer<V> valueDeserializer;
+
+    private final ExtendedDeserializer<K> keyDeserializer;
+    private final ExtendedDeserializer<V> valueDeserializer;
     private final IsolationLevel isolationLevel;
 
     private PartitionRecords nextInLineRecords = null;
@@ -136,8 +140,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.fetchSize = fetchSize;
         this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
-        this.keyDeserializer = keyDeserializer;
-        this.valueDeserializer = valueDeserializer;
+        this.keyDeserializer = ensureExtended(keyDeserializer);
+        this.valueDeserializer = ensureExtended(valueDeserializer);
         this.completedFetches = new ConcurrentLinkedQueue<>();
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
@@ -146,6 +150,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         subscriptions.addListener(this);
     }
 
+    private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
+        return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
+    }
+    
     /**
      * Represents data about an offset returned by a broker.
      */
@@ -894,18 +902,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             long offset = record.offset();
             long timestamp = record.timestamp();
             TimestampType timestampType = batch.timestampType();
+            Headers headers = new RecordHeaders(record.headers());
             ByteBuffer keyBytes = record.key();
             byte[] keyByteArray = keyBytes == null ? null : Utils.toArray(keyBytes);
-            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), keyByteArray);
+            K key = keyBytes == null ? null : this.keyDeserializer.deserialize(partition.topic(), headers, keyByteArray);
             ByteBuffer valueBytes = record.value();
             byte[] valueByteArray = valueBytes == null ? null : Utils.toArray(valueBytes);
-            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), valueByteArray);
-
+            V value = valueBytes == null ? null : this.valueDeserializer.deserialize(partition.topic(), headers, valueByteArray);
             return new ConsumerRecord<>(partition.topic(), partition.partition(), offset,
                                         timestamp, timestampType, record.checksum(),
                                         keyByteArray == null ? ConsumerRecord.NULL_SIZE : keyByteArray.length,
                                         valueByteArray == null ? ConsumerRecord.NULL_SIZE : valueByteArray.length,
-                                        key, value);
+                                        key, value, headers);
         } catch (RuntimeException e) {
             throw new SerializationException("Error deserializing key/value for partition " + partition +
                     " at offset " + record.offset(), e);

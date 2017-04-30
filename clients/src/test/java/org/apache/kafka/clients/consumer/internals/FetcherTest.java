@@ -36,12 +36,14 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -76,6 +78,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -333,6 +336,50 @@ public class FetcherTest {
             // the position should not advance since no data has been returned
             assertEquals(0, subscriptions.position(tp1).longValue());
         }
+    }
+
+    @Test
+    public void testHeaders() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time));
+        
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        builder.append(0L, "key".getBytes(), "value-1".getBytes());
+
+        Header[] headersArray = new Header[1];
+        headersArray[0] = new RecordHeader("headerKey", "headerValue".getBytes(StandardCharsets.UTF_8));
+        builder.append(0L, "key".getBytes(), "value-2".getBytes(), headersArray);
+
+        Header[] headersArray2 = new Header[2];
+        headersArray2[0] = new RecordHeader("headerKey", "headerValue".getBytes(StandardCharsets.UTF_8));
+        headersArray2[1] = new RecordHeader("headerKey", "headerValue2".getBytes(StandardCharsets.UTF_8));
+        builder.append(0L, "key".getBytes(), "value-3".getBytes(), headersArray2);
+
+        MemoryRecords memoryRecords = builder.build();
+
+        List<ConsumerRecord<byte[], byte[]>> records;
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 1);
+
+        client.prepareResponse(matchesOffset(tp1, 1), fetchResponse(memoryRecords, Errors.NONE, 100L, 0));
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        records = fetcher.fetchedRecords().get(tp1);
+        
+        assertEquals(3, records.size());
+
+        Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
+        
+        ConsumerRecord<byte[], byte[]> record = recordIterator.next();
+        assertNull(record.headers().lastHeader("headerKey"));
+        
+        record = recordIterator.next();
+        assertEquals("headerValue", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
+        assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
+
+        record = recordIterator.next();
+        assertEquals("headerValue2", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
+        assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
     }
 
     @Test
