@@ -280,7 +280,7 @@ public class Sender implements Runnable {
         if (transactionManager == null || !transactionManager.hasPendingTransactionalRequests())
             return false;
 
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextTransactionalRequest();
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
 
         if (nextRequestHandler.isEndTxn()) {
             if (transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
@@ -383,7 +383,7 @@ public class Sender implements Runnable {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
                     if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
                         InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        TransactionManager.PidAndEpoch pidAndEpoch = new TransactionManager.PidAndEpoch(
+                        PidAndEpoch pidAndEpoch = new PidAndEpoch(
                                 initPidResponse.producerId(), initPidResponse.epoch());
                         transactionManager.setPidAndEpoch(pidAndEpoch);
                     } else {

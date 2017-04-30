@@ -67,7 +67,7 @@ public class TransactionManager {
     private final int transactionTimeoutMs;
 
     private final Map<TopicPartition, Integer> sequenceNumbers;
-    private final PriorityQueue<TxnRequestHandler<?, ?>> pendingRequests;
+    private final PriorityQueue<TxnRequestHandler> pendingRequests;
     private final Set<TopicPartition> newPartitionsToBeAddedToTransaction;
     private final Set<TopicPartition> pendingPartitionsToBeAddedToTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
@@ -112,6 +112,23 @@ public class TransactionManager {
         }
     }
 
+
+    // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
+    // a pending FindCoordinator request, that must always go first. Next, If we need a PID, that must go second.
+    // The endTxn request must always go last.
+    private enum Priority {
+        FIND_COORDINATOR(0),
+        INIT_PRODUCER_ID(1),
+        ADD_PARTITIONS_OR_OFFSETS(2),
+        END_TXN(3);
+
+        final int priority;
+
+        Priority(int priority) {
+            this.priority = priority;
+        }
+    }
+
     public TransactionManager(String transactionalId, int transactionTimeoutMs) {
         this.pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers = new HashMap<>();
@@ -131,40 +148,8 @@ public class TransactionManager {
         });
     }
 
-    public TransactionManager() {
+    TransactionManager() {
         this("", 0);
-    }
-
-    // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
-    // a pending FindCoordinator request, that must always go first. Next, If we need a PID, that must go second.
-    // The endTxn request must always go last.
-    private enum Priority {
-        FIND_COORDINATOR(0),
-        INIT_PRODUCER_ID(1),
-        ADD_PARTITIONS_OR_OFFSETS(2),
-        END_TXN(4);
-
-        final int priority;
-
-        Priority(int priority) {
-            this.priority = priority;
-        }
-    }
-
-    static class PidAndEpoch {
-        private static final PidAndEpoch NONE = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
-
-        public final long producerId;
-        public final short epoch;
-
-        PidAndEpoch(long producerId, short epoch) {
-            this.producerId = producerId;
-            this.epoch = epoch;
-        }
-
-        public boolean isValid() {
-            return NO_PRODUCER_ID < producerId;
-        }
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -344,7 +329,7 @@ public class TransactionManager {
         return !(pendingRequests.isEmpty() && newPartitionsToBeAddedToTransaction.isEmpty());
     }
 
-    TxnRequestHandler nextTransactionalRequest() {
+    TxnRequestHandler nextRequestHandler() {
         if (!hasPendingTransactionalRequests())
             return null;
 
@@ -481,32 +466,23 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(builder);
     }
 
-    abstract class TxnRequestHandler<S extends AbstractRequest.Builder<?>, T extends AbstractResponse>
-            implements RequestCompletionHandler {
+    abstract class TxnRequestHandler implements  RequestCompletionHandler {
         protected final TransactionalRequestResult result = new TransactionalRequestResult();
-        protected final S builder;
         private boolean isRetry = false;
-
-        private TxnRequestHandler(S builder) {
-            this.builder = builder;
-        }
-
-        AbstractRequest.Builder<?> requestBuilder() {
-            return builder;
-        }
 
         void fatal(RuntimeException e) {
             result.setError(e);
-            result.done();
             transitionTo(State.ERROR, e);
+            result.done();
         }
 
         void fenced() {
-            log.error("Epoch has become invalid: producerId: {}. epoch: {}. Message: {}", pidAndEpoch.producerId,
-                    pidAndEpoch.epoch, Errors.INVALID_PRODUCER_EPOCH.message());
+            log.error("Producer has become invalid, which typically means another producer with the same " +
+                            "transactional.id has been started: producerId: {}. epoch: {}.",
+                    pidAndEpoch.producerId, pidAndEpoch.epoch);
             result.setError(Errors.INVALID_PRODUCER_EPOCH.exception());
-            result.done();
             transitionTo(State.FENCED, Errors.INVALID_PRODUCER_EPOCH.exception());
+            result.done();
         }
 
         void reenqueue() {
@@ -526,7 +502,7 @@ public class TransactionManager {
                 } else if (response.versionMismatch() != null) {
                     fatal(response.versionMismatch());
                 } else if (response.hasResponse()) {
-                    handleResponse((T) response.responseBody());
+                    handleResponse(response.responseBody());
                 } else {
                     fatal(new KafkaException("Could not execute transactional request for unknown reasons"));
                 }
@@ -557,14 +533,23 @@ public class TransactionManager {
             return false;
         }
 
-        abstract void handleResponse(T responseBody);
+        abstract AbstractRequest.Builder<?> requestBuilder();
+
+        abstract void handleResponse(AbstractResponse responseBody);
 
         abstract Priority priority();
     }
 
-    private class InitPidHandler extends TxnRequestHandler<InitPidRequest.Builder, InitPidResponse> {
+    private class InitPidHandler extends TxnRequestHandler {
+        private final InitPidRequest.Builder builder;
+
         private InitPidHandler(InitPidRequest.Builder builder) {
-            super(builder);
+            this.builder = builder;
+        }
+
+        @Override
+        InitPidRequest.Builder requestBuilder() {
+            return builder;
         }
 
         @Override
@@ -573,7 +558,8 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(InitPidResponse initPidResponse) {
+        public void handleResponse(AbstractResponse response) {
+            InitPidResponse initPidResponse = (InitPidResponse) response;
             Errors error = initPidResponse.error();
             if (error == Errors.NONE) {
                 PidAndEpoch pidAndEpoch = new PidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
@@ -592,9 +578,16 @@ public class TransactionManager {
         }
     }
 
-    private class AddPartitionsToTxnHandler extends TxnRequestHandler<AddPartitionsToTxnRequest.Builder, AddPartitionsToTxnResponse> {
+    private class AddPartitionsToTxnHandler extends TxnRequestHandler {
+        private final AddPartitionsToTxnRequest.Builder builder;
+
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
-            super(builder);
+            this.builder = builder;
+        }
+
+        @Override
+        AddPartitionsToTxnRequest.Builder requestBuilder() {
+            return builder;
         }
 
         @Override
@@ -603,7 +596,8 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AddPartitionsToTxnResponse addPartitionsToTxnResponse) {
+        public void handleResponse(AbstractResponse response) {
+            AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
             Errors error = addPartitionsToTxnResponse.error();
             if (error == Errors.NONE) {
                 partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
@@ -629,9 +623,16 @@ public class TransactionManager {
         }
     }
 
-    private class FindCoordinatorHandler extends TxnRequestHandler<FindCoordinatorRequest.Builder, FindCoordinatorResponse> {
+    private class FindCoordinatorHandler extends TxnRequestHandler {
+        private final FindCoordinatorRequest.Builder builder;
+
         private FindCoordinatorHandler(FindCoordinatorRequest.Builder builder) {
-            super(builder);
+            this.builder = builder;
+        }
+
+        @Override
+        FindCoordinatorRequest.Builder requestBuilder() {
+            return builder;
         }
 
         @Override
@@ -650,7 +651,8 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(FindCoordinatorResponse findCoordinatorResponse) {
+        public void handleResponse(AbstractResponse response) {
+            FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             if (findCoordinatorResponse.error() == Errors.NONE) {
                 Node node = findCoordinatorResponse.node();
                 switch (builder.coordinatorType()) {
@@ -673,9 +675,16 @@ public class TransactionManager {
         }
     }
 
-    private class EndTxnHandler extends TxnRequestHandler<EndTxnRequest.Builder, EndTxnResponse> {
+    private class EndTxnHandler extends TxnRequestHandler {
+        private final EndTxnRequest.Builder builder;
+
         private EndTxnHandler(EndTxnRequest.Builder builder) {
-            super(builder);
+            this.builder = builder;
+        }
+
+        @Override
+        EndTxnRequest.Builder requestBuilder() {
+            return builder;
         }
 
         @Override
@@ -689,7 +698,8 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(EndTxnResponse endTxnResponse) {
+        public void handleResponse(AbstractResponse response) {
+            EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
             if (error == Errors.NONE) {
                 completeTransaction();
@@ -707,12 +717,18 @@ public class TransactionManager {
         }
     }
 
-    private class AddOffsetsToTxnHandler extends TxnRequestHandler<AddOffsetsToTxnRequest.Builder, AddOffsetsToTxnResponse> {
+    private class AddOffsetsToTxnHandler extends TxnRequestHandler {
+        private final AddOffsetsToTxnRequest.Builder builder;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
         private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder, Map<TopicPartition, OffsetAndMetadata> offsets) {
-            super(builder);
+            this.builder = builder;
             this.offsets = offsets;
+        }
+
+        @Override
+        AddOffsetsToTxnRequest.Builder requestBuilder() {
+            return builder;
         }
 
         @Override
@@ -721,7 +737,8 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AddOffsetsToTxnResponse addOffsetsToTxnResponse) {
+        public void handleResponse(AbstractResponse response) {
+            AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = addOffsetsToTxnResponse.error();
             if (error == Errors.NONE) {
                 pendingRequests.add(txnOffsetCommitHandler(offsets, builder.consumerGroupId()));
@@ -739,9 +756,16 @@ public class TransactionManager {
         }
     }
 
-    private class TxnOffsetCommitHandler extends TxnRequestHandler<TxnOffsetCommitRequest.Builder, TxnOffsetCommitResponse> {
+    private class TxnOffsetCommitHandler extends TxnRequestHandler {
+        private final TxnOffsetCommitRequest.Builder builder;
+
         private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
-            super(builder);
+            this.builder = builder;
+        }
+
+        @Override
+        TxnOffsetCommitRequest.Builder requestBuilder() {
+            return builder;
         }
 
         @Override
@@ -760,7 +784,8 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(TxnOffsetCommitResponse txnOffsetCommitResponse) {
+        public void handleResponse(AbstractResponse response) {
+            TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
             boolean hadFailure = false;
             for (Map.Entry<TopicPartition, Errors> entry : txnOffsetCommitResponse.errors().entrySet()) {
@@ -795,4 +820,5 @@ public class TransactionManager {
                 reenqueue();
         }
     }
+
 }

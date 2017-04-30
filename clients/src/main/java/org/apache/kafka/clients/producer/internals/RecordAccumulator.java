@@ -439,7 +439,7 @@ public final class RecordAccumulator {
                                         // request
                                         break;
                                     } else {
-                                        TransactionManager.PidAndEpoch pidAndEpoch = null;
+                                        PidAndEpoch pidAndEpoch = null;
                                         if (transactionManager != null) {
                                             pidAndEpoch = transactionManager.pidAndEpoch();
                                             if (!pidAndEpoch.isValid())
