@@ -143,8 +143,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC,
-            10,
-            60000);
+            10);
         // receive only first values to make sure intermediate user topic is not consumed completely
         // => required to test "seekToEnd" for intermediate topics
         final List<KeyValue<Long, Long>> result2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
@@ -177,8 +176,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC,
-            10,
-            60000);
+            10);
         final List<KeyValue<Long, Long>> resultRerun2 = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
             resultTopicConsumerConfig,
             OUTPUT_TOPIC_2_RERUN,
@@ -187,7 +185,7 @@ public class ResetIntegrationTest {
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
-        final int maxToCompare = Math.max(result2.size(), resultRerun2.size());
+        final int maxToCompare = Math.min(result2.size(), resultRerun2.size());
         assertThat(resultRerun2.subList(0, maxToCompare), equalTo(result2.subList(0, maxToCompare)));
 
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * CLEANUP_CONSUMER_TIMEOUT,
@@ -230,8 +228,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> result = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 resultTopicConsumerConfig,
                 OUTPUT_TOPIC,
-                10,
-                60000);
+                10);
 
         streams.close();
         TestUtils.waitForCondition(consumerGroupInactive, TIMEOUT_MULTIPLIER * STREAMS_CONSUMER_TIMEOUT,
@@ -251,8 +248,7 @@ public class ResetIntegrationTest {
         final List<KeyValue<Long, Long>> resultRerun = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 resultTopicConsumerConfig,
                 OUTPUT_TOPIC,
-                10,
-                60000);
+                10);
         streams.close();
 
         assertThat(resultRerun, equalTo(result));
