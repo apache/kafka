@@ -55,6 +55,27 @@ public class MinTimestampTrackerTest {
     }
 
     @Test
+    public void shouldReturnLowestAvailableTimestampAfterPreviousLowestRemovedAndWasAddedSecond() throws Exception {
+        final Stamped<String> lowest = elem(88);
+        tracker.addElement(elem(99));
+        tracker.addElement(lowest);
+        tracker.removeElement(lowest);
+        assertThat(tracker.get(), equalTo(99L));
+    }
+
+    @Test
+    public void shouldReturnLowestAvailableTimestampAfterTwoPreviousLowestRemoved() throws Exception {
+        final Stamped<String> lowest = elem(88);
+        final Stamped<String> secondLowest = elem(99);
+        tracker.addElement(lowest);
+        tracker.addElement(elem(101));
+        tracker.addElement(secondLowest);
+        tracker.removeElement(lowest);
+        tracker.removeElement(secondLowest);
+        assertThat(tracker.get(), equalTo(101L));
+    }
+
+    @Test
     public void shouldReturnLastKnownTimestampWhenAllElementsHaveBeenRemoved() throws Exception {
         final Stamped<String> record = elem(98);
         tracker.addElement(record);
