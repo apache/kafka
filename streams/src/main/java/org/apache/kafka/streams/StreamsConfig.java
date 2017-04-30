@@ -522,6 +522,11 @@ public class StreamsConfig extends AbstractConfig {
     public StreamsConfig(final Map<?, ?> props) {
         super(CONFIG, props);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+
+        if (eosEnabled && !props.containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+            values.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
+        }
+
         if (eosEnabled && getInt(NUM_STANDBY_REPLICAS_CONFIG) > 0) {
             throw new ConfigException("Unexpected user-specified streams config " + NUM_STANDBY_REPLICAS_CONFIG
                 + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' standby tasks are not available.");
@@ -763,19 +768,6 @@ public class StreamsConfig extends AbstractConfig {
         }
 
         return parsed;
-    }
-
-    @Override
-    public Long getLong(final String key) {
-        // return different default value for `commit.interval.ms` if EOS enabled
-        if (StreamsConfig.COMMIT_INTERVAL_MS_CONFIG.equals(key)
-            && eosEnabled
-            // use EOS default value only if no user config is set
-            && !originals().containsKey(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG)) {
-            return EOS_DEFAULT_COMMIT_INTERVAL_MS;
-        }
-        // return non-EOS default value or user specified value
-        return super.getLong(key);
     }
 
     public static void main(final String[] args) {

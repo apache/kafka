@@ -286,7 +286,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldAcceptAtLestOnce() {
+    public void shouldAcceptAtLeastOnce() {
         // don't use `StreamsConfig.AT_LEAST_ONCE` to actually do a useful test
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "at_least_once");
         new StreamsConfig(props);

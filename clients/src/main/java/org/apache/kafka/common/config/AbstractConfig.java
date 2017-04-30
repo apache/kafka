@@ -48,7 +48,7 @@ public class AbstractConfig {
     private final Map<String, ?> originals;
 
     /* the parsed values */
-    private final Map<String, Object> values;
+    protected final Map<String, Object> values;
 
     private final ConfigDef definition;
 
