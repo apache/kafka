@@ -79,11 +79,13 @@ class Segments {
             }
             if (!segments.containsKey(key)) {
                 Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
-                newSegment.openDB(context);
-                segments.put(key, newSegment);
-                maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
-                if (minSegmentId == Long.MAX_VALUE) {
-                    minSegmentId = maxSegmentId;
+                Segment previousSegment = segments.putIfAbsent(key, newSegment);
+                if (previousSegment == null) {
+                    newSegment.openDB(context);
+                    maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
+                    if (minSegmentId == Long.MAX_VALUE) {
+                        minSegmentId = maxSegmentId;
+                    }
                 }
             }
             return segments.get(key);
