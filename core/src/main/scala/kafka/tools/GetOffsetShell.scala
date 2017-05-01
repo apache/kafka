@@ -19,16 +19,22 @@
 package kafka.tools
 
 import joptsimple._
-import kafka.api.{OffsetRequest, OffsetResponse, PartitionOffsetRequestInfo}
+import kafka.api.{OffsetRequest, OffsetResponse, PartitionMetadata, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
+import kafka.cluster.BrokerEndPoint
 import kafka.common.TopicAndPartition
 import kafka.consumer._
 import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.protocol.Errors
+
+import scala.collection.Seq
 
 
 object GetOffsetShell extends Logging {
+
+  private final val CLIENT_ID = "GetOffsetShell"
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
@@ -68,7 +74,6 @@ object GetOffsetShell extends Logging {
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
 
-    val clientId = "GetOffsetShell"
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
@@ -78,35 +83,48 @@ object GetOffsetShell extends Logging {
     val nOffsets = options.valueOf(nOffsetsOpt).intValue
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
-    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
-    if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
-      System.err.println(("Error: no valid topic metadata for topic: %s, " + " probably the topic does not exist, run ").format(topic) +
-        "kafka-list-topic.sh to verify")
-      Exit.exit(1)
+    val partitions: Set[Int] = partitionList match {
+      case "" => getTopicPartitionsFromMetadata(topic, metadataTargetBrokers, maxWaitMs)
+      case _ => partitionList.split(',').map(_.toInt).toSet
     }
-    val partitions =
-      if(partitionList == "") {
-        topicsMetadata.head.partitionsMetadata.map(_.partitionId)
-      } else {
-        partitionList.split(",").map(_.toInt).toSeq
-      }
-    partitions.foreach { partitionId =>
-      val partitionMetadataOpt = topicsMetadata.head.partitionsMetadata.find(_.partitionId == partitionId)
-      partitionMetadataOpt match {
-        case Some(metadata) =>
-          metadata.leader match {
-            case Some(leader) =>
-              val consumer = new SimpleConsumer(leader.host, leader.port, 10000, 100000, clientId)
-              val topicAndPartition = TopicAndPartition(topic, partitionId)
-              val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(time, nOffsets)))
-              val offsets = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets
 
-              println("%s:%d:%s".format(topic, partitionId, offsets.mkString(",")))
-            case None => System.err.println("Error: partition %d does not have a leader. Skip getting offsets".format(partitionId))
-          }
-        case None => System.err.println("Error: partition %d does not exist".format(partitionId))
+    /*TODO This implementation does not handle the situation when the first broker in the list is down.
+    * After switching to KafkaConsumer, this problem will be resolved. */
+    val targetBroker = metadataTargetBrokers.head
+    val offsets = getOffsets(targetBroker.host,
+      targetBroker.port,
+      partitions.map(new TopicPartition(topic, _)),
+      time,
+      nOffsets)
+    val report = offsets
+      .toList.sortBy(e => (e._1.topic, e._1.partition))
+      .map { case (topicPartition, errorOffsets) => errorOffsets match {
+        case Right(offsets) => "%s:%d:%s".format(topicPartition.topic, topicPartition.partition, offsets.mkString(","))
+        case Left(error) => "%s:%d: Exception: %s".format(topicPartition.topic, topicPartition.partition, error.exception.getMessage)
       }
+      }
+      .mkString("\n")
+    println(report)
+  }
+
+  /**
+    * TODO Complete the doc
+    * TODO Cover with tests
+    *
+    * @param topic
+    * @param brokers
+    * @param timeoutMs
+    * @throws InvalidTopicException
+    */
+  def getTopicPartitionsFromMetadata(topic: String, brokers: Seq[BrokerEndPoint], timeoutMs: Int): Set[Int] = {
+    require(topic != null, "Topic name cannot be null")
+    require(!topic.isEmpty, "Topic name cannot be an empty string")
+    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokers, CLIENT_ID, timeoutMs).topicsMetadata
+    if (topicsMetadata.size != 1 || !topic.equals(topicsMetadata.head.topic)) {
+      throw new InvalidTopicException(("Error: no valid topic metadata for topic: %s, " + " probably the topic does not exist, run ").format(topic) +
+        "kafka-list-topic.sh to verify")
     }
+    topicsMetadata.head.partitionsMetadata.map(_.partitionId).toSet
   }
 
   /**
@@ -114,6 +132,7 @@ object GetOffsetShell extends Logging {
     * If a message is not replicated yet from the leader to replicas, we don't count it.
     * Just one request for all topics and partitions - it should be much faster.
     *
+    * TODO Implement and test corner cases.
     * TODO Complete the doc.
     *
     * @param host
@@ -129,7 +148,7 @@ object GetOffsetShell extends Logging {
                  time: Long,
                  maxNumOffsets: Int): Map[TopicPartition, Either[Errors, Seq[Long]]] = {
     //TODO Eliminate magic constants
-    val consumer = new SimpleConsumer(host, port, 10000, 100000, "GetOffsetShell")
+    val consumer = new SimpleConsumer(host, port, 10000, 100000, CLIENT_ID)
     val partitionOffsetRequestInfo = PartitionOffsetRequestInfo(time, maxNumOffsets)
     val requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo] = topicPartitions
       .map(tp => TopicAndPartition(tp.topic, tp.partition) -> partitionOffsetRequestInfo)
