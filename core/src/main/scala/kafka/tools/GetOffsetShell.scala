@@ -49,7 +49,7 @@ object GetOffsetShell extends Logging {
                            .withRequiredArg
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
-                           .defaultsTo(-1)
+                           .defaultsTo(-1L)
     val nOffsetsOpt = parser.accepts("offsets", "number of offsets returned")
                            .withRequiredArg
                            .describedAs("count")
@@ -73,8 +73,8 @@ object GetOffsetShell extends Logging {
     ToolsUtils.validatePortOrDie(parser, brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topic = options.valueOf(topicOpt)
-    var partitionList = options.valueOf(partitionOpt)
-    var time = options.valueOf(timeOpt).longValue
+    val partitionList = options.valueOf(partitionOpt)
+    val time = options.valueOf(timeOpt).longValue
     val nOffsets = options.valueOf(nOffsetsOpt).intValue
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
@@ -132,7 +132,7 @@ object GetOffsetShell extends Logging {
     val consumer = new SimpleConsumer(host, port, 10000, 100000, "GetOffsetShell")
     val partitionOffsetRequestInfo = PartitionOffsetRequestInfo(time, maxNumOffsets)
     val requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo] = topicPartitions
-      .map(tp => new TopicAndPartition(tp.topic, tp.partition) -> partitionOffsetRequestInfo)
+      .map(tp => TopicAndPartition(tp.topic, tp.partition) -> partitionOffsetRequestInfo)
       .toMap
     val request = OffsetRequest(requestInfo)
     val offsetResponse: OffsetResponse = consumer.getOffsetsBefore(request)
