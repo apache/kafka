@@ -67,12 +67,11 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
   val partitionsToBeDeleted = mutable.Set.empty[TopicAndPartition]
   val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
-  def start(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]) {
+  def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted ++= initialTopicsToBeDeleted
       partitionsToBeDeleted ++= topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
       topicsIneligibleForDeletion ++= initialTopicsIneligibleForDeletion & topicsToBeDeleted
-      resumeDeletions()
     } else {
       // if delete topic is disabled clean the topic entries under /admin/delete_topics
       val zkUtils = controllerContext.zkUtils
@@ -81,6 +80,12 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
         info("Removing " + deleteTopicPath + " since delete topic is disabled")
         zkUtils.zkClient.delete(deleteTopicPath)
       }
+    }
+  }
+
+  def start(): Unit = {
+    if (isDeleteTopicEnabled) {
+      resumeDeletions()
     }
   }
 
