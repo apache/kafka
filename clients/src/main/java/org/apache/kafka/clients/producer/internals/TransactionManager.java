@@ -272,8 +272,7 @@ public class TransactionManager {
     }
 
     /**
-     * Set the pid and epoch atomically. This method will signal any callers blocked on the `pidAndEpoch` method
-     * once the pid is set. This method will be called on the background thread when the broker responds with the pid.
+     * Set the pid and epoch atomically.
      */
     void setPidAndEpoch(PidAndEpoch pidAndEpoch) {
         this.pidAndEpoch = pidAndEpoch;
