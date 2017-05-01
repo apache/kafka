@@ -41,25 +41,27 @@ import scala.collection.JavaConverters._
  * Also see {@link org.apache.kafka.clients.admin.KafkaAdminClientTest} for a unit test of the admin client.
  */
 class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Logging {
+
   @Rule
-  def globalTimeout = Timeout.millis(120000);
+  def globalTimeout = Timeout.millis(120000)
 
   var client: AdminClient = null
 
   @After
   def closeClient(): Unit = {
-    if (client != null) {
-      Utils.closeQuietly(client, "AdminClient");
-      client = null;
-    }
+    if (client != null)
+      Utils.closeQuietly(client, "AdminClient")
   }
 
   val brokerCount = 3
   lazy val serverConfig = new Properties
 
-  def createConfig() : util.HashMap[String, Object] = {
+  def createConfig(): util.Map[String, Object] = {
     val config = new util.HashMap[String, Object]
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val securityProps: util.Map[Object, Object] =
+      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
     config
   }
 

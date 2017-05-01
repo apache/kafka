@@ -561,6 +561,9 @@ object TestUtils extends Logging {
   def consumerSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
     securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "consumer", saslProperties)
 
+  def adminClientSecurityConfigs(securityProtocol: SecurityProtocol, trustStoreFile: Option[File], saslProperties: Option[Properties]): Properties =
+    securityConfigs(Mode.CLIENT, securityProtocol, trustStoreFile, "admin-client", saslProperties)
+
   /**
    * Create a new consumer with a few pre-configured properties.
    */

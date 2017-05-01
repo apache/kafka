@@ -160,7 +160,7 @@ public class KafkaAdminClient extends AdminClient {
         List<V> list = map.get(key);
         if (list != null)
             return list;
-        list = new LinkedList<V>();
+        list = new LinkedList<>();
         map.put(key, list);
         return list;
     }
@@ -253,8 +253,7 @@ public class KafkaAdminClient extends AdminClient {
                     config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
-            Map<String, String> metricTags = new LinkedHashMap<String, String>();
-            metricTags.put("client-id", clientId);
+            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))
@@ -884,7 +883,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<String>(topicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
             }
 
             @Override
@@ -967,7 +966,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<String>(topicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
             }
 
             @Override
