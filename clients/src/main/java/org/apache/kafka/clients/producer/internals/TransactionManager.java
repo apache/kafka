@@ -453,22 +453,31 @@ public class TransactionManager {
         return new AddPartitionsToTxnHandler(builder);
     }
 
-    private TxnRequestHandler txnOffsetCommitHandler(Map<TopicPartition, OffsetAndMetadata> offsets, String consumerGroupId) {
+    private TxnOffsetCommitHandler txnOffsetCommitHandler(TransactionalRequestResult result,
+                                                          Map<TopicPartition, OffsetAndMetadata> offsets,
+                                                          String consumerGroupId) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(), offsetAndMetadata.metadata());
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
-
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(consumerGroupId,
                 pidAndEpoch.producerId, pidAndEpoch.epoch, OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 pendingTxnOffsetCommits);
-        return new TxnOffsetCommitHandler(builder);
+        return new TxnOffsetCommitHandler(result, builder);
     }
 
     abstract class TxnRequestHandler implements  RequestCompletionHandler {
-        protected final TransactionalRequestResult result = new TransactionalRequestResult();
+        protected final TransactionalRequestResult result;
         private boolean isRetry = false;
+
+        TxnRequestHandler(TransactionalRequestResult result) {
+            this.result = result;
+        }
+
+        TxnRequestHandler() {
+            this(new TransactionalRequestResult());
+        }
 
         void fatal(RuntimeException e) {
             result.setError(e);
@@ -721,7 +730,8 @@ public class TransactionManager {
         private final AddOffsetsToTxnRequest.Builder builder;
         private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-        private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder, Map<TopicPartition, OffsetAndMetadata> offsets) {
+        private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
+                                       Map<TopicPartition, OffsetAndMetadata> offsets) {
             this.builder = builder;
             this.offsets = offsets;
         }
@@ -741,8 +751,8 @@ public class TransactionManager {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = addOffsetsToTxnResponse.error();
             if (error == Errors.NONE) {
-                pendingRequests.add(txnOffsetCommitHandler(offsets, builder.consumerGroupId()));
-                result.done();
+                // note the result is not completed until the TxnOffsetCommit returns
+                pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                 lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                 reenqueue();
@@ -759,7 +769,9 @@ public class TransactionManager {
     private class TxnOffsetCommitHandler extends TxnRequestHandler {
         private final TxnOffsetCommitRequest.Builder builder;
 
-        private TxnOffsetCommitHandler(TxnOffsetCommitRequest.Builder builder) {
+        private TxnOffsetCommitHandler(TransactionalRequestResult result,
+                                       TxnOffsetCommitRequest.Builder builder) {
+            super(result);
             this.builder = builder;
         }
 

@@ -203,7 +203,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // Send AddOffsetsRequest
         assertTrue(transactionManager.hasPendingOffsetCommits());  // We should now have created and queued the offset commit request.
-        assertTrue(addOffsetsResult.isCompleted());
+        assertFalse(addOffsetsResult.isCompleted()); // the result doesn't complete until TxnOffsetCommit returns
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
