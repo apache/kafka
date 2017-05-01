@@ -236,8 +236,6 @@ public class ListOffsetRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
-                return new ListOffsetResponse(responseData);
-            case 2:
                 return new ListOffsetResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

@@ -1426,8 +1426,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     authorizeClusterAction(request)
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
     val errors = new ConcurrentHashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
-    val markers = writeTxnMarkersRequest.markers()
-    val numAppends = new AtomicInteger(markers.size())
+    val markers = writeTxnMarkersRequest.markers
+    val numAppends = new AtomicInteger(markers.size)
+
+    if (numAppends.get == 0) {
+      sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))
+      return
+    }
 
     def sendResponseCallback(pid: Long)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       errors.put(pid, responseStatus.mapValues(_.error).asJava)
