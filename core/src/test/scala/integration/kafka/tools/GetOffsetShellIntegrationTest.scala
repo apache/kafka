@@ -2,16 +2,15 @@ package integration.kafka.tools
 
 import kafka.api.IntegrationTestHarness
 import kafka.cluster.BrokerEndPoint
-import kafka.server.KafkaConfig
 import kafka.tools.GetOffsetShell
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert._
-import org.junit.{After, Before, Ignore, Test}
+import org.junit.{After, Before, Test}
 
-class GetOffsetShellIntegrationTest extends IntegrationTestHarness with Logging {
+class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
 
   val producerCount = 1
   val consumerCount = 0
@@ -19,10 +18,6 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness with Logging 
 
   val topic1 = "topic1"
   val topic2 = "topic2"
-
-  override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
-  }
 
   @Before
   override def setUp: Unit = {

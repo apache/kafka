@@ -19,12 +19,12 @@
 package kafka.tools
 
 import joptsimple._
-import kafka.api.{OffsetRequest, OffsetResponse, PartitionMetadata, PartitionOffsetRequestInfo}
+import kafka.api.{OffsetRequest, OffsetResponse, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.common.TopicAndPartition
 import kafka.consumer._
-import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils}
+import kafka.utils.{CommandLineUtils, Logging, ToolsUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.protocol.Errors
@@ -34,7 +34,7 @@ import scala.collection.Seq
 
 object GetOffsetShell extends Logging {
 
-  private final val CLIENT_ID = "GetOffsetShell"
+  private val CLIENT_ID = "GetOffsetShell"
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
@@ -66,7 +66,7 @@ object GetOffsetShell extends Logging {
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
-                           
+
    if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
 
