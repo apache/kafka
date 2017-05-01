@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 public class OffsetFetchResponse extends AbstractResponse {
 
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String RESPONSES_KEY_NAME = "responses";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
@@ -67,6 +68,7 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     private final Map<TopicPartition, PartitionData> responseData;
     private final Errors error;
+    private final int throttleTimeMs;
 
     public static final class PartitionData {
         public final long offset;
@@ -85,16 +87,28 @@ public class OffsetFetchResponse extends AbstractResponse {
     }
 
     /**
-     * Constructor for all versions.
+     * Constructor for all versions without throttle time.
      * @param error Potential coordinator or group level error code (for api version 2 and later)
      * @param responseData Fetched offset information grouped by topic-partition
      */
     public OffsetFetchResponse(Errors error, Map<TopicPartition, PartitionData> responseData) {
+        this(DEFAULT_THROTTLE_TIME, error, responseData);
+    }
+
+    /**
+     * Constructor with throttle time
+     * @param throttleTimeMs The time in milliseconds that this response was throttled
+     * @param error Potential coordinator or group level error code (for api version 2 and later)
+     * @param responseData Fetched offset information grouped by topic-partition
+     */
+    public OffsetFetchResponse(int throttleTimeMs, Errors error, Map<TopicPartition, PartitionData> responseData) {
+        this.throttleTimeMs = throttleTimeMs;
         this.responseData = responseData;
         this.error = error;
     }
 
     public OffsetFetchResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         Errors topLevelError = Errors.NONE;
         this.responseData = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(RESPONSES_KEY_NAME)) {
@@ -128,6 +142,10 @@ public class OffsetFetchResponse extends AbstractResponse {
         }
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     public boolean hasError() {
         return this.error != Errors.NONE;
     }
@@ -147,6 +165,8 @@ public class OffsetFetchResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.OFFSET_FETCH.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();

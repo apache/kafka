@@ -146,7 +146,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
     skipResponseHeader(response)
   }
 
-  private def skipResponseHeader(response: Array[Byte]): ByteBuffer = {
+  protected def skipResponseHeader(response: Array[Byte]): ByteBuffer = {
     val responseBuffer = ByteBuffer.wrap(response)
     // Parse the header to ensure its valid and move the buffer forward
     ResponseHeader.parse(responseBuffer)

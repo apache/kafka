@@ -209,7 +209,7 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Map<String, CreateTopicsResponse.Error> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
             Errors error = Errors.forException(e);
@@ -223,6 +223,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             case 0:
             case 1:
                 return new CreateTopicsResponse(topicErrors);
+            case 2:
+                return new CreateTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                     versionId, this.getClass().getSimpleName(), ApiKeys.CREATE_TOPICS.latestVersion()));
