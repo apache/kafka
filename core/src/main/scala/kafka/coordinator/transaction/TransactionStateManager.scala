@@ -20,11 +20,11 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.{KafkaException, Topic}
 import kafka.log.LogConfig
-import kafka.message.NoCompressionCodec
+import kafka.message.UncompressedCodec
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
@@ -34,7 +34,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
-import scala.collection.{concurrent, mutable}
+import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 
@@ -114,9 +114,8 @@ class TransactionStateManager(brokerId: Int,
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
     props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, NoCompressionCodec)
+    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-
     props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
     props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
 

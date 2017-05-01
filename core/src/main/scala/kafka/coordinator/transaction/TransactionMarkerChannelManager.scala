@@ -124,7 +124,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   def addTxnMarkerRequest(coordinatorPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
     val metadataToWrite = metadata synchronized metadata.copy()
 
-    if (!transactionMarkerChannel.maybeAddPendingRequest(coordinatorPartition, metadata))
+    if (!transactionMarkerChannel.maybeAddPendingRequest(coordinatorPartition, metadataToWrite))
       // TODO: Not sure this is the correct response here?
       completionCallback(Errors.INVALID_TXN_STATE)
     else {
