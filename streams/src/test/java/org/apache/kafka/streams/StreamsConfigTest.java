@@ -351,19 +351,6 @@ public class StreamsConfigTest {
         streamsConfig.getProducerConfigs("clientId");
     }
 
-    @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionIfStandbyTasksAreUsedIfEosEnabled() {
-        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        new StreamsConfig(props);
-    }
-
-    @Test
-    public void shouldAllowSettingStandbyTasksIfEosDisabled() {
-        props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
-        new StreamsConfig(props);
-    }
-
     @Test
     public void shouldSetDifferentDefaultsIfEosEnabled() {
         props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);

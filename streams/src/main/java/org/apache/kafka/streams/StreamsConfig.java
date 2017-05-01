@@ -35,6 +35,8 @@ import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -78,6 +80,8 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * @see ProducerConfig
  */
 public class StreamsConfig extends AbstractConfig {
+
+    private final Logger log = LoggerFactory.getLogger(getClass());
 
     private static final ConfigDef CONFIG;
 
@@ -524,12 +528,9 @@ public class StreamsConfig extends AbstractConfig {
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
 
         if (eosEnabled && !props.containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+            log.debug("Using " + COMMIT_INTERVAL_MS_CONFIG + " default value of "
+                + EOS_DEFAULT_COMMIT_INTERVAL_MS + " as exactly once is enabled.");
             values.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
-        }
-
-        if (eosEnabled && getInt(NUM_STANDBY_REPLICAS_CONFIG) > 0) {
-            throw new ConfigException("Unexpected user-specified streams config " + NUM_STANDBY_REPLICAS_CONFIG
-                + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' standby tasks are not available.");
         }
     }
 

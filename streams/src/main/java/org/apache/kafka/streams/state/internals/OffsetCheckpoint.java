@@ -170,9 +170,7 @@ public class OffsetCheckpoint {
      * @throws IOException if there is any IO exception during delete
      */
     public void delete() throws IOException {
-        if (Files.exists(file.toPath())) {
-            Files.delete(file.toPath());
-        }
+        Files.deleteIfExists(file.toPath());
     }
 
     @Override
