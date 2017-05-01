@@ -30,44 +30,109 @@ import org.apache.kafka.streams.kstream.KCogroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
-public class KCogroupedStreamImpl<K, V> implements KCogroupedStream<K, V> {
+class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
 
     private static final String COGROUP_AGGREGATE_NAME = "KSTREAM-COGROUP-AGGREGATE-";
     private static final String COGROUP_NAME = "KSTREAM-COGROUP-";
+    private static enum AggregationType {
+        AGGREGATE,
+        SESSION_WINDOW_AGGREGATE,
+        WINDOW_AGGREGATE
+    }
 
-    protected final KStreamBuilder topology;
+    private final KStreamBuilder topology;
     private final Initializer<V> initializer;
+    private final Merger<? super K, V> sessionMerger;
+    private final SessionWindows sessionWindows;
+    private final Windows<?> windows;
     private final StateStoreSupplier<?> storeSupplier;
-    private final Map<KGroupedStream<K, ?>, KStreamAggregate<K, ?, V>> cogroups = new HashMap<>();
+    private final AggregationType aggregationType;
+    private final Map<KGroupedStream<K, ?>, KStreamAggProcessorSupplier<?, ?, ?, ?>> cogroups = new HashMap<>();
     private boolean aggregated = false;
 
     <T> KCogroupedStreamImpl(final KStreamBuilder topology,
                              final KGroupedStream<K, T> groupedStream,
                              final Initializer<V> initializer,
                              final Aggregator<? super K, ? super T, V> aggregator,
-                             final StateStoreSupplier<?> storeSupplier) {
+                             final StateStoreSupplier<KeyValueStore> storeSupplier) {
         this.topology = topology;
         this.initializer = initializer;
+        this.sessionMerger = null;
+        this.sessionWindows = null;
+        this.windows = null;
         this.storeSupplier = storeSupplier;
+        this.aggregationType = AggregationType.AGGREGATE;
+        cogroup(groupedStream, aggregator);
+    }
+
+    <T> KCogroupedStreamImpl(final KStreamBuilder topology,
+                             final KGroupedStream<K, T> groupedStream,
+                             final Initializer<V> initializer,
+                             final Aggregator<? super K, ? super T, V> aggregator,
+                             final Merger<? super K, V> sessionMerger,
+                             final SessionWindows sessionWindows,
+                             final StateStoreSupplier<SessionStore> storeSupplier) {
+        this.topology = topology;
+        this.initializer = initializer;
+        this.sessionMerger = sessionMerger;
+        this.sessionWindows = sessionWindows;
+        this.windows = null;
+        this.storeSupplier = storeSupplier;
+        this.aggregationType = AggregationType.SESSION_WINDOW_AGGREGATE;
+        cogroup(groupedStream, aggregator);
+    }
+
+    <W extends Window, T> KCogroupedStreamImpl(final KStreamBuilder topology,
+                                               final KGroupedStream<K, T> groupedStream,
+                                               final Initializer<V> initializer,
+                                               final Aggregator<? super K, ? super T, V> aggregator,
+                                               final Windows<W> windows,
+                                               final StateStoreSupplier<WindowStore> storeSupplier) {
+        this.topology = topology;
+        this.initializer = initializer;
+        this.sessionMerger = null;
+        this.sessionWindows = null;
+        this.windows = windows;
+        this.storeSupplier = storeSupplier;
+        this.aggregationType = AggregationType.WINDOW_AGGREGATE;
         cogroup(groupedStream, aggregator);
     }
 
     @Override
-    public <T> KCogroupedStream<K, V> cogroup(final KGroupedStream<K, T> groupedStream,
+    public <T> KCogroupedStream<K, RK, V> cogroup(final KGroupedStream<K, T> groupedStream,
                                               final Aggregator<? super K, ? super T, V> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
         if (aggregated) {
             throw new IllegalStateException("can't add additional streams after aggregate has been called");
         }
-        cogroups.put(groupedStream, new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator));
+        switch (aggregationType) {
+        case AGGREGATE:
+            cogroups.put(groupedStream, new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator));
+            break;
+        case SESSION_WINDOW_AGGREGATE:
+            cogroups.put(groupedStream, new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger));
+            break;
+        case WINDOW_AGGREGATE:
+            cogroups.put(groupedStream, new KStreamWindowAggregate<>(windows, storeSupplier.name(), initializer, aggregator));
+            break;
+        default:
+            throw new IllegalStateException(String.format("Unrecognized AggregationType %s", aggregationType));
+        }
         return this;
     }
 
     @Override
-    public KTable<K, V> aggregate() {
+    public KTable<RK, V> aggregate() {
         if (aggregated) {
             throw new IllegalStateException("can't call aggregate more than once");
         }
@@ -75,22 +140,21 @@ public class KCogroupedStreamImpl<K, V> implements KCogroupedStream<K, V> {
 
         final List<String> processorNames = new ArrayList<>();
         final Set<String> sourceNodes = new HashSet<>();
-        for (final Map.Entry<KGroupedStream<K, ?>, KStreamAggregate<K, ?, V>> cogroup : cogroups.entrySet()) {
+        for (final Map.Entry<KGroupedStream<K, ?>, KStreamAggProcessorSupplier<?, ?, ?, ?>> cogroup : cogroups.entrySet()) {
             final KGroupedStreamImpl<K, ?> groupedStream = (KGroupedStreamImpl<K, ?>) cogroup.getKey();
-            final String processorName = topology.newName(COGROUP_AGGREGATE_NAME);
-            processorNames.add(processorName);
-
-            final String sourceName = groupedStream.repartitionIfRequired(storeSupplier.name());
+            final String sourceName = groupedStream.repartitionIfRequired(null);
             if (sourceName.equals(groupedStream.name)) {
                 sourceNodes.addAll(groupedStream.sourceNodes);
             } else {
                 sourceNodes.add(sourceName);
             }
 
+            final String processorName = topology.newName(COGROUP_AGGREGATE_NAME);
+            processorNames.add(processorName);
             topology.addProcessor(processorName, cogroup.getValue(), sourceName);
         }
         final String name = topology.newName(COGROUP_NAME);
-        final KStreamCogroup<K, V> cogroup = new KStreamCogroup<>(cogroups.values());
+        final KStreamCogroup<RK, V> cogroup = new KStreamCogroup<>(cogroups.values());
         final String[] processorNamesArray = processorNames.toArray(new String[processorNames.size()]);
         topology.addProcessor(name, cogroup, processorNamesArray);
         topology.addStateStore(storeSupplier, processorNamesArray);

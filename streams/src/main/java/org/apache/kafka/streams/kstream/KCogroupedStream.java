@@ -20,22 +20,23 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.streams.KeyValue;
 
 /**
- * {@code KCogroupedStream} is an abstraction of multiple <i>grouped</i> record stream of {@link KeyValue} pairs.
+ * {@code KCogroupedStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
  * It is an intermediate representation of one or more {@link KStream}s in order to apply one or more aggregation
  * operations on the original {@link KStream} records.
  * <p>
- * It is an intermediate representation after a grouping of {@link KStream}s before the aggregations are applied to
+ * It is an intermediate representation after a grouping of {@link KStream}s, before the aggregations are applied to
  * the new partitions resulting in a {@link KTable}.
  * <p>
  * A {@code KCogroupedStream} must be obtained from a {@link KGroupedStream} via 
- * {@link KGroupedStreamStream#cogroup(Initializer, Aggregator, Serde, String) cogroup(...)}.
+ * {@link KGroupedStream#cogroup(Initializer, Aggregator, org.apache.kafka.common.serialization.Serde, String) cogroup(...)}.
  *
  * @param <K> Type of keys
+ * @param <RK> Type of key in table, either K or Windowed&ltK&gt
  * @param <V> Type of aggregate values
  * @see KGroupedStream
  */
 @InterfaceStability.Unstable
-public interface KCogroupedStream<K, V> {
+public interface KCogroupedStream<K, RK, V> {
 
     /**
      * 
@@ -43,11 +44,12 @@ public interface KCogroupedStream<K, V> {
      * @param aggregator
      * @return
      */
-    <T> KCogroupedStream<K, V> cogroup(KGroupedStream<K, T> groupedStream, Aggregator<? super K, ? super T, V> aggregator);
+    <T> KCogroupedStream<K, RK, V> cogroup(final KGroupedStream<K, T> groupedStream,
+                                           final Aggregator<? super K, ? super T, V> aggregator);
 
     /**
      * 
      * @return
      */
-    KTable<K, V> aggregate();
+    KTable<RK, V> aggregate();
 }

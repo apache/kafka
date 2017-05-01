@@ -23,13 +23,13 @@ import java.util.List;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 
-public class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V>, V> {
+class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V>, V> {
 
-    private final List<KStreamAggregate<K, ?, V>> parents;
+    private final List<KStreamAggProcessorSupplier<?, ?, ?, ?>> parents;
 
     private boolean sendOldValues = false;
 
-    public KStreamCogroup(Collection<KStreamAggregate<K, ?, V>> parents) {
+    KStreamCogroup(Collection<KStreamAggProcessorSupplier<?, ?, ?, ?>> parents) {
         this.parents = new ArrayList<>(parents);
     }
 
@@ -49,9 +49,10 @@ public class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, C
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-        return parents.get(0).view();
+        return (KTableValueGetterSupplier<K, V>) parents.get(0).view();
     }
 
     @Override

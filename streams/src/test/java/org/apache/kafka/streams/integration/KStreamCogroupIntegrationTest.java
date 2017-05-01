@@ -45,6 +45,9 @@ import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
@@ -92,7 +95,7 @@ public class KStreamCogroupIntegrationTest {
     private static final KeyValueMapper<Long, String, Long> GROUP_BY = new KeyValueMapper<Long, String, Long>() {
             @Override
             public Long apply(Long key, String value) {
-                return key * 3;
+                return key * 2;
             }
         };
     private static final ValueJoiner<String, String, String> JOINER = new ValueJoiner<String, String, String>() {
@@ -101,6 +104,12 @@ public class KStreamCogroupIntegrationTest {
                 return value1 + "+" + value2;
             }
         };
+    private static final Merger<Long, String> MERGER = new Merger<Long, String>() {
+        @Override
+        public String apply(Long aggKey, String aggOne, String aggTwo) {
+            return aggOne + "+" + aggTwo;
+        }
+    };
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties CONSUMER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
@@ -144,12 +153,13 @@ public class KStreamCogroupIntegrationTest {
         STREAMS_CONFIG.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         STREAMS_CONFIG.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-        STREAMS_CONFIG.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
     }
 
     @Test
     public void testCogroup() throws InterruptedException, ExecutionException {
         final int testNumber = TEST_NUMBER.getAndIncrement();
+        final Properties producerConfig = producerConfig();
+        final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
         CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
@@ -168,24 +178,24 @@ public class KStreamCogroupIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
         
         final List<String> outputs = Arrays.asList(
-                "1a", // Cogroup 1
-                "2a", // Cogroup 2
-                "1a3a", // Cogroup 1
-                "1a3a1b", // Cogroup 1
-                "2a2b", // Cogroup 2
-                "1a3a1b3b", // Cogroup 1
-                "2a2b1c", // Cogroup 2
-                "1a3a1b3b2c", // Cogroup 1
-                "2a2b1c3c", // Cogroup 2
-                "2a2b1c3c1a", // Cogroup 2
-                "1a3a1b3b2c2a", // Cogroup 1
-                "2a2b1c3c1a3a", // Cogroup 2
-                "2a2b1c3c1a3a1b", // Cogroup 2
-                "1a3a1b3b2c2a2b", // Cogroup 1
-                "2a2b1c3c1a3a1b3b", // Cogroup 2
-                "1a3a1b3b2c2a2b1c", // Cogroup 1
-                "2a2b1c3c1a3a1b3b2c", // Cogroup 2
-                "1a3a1b3b2c2a2b1c3c" // Cogroup 1
+                "1a", // Key 1
+                "2a", // Key 2
+                "1a3a", // Key 1
+                "1a3a1b", // Key 1
+                "2a2b", // Key 2
+                "1a3a1b3b", // Key 1
+                "2a2b1c", // Key 2
+                "1a3a1b3b2c", // Key 1
+                "2a2b1c3c", // Key 2
+                "2a2b1c3c1a", // Key 2
+                "1a3a1b3b2c2a", // Key 1
+                "2a2b1c3c1a3a", // Key 2
+                "2a2b1c3c1a3a1b", // Key 2
+                "1a3a1b3b2c2a2b", // Key 1
+                "2a2b1c3c1a3a1b3b", // Key 2
+                "1a3a1b3b2c2a2b1c", // Key 1
+                "2a2b1c3c1a3a1b3b2c", // Key 2
+                "1a3a1b3b2c2a2b1c3c" // Key 1
             );
 
         try {
@@ -193,8 +203,124 @@ public class KStreamCogroupIntegrationTest {
 
             Iterator<String> outputIterator = outputs.iterator();
             for (final Input<Long, String> input : INPUTS) {
-                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig(), CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig("consumer-" + testNumber), OUTPUT_TOPIC + testNumber, 1);
+                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
+                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
+                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+            }
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void testCogroupSessionWindow() throws InterruptedException, ExecutionException {
+        final int testNumber = TEST_NUMBER.getAndIncrement();
+        final Properties producerConfig = producerConfig();
+        final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
+        CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
+        CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
+        CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+
+        final KStreamBuilder builder = new KStreamBuilder();
+        KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
+        KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
+        KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, MERGER, SessionWindows.with(10L), null, COGROUP_STORE_NAME)
+                .cogroup(stream2, AGGREGATOR_2)
+                .cogroup(stream3, AGGREGATOR_3)
+                .aggregate()
+                .to(OUTPUT_TOPIC + testNumber);
+
+        final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
+
+        // TODO
+        final List<String> outputs = Arrays.asList(
+                "1a", // Key 1
+                "2a", // Key 2
+                "1a3a", // Key 1
+                "1a3a1b", // Key 1
+                "2a2b", // Key 2
+                "1a3a1b3b", // Key 1
+                "2a2b1c", // Key 2
+                "1a3a1b3b2c", // Key 1
+                "2a2b1c3c", // Key 2
+                "2a2b1c3c1a", // Key 2
+                "1a3a1b3b2c2a", // Key 1
+                "2a2b1c3c1a3a", // Key 2
+                "2a2b1c3c1a3a1b", // Key 2
+                "1a3a1b3b2c2a2b", // Key 1
+                "2a2b1c3c1a3a1b3b", // Key 2
+                "1a3a1b3b2c2a2b1c", // Key 1
+                "2a2b1c3c1a3a1b3b2c", // Key 2
+                "1a3a1b3b2c2a2b1c3c" // Key 1
+            );
+
+        try {
+            streams.start();
+
+            Iterator<String> outputIterator = outputs.iterator();
+            for (final Input<Long, String> input : INPUTS) {
+                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
+                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
+                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+            }
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void testCogroupWindow() throws InterruptedException, ExecutionException {
+        final int testNumber = TEST_NUMBER.getAndIncrement();
+        final Properties producerConfig = producerConfig();
+        final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
+        CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
+        CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
+        CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+
+        final KStreamBuilder builder = new KStreamBuilder();
+        KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
+        KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
+        KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, TimeWindows.of(10L), null, COGROUP_STORE_NAME)
+                .cogroup(stream2, AGGREGATOR_2)
+                .cogroup(stream3, AGGREGATOR_3)
+                .aggregate()
+                .to(OUTPUT_TOPIC + testNumber);
+
+        final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
+
+        // TODO
+        final List<String> outputs = Arrays.asList(
+                "1a", // Key 1
+                "2a", // Key 2
+                "1a3a", // Key 1
+                "1a3a1b", // Key 1
+                "2a2b", // Key 2
+                "1a3a1b3b", // Key 1
+                "2a2b1c", // Key 2
+                "1a3a1b3b2c", // Key 1
+                "2a2b1c3c", // Key 2
+                "2a2b1c3c1a", // Key 2
+                "1a3a1b3b2c2a", // Key 1
+                "2a2b1c3c1a3a", // Key 2
+                "2a2b1c3c1a3a1b", // Key 2
+                "1a3a1b3b2c2a2b", // Key 1
+                "2a2b1c3c1a3a1b3b", // Key 2
+                "1a3a1b3b2c2a2b1c", // Key 1
+                "2a2b1c3c1a3a1b3b2c", // Key 2
+                "1a3a1b3b2c2a2b1c3c" // Key 1
+            );
+
+        try {
+            streams.start();
+
+            Iterator<String> outputIterator = outputs.iterator();
+            for (final Input<Long, String> input : INPUTS) {
+                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
+                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
                 assertThat(output.get(0).value, equalTo(outputIterator.next()));
             }
         } finally {
@@ -205,10 +331,12 @@ public class KStreamCogroupIntegrationTest {
     @Test
     public void testCogroupRepartition() throws InterruptedException, ExecutionException {
         final int testNumber = TEST_NUMBER.getAndIncrement();
+        final Properties producerConfig = producerConfig();
+        final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
         CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
 
         final KStreamBuilder builder = new KStreamBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupBy(GROUP_BY);
@@ -223,24 +351,24 @@ public class KStreamCogroupIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
 
         final List<String> outputs = Arrays.asList(
-                "1a", // Cogroup 3
-                "2a", // Cogroup 6
-                "1a3a", // Cogroup 3
-                "1a3a1b", // Cogroup 3
-                "2a2b", // Cogroup 6
-                "1a3a1b3b", // Cogroup 3
-                "2a2b1c", // Cogroup 6
-                "1a3a1b3b2c", // Cogroup 3
-                "2a2b1c3c", // Cogroup 6
-                "2a2b1c3c1a", // Cogroup 6
-                "1a3a1b3b2c2a", // Cogroup 3
-                "2a2b1c3c1a3a", // Cogroup 6
-                "2a2b1c3c1a3a1b", // Cogroup 6
-                "1a3a1b3b2c2a2b", // Cogroup 3
-                "2a2b1c3c1a3a1b3b", // Cogroup 6
-                "1a3a1b3b2c2a2b1c", // Cogroup 3
-                "2a2b1c3c1a3a1b3b2c", // Cogroup 6
-                "1a3a1b3b2c2a2b1c3c" // Cogroup 3
+                "1a", // Key 2
+                "2a", // Key 4
+                "1a3a", // Key 2
+                "1a3a1b", // Key 2
+                "2a2b", // Key 4
+                "1a3a1b3b", // Key 2
+                "2a2b1c", // Key 4
+                "1a3a1b3b2c", // Key 2
+                "2a2b1c3c", // Key 4
+                "2a2b1c3c1a", // Key 4
+                "1a3a1b3b2c2a", // Key 2
+                "2a2b1c3c1a3a", // Key 4
+                "2a2b1c3c1a3a1b", // Key 4
+                "1a3a1b3b2c2a2b", // Key 2
+                "2a2b1c3c1a3a1b3b", // Key 4
+                "1a3a1b3b2c2a2b1c", // Key 2
+                "2a2b1c3c1a3a1b3b2c", // Key 4
+                "1a3a1b3b2c2a2b1c3c" // Key 2
             );
 
         try {
@@ -248,8 +376,8 @@ public class KStreamCogroupIntegrationTest {
 
             Iterator<String> outputIterator = outputs.iterator();
             for (final Input<Long, String> input : INPUTS) {
-                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig(), CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig("consumer-" + testNumber), OUTPUT_TOPIC + testNumber, 1);
+                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
+                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
                 assertThat(output.get(0).value, equalTo(outputIterator.next()));
             }
         } finally {
@@ -260,10 +388,12 @@ public class KStreamCogroupIntegrationTest {
     @Test
     public void testCogroupEnableSendingOldValuesAndView() throws InterruptedException, ExecutionException {
         final int testNumber = TEST_NUMBER.getAndIncrement();
+        final Properties producerConfig = producerConfig();
+        final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
         CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
 
         final KStreamBuilder builder = new KStreamBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
@@ -278,24 +408,24 @@ public class KStreamCogroupIntegrationTest {
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
 
         final List<String> outputs = Arrays.asList(
-                "1a+null", // Cogroup 3
-                "2a+null", // Cogroup 6
-                "1a+a", // Cogroup 3
-                "1a1b+a", // Cogroup 3
-                "2a2b+null", // Cogroup 6
-                "1a1b+b", // Cogroup 3
-                "2a2b1c+null", // Cogroup 6
-                "1a1b2c+b", // Cogroup 3
-                "2a2b1c+c", // Cogroup 6
-                "2a2b1c1a+c", // Cogroup 6
-                "1a1b2c2a+b", // Cogroup 3
-                "2a2b1c1a+a", // Cogroup 6
-                "2a2b1c1a1b+a", // Cogroup 6
-                "1a1b2c2a2b+b", // Cogroup 3
-                "2a2b1c1a1b+b", // Cogroup 6
-                "1a1b2c2a2b1c+b", // Cogroup 3
-                "2a2b1c1a1b2c+b", // Cogroup 6
-                "1a1b2c2a2b1c+c" // Cogroup 3
+                "1a+null", // Key 1
+                "2a+null", // Key 2
+                "1a+a", // Key 1
+                "1a1b+a", // Key 1
+                "2a2b+null", // Key 2
+                "1a1b+b", // Key 1
+                "2a2b1c+null", // Key 2
+                "1a1b2c+b", // Key 1
+                "2a2b1c+c", // Key 2
+                "2a2b1c1a+c", // Key 2
+                "1a1b2c2a+b", // Key 1
+                "2a2b1c1a+a", // Key 2
+                "2a2b1c1a1b+a", // Key 2
+                "1a1b2c2a2b+b", // Key 1
+                "2a2b1c1a1b+b", // Key 2
+                "1a1b2c2a2b1c+b", // Key 1
+                "2a2b1c1a1b2c+b", // Key 2
+                "1a1b2c2a2b1c+c" // Key 1
             );
 
         try {
@@ -303,8 +433,8 @@ public class KStreamCogroupIntegrationTest {
 
             Iterator<String> outputIterator = outputs.iterator();
             for (final Input<Long, String> input : INPUTS) {
-                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig(), CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig("consumer-" + testNumber), OUTPUT_TOPIC + testNumber, 1);
+                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
+                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
                 assertThat(output.get(0).value, equalTo(outputIterator.next()));
             }
         } finally {
