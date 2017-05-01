@@ -141,7 +141,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     for ((node, brokerVersionInfo) <- nodesToVersions.asScala) {
       val hostStr = s"${node.host}:${node.port}"
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
-      assertEquals(0, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
+      assertEquals(1, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
     }
     client.close()
   }
