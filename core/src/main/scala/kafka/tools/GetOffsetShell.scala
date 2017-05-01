@@ -18,15 +18,17 @@
  */
 package kafka.tools
 
-import kafka.consumer._
 import joptsimple._
-import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
-import kafka.common.TopicAndPartition
+import kafka.api.{OffsetRequest, OffsetResponse, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
-import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
+import kafka.common.TopicAndPartition
+import kafka.consumer._
+import kafka.utils.{CommandLineUtils, Exit, Logging, ToolsUtils}
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 
 
-object GetOffsetShell {
+object GetOffsetShell extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
@@ -105,5 +107,40 @@ object GetOffsetShell {
         case None => System.err.println("Error: partition %d does not exist".format(partitionId))
       }
     }
+  }
+
+  /**
+    * XXX Makes no sense to ask a leader of each partition. We are interested in offsets that we can read.
+    * If a message is not replicated yet from the leader to replicas, we don't count it.
+    * Just one request for all topics and partitions - it should be much faster.
+    *
+    * TODO Complete the doc.
+    *
+    * @param host
+    * @param port
+    * @param topicPartitions
+    * @param time
+    * @param maxNumOffsets
+    * @return
+    */
+  def getOffsets(host: String,
+                 port: Int,
+                 topicPartitions: Set[TopicPartition],
+                 time: Long,
+                 maxNumOffsets: Int): Map[TopicPartition, Either[Errors, Seq[Long]]] = {
+    //TODO Eliminate magic constants
+    val consumer = new SimpleConsumer(host, port, 10000, 100000, "GetOffsetShell")
+    val partitionOffsetRequestInfo = PartitionOffsetRequestInfo(time, maxNumOffsets)
+    val requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo] = topicPartitions
+      .map(tp => new TopicAndPartition(tp.topic, tp.partition) -> partitionOffsetRequestInfo)
+      .toMap
+    val request = OffsetRequest(requestInfo)
+    val offsetResponse: OffsetResponse = consumer.getOffsetsBefore(request)
+    offsetResponse.partitionErrorAndOffsets
+      .map { case (tp, partitionOffsetsResponse) => partitionOffsetsResponse.error match {
+        case Errors.NONE => new TopicPartition(tp.topic, tp.partition) -> Right(partitionOffsetsResponse.offsets)
+        case _ => new TopicPartition(tp.topic, tp.partition) -> Left(partitionOffsetsResponse.error)
+      }
+      }
   }
 }
