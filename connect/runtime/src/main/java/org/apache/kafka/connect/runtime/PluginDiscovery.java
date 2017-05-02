@@ -78,14 +78,14 @@ public class PluginDiscovery {
         final List<ConnectorPluginInfo> connectorPlugins = new ArrayList<>(connectorClasses.size());
         for (Class<? extends Connector> connectorClass : connectorClasses) {
             if (isConcrete(connectorClass)) {
-                connectorPlugins.add(new ConnectorPluginInfo(connectorClass.getCanonicalName()));
+                connectorPlugins.add(new ConnectorPluginInfo(connectorClass));
             }
         }
 
         Collections.sort(connectorPlugins, new Comparator<ConnectorPluginInfo>() {
             @Override
             public int compare(ConnectorPluginInfo a, ConnectorPluginInfo b) {
-                return a.clazz().compareTo(b.clazz());
+                return a.className().compareTo(b.className());
             }
         });
 
