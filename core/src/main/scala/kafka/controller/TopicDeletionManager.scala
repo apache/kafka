@@ -83,7 +83,7 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
     }
   }
 
-  def start(): Unit = {
+  def tryTopicDeletion(): Unit = {
     if (isDeleteTopicEnabled) {
       resumeDeletions()
     }
@@ -92,8 +92,7 @@ class TopicDeletionManager(controller: KafkaController) extends Logging {
   /**
    * Invoked when the current controller resigns. At this time, all state for topic deletion should be cleared.
    */
-  def shutdown() {
-    // Only allow one shutdown to go through
+  def reset() {
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted.clear()
       partitionsToBeDeleted.clear()

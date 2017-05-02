@@ -262,7 +262,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     controllerContext.allTopics.foreach(topic => registerPartitionModificationsListener(topic))
     info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
     maybeTriggerPartitionReassignment()
-    topicDeletionManager.start()
+    topicDeletionManager.tryTopicDeletion()
     val pendingPreferredReplicaElections = fetchPendingPreferredReplicaElections()
     onPreferredReplicaElection(pendingPreferredReplicaElections)
     info("starting the controller scheduler")
@@ -289,8 +289,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     deregisterPartitionReassignmentListener()
     deregisterPreferredReplicaElectionListener()
 
-    // shutdown delete topic manager
-    topicDeletionManager.shutdown()
+    // reset topic deletion manager
+    topicDeletionManager.reset()
 
     // shutdown leader rebalance scheduler
     kafkaScheduler.shutdown()
