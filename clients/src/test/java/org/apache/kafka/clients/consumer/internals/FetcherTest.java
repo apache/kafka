@@ -1255,9 +1255,9 @@ public class FetcherTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-               FetchRequest request = (FetchRequest) body;
-               assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
-               return true;
+                FetchRequest request = (FetchRequest) body;
+                assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
+                return true;
             }
         }, fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
 
