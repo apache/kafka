@@ -324,21 +324,16 @@ class TransactionStateManagerTest {
 
     prepareTxnLog(topicPartition, 0, records)
 
-    var receivedId: String = null
+    var receivedArgs: WriteTxnMarkerArgs = null
 
-    def callback(transactionalId: String,
-                 pid: Long,
-                 producerEpoch: Short,
-                 state: TransactionState,
-                 metadata: TransactionMetadata,
-                 coordinatorEpoch: Int): Unit = {
-      receivedId = transactionalId
+    def callback(writeTxnMarkerArgs: WriteTxnMarkerArgs): Unit = {
+      receivedArgs = writeTxnMarkerArgs
     }
 
     transactionManager.loadTransactionsForPartition(partitionId, 0, callback)
     scheduler.tick()
 
-    assertEquals(txnId1, receivedId)
+    assertEquals(txnId1, receivedArgs.transactionalId)
   }
 
   private def assertCallback(error: Errors): Unit = {
@@ -390,12 +385,7 @@ class TransactionStateManagerTest {
     EasyMock.replay(replicaManager)
   }
 
-  def writeTxnMarkersCallback(transactionalId: String,
-                              pid: Long,
-                              producerEpoch: Short,
-                              state: TransactionState,
-                              metadata: TransactionMetadata,
-                              coordinatorEpoch: Int): Unit = {
+  def writeTxnMarkersCallback(writeTxnMarkerArgs: WriteTxnMarkerArgs): Unit = {
 
 
   }

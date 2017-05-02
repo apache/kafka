@@ -60,13 +60,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
 
-  type WriteTxnMarkers = (String, // transactionalId
-    Long, // pid
-    Short, // producerEpoch
-    TransactionState, // currentState
-    TransactionMetadata, // current metadata
-    Int) // coordinatorEpoch
-    => Unit
+  type WriteTxnMarkers = WriteTxnMarkerArgs => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -217,13 +211,13 @@ class TransactionStateManager(brokerId: Int,
               }
               // if state is PrepareCommit or PrepareAbort we need to complete the transaction
               if (currentTxnMetadata.state == PrepareCommit || currentTxnMetadata.state == PrepareAbort) {
-                writeTxnMarkers(transactionalId,
+                writeTxnMarkers(WriteTxnMarkerArgs(transactionalId,
                   txnMetadata.pid,
                   txnMetadata.producerEpoch,
                   txnMetadata.state,
                   txnMetadata,
                   coordinatorEpochFor(transactionalId).get
-                )
+                ))
               }
           }
 
