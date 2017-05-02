@@ -383,25 +383,27 @@ class TransactionCoordinator(brokerId: Int,
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
   private def expireTransactions(): Unit = {
+
     txnManager.transactionsToExpire().foreach{ idAndMetadata =>
       idAndMetadata.metadata synchronized {
-        idAndMetadata.metadata.producerEpoch =  (idAndMetadata.metadata.producerEpoch + 1).toShort
-        idAndMetadata.metadata.prepareTransitionTo(Ongoing)
-
-        txnManager.appendTransactionToLog(idAndMetadata.transactionalId, idAndMetadata.metadata, (errors:Errors) => {
-          if (errors != Errors.NONE)
-          // TODO: Is this sufficient? It will be retried later if it failed
-            warn(s"failed to append transactionalId ${idAndMetadata.transactionalId} to log during transaction expiry. errors:$errors")
-          else
-            handleEndTransaction(idAndMetadata.transactionalId,
-              idAndMetadata.metadata.pid,
-              idAndMetadata.metadata.producerEpoch,
-              TransactionResult.ABORT,
-              (errors: Errors) => {
-                warn(s"rollback of transactionalId: ${idAndMetadata.transactionalId} failed during transaction expiry. errors: $errors")
-              }
-            )
-        })
+        if (!txnManager.isCoordinatorLoadingInProgress(idAndMetadata.transactionalId)) {
+          idAndMetadata.metadata.producerEpoch = (idAndMetadata.metadata.producerEpoch + 1).toShort
+          idAndMetadata.metadata.prepareTransitionTo(Ongoing)
+          txnManager.appendTransactionToLog(idAndMetadata.transactionalId, idAndMetadata.metadata, (errors: Errors) => {
+            if (errors != Errors.NONE)
+            // TODO: Is this sufficient? It will be retried later if it failed
+              warn(s"failed to append transactionalId ${idAndMetadata.transactionalId} to log during transaction expiry. errors:$errors")
+            else
+              handleEndTransaction(idAndMetadata.transactionalId,
+                idAndMetadata.metadata.pid,
+                idAndMetadata.metadata.producerEpoch,
+                TransactionResult.ABORT,
+                (errors: Errors) => {
+                  warn(s"rollback of transactionalId: ${idAndMetadata.transactionalId} failed during transaction expiry. errors: $errors")
+                }
+              )
+          })
+        }
       }
     }
   }
