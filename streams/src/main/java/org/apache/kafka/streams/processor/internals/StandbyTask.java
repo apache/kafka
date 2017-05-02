@@ -116,7 +116,8 @@ public class StandbyTask extends AbstractTask {
      * - {@link #commit(boolean) commit(noNewTransaction)}
      * - close state
      * <pre>
-     * @param clean shut down cleanly if {@code true} -- otherwise, just clean up open resources
+     * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
+     *              (ie, commit, flush, and write checkpoint file)
      */
     @Override
     public void close(final boolean clean) {

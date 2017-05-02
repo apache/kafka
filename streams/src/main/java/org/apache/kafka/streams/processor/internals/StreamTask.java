@@ -382,11 +382,12 @@ public class StreamTask extends AbstractTask implements Punctuator {
      *   - close topology
      *   - if (clean) {@link #commit(boolean) commit(noNewTransaction)}
      *     - flush state and producer
-     *     - if (!eos) write checkpoint
      *     - commit offsets
      * - close state
      *   - if (clean) write checkpoint
      * </pre>
+     * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
+     *              otherwise, just close open resources
      */
     @Override
     public void close(final boolean clean) {

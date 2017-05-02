@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -81,7 +82,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  */
 public class StreamsConfig extends AbstractConfig {
 
-    private final Logger log = LoggerFactory.getLogger(getClass());
+    private final static Logger log = LoggerFactory.getLogger(StreamsConfig.class);
 
     private static final ConfigDef CONFIG;
 
@@ -526,12 +527,20 @@ public class StreamsConfig extends AbstractConfig {
     public StreamsConfig(final Map<?, ?> props) {
         super(CONFIG, props);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
+    }
 
-        if (eosEnabled && !props.containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        final Map<String, Object> configUpdates = new HashMap<>();
+
+        final boolean eosEnabled = EXACTLY_ONCE.equals(parsedValues.get(PROCESSING_GUARANTEE_CONFIG));
+        if (eosEnabled && !originals().containsKey(COMMIT_INTERVAL_MS_CONFIG)) {
             log.debug("Using " + COMMIT_INTERVAL_MS_CONFIG + " default value of "
                 + EOS_DEFAULT_COMMIT_INTERVAL_MS + " as exactly once is enabled.");
-            values.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
+            configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
         }
+
+        return configUpdates;
     }
 
     private Map<String, Object> getCommonConsumerConfigs() throws ConfigException {
@@ -556,7 +565,7 @@ public class StreamsConfig extends AbstractConfig {
                 throw new ConfigException("Unexpected user-specified consumer config " + ConsumerConfig.ISOLATION_LEVEL_CONFIG
                     + "; because " + PROCESSING_GUARANTEE_CONFIG + " is set to '" + EXACTLY_ONCE + "' consumers will always read committed data only.");
             }
-            consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED);
+            consumerProps.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.name().toLowerCase(Locale.ROOT));
         }
 
         return consumerProps;
