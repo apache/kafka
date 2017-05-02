@@ -495,6 +495,14 @@ public class RequestResponseTest {
         FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
         assertEquals(fr2.maxBytes(), fr.maxBytes());
     }
+
+    @Test
+    public void testFetchRequestIsolationLevel() throws Exception {
+        FetchRequest request = createFetchRequest(4);
+        Struct struct = request.toStruct();
+        FetchRequest deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+    }
     
     private RequestHeader createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
@@ -517,7 +525,7 @@ public class RequestResponseTest {
         LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L, 1000000));
-        return FetchRequest.Builder.forConsumer(100, 100000, fetchData).setMaxBytes(1000).build((short) version);
+        return FetchRequest.Builder.forConsumer(100, 100000, fetchData, IsolationLevel.READ_COMMITTED).setMaxBytes(1000).build((short) version);
     }
 
     private FetchResponse createFetchResponse() {

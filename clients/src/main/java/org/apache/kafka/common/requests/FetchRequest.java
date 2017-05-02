@@ -145,7 +145,7 @@ public class FetchRequest extends AbstractRequest {
                 maxBytes = DEFAULT_RESPONSE_MAX_BYTES;
             }
 
-            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData, IsolationLevel.READ_UNCOMMITTED);
+            return new FetchRequest(version, replicaId, maxWait, minBytes, maxBytes, fetchData, isolationLevel);
         }
 
         @Override
