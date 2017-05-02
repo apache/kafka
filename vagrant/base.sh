@@ -67,7 +67,7 @@ get_kafka() {
     version=$1
 
     kafka_dir=/opt/kafka-$version
-    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_2.10-$version.tgz
+    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_2.11-$version.tgz
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url

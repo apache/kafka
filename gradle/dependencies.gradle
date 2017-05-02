@@ -50,13 +50,10 @@ versions += [
 ]
 
 // Add Scala version
-def defaultScala210Version = '2.10.6'
 def defaultScala211Version = '2.11.11'
 def defaultScala212Version = '2.12.2'
 if (hasProperty('scalaVersion')) {
-  if (scalaVersion == '2.10') {
-    versions["scala"] = defaultScala210Version
-  } else if (scalaVersion == '2.11') {
+  if (scalaVersion == '2.11') {
     versions["scala"] = defaultScala211Version
   } else if (scalaVersion == '2.12') {
     versions["scala"] = defaultScala212Version
@@ -64,7 +61,7 @@ if (hasProperty('scalaVersion')) {
     versions["scala"] = scalaVersion
   }
 } else {
-  versions["scala"] = defaultScala210Version
+  versions["scala"] = defaultScala211Version
 }
 
 // Add base Scala version
