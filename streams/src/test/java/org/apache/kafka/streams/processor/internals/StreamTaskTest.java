@@ -407,7 +407,7 @@ public class StreamTaskTest {
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
             final String message = e.getMessage();
-            assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
     }
@@ -555,14 +555,14 @@ public class StreamTaskTest {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         final StreamsConfig config = new StreamsConfig(properties);
 
-        final MockedProducer producer = new MockedProducer(null);
+        final MockProducer producer = new MockProducer();
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
 
         task.close();
 
-        assertTrue(producer.closed);
+        assertTrue(producer.closed());
     }
 
     @SuppressWarnings("unchecked")

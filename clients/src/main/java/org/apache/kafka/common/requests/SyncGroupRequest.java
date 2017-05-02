@@ -98,11 +98,16 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:
                 return new SyncGroupResponse(
+                        Errors.forException(e),
+                        ByteBuffer.wrap(new byte[]{}));
+            case 1:
+                return new SyncGroupResponse(
+                        throttleTimeMs,
                         Errors.forException(e),
                         ByteBuffer.wrap(new byte[]{}));
             default:

@@ -77,8 +77,8 @@ public class InitPidRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
-        return new InitPidResponse(Errors.forException(e));
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new InitPidResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static InitPidRequest parse(ByteBuffer buffer, short version) {

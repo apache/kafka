@@ -94,6 +94,16 @@ public class StreamsConfig extends AbstractConfig {
      */
     public static final String PRODUCER_PREFIX = "producer.";
 
+    /**
+     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for at-least-once processing guarantees.
+     */
+    public static final String AT_LEAST_ONCE = "at_least_once";
+
+    /**
+     * Config value for parameter {@link #PROCESSING_GUARANTEE_CONFIG "processing.guarantee"} for exactly-once processing guarantees.
+     */
+    public static final String EXACTLY_ONCE = "exactly_once";
+
     /** {@code application.id} */
     public static final String APPLICATION_ID_CONFIG = "application.id";
     private static final String APPLICATION_ID_DOC = "An identifier for the stream processing application. Must be unique within the Kafka cluster. It is used as 1) the default client-id prefix, 2) the group-id for membership management, 3) the changelog topic prefix.";
@@ -162,7 +172,7 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code cache.max.bytes.buffering} */
     public static final String PROCESSING_GUARANTEE_CONFIG = "processing.guarantee";
-    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>at_least_once</code> (default) and <code>exactly_once</code>.";
+    private static final String PROCESSING_GUARANTEE_DOC = "The processing guarantee that should be used. Possible values are <code>" + AT_LEAST_ONCE + "</code> (default) and <code>" + EXACTLY_ONCE + "</code>.";
 
     /** {@code receive.buffer.bytes} */
     public static final String RECEIVE_BUFFER_CONFIG = CommonClientConfigs.RECEIVE_BUFFER_CONFIG;
@@ -397,8 +407,8 @@ public class StreamsConfig extends AbstractConfig {
                     REQUEST_TIMEOUT_MS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     ConfigDef.Type.STRING,
-                    "at_least_once",
-                    in("at_least_once", "exactly_once"),
+                    AT_LEAST_ONCE,
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC);
     }

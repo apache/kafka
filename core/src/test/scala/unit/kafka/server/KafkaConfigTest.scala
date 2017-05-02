@@ -410,7 +410,7 @@ class KafkaConfigTest {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val serverConfig = KafkaConfig.fromProps(props)
 
-    assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
+    assertEquals(serverConfig.uncleanLeaderElectionEnable, false)
   }
 
   @Test

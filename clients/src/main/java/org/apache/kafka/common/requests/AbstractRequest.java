@@ -95,7 +95,14 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     /**
      * Get an error response for a request
      */
-    public abstract AbstractResponse getErrorResponse(Throwable e);
+    public AbstractResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
+    /**
+     * Get an error response for a request with specified throttle time in the response if applicable
+     */
+    public abstract AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e);
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
