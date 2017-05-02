@@ -35,6 +35,7 @@ import static org.junit.Assert.assertEquals;
  * A unit test for KafkaFuture.
  */
 public class KafkaFutureTest {
+
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
@@ -65,7 +66,9 @@ public class KafkaFutureTest {
     @Test
     public void testCompletingFutures() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
-        CompleterThread myThread = new CompleterThread(future, "You must construct additional pylons.");
+        CompleterThread
+            myThread =
+            new CompleterThread(future, "You must construct additional pylons.");
         assertFalse(future.isDone());
         assertFalse(future.isCompletedExceptionally());
         assertFalse(future.isCancelled());
@@ -82,6 +85,7 @@ public class KafkaFutureTest {
     }
 
     private static class CompleterThread<T> extends Thread {
+
         private final KafkaFutureImpl<T> future;
         private final T value;
         Throwable testException = null;
@@ -106,6 +110,7 @@ public class KafkaFutureTest {
     }
 
     private static class WaiterThread<T> extends Thread {
+
         private final KafkaFutureImpl<T> future;
         private final T expected;
         Throwable testException = null;
@@ -160,5 +165,14 @@ public class KafkaFutureTest {
             assertEquals(null, completerThreads.get(i).testException);
             assertEquals(null, waiterThreads.get(i).testException);
         }
+    }
+
+    @Test
+    public void testAllOfFuturesHandlesZeroFutures() throws Exception {
+        KafkaFuture<Void> allFuture = KafkaFuture.allOf();
+        assertTrue(allFuture.isDone());
+        assertFalse(allFuture.isCancelled());
+        assertFalse(allFuture.isCompletedExceptionally());
+        allFuture.get();
     }
 }
