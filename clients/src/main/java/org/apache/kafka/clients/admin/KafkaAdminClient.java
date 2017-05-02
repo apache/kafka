@@ -48,6 +48,7 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.AbstractRequest.Builder;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -63,6 +64,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -72,6 +74,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -376,16 +379,23 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
-    private abstract class Call {
+    private static abstract class Call {
         private final String callName;
         private final long deadlineMs;
         private final NodeProvider nodeProvider;
+        private final KafkaAdminClient.AdminClientRunnable runnable;
         private int tries = 0;
 
-        Call(String callName, long deadlineMs, NodeProvider nodeProvider) {
+        Call(
+            String callName,
+            long deadlineMs,
+            NodeProvider nodeProvider,
+            KafkaAdminClient.AdminClientRunnable runnable
+        ) {
             this.callName = callName;
             this.deadlineMs = deadlineMs;
             this.nodeProvider = nodeProvider;
+            this.runnable = runnable;
         }
 
         /**
@@ -827,7 +837,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(), runnable) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -878,7 +888,7 @@ public class KafkaAdminClient extends AdminClient {
         }
         final long now = time.milliseconds();
         runnable.call(new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
+            new ControllerNodeProvider(), runnable) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -925,7 +935,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), runnable) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -953,6 +963,69 @@ public class KafkaAdminClient extends AdminClient {
         return new ListTopicsResults(topicListingFuture);
     }
 
+    static class DescribeTopicsCall extends Call {
+
+        private final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures;
+
+        protected DescribeTopicsCall(
+            long deadlineMs,
+            ControllerNodeProvider controllerNodeProvider,
+            Map<String, KafkaFutureImpl<TopicDescription>> topicFutures,
+            AdminClientRunnable runnable
+        ) {
+            super("describeTopics", deadlineMs, controllerNodeProvider, runnable);
+            this.topicFutures = topicFutures;
+        }
+
+        @Override
+        Builder createRequest(int timeoutMs) {
+            return new MetadataRequest.Builder(new ArrayList<>(topicFutures.keySet()));
+        }
+
+        @Override
+        void handleResponse(AbstractResponse abstractResponse) {
+            MetadataResponse response = (MetadataResponse) abstractResponse;
+            // Handle server responses for particular topics.
+            for (Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures
+                .entrySet()) {
+                String topicName = entry.getKey();
+                KafkaFutureImpl<TopicDescription> future = entry.getValue();
+                Errors topicError = response.errors().get(topicName);
+                if (topicError != null) {
+                    future.completeExceptionally(topicError.exception());
+                    continue;
+                }
+                Cluster cluster = response.cluster();
+                if (!cluster.topics().contains(topicName)) {
+                    future.completeExceptionally(new InvalidTopicException(
+                        "Topic " + topicName + " not found."));
+                    continue;
+                }
+                boolean isInternal = cluster.internalTopics().contains(topicName);
+                TreeMap<Integer, TopicPartitionInfo> partitions = new TreeMap<>();
+                List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
+                for (PartitionInfo partitionInfo : partitionInfos) {
+                    TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
+                        partitionInfo.partition(),
+                        partitionInfo.leader(),
+                        Arrays.asList(partitionInfo.replicas()),
+                        Arrays.asList(partitionInfo.inSyncReplicas())
+                    );
+                    partitions.put(partitionInfo.partition(), topicPartitionInfo);
+                }
+                TopicDescription
+                    topicDescription =
+                    new TopicDescription(topicName, isInternal, partitions);
+                future.complete(topicDescription);
+            }
+        }
+
+        @Override
+        void handleFailure(Throwable throwable) {
+            completeAllExceptionally(topicFutures.values(), throwable);
+        }
+    }
+
     @Override
     public DescribeTopicsResults describeTopics(final Collection<String> topicNames, DescribeTopicsOptions options) {
         final Map<String, KafkaFutureImpl<TopicDescription>> topicFutures = new HashMap<>(topicNames.size());
@@ -960,50 +1033,13 @@ public class KafkaAdminClient extends AdminClient {
             topicFutures.put(topicName, new KafkaFutureImpl<TopicDescription>());
         }
         final long now = time.milliseconds();
-        runnable.call(new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
-            new ControllerNodeProvider()) {
-
-            @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<>(topicNames), timeoutMs);
-            }
-
-            @Override
-            void handleResponse(AbstractResponse abstractResponse) {
-                MetadataResponse response = (MetadataResponse) abstractResponse;
-                // Handle server responses for particular topics.
-                for (Map.Entry<String, KafkaFutureImpl<TopicDescription>> entry : topicFutures.entrySet()) {
-                    String topicName = entry.getKey();
-                    KafkaFutureImpl<TopicDescription> future = entry.getValue();
-                    Errors topicError = response.errors().get(topicName);
-                    if (topicError != null) {
-                        future.completeExceptionally(topicError.exception());
-                        continue;
-                    }
-                    Cluster cluster = response.cluster();
-                    if (!cluster.topics().contains(topicName)) {
-                        future.completeExceptionally(new InvalidTopicException("Topic " + topicName + " not found."));
-                        continue;
-                    }
-                    boolean isInternal = cluster.internalTopics().contains(topicName);
-                    TreeMap<Integer, TopicPartitionInfo> partitions = new TreeMap<>();
-                    List<PartitionInfo> partitionInfos = cluster.partitionsForTopic(topicName);
-                    for (PartitionInfo partitionInfo : partitionInfos) {
-                        TopicPartitionInfo topicPartitionInfo = new TopicPartitionInfo(
-                            partitionInfo.partition(), partitionInfo.leader(), Arrays.asList(partitionInfo.replicas()),
-                            Arrays.asList(partitionInfo.inSyncReplicas()));
-                        partitions.put(partitionInfo.partition(), topicPartitionInfo);
-                    }
-                    TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions);
-                    future.complete(topicDescription);
-                }
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                completeAllExceptionally(topicFutures.values(), throwable);
-            }
-        }, now);
+        final Call call = new DescribeTopicsCall(
+            calcDeadlineMs(now, options.timeoutMs()),
+            new ControllerNodeProvider(),
+            topicFutures,
+            runnable
+        );
+        runnable.call(call, now);
         return new DescribeTopicsResults(new HashMap<String, KafkaFuture<TopicDescription>>(topicFutures));
     }
 
@@ -1012,7 +1048,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedNodeProvider(), runnable) {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -1041,7 +1077,7 @@ public class KafkaAdminClient extends AdminClient {
         for (final Node node : nodes) {
             final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
             nodeFutures.put(node, nodeFuture);
-            runnable.call(new Call("apiVersions", deadlineMs, new ConstantAdminNodeProvider(node)) {
+            runnable.call(new Call("apiVersions", deadlineMs, new ConstantAdminNodeProvider(node), runnable) {
                     @Override
                     public AbstractRequest.Builder createRequest(int timeoutMs) {
                         return new ApiVersionsRequest.Builder();
