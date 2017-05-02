@@ -152,7 +152,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
         return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
     }
-
+    
     /**
      * Represents data about an offset returned by a broker.
      */
