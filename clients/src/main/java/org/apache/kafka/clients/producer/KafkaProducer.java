@@ -21,11 +21,11 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.internals.FutureTransactionalResult;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
+import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -484,7 +484,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot call initTransactions without setting a transactional id.");
-        transactionManager.initializeTransactions().get();
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        sender.wakeup();
+        result.await();
     }
 
     /**
@@ -515,9 +517,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                          String consumerGroupId) throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot send offsets to transaction since transactions are not enabled.");
-        FutureTransactionalResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
         sender.wakeup();
-        result.get();
+        result.await();
     }
 
     /**
@@ -529,9 +531,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot commit transaction since transactions are not enabled");
-        FutureTransactionalResult result = transactionManager.beginCommittingTransaction();
+        TransactionalRequestResult result = transactionManager.beginCommittingTransaction();
         sender.wakeup();
-        result.get();
+        result.await();
     }
 
     /**
@@ -543,9 +545,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void abortTransaction() throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot abort transaction since transactions are not enabled.");
-        FutureTransactionalResult result = transactionManager.beginAbortingTransaction();
+        TransactionalRequestResult result = transactionManager.beginAbortingTransaction();
         sender.wakeup();
-        result.get();
+        result.await();
     }
 
     /**

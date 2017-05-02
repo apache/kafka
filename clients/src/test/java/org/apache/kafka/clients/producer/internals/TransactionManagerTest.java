@@ -156,6 +156,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
@@ -185,7 +186,7 @@ public class TransactionManagerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(tp1, new OffsetAndMetadata(1));
         final String consumerGroupId = "myconsumergroup";
-        FutureTransactionalResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
 
@@ -203,7 +204,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // Send AddOffsetsRequest
         assertTrue(transactionManager.hasPendingOffsetCommits());  // We should now have created and queued the offset commit request.
-        assertFalse(addOffsetsResult.isDone());
+        assertFalse(addOffsetsResult.isCompleted()); // the result doesn't complete until TxnOffsetCommit returns
 
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
@@ -230,7 +231,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // send TxnOffsetCommitRequest commit.
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
-        assertTrue(addOffsetsResult.isDone());  // We should only be done after both RPCs complete.
+        assertTrue(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete.
 
         transactionManager.beginCommittingTransaction();
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
@@ -252,6 +253,7 @@ public class TransactionManagerTest {
 
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
     }
 
@@ -262,26 +264,27 @@ public class TransactionManagerTest {
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        FutureTransactionalResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NOT_COORDINATOR, false, pid, epoch);
         sender.run(time.milliseconds());  // send pid, get not coordinator. Should resend the FindCoordinator and InitPid requests
 
         assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
-        assertFalse(initPidResult.isDone());
+        assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasPid());
 
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
-        assertFalse(initPidResult.isDone());
+        assertFalse(initPidResult.isCompleted());
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
         sender.run(time.milliseconds());  // get pid and epoch
 
-        assertTrue(initPidResult.isDone()); // The future should only return after the second round of retries succeed.
+        assertTrue(initPidResult.isCompleted()); // The future should only return after the second round of retries succeed.
         assertTrue(transactionManager.hasPid());
         assertEquals(pid, transactionManager.pidAndEpoch().producerId);
         assertEquals(epoch, transactionManager.pidAndEpoch().epoch);
@@ -298,6 +301,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
@@ -314,7 +318,7 @@ public class TransactionManagerTest {
 
         assertFalse(responseFuture.isDone());
 
-        FutureTransactionalResult commitResult = transactionManager.beginCommittingTransaction();
+        TransactionalRequestResult commitResult = transactionManager.beginCommittingTransaction();
 
         // we have an append, an add partitions request, and now also an endtxn.
         // The order should be:
@@ -327,19 +331,19 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // AddPartitions.
         assertTrue(transactionManager.transactionContainsPartition(tp0));
         assertFalse(responseFuture.isDone());
-        assertFalse(commitResult.isDone());
+        assertFalse(commitResult.isCompleted());
 
         prepareProduceResponse(Errors.NONE, pid, epoch);
         sender.run(time.milliseconds());  // Produce.
         assertTrue(responseFuture.isDone());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
-        assertFalse(commitResult.isDone());
+        assertFalse(commitResult.isCompleted());
         assertTrue(transactionManager.isInTransaction());
         assertTrue(transactionManager.isCompletingTransaction());
 
         sender.run(time.milliseconds());
-        assertTrue(commitResult.isDone());
+        assertTrue(commitResult.isCompleted());
         assertFalse(transactionManager.isInTransaction());
     }
 
@@ -354,6 +358,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
@@ -391,7 +396,7 @@ public class TransactionManagerTest {
         assertFalse(responseFuture.isDone());
         assertFalse(secondResponseFuture.isDone());
 
-        // The second add partitionsh should go out here.
+        // The second add partitions should go out here.
         sender.run(time.milliseconds());  // send second add partitions request
         assertTrue(transactionManager.transactionContainsPartition(tp1));
 
@@ -416,6 +421,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
@@ -450,6 +456,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
         sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
         assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
@@ -463,32 +470,32 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
 
-        FutureTransactionalResult commitResult = transactionManager.beginCommittingTransaction();
+        TransactionalRequestResult commitResult = transactionManager.beginCommittingTransaction();
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
 
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
-        assertFalse(commitResult.isDone());
+        assertFalse(commitResult.isCompleted());
 
         sender.run(time.milliseconds());  // Send Produce Request, returns OutOfOrderSequenceException.
         sender.run(time.milliseconds());  // try to commit.
-        assertTrue(commitResult.isDone());  // commit should be cancelled with exception without being sent.
+        assertTrue(commitResult.isCompleted());  // commit should be cancelled with exception without being sent.
 
         try {
-            commitResult.get();
+            commitResult.await();
             fail();  // the get() must throw an exception.
         } catch (RuntimeException e) {
             assertTrue(e instanceof KafkaException);
         }
 
         // Commit is not allowed, so let's abort and try again.
-        FutureTransactionalResult abortResult = transactionManager.beginAbortingTransaction();
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
         prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
         sender.run(time.milliseconds());  // Send abort request. It is valid to transition from ERROR to ABORT
 
-        assertTrue(abortResult.isDone());
-        assertTrue(abortResult.get().isSuccessful());
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReadyForTransaction());  // make sure we are ready for a transaction now.
     }
 

@@ -231,7 +231,7 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
-    public void setProducerState(TransactionManager.PidAndEpoch pidAndEpoch, int baseSequence) {
+    public void setProducerState(PidAndEpoch pidAndEpoch, int baseSequence) {
         recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
     }
 

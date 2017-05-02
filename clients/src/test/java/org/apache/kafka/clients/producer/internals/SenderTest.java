@@ -395,7 +395,7 @@ public class SenderTest {
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setPidAndEpoch(producerId, (short) 0);
+        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
@@ -448,7 +448,7 @@ public class SenderTest {
     public void testAbortRetryWhenPidChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setPidAndEpoch(producerId, (short) 0);
+        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
@@ -480,7 +480,7 @@ public class SenderTest {
         assertEquals(0, client.inFlightRequestCount());
         assertFalse("Client ready status should be false", client.isReady(node, 0L));
 
-        transactionManager.setPidAndEpoch(producerId + 1, (short) 0);
+        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId + 1, (short) 0));
         sender.run(time.milliseconds()); // receive error
         sender.run(time.milliseconds()); // reconnect
         sender.run(time.milliseconds()); // nothing to do, since the pid has changed. We should check the metrics for errors.
@@ -497,7 +497,7 @@ public class SenderTest {
     public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setPidAndEpoch(producerId, (short) 0);
+        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 

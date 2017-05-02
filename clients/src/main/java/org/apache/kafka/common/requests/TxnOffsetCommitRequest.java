@@ -55,6 +55,10 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
             this.offsets = offsets;
         }
 
+        public String consumerGroupId() {
+            return consumerGroupId;
+        }
+
         @Override
         public TxnOffsetCommitRequest build(short version) {
             return new TxnOffsetCommitRequest(version, consumerGroupId, producerId, producerEpoch, retentionTimeMs, offsets);
