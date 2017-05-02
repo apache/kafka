@@ -2096,10 +2096,12 @@ class LogTest {
     val pid1 = 1L
     val pid2 = 2L
     val pid3 = 3L
+    val pid4 = 4L
 
     val appendPid1 = appendTransactional(pid1)
     val appendPid2 = appendTransactional(pid2)
     val appendPid3 = appendTransactional(pid3)
+    val appendPid4 = appendTransactional(pid4)
 
     appendPid1(5) // nextOffset: 5
     appendPid2(2) // 7
@@ -2108,12 +2110,16 @@ class LogTest {
     appendPid1(10) // 24
     appendControl(pid1, ControlRecordType.ABORT) // 25
     appendPid2(6) // 31
-    appendPid3(9) // 40
-    appendControl(pid3, ControlRecordType.COMMIT) // 41
-    appendPid2(7) // 48
-    appendControl(pid2, ControlRecordType.ABORT) // 49
+    appendPid4(3) // 34
+    appendPid3(9) // 43
+    appendControl(pid3, ControlRecordType.COMMIT) // 44
+    appendPid4(8) // 52
+    appendPid2(7) // 59
+    appendControl(pid2, ControlRecordType.ABORT) // 60
+    appendPid4(4) // 64
+    appendControl(pid4, ControlRecordType.COMMIT) // 65
 
-    assertEquals(List(new AbortedTxn(pid1, 0L, 24L, 5L), new AbortedTxn(pid2, 5L, 48L, 49L)), allAbortedTransactions)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 24L, 5L), new AbortedTxn(pid2, 5L, 59L, 31L)), allAbortedTransactions)
   }
 
   @Test

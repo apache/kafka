@@ -238,7 +238,7 @@ class ReplicaManagerTest {
 
       // write a few batches as part of a transaction
       val numRecords = 3
-      for (sequence <- 0 to numRecords) {
+      for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
         rm.appendRecords(
