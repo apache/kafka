@@ -117,7 +117,7 @@ public class MockProducerTest {
         producer.initTransactions();
         try {
             producer.initTransactions();
-            fail("Should have trows as producer got initialized already");
+            fail("Should have thrown as producer is already initialized");
         } catch (IllegalStateException e) { }
     }
 
@@ -143,6 +143,7 @@ public class MockProducerTest {
         producer.initTransactions();
         try {
             producer.sendOffsetsToTransaction(null, null);
+            fail("Should have thrown as producer has no open transaction");
         } catch (IllegalStateException e) { }
     }
 
@@ -156,6 +157,7 @@ public class MockProducerTest {
         producer.initTransactions();
         try {
             producer.commitTransaction();
+            fail("Should have thrown as producer has no open transaction");
         } catch (IllegalStateException e) { }
     }
 
@@ -179,6 +181,7 @@ public class MockProducerTest {
         producer.initTransactions();
         try {
             producer.abortTransaction();
+            fail("Should have thrown as producer has no open transaction");
         } catch (IllegalStateException e) { }
     }
 
@@ -454,74 +457,74 @@ public class MockProducerTest {
     }
 
     @Test
-    public void shouldThrowOnInitTransactionIfProducerGotClosedAlready() {
+    public void shouldThrowOnInitTransactionIfProducerIsClosed() {
         producer.close();
         try {
             producer.initTransactions();
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowOnSendIfProducerGotClosedAlready() {
+    public void shouldThrowOnSendIfProducerIsClosed() {
         producer.close();
         try {
             producer.send(null);
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowOnBeginTransactionIfProducerGotClosedAlready() {
+    public void shouldThrowOnBeginTransactionIfProducerIsClosed() {
         producer.close();
         try {
             producer.beginTransaction();
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowSendOffsetsToTransactionIfProducerGotClosedAlready() {
+    public void shouldThrowSendOffsetsToTransactionIfProducerIsClosed() {
         producer.close();
         try {
             producer.sendOffsetsToTransaction(null, null);
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowOnCommitTransactionIfProducerGotClosedAlready() {
+    public void shouldThrowOnCommitTransactionIfProducerIsClosed() {
         producer.close();
         try {
             producer.commitTransaction();
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowOnAbortTransactionIfProducerGotClosedAlready() {
+    public void shouldThrowOnAbortTransactionIfProducerIsClosed() {
         producer.close();
         try {
             producer.abortTransaction();
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowOnCloseIfProducerGotClosedAlready() {
+    public void shouldThrowOnCloseIfProducerIsClosed() {
         producer.close();
         try {
             producer.close();
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 
     @Test
-    public void shouldThrowOnFenceProducerIfProducerGotClosedAlready() {
+    public void shouldThrowOnFenceProducerIfProducerIsClosed() {
         producer.close();
         try {
             producer.fenceProducer();
-            fail("Should have thrown as producer got closed already");
+            fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }
 

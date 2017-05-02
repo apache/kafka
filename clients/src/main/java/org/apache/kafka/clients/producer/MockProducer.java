@@ -136,7 +136,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         verifyProducerState();
         if (this.transactionInitialized) {
-            throw new IllegalStateException("MockedProducer got already initialized for transactions.");
+            throw new IllegalStateException("MockProducer has already been initialized for transactions.");
         }
         this.transactionInitialized = true;
     }
@@ -155,9 +155,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
                                          String consumerGroupId) throws ProducerFencedException {
         verifyProducerState();
         verifyTransactionsInitialized();
-        if (!transactionInFlight) {
-            throw new IllegalStateException("There is not open transaction to be committed.");
-        }
+        verifyNoTransactionInFlight();
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets = this.uncommittedConsumerGroupOffsets.get(consumerGroupId);
         if (uncommittedOffsets == null) {
             uncommittedOffsets = new HashMap<>();
@@ -170,9 +168,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         verifyProducerState();
         verifyTransactionsInitialized();
-        if (!transactionInFlight) {
-            throw new IllegalStateException("There is not open transaction to be committed.");
-        }
+        verifyNoTransactionInFlight();
 
         flush();
 
@@ -192,9 +188,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public void abortTransaction() throws ProducerFencedException {
         verifyProducerState();
         verifyTransactionsInitialized();
-        if (!transactionInFlight) {
-            throw new IllegalStateException("There is not open transaction to be aborted.");
-        }
+        verifyNoTransactionInFlight();
         flush();
         this.uncommittedSends.clear();
         this.uncommittedConsumerGroupOffsets.clear();
@@ -205,16 +199,22 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     private void verifyProducerState() {
         if (this.closed) {
-            throw new IllegalStateException("MockedProducer is already closed.");
+            throw new IllegalStateException("MockProducer is already closed.");
         }
         if (this.producerFenced) {
-            throw new ProducerFencedException("MockProducer got fenced.");
+            throw new ProducerFencedException("MockProducer is fenced.");
         }
     }
 
     private void verifyTransactionsInitialized() {
         if (!this.transactionInitialized) {
-            throw new IllegalStateException("MockedProducer did got initialized for transactions.");
+            throw new IllegalStateException("MockProducer hasn't been initialized for transactions.");
+        }
+    }
+
+    private void verifyNoTransactionInFlight() {
+        if (!this.transactionInFlight) {
+            throw new IllegalStateException("There is no open transaction.");
         }
     }
 
@@ -296,7 +296,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
         if (this.closed) {
-            throw new IllegalStateException("MockedProducer is already closed.");
+            throw new IllegalStateException("MockProducer is already closed.");
         }
         if (transactionInFlight)
             abortTransaction();
