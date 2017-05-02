@@ -309,8 +309,28 @@ subprojects {
       "-feature",
       "-language:postfixOps",
       "-language:implicitConversions",
-      "-language:existentials"
+      "-language:existentials",
+      "-Xlint:by-name-right-associative",
+      "-Xlint:delayedinit-select",
+      "-Xlint:doc-detached",
+      "-Xlint:missing-interpolator",
+      "-Xlint:nullary-override",
+      "-Xlint:nullary-unit",
+      "-Xlint:option-implicit",
+      "-Xlint:package-object-classes",
+      "-Xlint:poly-implicit-overload",
+      "-Xlint:private-shadow",
+      "-Xlint:stars-align",
+      "-Xlint:type-parameter-shadow",
+      "-Xlint:unsound-match",
     ]
+
+    if (versions.baseScala != '2.11') {
+      scalaCompileOptions.additionalParameters += [
+        "-Xlint:constant",
+        "-Xlint:unused"
+      ]
+    }
 
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
