@@ -149,13 +149,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String JMX_PREFIX = "kafka.producer";
 
     private String clientId;
+    // Visible for testing
+    final Metrics metrics;
     private final Partitioner partitioner;
     private final int maxRequestSize;
     private final long totalMemorySize;
     private final Metadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
-    private final Metrics metrics;
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
@@ -234,6 +235,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             metricTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                    .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
             List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);

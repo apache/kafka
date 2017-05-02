@@ -41,6 +41,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -519,6 +520,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final String JMX_PREFIX = "kafka.consumer";
     static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
 
+    // Visible for testing
+    final Metrics metrics;
+
     private final String clientId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
@@ -528,7 +532,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private final Time time;
     private final ConsumerNetworkClient client;
-    private final Metrics metrics;
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
     private final long retryBackoffMs;
@@ -626,6 +629,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             metricsTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                    .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricsTags);
             List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
