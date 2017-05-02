@@ -224,7 +224,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
-            channel.position(targetSize);
             size.set(targetSize);
         }
         return originalSize - targetSize;

@@ -65,8 +65,10 @@ object LogAppendInfo {
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
- * @param producerAppendInfos A map from a Pid to a ProducerAppendInfo, which is used to validate each Record in a
- *                            RecordBatch and keep track of metadata across Records in a RecordBatch.
+ * @param producerAppendInfos A map from PID to a ProducerAppendInfo, which is used to validate the producer
+ *                            metadata (i.e. epoch and sequence number) for all produced or replicated data
+ * @param completedTransactions A list of all transactions completed in this append. This list is sorted by the
+ *                              last offset of the transactions and is used to keep the transaction index up to date.
  * @param isDuplicate Indicates whether the message set is a duplicate of a message at the tail of the log.
  */
 case class LogAppendInfo(var firstOffset: Long,
@@ -83,12 +85,39 @@ case class LogAppendInfo(var firstOffset: Long,
                          completedTransactions: List[CompletedTxn] = null,
                          isDuplicate: Boolean = false)
 
-case class ControlRecord(controlType: ControlRecordType, pid: Long, epoch: Short, offset: Long, timestamp: Long)
-case class CompletedTxn(pid: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean) extends Ordered[CompletedTxn] {
+/**
+ * A class used to hold useful metadata about a control record
+ *
+ * @param controlType Type of the control record
+ * @param producerId ID of the associated producer
+ * @param producerEpoch Epoch of the associated producer
+ * @param offset The offset of the record
+ * @param timestamp The timestamp from the record
+ */
+case class ControlRecord(controlType: ControlRecordType,
+                         producerId: Long,
+                         producerEpoch: Short,
+                         offset: Long,
+                         timestamp: Long)
+
+/**
+ * A class used to hold useful metadata about a completed transaction. This is used to build
+ * the transaction index after appending to the log.
+ *
+ * @param producerId The ID of the producer
+ * @param firstOffset The first offset (inclusive) of the transaction
+ * @param lastOffset The last offset (inclusive) of the transaction. This is always the offset of the
+ *                   COMMIT/ABORT control record which indicates the transaction's completion.
+ * @param isAborted Whether or not the transaction was aborted
+ */
+case class CompletedTxn(producerId: Long,
+                        firstOffset: Long,
+                        lastOffset: Long,
+                        isAborted: Boolean) extends Ordered[CompletedTxn] {
   override def compare(that: CompletedTxn): Int = {
     val res = this.firstOffset compare that.firstOffset
     if (res == 0)
-      this.pid compare that.pid
+      this.producerId compare that.producerId
     else
       res
   }
@@ -154,7 +183,7 @@ class Log(@volatile var dir: File,
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
-  private val pidMap = new ProducerIdMapping(config, topicPartition, dir, maxPidExpirationMs)
+  private val producerStateManager = new ProducerStateManager(config, topicPartition, dir, maxPidExpirationMs)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -211,13 +240,13 @@ class Log(@volatile var dir: File,
 
   scheduler.schedule(name = "PeriodicPidExpirationCheck", fun = () => {
     lock synchronized {
-      pidMap.removeExpiredPids(time.milliseconds)
+      producerStateManager.removeExpiredProducers(time.milliseconds)
     }
   }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
   scheduler.schedule(name = "PeriodicPidSnapshotTask", fun = () => {
     lock synchronized {
-      pidMap.maybeTakeSnapshot()
+      producerStateManager.maybeTakeSnapshot()
     }
   }, period = pidSnapshotIntervalMs, unit = TimeUnit.MILLISECONDS)
 
@@ -401,14 +430,14 @@ class Log(@volatile var dir: File,
     lock synchronized {
       info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
       val currentTimeMs = time.milliseconds
-      pidMap.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
-      logSegments(pidMap.mapEndOffset, lastOffset).foreach { segment =>
-        val startOffset = math.max(segment.baseOffset, pidMap.mapEndOffset)
+      producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
+      logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+        val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
         val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
         if (fetchDataInfo != null)
           loadPidsFromLog(fetchDataInfo.records)
       }
-      pidMap.updateMapEndOffset(lastOffset)
+      producerStateManager.updateMapEndOffset(lastOffset)
       updateFirstUnstableOffset()
     }
   }
@@ -419,13 +448,13 @@ class Log(@volatile var dir: File,
     records.batches.asScala.foreach { batch =>
       updateProducer(batch, pidsToLoad, completedTxns, loadingFromLog = true)
     }
-    pidsToLoad.values.foreach(pidMap.update)
-    completedTxns.foreach(pidMap.completeTxn)
+    pidsToLoad.values.foreach(producerStateManager.update)
+    completedTxns.foreach(producerStateManager.completeTxn)
   }
 
   private[log] def activePids: Map[Long, ProducerIdEntry] = {
     lock synchronized {
-      pidMap.activePids
+      producerStateManager.activePids
     }
   }
 
@@ -566,27 +595,27 @@ class Log(@volatile var dir: File,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
 
-        // update the PID sequence mapping
-        for ((pid, producerAppendInfo) <- appendInfo.producerAppendInfos) {
-          trace(s"Updating pid with sequence: $pid -> ${producerAppendInfo.lastEntry}")
+        // update the producer state
+        for ((producerId, producerAppendInfo) <- appendInfo.producerAppendInfos) {
+          trace(s"Updating pid with sequence: $producerId -> ${producerAppendInfo.lastEntry}")
           if (assignOffsets)
             producerAppendInfo.assignLastOffsetAndTimestamp(appendInfo.lastOffset, appendInfo.maxTimestamp)
-          pidMap.update(producerAppendInfo)
+          producerStateManager.update(producerAppendInfo)
         }
 
         // update the transaction index and last stable offset. The ordering is important.
         // The index must be updated before we can advance the LSO, but the LSO value must take
         // into account the completed transaction.
         for (completedTxn <- appendInfo.completedTransactions) {
-          val firstUnstableOffset = pidMap.firstUndecidedOffsetExcluding(completedTxn)
+          val firstUnstableOffset = producerStateManager.firstUndecidedOffsetExcluding(completedTxn)
           val lastStableOffset = firstUnstableOffset.getOrElse(completedTxn.lastOffset + 1)
           segment.updateTxnIndex(completedTxn, lastStableOffset)
-          pidMap.completeTxn(completedTxn)
+          producerStateManager.completeTxn(completedTxn)
         }
 
         // always update the last pid map offset so that the snapshot reflects the current offset
         // even if there isn't any idempotent data being written
-        pidMap.updateMapEndOffset(appendInfo.lastOffset + 1)
+        producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
 
         // increment the log end offset
         updateLogEndOffset(appendInfo.lastOffset + 1)
@@ -609,13 +638,13 @@ class Log(@volatile var dir: File,
 
   def onHighWatermarkIncremented(highWatermark: Long): Unit = {
     lock synchronized {
-      pidMap.ackTransactionsCompletedBefore(highWatermark)
+      producerStateManager.ackTransactionsCompletedBefore(highWatermark)
       updateFirstUnstableOffset()
     }
   }
 
   private def updateFirstUnstableOffset(): Unit = {
-    this.firstUnstableOffset = pidMap.firstUnstableOffset.flatMap { offset =>
+    this.firstUnstableOffset = producerStateManager.firstUnstableOffset.flatMap { offset =>
       if (firstUnstableOffset.exists(_.messageOffset == offset)) {
         firstUnstableOffset
       } else {
@@ -715,7 +744,7 @@ class Log(@volatile var dir: File,
       if (isFromClient) {
         if (batch.hasProducerId) {
           val pid = batch.producerId
-          val isDuplicate = pidMap.lastEntry(pid) match {
+          val isDuplicate = producerStateManager.lastEntry(pid) match {
             case Some(lastEntry) if lastEntry.isDuplicate(batch) =>
               // This request is a duplicate so return the information about the existing entry. Note that for requests
               // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
@@ -765,7 +794,7 @@ class Log(@volatile var dir: File,
       } else None
 
       val appendInfo = producers.getOrElse(pid, {
-        val appendInfo = new ProducerAppendInfo(pid, pidMap.lastEntry(pid), loadingFromLog)
+        val appendInfo = new ProducerAppendInfo(pid, producerStateManager.lastEntry(pid), loadingFromLog)
         producers.put(pid, appendInfo)
         appendInfo
       })
@@ -988,7 +1017,7 @@ class Log(@volatile var dir: File,
         deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearEarliest(logStartOffset)
-        pidMap.evictUnretainedPids(logStartOffset)
+        producerStateManager.evictUnretainedPids(logStartOffset)
       }
     }
     numToDelete
@@ -1201,11 +1230,11 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def maybeTakePidSnapshot(): Unit = pidMap.maybeTakeSnapshot()
+  private[log] def maybeTakePidSnapshot(): Unit = producerStateManager.maybeTakeSnapshot()
 
-  private[log] def latestPidSnapshotOffset: Option[Long] = pidMap.latestSnapshotOffset
+  private[log] def latestPidSnapshotOffset: Option[Long] = producerStateManager.latestSnapshotOffset
 
-  private[log] def latestPidMapOffset: Long = pidMap.mapEndOffset
+  private[log] def latestPidMapOffset: Long = producerStateManager.mapEndOffset
 
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.
@@ -1258,8 +1287,8 @@ class Log(@volatile var dir: File,
       updateLogEndOffset(newOffset)
       leaderEpochCache.clear()
 
-      pidMap.truncate()
-      pidMap.updateMapEndOffset(newOffset)
+      producerStateManager.truncate()
+      producerStateManager.updateMapEndOffset(newOffset)
       updateFirstUnstableOffset()
 
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)

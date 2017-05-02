@@ -52,7 +52,19 @@ class TransactionIndexTest extends JUnitSuite {
     val reopenedIndex = new TransactionIndex(file)
     val anotherAbortedTxn = new AbortedTxn(producerId = 3L, firstOffset = 50, lastOffset = 60, lastStableOffset = 55)
     reopenedIndex.append(anotherAbortedTxn)
-    assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.iterator.toList)
+    assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.allAbortedTxns)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testLastOffsetMustIncrease(): Unit = {
+    index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13))
+    index.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 15, lastStableOffset = 11))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testLastOffsetCannotDecrease(): Unit = {
+    index.append(new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13))
+    index.append(new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11))
   }
 
   @Test

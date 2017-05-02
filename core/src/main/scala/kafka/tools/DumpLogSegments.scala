@@ -135,7 +135,7 @@ object DumpLogSegments {
 
   private def dumpTxnIndex(file: File): Unit = {
     val index = new TransactionIndex(file)
-    for (abortedTxn <- index.iterator) {
+    for (abortedTxn <- index.allAbortedTxns) {
       println(s"version: ${abortedTxn.version} pid: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
         s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
     }
@@ -143,7 +143,7 @@ object DumpLogSegments {
 
   private def dumpPidSnapshot(file: File): Unit = {
     try {
-      ProducerIdMapping.readSnapshot(file).foreach { case (pid, entry) =>
+      ProducerStateManager.readSnapshot(file).foreach { case (pid, entry) =>
         println(s"pid: $pid epoch: ${entry.epoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
           s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp} " +
           s"currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")

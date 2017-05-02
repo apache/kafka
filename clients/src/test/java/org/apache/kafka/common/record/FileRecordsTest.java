@@ -241,7 +241,6 @@ public class FileRecordsTest {
         EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
         EasyMock.expect(channelMock.position(42L)).andReturn(null).once();
         EasyMock.expect(channelMock.truncate(23L)).andReturn(null).once();
-        EasyMock.expect(channelMock.position(23L)).andReturn(null).once();
         EasyMock.replay(channelMock);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);

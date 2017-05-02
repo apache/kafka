@@ -36,7 +36,7 @@ private[log] object ProducerIdEntry {
     -1, 0, RecordBatch.NO_TIMESTAMP, -1)
 }
 
-private[log] case class ProducerIdEntry(pid: Long, epoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int,
+private[log] case class ProducerIdEntry(producerId: Long, epoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int,
                                         timestamp: Long, currentTxnFirstOffset: Long) {
   def firstSeq: Int = lastSeq - offsetDelta
   def firstOffset: Long = lastOffset - offsetDelta
@@ -48,7 +48,7 @@ private[log] case class ProducerIdEntry(pid: Long, epoch: Short, lastSeq: Int, l
   }
 }
 
-private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
+private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
   // the initialEntry here is the last successful appended batch. we validate incoming entries transitively, starting
   // with the last appended entry.
   private var epoch = initialEntry.epoch
@@ -71,11 +71,11 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
         throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $epoch " +
           s"(request epoch), $firstSeq (seq. number)")
     } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
-      throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $pid, (incomingBatch.firstSeq, " +
+      throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $producerId, (incomingBatch.firstSeq, " +
         s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
         s"(${this.firstSeq}, ${this.lastSeq}).")
     } else if (firstSeq != this.lastSeq + 1L) {
-      throw new OutOfOrderSequenceException(s"Out of order sequence number: $pid (pid), $firstSeq " +
+      throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), $firstSeq " +
         s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
     }
   }
@@ -84,7 +84,7 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
     if (startedTxns.nonEmpty) {
       startedTxns.clear()
       val firstOffset = lastOffset - (lastSeq - firstSeq)
-      startedTxns += OngoingTxn(pid, firstOffset)
+      startedTxns += OngoingTxn(producerId, firstOffset)
       if (currentTxnFirstOffset == 0)
         currentTxnFirstOffset = firstOffset
     }
@@ -105,12 +105,12 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
 
     if (currentTxnFirstOffset >= 0 && !isTransactional)
       // FIXME: Do we need a new error code here?
-      throw new InvalidRecordException(s"Expected transactional write from producer $pid")
+      throw new InvalidRecordException(s"Expected transactional write from producer $producerId")
 
     if (isTransactional && currentTxnFirstOffset < 0) {
       val firstOffset = lastOffset - (lastSeq - firstSeq)
       currentTxnFirstOffset = firstOffset
-      startedTxns += OngoingTxn(pid, firstOffset)
+      startedTxns += OngoingTxn(producerId, firstOffset)
     }
   }
 
@@ -123,8 +123,8 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
       // we have a dangling marker in the log (i.e. a marker with no associated transaction data)
       return None
 
-    if (this.epoch > controlRecord.epoch)
-      throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${controlRecord.epoch} (request epoch), ${this.epoch}")
+    if (this.epoch > controlRecord.producerEpoch)
+      throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${controlRecord.producerEpoch} (request epoch), ${this.epoch}")
 
     controlRecord.controlType match {
       case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
@@ -135,14 +135,14 @@ private[log] class ProducerAppendInfo(val pid: Long, initialEntry: ProducerIdEnt
 
         currentTxnFirstOffset = -1
         maxTimestamp = controlRecord.timestamp
-        Some(CompletedTxn(pid, firstOffset, lastOffset, controlRecord.controlType == ControlRecordType.ABORT))
+        Some(CompletedTxn(producerId, firstOffset, lastOffset, controlRecord.controlType == ControlRecordType.ABORT))
 
       case unhandled => throw new IllegalArgumentException(s"Unhandled control type $unhandled")
     }
   }
 
   def lastEntry: ProducerIdEntry =
-    ProducerIdEntry(pid, epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp, currentTxnFirstOffset)
+    ProducerIdEntry(producerId, epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp, currentTxnFirstOffset)
 
   def startedTransactions: List[OngoingTxn] = startedTxns.toList
 }
@@ -158,7 +158,7 @@ private[log] case class OngoingTxn(pid: Long, firstOffset: Long) extends Ordered
   }
 }
 
-object ProducerIdMapping {
+object ProducerStateManager {
   private val PidSnapshotVersion: Short = 1
   private val VersionField = "version"
   private val CrcField = "crc"
@@ -273,13 +273,13 @@ object ProducerIdMapping {
  * been deleted.
  */
 @nonthreadsafe
-class ProducerIdMapping(val config: LogConfig,
-                        val topicPartition: TopicPartition,
-                        val logDir: File,
-                        val maxPidExpirationMs: Int) extends Logging {
-  import ProducerIdMapping._
+class ProducerStateManager(val config: LogConfig,
+                           val topicPartition: TopicPartition,
+                           val logDir: File,
+                           val maxPidExpirationMs: Int) extends Logging {
+  import ProducerStateManager._
 
-  private val pidMap = mutable.Map.empty[Long, ProducerIdEntry]
+  private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
 
@@ -327,7 +327,7 @@ class ProducerIdMapping(val config: LogConfig,
   /**
    * Get a copy of the active producers
    */
-  def activePids: immutable.Map[Long, ProducerIdEntry] = pidMap.toMap
+  def activePids: immutable.Map[Long, ProducerIdEntry] = producers.toMap
 
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
     while (true) {
@@ -337,7 +337,7 @@ class ProducerIdMapping(val config: LogConfig,
             info(s"Loading PID mapping from snapshot file ${file.getName} for partition $topicPartition")
             readSnapshot(file).foreach { case (pid, entry) =>
               if (!isExpired(currentTime, entry)) {
-                pidMap.put(pid, entry)
+                producers.put(pid, entry)
                 if (entry.currentTxnFirstOffset >= 0)
                   ongoingTxns += OngoingTxn(pid, entry.currentTxnFirstOffset)
               }
@@ -362,8 +362,8 @@ class ProducerIdMapping(val config: LogConfig,
   private def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry): Boolean =
     producerIdEntry.currentTxnFirstOffset < 0 && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
 
-  def removeExpiredPids(currentTimeMs: Long) {
-    pidMap.retain { case (pid, lastEntry) =>
+  def removeExpiredProducers(currentTimeMs: Long) {
+    producers.retain { case (pid, lastEntry) =>
       !isExpired(currentTimeMs, lastEntry)
     }
   }
@@ -374,7 +374,7 @@ class ProducerIdMapping(val config: LogConfig,
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     if (logEndOffset != mapEndOffset) {
-      pidMap.clear()
+      producers.clear()
       ongoingTxns.clear()
       unackedCompletedTxns.clear()
       deleteSnapshotFiles { file =>
@@ -391,10 +391,10 @@ class ProducerIdMapping(val config: LogConfig,
    * Update the mapping with the given append information
    */
   def update(appendInfo: ProducerAppendInfo): Unit = {
-    if (appendInfo.pid == RecordBatch.NO_PRODUCER_ID)
+    if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
       throw new IllegalArgumentException("Invalid PID passed to update")
     val entry = appendInfo.lastEntry
-    pidMap.put(appendInfo.pid, entry)
+    producers.put(appendInfo.producerId, entry)
     ongoingTxns ++= appendInfo.startedTransactions
   }
 
@@ -405,7 +405,7 @@ class ProducerIdMapping(val config: LogConfig,
   /**
    * Get the last written entry for the given PID.
    */
-  def lastEntry(pid: Long): Option[ProducerIdEntry] = pidMap.get(pid)
+  def lastEntry(producerId: Long): Option[ProducerIdEntry] = producers.get(producerId)
 
   /**
    * Write a new snapshot if there have been updates since the last one.
@@ -415,7 +415,7 @@ class ProducerIdMapping(val config: LogConfig,
     if (lastMapOffset > lastSnapOffset) {
       val snapshotFile = Log.pidSnapshotFilename(logDir, lastMapOffset)
       debug(s"Writing producer snapshot for partition $topicPartition at offset $lastMapOffset")
-      writeSnapshot(snapshotFile, pidMap)
+      writeSnapshot(snapshotFile, producers)
 
       // Update the last snap offset according to the serialized map
       lastSnapOffset = lastMapOffset
@@ -434,12 +434,12 @@ class ProducerIdMapping(val config: LogConfig,
    * the new start offset and removes all pids which have a smaller last written offset.
    */
   def evictUnretainedPids(logStartOffset: Long) {
-    val evictedPidEntries = pidMap.filter(_._2.lastOffset < logStartOffset)
+    val evictedPidEntries = producers.filter(_._2.lastOffset < logStartOffset)
     val evictedPids = evictedPidEntries.keySet
 
     ongoingTxns.retain(txn => !evictedPids.contains(txn.pid))
-    unackedCompletedTxns.retain(txn => !evictedPids.contains(txn.pid))
-    pidMap --= evictedPids
+    unackedCompletedTxns.retain(txn => !evictedPids.contains(txn.producerId))
+    producers --= evictedPids
 
     deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= logStartOffset)
     if (lastMapOffset < logStartOffset)
@@ -451,7 +451,7 @@ class ProducerIdMapping(val config: LogConfig,
    * Truncate the PID mapping and remove all snapshots. This resets the state of the mapping.
    */
   def truncate() {
-    pidMap.clear()
+    producers.clear()
     ongoingTxns.clear()
     unackedCompletedTxns.clear()
     deleteSnapshotFiles()
@@ -460,7 +460,7 @@ class ProducerIdMapping(val config: LogConfig,
   }
 
   def completeTxn(completedTxn: CompletedTxn): Unit = {
-    ongoingTxns -= OngoingTxn(completedTxn.pid, completedTxn.firstOffset)
+    ongoingTxns -= OngoingTxn(completedTxn.producerId, completedTxn.firstOffset)
     unackedCompletedTxns += completedTxn
   }
 
