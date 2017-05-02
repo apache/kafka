@@ -33,11 +33,11 @@ import scala.collection.{immutable, mutable}
 
 private[log] object ProducerIdEntry {
   val Empty = ProducerIdEntry(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
-    -1, 0, RecordBatch.NO_TIMESTAMP, -1)
+    -1, 0, RecordBatch.NO_TIMESTAMP, None)
 }
 
 private[log] case class ProducerIdEntry(producerId: Long, epoch: Short, lastSeq: Int, lastOffset: Long, offsetDelta: Int,
-                                        timestamp: Long, currentTxnFirstOffset: Long) {
+                                        timestamp: Long, currentTxnFirstOffset: Option[Long]) {
   def firstSeq: Int = lastSeq - offsetDelta
   def firstOffset: Long = lastOffset - offsetDelta
 
@@ -57,7 +57,6 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   private var lastOffset = initialEntry.lastOffset
   private var maxTimestamp = initialEntry.timestamp
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
-  private val startedTxns = ListBuffer.empty[OngoingTxn]
 
   def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
     this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
@@ -70,6 +69,10 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
       if (firstSeq != 0)
         throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $epoch " +
           s"(request epoch), $firstSeq (seq. number)")
+    } else if (this.firstSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
+      // the epoch was bumped by a control record, so we expect the sequence number to be reset
+      throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), found $firstSeq " +
+        s"(incoming seq. number), but expected 0")
     } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
       throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $producerId, (incomingBatch.firstSeq, " +
         s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
@@ -80,21 +83,19 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     }
   }
 
-  def assignLastOffsetAndTimestamp(lastOffset: Long, lastTimestamp: Long): Unit = {
-    if (startedTxns.nonEmpty) {
-      startedTxns.clear()
-      val firstOffset = lastOffset - (lastSeq - firstSeq)
-      startedTxns += OngoingTxn(producerId, firstOffset)
-      if (currentTxnFirstOffset == 0)
-        currentTxnFirstOffset = firstOffset
-    }
-
-    this.lastOffset = lastOffset
+  def assignTimestamp(lastTimestamp: Long): Unit = {
     this.maxTimestamp = lastTimestamp
   }
 
-  def append(epoch: Short, firstSeq: Int, lastSeq: Int, lastTimestamp: Long, lastOffset: Long, isTransactional: Boolean) {
+  def append(epoch: Short,
+             firstSeq: Int,
+             lastSeq: Int,
+             lastTimestamp: Long,
+             lastOffset: Long,
+             isTransactional: Boolean): Unit = {
     if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
+      // skip validation if this is the first entry when loading from the log. Log retention
+      // will generally have removed the beginning entries from each PID
       validateAppend(epoch, firstSeq, lastSeq)
 
     this.epoch = epoch
@@ -103,39 +104,38 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     this.maxTimestamp = lastTimestamp
     this.lastOffset = lastOffset
 
-    if (currentTxnFirstOffset >= 0 && !isTransactional)
+    if (currentTxnFirstOffset.isDefined && !isTransactional)
       // FIXME: Do we need a new error code here?
       throw new InvalidRecordException(s"Expected transactional write from producer $producerId")
 
-    if (isTransactional && currentTxnFirstOffset < 0) {
+    if (isTransactional && currentTxnFirstOffset.isEmpty) {
       val firstOffset = lastOffset - (lastSeq - firstSeq)
-      currentTxnFirstOffset = firstOffset
-      startedTxns += OngoingTxn(producerId, firstOffset)
+      currentTxnFirstOffset = Some(firstOffset)
     }
   }
 
-  def append(batch: RecordBatch): Unit =
-    append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
-      batch.isTransactional)
+  def appendControlRecord(controlType: ControlRecordType,
+                          producerId: Long,
+                          producerEpoch: Short,
+                          offset: Long,
+                          timestamp: Long): CompletedTxn = {
+    if (this.epoch > producerEpoch)
+      throw new ProducerFencedException(s"Invalid epoch (zombie writer): $producerEpoch (request epoch), ${this.epoch}")
 
-  def appendControl(controlRecord: ControlRecord): Option[CompletedTxn] = {
-    if (loadingFromLog && this.epoch == RecordBatch.NO_PRODUCER_EPOCH)
-      // we have a dangling marker in the log (i.e. a marker with no associated transaction data)
-      return None
+    // it is possible that this control record is the first record seen from a new epoch
+    if (producerEpoch > this.epoch) {
+      this.epoch = producerEpoch
+      this.firstSeq = RecordBatch.NO_SEQUENCE
+      this.lastSeq = RecordBatch.NO_SEQUENCE
+    }
 
-    if (this.epoch > controlRecord.producerEpoch)
-      throw new ProducerFencedException(s"Invalid epoch (zombie writer): ${controlRecord.producerEpoch} (request epoch), ${this.epoch}")
-
-    controlRecord.controlType match {
+    controlType match {
       case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
-        val firstOffset = if (currentTxnFirstOffset >= 0)
-          currentTxnFirstOffset
-        else
-          controlRecord.offset
-
-        currentTxnFirstOffset = -1
-        maxTimestamp = controlRecord.timestamp
-        Some(CompletedTxn(producerId, firstOffset, lastOffset, controlRecord.controlType == ControlRecordType.ABORT))
+        val firstOffset = currentTxnFirstOffset.getOrElse(offset)
+        this.lastOffset = offset
+        this.currentTxnFirstOffset = None
+        this.maxTimestamp = timestamp
+        CompletedTxn(producerId, firstOffset, offset, controlType == ControlRecordType.ABORT)
 
       case unhandled => throw new IllegalArgumentException(s"Unhandled control type $unhandled")
     }
@@ -144,10 +144,14 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   def lastEntry: ProducerIdEntry =
     ProducerIdEntry(producerId, epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp, currentTxnFirstOffset)
 
-  def startedTransactions: List[OngoingTxn] = startedTxns.toList
+  def startedTransaction: Option[OngoingTxn] = currentTxnFirstOffset.map { offset =>
+    OngoingTxn(producerId, offset)
+  }
+
 }
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
+
 private[log] case class OngoingTxn(pid: Long, firstOffset: Long) extends Ordered[OngoingTxn] {
   override def compare(that: OngoingTxn): Int = {
     val res = this.firstOffset compare that.firstOffset
@@ -213,7 +217,8 @@ object ProducerStateManager {
       val timestamp = pidEntryStruct.getLong(TimestampField)
       val offsetDelta = pidEntryStruct.getInt(OffsetDeltaField)
       val currentTxnFirstOffset = pidEntryStruct.getLong(CurrentTxnFirstOffsetField)
-      val newEntry = ProducerIdEntry(pid, epoch, seq, offset, offsetDelta, timestamp, currentTxnFirstOffset)
+      val newEntry = ProducerIdEntry(pid, epoch, seq, offset, offsetDelta, timestamp,
+        if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
       pid -> newEntry
     }
   }
@@ -231,7 +236,7 @@ object ProducerStateManager {
           .set(LastOffsetField, entry.lastOffset)
           .set(OffsetDeltaField, entry.offsetDelta)
           .set(TimestampField, entry.timestamp)
-          .set(CurrentTxnFirstOffsetField, entry.currentTxnFirstOffset)
+          .set(CurrentTxnFirstOffsetField, entry.currentTxnFirstOffset.getOrElse(-1L))
         pidEntryStruct
     }.toArray
     struct.set(PidEntriesField, entriesArray)
@@ -338,8 +343,9 @@ class ProducerStateManager(val config: LogConfig,
             readSnapshot(file).foreach { case (pid, entry) =>
               if (!isExpired(currentTime, entry)) {
                 producers.put(pid, entry)
-                if (entry.currentTxnFirstOffset >= 0)
-                  ongoingTxns += OngoingTxn(pid, entry.currentTxnFirstOffset)
+                entry.currentTxnFirstOffset.foreach { offset =>
+                  ongoingTxns += OngoingTxn(pid, offset)
+                }
               }
             }
 
@@ -360,8 +366,11 @@ class ProducerStateManager(val config: LogConfig,
   }
 
   private def isExpired(currentTimeMs: Long, producerIdEntry: ProducerIdEntry): Boolean =
-    producerIdEntry.currentTxnFirstOffset < 0 && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
+    producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
 
+  /**
+   * Expire any PIDs which have been idle longer than the configured maximum expiration timeout.
+   */
   def removeExpiredProducers(currentTimeMs: Long) {
     producers.retain { case (pid, lastEntry) =>
       !isExpired(currentTimeMs, lastEntry)
@@ -395,7 +404,7 @@ class ProducerStateManager(val config: LogConfig,
       throw new IllegalArgumentException("Invalid PID passed to update")
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)
-    ongoingTxns ++= appendInfo.startedTransactions
+    appendInfo.startedTransaction.foreach(ongoingTxns += _)
   }
 
   def updateMapEndOffset(lastOffset: Long): Unit = {

@@ -86,21 +86,6 @@ case class LogAppendInfo(var firstOffset: Long,
                          isDuplicate: Boolean = false)
 
 /**
- * A class used to hold useful metadata about a control record
- *
- * @param controlType Type of the control record
- * @param producerId ID of the associated producer
- * @param producerEpoch Epoch of the associated producer
- * @param offset The offset of the record
- * @param timestamp The timestamp from the record
- */
-case class ControlRecord(controlType: ControlRecordType,
-                         producerId: Long,
-                         producerEpoch: Short,
-                         offset: Long,
-                         timestamp: Long)
-
-/**
  * A class used to hold useful metadata about a completed transaction. This is used to build
  * the transaction index after appending to the log.
  *
@@ -446,7 +431,10 @@ class Log(@volatile var dir: File,
     val pidsToLoad = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      updateProducer(batch, pidsToLoad, completedTxns, loadingFromLog = true)
+      if (batch.hasProducerId) {
+        val lastEntry = producerStateManager.lastEntry(batch.producerId)
+        updateProducer(batch, pidsToLoad, completedTxns, lastEntry, assignOffsets = false, loadingFromLog = true)
+      }
     }
     pidsToLoad.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
@@ -480,39 +468,41 @@ class Log(@volatile var dir: File,
   }
 
   /**
-    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
-    * @param records The records to append
-    * @throws KafkaStorageException If the append fails due to an I/O error.
-    * @return Information about the appended messages including the first and last offset.
-    */
+   * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
+   * @param records The records to append
+   * @param isFromClient Whether or not this append is from a producer
+   * @throws KafkaStorageException If the append fails due to an I/O error.
+   * @return Information about the appended messages including the first and last offset.
+   */
   def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true): LogAppendInfo = {
     append(records, isFromClient, assignOffsets = true, leaderEpoch)
   }
 
   /**
-    * Append this message set to the active segment of the log without assigning offsets or Partition Leader Epochs
-    * @param records The records to append
-    * @throws KafkaStorageException If the append fails due to an I/O error.
-    * @return Information about the appended messages including the first and last offset.
-    */
+   * Append this message set to the active segment of the log without assigning offsets or Partition Leader Epochs
+   * @param records The records to append
+   * @throws KafkaStorageException If the append fails due to an I/O error.
+   * @return Information about the appended messages including the first and last offset.
+   */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records, isFromClient = false, assignOffsets = false, leaderEpoch = -1)
   }
 
   /**
-    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
-    *
-    * This method will generally be responsible for assigning offsets to the messages,
-    * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
-    *
-    * @param records The log records to append
-    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
-    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
-    * @throws KafkaStorageException If the append fails due to an I/O error.
-    * @return Information about the appended messages including the first and last offset.
-    */
+   * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
+   *
+   * This method will generally be responsible for assigning offsets to the messages,
+   * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
+   *
+   * @param records The log records to append
+   * @param isFromClient Whether or not this append is from a producer
+   * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
+   * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
+   * @throws KafkaStorageException If the append fails due to an I/O error.
+   * @return Information about the appended messages including the first and last offset.
+   */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
-    val appendInfo = analyzeAndValidateRecords(records, isFromClient)
+    val appendInfo = analyzeAndValidateRecords(records, assignOffsets)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
     if (appendInfo.shallowCount == 0 || appendInfo.isDuplicate)
@@ -597,9 +587,10 @@ class Log(@volatile var dir: File,
 
         // update the producer state
         for ((producerId, producerAppendInfo) <- appendInfo.producerAppendInfos) {
-          trace(s"Updating pid with sequence: $producerId -> ${producerAppendInfo.lastEntry}")
           if (assignOffsets)
-            producerAppendInfo.assignLastOffsetAndTimestamp(appendInfo.lastOffset, appendInfo.maxTimestamp)
+            // the timestamp may have been overwritten with the log append time, so update the value here
+            producerAppendInfo.assignTimestamp(appendInfo.maxTimestamp)
+          trace(s"Updating pid with sequence: $producerId -> ${producerAppendInfo.lastEntry}")
           producerStateManager.update(producerAppendInfo)
         }
 
@@ -687,7 +678,7 @@ class Log(@volatile var dir: File,
    * <li> Whether any compression codec is used (if many are used, then the last one is given)
    * </ol>
    */
-  private def analyzeAndValidateRecords(records: MemoryRecords, isFromClient: Boolean): LogAppendInfo = {
+  private def analyzeAndValidateRecords(records: MemoryRecords, assignOffsets: Boolean): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
     var firstOffset = -1L
@@ -701,7 +692,7 @@ class Log(@volatile var dir: File,
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
-      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.baseOffset != 0)
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && assignOffsets && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch should be 0, but it is ${batch.baseOffset}")
 
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
@@ -741,8 +732,8 @@ class Log(@volatile var dir: File,
       if (messageCodec != NoCompressionCodec)
         sourceCodec = messageCodec
 
-      if (isFromClient) {
-        if (batch.hasProducerId) {
+      if (batch.hasProducerId) {
+        if (assignOffsets) {
           val pid = batch.producerId
           val isDuplicate = producerStateManager.lastEntry(pid) match {
             case Some(lastEntry) if lastEntry.isDuplicate(batch) =>
@@ -755,9 +746,8 @@ class Log(@volatile var dir: File,
               true
 
             case maybeLastEntry =>
-              val appendInfo = new ProducerAppendInfo(pid, maybeLastEntry, loadingFromLog = false)
-              appendInfo.append(batch)
-              producerAppendInfos.put(pid, appendInfo)
+              updateProducer(batch, producerAppendInfos, completedTxns, maybeLastEntry, assignOffsets = true,
+                loadingFromLog = false)
               false
           }
 
@@ -765,9 +755,11 @@ class Log(@volatile var dir: File,
           return LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP,
             sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap,
             completedTxns.toList, isDuplicate = isDuplicate)
+        } else {
+          val lastEntry = producerStateManager.lastEntry(batch.producerId)
+          updateProducer(batch, producerAppendInfos, completedTxns, lastEntry, assignOffsets = false,
+            loadingFromLog = false)
         }
-      } else {
-        updateProducer(batch, producerAppendInfos, completedTxns, loadingFromLog = false)
       }
     }
 
@@ -781,31 +773,30 @@ class Log(@volatile var dir: File,
   private def updateProducer(batch: RecordBatch,
                              producers: mutable.Map[Long, ProducerAppendInfo],
                              completedTxns: ListBuffer[CompletedTxn],
+                             lastEntry: Option[ProducerIdEntry],
+                             assignOffsets: Boolean,
                              loadingFromLog: Boolean): Unit = {
+    val pid = batch.producerId
+    val (firstOffset, lastOffset) = if (assignOffsets)
+      (nextOffsetMetadata.messageOffset, nextOffsetMetadata.messageOffset + batch.countOrNull - 1)
+    else
+      (batch.baseOffset, batch.lastOffset)
 
-    if (batch.hasProducerId) {
-      val pid = batch.producerId
-      val maybeControlRecord = if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
-        val record = batch.iterator.next()
-        val controlRecordType = ControlRecordType.parse(record.key)
-        val controlRecord = ControlRecord(controlRecordType, pid, batch.producerEpoch,
-          record.offset, record.timestamp)
-        Some(controlRecord)
-      } else None
+    val appendInfo = producers.getOrElse(pid, {
+      val appendInfo = new ProducerAppendInfo(pid, lastEntry, loadingFromLog)
+      producers.put(pid, appendInfo)
+      appendInfo
+    })
 
-      val appendInfo = producers.getOrElse(pid, {
-        val appendInfo = new ProducerAppendInfo(pid, producerStateManager.lastEntry(pid), loadingFromLog)
-        producers.put(pid, appendInfo)
-        appendInfo
-      })
-
-      maybeControlRecord match {
-        case Some(controlRecord) =>
-          appendInfo.appendControl(controlRecord).foreach { completedTxn =>
-            completedTxns += completedTxn
-          }
-        case None => appendInfo.append(batch)
-      }
+    if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
+      val record = batch.iterator.next()
+      val controlRecordType = ControlRecordType.parse(record.key)
+      val completedTxn = appendInfo.appendControlRecord(controlRecordType, pid, batch.producerEpoch, firstOffset,
+        record.timestamp)
+      completedTxns += completedTxn
+    } else {
+      appendInfo.append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, lastOffset,
+        batch.isTransactional)
     }
   }
 
@@ -902,7 +893,8 @@ class Log(@volatile var dir: File,
   private def addAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
     val fetchSize = fetchInfo.records.sizeInBytes
-    val startOffsetPosition = OffsetPosition(startOffset, fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
+    val startOffsetPosition = OffsetPosition(fetchInfo.fetchOffsetMetadata.messageOffset,
+      fetchInfo.fetchOffsetMetadata.relativePositionInSegment)
     val upperBoundOffset = segmentEntry.getValue.fetchUpperBoundOffset(startOffsetPosition, fetchSize).getOrElse {
       val nextSegmentEntry = segments.higherEntry(segmentEntry.getKey)
       if (nextSegmentEntry != null)

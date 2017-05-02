@@ -1455,7 +1455,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }.toMap
 
       replicaManager.appendRecords(
-        timeout = 30000, // FIXME: Add this to the request type? Or broker config?
+        timeout = config.requestTimeoutMs.toLong,
         requiredAcks = -1,
         internalTopicsAllowed = true,
         isFromClient = false,

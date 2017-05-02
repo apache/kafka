@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
-import org.apache.kafka.common.record.ControlRecordType
+import org.apache.kafka.common.record.{ControlRecordType, InvalidRecordException, RecordBatch}
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -77,6 +77,70 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertThrows[ProducerFencedException] {
       append(idMapping, pid, 0, epoch, 0L, 4L)
     }
+  }
+
+  @Test
+  def testNoValidationOnFirstEntryWhenLoadingLog(): Unit = {
+    val epoch = 5.toShort
+    val sequence = 16
+    val offset = 735L
+    append(idMapping, pid, sequence, epoch, offset, isLoadingFromLog = true)
+
+    val maybeLastEntry = idMapping.lastEntry(pid)
+    assertTrue(maybeLastEntry.isDefined)
+
+    val lastEntry = maybeLastEntry.get
+    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(sequence, lastEntry.firstSeq)
+    assertEquals(sequence, lastEntry.lastSeq)
+    assertEquals(offset, lastEntry.lastOffset)
+    assertEquals(offset, lastEntry.firstOffset)
+  }
+
+  @Test
+  def testControlRecordBumpsEpoch(): Unit = {
+    val epoch = 0.toShort
+    append(idMapping, pid, 0, epoch, 0L)
+
+    val bumpedEpoch = 1.toShort
+    val completedTxn = appendControl(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
+    assertEquals(1L, completedTxn.firstOffset)
+    assertEquals(1L, completedTxn.lastOffset)
+    assertTrue(completedTxn.isAborted)
+    assertEquals(pid, completedTxn.producerId)
+
+    val maybeLastEntry = idMapping.lastEntry(pid)
+    assertTrue(maybeLastEntry.isDefined)
+
+    val lastEntry = maybeLastEntry.get
+    assertEquals(bumpedEpoch, lastEntry.epoch)
+    assertEquals(None, lastEntry.currentTxnFirstOffset)
+    assertEquals(RecordBatch.NO_SEQUENCE, lastEntry.firstSeq)
+    assertEquals(RecordBatch.NO_SEQUENCE, lastEntry.lastSeq)
+
+    // should be able to append with the new epoch if we start at sequence 0
+    append(idMapping, pid, 0, bumpedEpoch, 2L)
+    assertEquals(Some(0), idMapping.lastEntry(pid).map(_.firstSeq))
+  }
+
+  @Test(expected = classOf[OutOfOrderSequenceException])
+  def testOutOfSequenceAfterControlRecordEpochBump(): Unit = {
+    val epoch = 0.toShort
+    append(idMapping, pid, 0, epoch, 0L)
+    append(idMapping, pid, 1, epoch, 1L)
+
+    val bumpedEpoch = 1.toShort
+    appendControl(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
+
+    // next append is invalid since we expect the sequence to be reset
+    append(idMapping, pid, 2, bumpedEpoch, 2L)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testNonTransactionalAppendWithOngoingTransaction(): Unit = {
+    val epoch = 0.toShort
+    append(idMapping, pid, 0, epoch, 0L, isTransactional = true)
+    append(idMapping, pid, 1, epoch, 1L, isTransactional = false)
   }
 
   @Test
@@ -337,12 +401,13 @@ class ProducerStateManagerTest extends JUnitSuite {
                             epoch: Short,
                             controlType: ControlRecordType,
                             offset: Long,
-                            timestamp: Long = time.milliseconds()): Unit = {
+                            timestamp: Long = time.milliseconds()): CompletedTxn = {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
-    val maybeCompletedTxn = producerAppendInfo.appendControl(ControlRecord(controlType, pid, epoch, offset, timestamp))
+    val completedTxn = producerAppendInfo.appendControlRecord(controlType, pid, epoch, offset, timestamp)
     mapping.update(producerAppendInfo)
-    maybeCompletedTxn.foreach(mapping.completeTxn)
+    mapping.completeTxn(completedTxn)
     mapping.updateMapEndOffset(offset + 1)
+    completedTxn
   }
 
   private def append(mapping: ProducerStateManager,
@@ -351,8 +416,9 @@ class ProducerStateManagerTest extends JUnitSuite {
                      epoch: Short,
                      offset: Long,
                      timestamp: Long = time.milliseconds(),
-                     isTransactional: Boolean = false): Unit = {
-    val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
+                     isTransactional: Boolean = false,
+                     isLoadingFromLog: Boolean = false): Unit = {
+    val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid), isLoadingFromLog)
     producerAppendInfo.append(epoch, seq, seq, timestamp, offset, isTransactional)
     mapping.update(producerAppendInfo)
     mapping.updateMapEndOffset(offset + 1)
