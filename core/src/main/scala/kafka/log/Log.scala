@@ -629,7 +629,7 @@ class Log(@volatile var dir: File,
 
   def onHighWatermarkIncremented(highWatermark: Long): Unit = {
     lock synchronized {
-      producerStateManager.ackTransactionsCompletedBefore(highWatermark)
+      producerStateManager.onHighWatermarkUpdated(highWatermark)
       updateFirstUnstableOffset()
     }
   }
@@ -791,7 +791,7 @@ class Log(@volatile var dir: File,
     if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
       val record = batch.iterator.next()
       val controlRecordType = ControlRecordType.parse(record.key)
-      val completedTxn = appendInfo.appendControlRecord(controlRecordType, pid, batch.producerEpoch, firstOffset,
+      val completedTxn = appendInfo.appendControlRecord(controlRecordType, batch.producerEpoch, firstOffset,
         record.timestamp)
       completedTxns += completedTxn
     } else {

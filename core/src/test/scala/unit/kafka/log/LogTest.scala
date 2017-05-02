@@ -2060,10 +2060,60 @@ class LogTest {
     // now transaction is committed
     val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.COMMIT, pid, epoch),
       isFromClient = false, leaderEpoch = 0)
+
+    // first unstable offset is not updated until the high watermark is advanced
+    assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
     log.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
 
     // now there should be no first unstable offset
     assertEquals(None, log.firstUnstableOffset)
+  }
+
+  @Test
+  def testTransactionIndexUpdated(): Unit = {
+    val epoch = 0.toShort
+    val log = createLog(1024 * 1024)
+
+    def allAbortedTransactions = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+
+    def appendTransactional(pid: Long): Int => Unit = {
+      var sequence = 0
+      numRecords: Int => {
+        val simpleRecords = (sequence until sequence + numRecords).map { seq =>
+          new SimpleRecord(s"$seq".getBytes)
+        }
+        val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, pid,
+          epoch, sequence, simpleRecords: _*)
+        log.appendAsLeader(records, leaderEpoch = 0)
+        sequence += numRecords
+      }
+    }
+
+    def appendControl(pid: Long, controlType: ControlRecordType): Unit =
+      log.appendAsLeader(MemoryRecords.withControlRecord(controlType, pid, epoch), isFromClient = false,
+        leaderEpoch = 0)
+
+    val pid1 = 1L
+    val pid2 = 2L
+    val pid3 = 3L
+
+    val appendPid1 = appendTransactional(pid1)
+    val appendPid2 = appendTransactional(pid2)
+    val appendPid3 = appendTransactional(pid3)
+
+    appendPid1(5) // nextOffset: 5
+    appendPid2(2) // 7
+    appendPid1(4) // 11
+    appendPid3(3) // 14
+    appendPid1(10) // 24
+    appendControl(pid1, ControlRecordType.ABORT) // 25
+    appendPid2(6) // 31
+    appendPid3(9) // 40
+    appendControl(pid3, ControlRecordType.COMMIT) // 41
+    appendPid2(7) // 48
+    appendControl(pid2, ControlRecordType.ABORT) // 49
+
+    assertEquals(List(new AbortedTxn(pid1, 0L, 24L, 5L), new AbortedTxn(pid2, 5L, 48L, 49L)), allAbortedTransactions)
   }
 
   @Test

@@ -123,6 +123,49 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Some(0), idMapping.lastEntry(pid).map(_.firstSeq))
   }
 
+  @Test
+  def updateProducerTransactionState(): Unit = {
+    val epoch = 0.toShort
+    val offset = 9L
+    append(idMapping, pid, 0, epoch, offset)
+
+    val appendInfo = new ProducerAppendInfo(pid, idMapping.lastEntry(pid), loadingFromLog = false)
+    appendInfo.append(epoch, 1, 5, time.milliseconds(), 20L, isTransactional = true)
+    var lastEntry = appendInfo.lastEntry
+    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(1, lastEntry.firstSeq)
+    assertEquals(5, lastEntry.lastSeq)
+    assertEquals(16L, lastEntry.firstOffset)
+    assertEquals(20L, lastEntry.lastOffset)
+    assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
+    assertEquals(Some(OngoingTxn(pid, 16L)), appendInfo.startedTransaction)
+
+    appendInfo.append(epoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
+    lastEntry = appendInfo.lastEntry
+    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(6, lastEntry.firstSeq)
+    assertEquals(10, lastEntry.lastSeq)
+    assertEquals(26L, lastEntry.firstOffset)
+    assertEquals(30L, lastEntry.lastOffset)
+    assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
+    assertEquals(Some(OngoingTxn(pid, 16L)), appendInfo.startedTransaction)
+
+    val completedTxn = appendInfo.appendControlRecord(ControlRecordType.COMMIT, epoch, 40L, time.milliseconds())
+    assertEquals(pid, completedTxn.producerId)
+    assertEquals(16L, completedTxn.firstOffset)
+    assertEquals(40L, completedTxn.lastOffset)
+    assertFalse(completedTxn.isAborted)
+
+    lastEntry = appendInfo.lastEntry
+    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(10, lastEntry.firstSeq)
+    assertEquals(10, lastEntry.lastSeq)
+    assertEquals(40L, lastEntry.firstOffset)
+    assertEquals(40L, lastEntry.lastOffset)
+    assertEquals(None, lastEntry.currentTxnFirstOffset)
+    assertEquals(None, appendInfo.startedTransaction)
+  }
+
   @Test(expected = classOf[OutOfOrderSequenceException])
   def testOutOfSequenceAfterControlRecordEpochBump(): Unit = {
     val epoch = 0.toShort
@@ -243,7 +286,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     idMapping.maybeTakeSnapshot()
 
     appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 105)
-    idMapping.ackTransactionsCompletedBefore(106)
+    idMapping.onHighWatermarkUpdated(106)
     assertEquals(None, idMapping.firstUnstableOffset)
     idMapping.maybeTakeSnapshot()
 
@@ -355,16 +398,31 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
     assertEquals(Some(99L), idMapping.firstUndecidedOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset)
 
     val anotherPid = 2L
     append(idMapping, anotherPid, sequence, epoch, offset = 105, isTransactional = true)
     assertEquals(Some(99L), idMapping.firstUndecidedOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(105L), idMapping.firstUndecidedOffsetExcluding(CompletedTxn(pid, 99L, 109L, isAborted = false)))
 
     appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 109)
     assertEquals(Some(105L), idMapping.firstUndecidedOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+
+    idMapping.onHighWatermarkUpdated(100L)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+
+    idMapping.onHighWatermarkUpdated(110L)
+    assertEquals(Some(105L), idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUndecidedOffsetExcluding(CompletedTxn(anotherPid, 105L, 112L, isAborted = true)))
 
     appendControl(idMapping, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
     assertEquals(None, idMapping.firstUndecidedOffset)
+    assertEquals(Some(105L), idMapping.firstUnstableOffset)
+
+    idMapping.onHighWatermarkUpdated(113L)
+    assertEquals(None, idMapping.firstUnstableOffset)
   }
 
   @Test
@@ -403,7 +461,7 @@ class ProducerStateManagerTest extends JUnitSuite {
                             offset: Long,
                             timestamp: Long = time.milliseconds()): CompletedTxn = {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
-    val completedTxn = producerAppendInfo.appendControlRecord(controlType, pid, epoch, offset, timestamp)
+    val completedTxn = producerAppendInfo.appendControlRecord(controlType, epoch, offset, timestamp)
     mapping.update(producerAppendInfo)
     mapping.completeTxn(completedTxn)
     mapping.updateMapEndOffset(offset + 1)

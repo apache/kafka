@@ -115,18 +115,25 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   }
 
   def appendControlRecord(controlType: ControlRecordType,
-                          producerId: Long,
                           producerEpoch: Short,
                           offset: Long,
                           timestamp: Long): CompletedTxn = {
     if (this.epoch > producerEpoch)
       throw new ProducerFencedException(s"Invalid epoch (zombie writer): $producerEpoch (request epoch), ${this.epoch}")
 
-    // it is possible that this control record is the first record seen from a new epoch
     if (producerEpoch > this.epoch) {
+      // it is possible that this control record is the first record seen from a new epoch (the producer
+      // may fail before sending to the partition or the request itself could fail for some reason). In this
+      // case, we bump the epoch and reset the sequence numbers
       this.epoch = producerEpoch
       this.firstSeq = RecordBatch.NO_SEQUENCE
       this.lastSeq = RecordBatch.NO_SEQUENCE
+    } else {
+      // the control record is the last append to the log, so the last offset will be updated to point to it.
+      // However, the sequence numbers still point to the previous batch, so the duplicate check would no longer
+      // be correct: it would return the wrong offset. To fix this, we treat the control record as a batch
+      // of size 1 which uses the last appended sequence number.
+      this.firstSeq = this.lastSeq
     }
 
     controlType match {
@@ -292,7 +299,7 @@ class ProducerStateManager(val config: LogConfig,
   private val ongoingTxns = mutable.TreeSet.empty[OngoingTxn]
 
   // completed transactions whose markers are at offsets above the high watermark
-  private val unackedCompletedTxns = mutable.TreeSet.empty[CompletedTxn]
+  private val unreplicatedTxns = mutable.TreeSet.empty[CompletedTxn]
 
   /**
    * An unstable offset is one which is either undecided (i.e. its ultimate outcome is not yet known),
@@ -300,7 +307,7 @@ class ProducerStateManager(val config: LogConfig,
    * marker written at a higher offset than the current high watermark).
    */
   def firstUnstableOffset: Option[Long] = {
-    val firstUnackedOffset = unackedCompletedTxns.headOption.map(_.firstOffset)
+    val firstUnackedOffset = unreplicatedTxns.headOption.map(_.firstOffset)
     firstUndecidedOffset.map { offset =>
       math.min(offset, firstUnackedOffset.getOrElse(Long.MaxValue))
     }.orElse(firstUnackedOffset)
@@ -310,7 +317,7 @@ class ProducerStateManager(val config: LogConfig,
    * Acknowledge all transactions which have been completed before a given offset. This allows the LSO
    * to advance to the next unstable offset.
    */
-  def ackTransactionsCompletedBefore(offset: Long): Unit = unackedCompletedTxns.retain(_.lastOffset >= offset)
+  def onHighWatermarkUpdated(highWatermark: Long): Unit = unreplicatedTxns.retain(_.lastOffset >= highWatermark)
 
   /**
    * The first undecided offset is the earliest transactional message which has not yet been committed
@@ -322,7 +329,7 @@ class ProducerStateManager(val config: LogConfig,
    * Get the next first undecided offset once the given transaction is completed.
    */
   def firstUndecidedOffsetExcluding(txn: CompletedTxn): Option[Long] =
-    ongoingTxns.find(txn => txn.firstOffset != txn.firstOffset).map(_.firstOffset)
+    ongoingTxns.find(ongoingTxn => txn.firstOffset != ongoingTxn.firstOffset).map(_.firstOffset)
 
   /**
    * Returns the last offset of this map
@@ -385,7 +392,7 @@ class ProducerStateManager(val config: LogConfig,
     if (logEndOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
-      unackedCompletedTxns.clear()
+      unreplicatedTxns.clear()
       deleteSnapshotFiles { file =>
         val offset = Log.offsetFromFilename(file.getName)
         offset > logEndOffset || offset <= logStartOffset
@@ -447,7 +454,7 @@ class ProducerStateManager(val config: LogConfig,
     val evictedPids = evictedPidEntries.keySet
 
     ongoingTxns.retain(txn => !evictedPids.contains(txn.pid))
-    unackedCompletedTxns.retain(txn => !evictedPids.contains(txn.producerId))
+    unreplicatedTxns.retain(txn => !evictedPids.contains(txn.producerId))
     producers --= evictedPids
 
     deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= logStartOffset)
@@ -462,7 +469,7 @@ class ProducerStateManager(val config: LogConfig,
   def truncate() {
     producers.clear()
     ongoingTxns.clear()
-    unackedCompletedTxns.clear()
+    unreplicatedTxns.clear()
     deleteSnapshotFiles()
     lastSnapOffset = 0L
     lastMapOffset = 0L
@@ -470,7 +477,7 @@ class ProducerStateManager(val config: LogConfig,
 
   def completeTxn(completedTxn: CompletedTxn): Unit = {
     ongoingTxns -= OngoingTxn(completedTxn.producerId, completedTxn.firstOffset)
-    unackedCompletedTxns += completedTxn
+    unreplicatedTxns += completedTxn
   }
 
   private def maybeRemoveOldestSnapshot() {
