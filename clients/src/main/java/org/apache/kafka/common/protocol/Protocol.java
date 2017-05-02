@@ -1457,13 +1457,13 @@ public class Protocol {
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),
                             new Field("partitions", new ArrayOf(INT32)))),
-                    "The partitions to write markers for.")
+                    "The partitions to write markers for."),
+            new Field("coordinator_epoch",
+                      INT32,
+                      "Epoch associated with the transaction state partition hosted by this transaction coordinator")
     );
 
     public static final Schema WRITE_TXN_MARKERS_REQUEST_V0 = new Schema(
-            new Field("coordinator_epoch",
-                    INT32,
-                    "Epoch associated with the transaction state partition hosted by this transaction coordinator."),
             new Field("transaction_markers",
                     new ArrayOf(WRITE_TXN_MARKERS_ENTRY_V0),
                     "The transaction markers to be written.")
