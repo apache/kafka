@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import java.util.Properties
 import java.util.concurrent.CountDownLatch
 
 import kafka.admin._
@@ -102,6 +103,12 @@ object ZkUtils {
     val zkConnection = new ZkConnection(zkUrl, sessionTimeout)
     val zkClient = new ZkClient(zkConnection, connectionTimeout, ZKStringSerializer)
     (zkClient, zkConnection)
+  }
+
+  def createZkUtils(properties: Properties): ZkUtils = {
+    val zkConfig = new ZKConfig(new VerifiableProperties(properties))
+    val tuple = createZkClientAndConnection(zkConfig.zkConnect, zkConfig.zkSessionTimeoutMs, zkConfig.zkConnectionTimeoutMs)
+    new ZkUtils(tuple._1, tuple._2, zkConfig.zkSecure)
   }
 
   def sensitivePath(path: String): Boolean = {
@@ -229,6 +236,7 @@ object ZkUtils {
 class ZkUtils(val zkClient: ZkClient,
               val zkConnection: ZkConnection,
               val isSecure: Boolean) extends Logging {
+
   // These are persistent ZK paths that should exist on kafka broker startup.
   val persistentZkPaths = Seq(ConsumersPath,
                               BrokerIdsPath,
@@ -976,6 +984,7 @@ object ZKConfig {
   val ZkSessionTimeoutMsProp = "zookeeper.session.timeout.ms"
   val ZkConnectionTimeoutMsProp = "zookeeper.connection.timeout.ms"
   val ZkSyncTimeMsProp = "zookeeper.sync.time.ms"
+  val ZkSecure = "zookeeper.secure"
 }
 
 class ZKConfig(props: VerifiableProperties) {
@@ -992,6 +1001,9 @@ class ZKConfig(props: VerifiableProperties) {
 
   /** how far a ZK follower can be behind a ZK leader */
   val zkSyncTimeMs = props.getInt(ZkSyncTimeMsProp, 2000)
+
+  /** */
+  val zkSecure = props.getBoolean(ZkSecure, false)
 }
 
 class ZkPath(client: ZkClient) {
