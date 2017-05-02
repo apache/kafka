@@ -841,7 +841,7 @@ public class RequestResponseTest {
     }
 
     private InitPidResponse createInitPidResponse() {
-        return new InitPidResponse(Errors.NONE, 3332, (short) 3);
+        return new InitPidResponse(0, Errors.NONE, 3332, (short) 3);
     }
 
 
@@ -871,7 +871,7 @@ public class RequestResponseTest {
     }
 
     private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
-        return new AddPartitionsToTxnResponse(Errors.NONE);
+        return new AddPartitionsToTxnResponse(0, Errors.NONE);
     }
 
     private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest() {
@@ -879,7 +879,7 @@ public class RequestResponseTest {
     }
 
     private AddOffsetsToTxnResponse createAddOffsetsToTxnResponse() {
-        return new AddOffsetsToTxnResponse(Errors.NONE);
+        return new AddOffsetsToTxnResponse(0, Errors.NONE);
     }
 
     private EndTxnRequest createEndTxnRequest() {
@@ -887,13 +887,13 @@ public class RequestResponseTest {
     }
 
     private EndTxnResponse createEndTxnResponse() {
-        return new EndTxnResponse(Errors.NONE);
+        return new EndTxnResponse(0, Errors.NONE);
     }
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
-        return new WriteTxnMarkersRequest.Builder(73,
-            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, TransactionResult.ABORT,
-                Collections.singletonList(new TopicPartition("topic", 73))))).build();
+        return new WriteTxnMarkersRequest.Builder(
+            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT,
+                                                                                Collections.singletonList(new TopicPartition("topic", 73))))).build();
     }
 
     private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
@@ -914,7 +914,7 @@ public class RequestResponseTest {
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
         final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
         errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
-        return new TxnOffsetCommitResponse(errorPerPartitions);
+        return new TxnOffsetCommitResponse(0, errorPerPartitions);
     }
 
     private static class ByteBufferChannel implements GatheringByteChannel {

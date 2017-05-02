@@ -16,16 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.MockProcessorContext;
-import org.junit.After;
 import org.junit.Test;
 import org.rocksdb.Options;
 
@@ -37,9 +33,6 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
-
-    private final KeyValueStoreTestDriver<Integer, String> driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-    private final MockProcessorContext context = (MockProcessorContext) driver.context();
 
     @SuppressWarnings("unchecked")
     @Override
@@ -78,22 +71,13 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
-    @After
-    public void after() {
-        store.close();
-        context.close();
-    }
-
     @Test
     public void shouldUseCustomRocksDbConfigSetter() throws Exception {
-        driver.setConfig(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TheRocksDbConfigSetter.class);
-        store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
         assertTrue(TheRocksDbConfigSetter.called);
     }
 
     @Test
     public void shouldPerformRangeQueriesWithCachingDisabled() throws Exception {
-        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -105,7 +89,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPerformAllQueriesWithCachingDisabled() throws Exception {
-        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
@@ -117,7 +100,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() throws Exception {
-        store = createKeyValueStore(context, Integer.class, String.class, false);
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");

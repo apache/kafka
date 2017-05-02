@@ -53,6 +53,7 @@ public abstract class AbstractKeyValueStoreTest {
     public void after() {
         store.close();
         context.close();
+        driver.clear();
     }
 
     @Test
@@ -153,11 +154,12 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 
@@ -173,11 +175,12 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 

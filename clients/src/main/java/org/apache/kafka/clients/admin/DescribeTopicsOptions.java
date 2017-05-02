@@ -14,20 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server
 
-import kafka.utils.Logging
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * This trait defines a leader elector If the existing leader is dead, this class will handle automatic
- * re-election and if it succeeds, it invokes the leader state change callback
+ * Options for describeTopics.
  */
-trait LeaderElector extends Logging {
-  def startup
+@InterfaceStability.Unstable
+public class DescribeTopicsOptions {
+    private Integer timeoutMs = null;
 
-  def amILeader : Boolean
+    public DescribeTopicsOptions timeoutMs(Integer timeoutMs) {
+        this.timeoutMs = timeoutMs;
+        return this;
+    }
 
-  def elect: Boolean
-
-  def close
+    public Integer timeoutMs() {
+        return timeoutMs;
+    }
 }

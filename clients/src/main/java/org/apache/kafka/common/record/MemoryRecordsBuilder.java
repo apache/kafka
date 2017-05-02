@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
@@ -117,23 +118,10 @@ public class MemoryRecordsBuilder {
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
 
         if (isTransactional) {
-            if (producerId == RecordBatch.NO_PRODUCER_ID)
-                throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
-
             if (magic < RecordBatch.MAGIC_VALUE_V2)
                 throw new IllegalArgumentException("Transactional messages are not supported for magic " + magic);
         }
 
-        if (producerId != RecordBatch.NO_PRODUCER_ID) {
-            if (producerEpoch < 0)
-                throw new IllegalArgumentException("Invalid negative producer epoch");
-
-            if (baseSequence < 0)
-                 throw new IllegalArgumentException("Invalid negative sequence number used");
-
-            if (magic < RecordBatch.MAGIC_VALUE_V2)
-                throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
-        }
 
         this.magic = magic;
         this.timestampType = timestampType;
@@ -258,6 +246,20 @@ public class MemoryRecordsBuilder {
     public void close() {
         if (builtRecords != null)
             return;
+
+        if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
+            throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
+
+        if (producerId != RecordBatch.NO_PRODUCER_ID) {
+            if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
+                throw new IllegalArgumentException("Invalid negative producer epoch");
+
+            if (baseSequence == RecordBatch.NO_SEQUENCE)
+                throw new IllegalArgumentException("Invalid negative sequence number used");
+
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
+        }
 
         closeForRecordAppends();
 
@@ -411,6 +413,7 @@ public class MemoryRecordsBuilder {
         return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
+
     /**
      * Append a new record at the next sequential offset.
      * @param timestamp The record timestamp
@@ -419,7 +422,19 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
-        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value, Record.EMPTY_HEADERS);
+        return append(timestamp, key, value, Record.EMPTY_HEADERS);
+    }
+    
+    /**
+     * Append a new record at the next sequential offset.
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @param headers The record headers if there are any
+     * @return crc of the record
+     */
+    public long append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
+        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value, headers);
     }
 
     /**
@@ -430,7 +445,19 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long append(long timestamp, byte[] key, byte[] value) {
-        return append(timestamp, wrapNullable(key), wrapNullable(value));
+        return append(timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
+    }
+
+    /**
+     * Append a new record at the next sequential offset.
+     * @param timestamp The record timestamp
+     * @param key The record key
+     * @param value The record value
+     * @param headers The record headers if there are any
+     * @return crc of the record
+     */
+    public long append(long timestamp, byte[] key, byte[] value, Header[] headers) {
+        return append(timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
@@ -658,5 +685,9 @@ public class MemoryRecordsBuilder {
      */
     public long producerId() {
         return this.producerId;
+    }
+
+    public short producerEpoch() {
+        return this.producerEpoch;
     }
 }

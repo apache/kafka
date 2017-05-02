@@ -37,6 +37,7 @@ public final class Cluster {
     private final List<Node> nodes;
     private final Set<String> unauthorizedTopics;
     private final Set<String> internalTopics;
+    private final Node controller;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
@@ -54,7 +55,7 @@ public final class Cluster {
     public Cluster(Collection<Node> nodes,
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics) {
-        this(null, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet());
+        this(null, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet(), null);
     }
 
 
@@ -68,7 +69,21 @@ public final class Cluster {
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, internalTopics);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, internalTopics, null);
+    }
+
+    /**
+     * Create a new cluster with the given id, nodes and partitions
+     * @param nodes The nodes in the cluster
+     * @param partitions Information about a subset of the topic-partitions this cluster hosts
+     */
+    public Cluster(String clusterId,
+                   Collection<Node> nodes,
+                   Collection<PartitionInfo> partitions,
+                   Set<String> unauthorizedTopics,
+                   Set<String> internalTopics,
+                   Node controller) {
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, internalTopics, controller);
     }
 
     private Cluster(String clusterId,
@@ -76,7 +91,8 @@ public final class Cluster {
                     Collection<Node> nodes,
                     Collection<PartitionInfo> partitions,
                     Set<String> unauthorizedTopics,
-                    Set<String> internalTopics) {
+                    Set<String> internalTopics,
+                    Node controller) {
         this.isBootstrapConfigured = isBootstrapConfigured;
         this.clusterResource = new ClusterResource(clusterId);
         // make a randomized, unmodifiable copy of the nodes
@@ -130,6 +146,7 @@ public final class Cluster {
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
         this.internalTopics = Collections.unmodifiableSet(internalTopics);
+        this.controller = controller;
     }
 
     /**
@@ -137,7 +154,7 @@ public final class Cluster {
      */
     public static Cluster empty() {
         return new Cluster(null, new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(),
-                Collections.<String>emptySet());
+                Collections.<String>emptySet(), null);
     }
 
     /**
@@ -150,7 +167,7 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(null, true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet());
+        return new Cluster(null, true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet(), null);
     }
 
     /**
@@ -160,7 +177,7 @@ public final class Cluster {
         Map<TopicPartition, PartitionInfo> combinedPartitions = new HashMap<>(this.partitionsByTopicPartition);
         combinedPartitions.putAll(partitions);
         return new Cluster(clusterResource.clusterId(), this.nodes, combinedPartitions.values(),
-                new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.internalTopics));
+                new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.internalTopics), this.controller);
     }
 
     /**
@@ -263,6 +280,10 @@ public final class Cluster {
 
     public ClusterResource clusterResource() {
         return clusterResource;
+    }
+
+    public Node controller() {
+        return controller;
     }
 
     @Override

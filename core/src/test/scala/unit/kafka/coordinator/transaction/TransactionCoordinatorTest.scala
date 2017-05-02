@@ -196,26 +196,16 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsPrepareCommit(): Unit = {
-    validateInvalidTxnState(PrepareCommit)
+  def shouldRespondWithConcurrentTransactionsOnAddPartitionsWhenStateIsPrepareCommit(): Unit = {
+    validateConcurrentTransactions(PrepareCommit)
   }
 
   @Test
-  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsPrepareAbort(): Unit = {
-    validateInvalidTxnState(PrepareAbort)
+  def shouldRespondWithConcurrentTransactionOnAddPartitionsWhenStateIsPrepareAbort(): Unit = {
+    validateConcurrentTransactions(PrepareAbort)
   }
 
-  @Test
-  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsCompleteCommit(): Unit = {
-    validateInvalidTxnState(CompleteCommit)
-  }
-
-  @Test
-  def shouldRespondWithInvalidTnxStateOnAddPartitionsWhenStateIsCompleteAbort(): Unit = {
-    validateInvalidTxnState(CompleteAbort)
-  }
-
-  def validateInvalidTxnState(state: TransactionState): Unit = {
+  def validateConcurrentTransactions(state: TransactionState): Unit = {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
@@ -224,7 +214,7 @@ class TransactionCoordinatorTest {
     EasyMock.replay(transactionManager)
 
     coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
-    assertEquals(Errors.INVALID_TXN_STATE, error)
+    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
   }
 
   @Test
@@ -242,14 +232,33 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldAppendNewMetadataToLogOnAddPartitionsWhenPartitionsAdded(): Unit = {
+    validateSuccessfulAddPartitions(Empty)
+  }
+
+  @Test
+  def shouldRespondWithSuccessOnAddPartitionsWhenStateIsOngoing(): Unit = {
+    validateSuccessfulAddPartitions(Ongoing)
+  }
+
+  @Test
+  def shouldRespondWithSuccessOnAddPartitionsWhenStateIsCompleteCommit(): Unit = {
+    validateSuccessfulAddPartitions(CompleteCommit)
+  }
+
+  @Test
+  def shouldRespondWithSuccessOnAddPartitionsWhenStateIsCompleteAbort(): Unit = {
+    validateSuccessfulAddPartitions(CompleteAbort)
+  }
+
+  def validateSuccessfulAddPartitions(previousState: TransactionState): Unit = {
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
       .andReturn(true)
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(new TransactionMetadata(0, 0, 0, Empty, mutable.Set.empty, 0, 0)))
+      .andReturn(Some(new TransactionMetadata(0, 0, 0, previousState, mutable.Set.empty, 0, 0)))
 
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
-      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, time.milliseconds(), time.milliseconds())),
+      EasyMock.eq(new TransactionMetadata(0, 0, 0, Ongoing, partitions, if (previousState == Ongoing) 0 else time.milliseconds(), time.milliseconds())),
       EasyMock.capture(capturedErrorsCallback)
     ))
 
@@ -484,12 +493,12 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldWaitForCommitToCompleteOnHandleInitPidAndExistingTransactionInPrepareCommitState(): Unit ={
-    validateWaitsForCompletionBeforeRespondingWithIncrementedEpoch(PrepareCommit)
+    validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(PrepareCommit)
   }
 
   @Test
   def shouldWaitForCommitToCompleteOnHandleInitPidAndExistingTransactionInPrepareAbortState(): Unit ={
-    validateWaitsForCompletionBeforeRespondingWithIncrementedEpoch(PrepareAbort)
+    validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(PrepareAbort)
   }
 
   @Test
@@ -506,31 +515,12 @@ class TransactionCoordinatorTest {
 
     mockComplete(PrepareAbort)
 
-    EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))
-      .andReturn(true).anyTimes()
-    EasyMock.expect(transactionManager.validateTransactionTimeoutMs(EasyMock.anyInt()))
-      .andReturn(true).anyTimes()
-
-    val completedMetadata = new TransactionMetadata(pid, epoch, txnTimeoutMs, CompleteAbort, mutable.Set.empty[TopicPartition], 0, 0)
-    EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(completedMetadata))
-      .anyTimes()
-
-    EasyMock.expect(transactionManager.appendTransactionToLog(
-      EasyMock.eq(transactionalId),
-      EasyMock.anyObject(classOf[TransactionMetadata]),
-      EasyMock.capture(capturedErrorsCallback)
-    )).andAnswer(new IAnswer[Unit] {
-      override def answer(): Unit = {
-        capturedErrorsCallback.getValue.apply(Errors.NONE)
-      }
-    })
 
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
     coordinator.handleInitPid(transactionalId, txnTimeoutMs, initPidMockCallback)
 
-    assertEquals(InitPidResult(10, 2, Errors.NONE), result)
+    assertEquals(InitPidResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
     EasyMock.verify(transactionManager)
   }
 
@@ -623,7 +613,7 @@ class TransactionCoordinatorTest {
     EasyMock.verify(transactionManager)
   }
 
-  private def validateWaitsForCompletionBeforeRespondingWithIncrementedEpoch(state: TransactionState) = {
+  private def validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(state: TransactionState) = {
     val transactionId = "tid"
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionId))
       .andReturn(true).anyTimes()
@@ -634,28 +624,11 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.getTransactionState(transactionId))
       .andReturn(Some(metadata)).anyTimes()
 
-    EasyMock.expect(transactionManager.appendTransactionToLog(
-      EasyMock.eq(transactionId),
-      EasyMock.anyObject(classOf[TransactionMetadata]),
-      EasyMock.capture(capturedErrorsCallback)
-    )).andAnswer(new IAnswer[Unit] {
-      override def answer(): Unit = {
-        capturedErrorsCallback.getValue.apply(Errors.NONE)
-      }
-    })
-
     EasyMock.replay(transactionManager)
 
     coordinator.handleInitPid(transactionId, 10, initPidMockCallback)
-    // no result yet as hasn't completed
-    assertNull(result)
-    // complete the transaction
-    metadata.topicPartitions.clear()
-    metadata.state = if (state == PrepareCommit) CompleteCommit else CompleteAbort
-    txnMarkerPurgatory.checkAndComplete(0L)
 
-    assertEquals(InitPidResult(0, 1, Errors.NONE), result)
-    assertEquals(new TransactionMetadata(0, 1, 10, Empty, mutable.Set.empty, 0, time.milliseconds()), metadata)
+    assertEquals(InitPidResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
   }
 
   private def validateIncrementEpochAndUpdateMetadata(state: TransactionState) = {

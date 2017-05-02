@@ -52,22 +52,20 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     private final Serde<K> keySerde;
 
     private final Serde<V> valueSerde;
-    private String name;
-    protected Map<K, V> map;
+    private final String name;
+    protected final Map<K, V> map;
+
     private StateSerdes<K, V> serdes;
+    private boolean restoring = false;      // TODO: this is a sub-optimal solution to avoid logging during restoration.
+                                            // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
 
-    protected EldestEntryRemovalListener<K, V> listener;
+    EldestEntryRemovalListener<K, V> listener;
 
-    // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCache(Serde<K> keySerde, Serde<V> valueSerde) {
+    MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
+        this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-    }
-
-    public MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(keySerde, valueSerde);
-        this.name = name;
 
         // leave room for one extra entry to handle adding an entry before the oldest can be removed
         this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
@@ -75,21 +73,20 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (super.size() > maxCacheSize) {
-                    K key = eldest.getKey();
-                    if (listener != null) listener.apply(key, eldest.getValue());
-                    return true;
+                boolean evict = super.size() > maxCacheSize;
+                if (evict && !restoring && listener != null) {
+                    listener.apply(eldest.getKey(), eldest.getValue());
                 }
-                return false;
+                return evict;
             }
         };
     }
 
-    public KeyValueStore<K, V> enableLogging() {
+    KeyValueStore<K, V> enableLogging() {
         return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
     }
 
-    public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
+    MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
         this.listener = listener;
 
         return this;
@@ -113,12 +110,14 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         context.register(root, true, new StateRestoreCallback() {
             @Override
             public void restore(byte[] key, byte[] value) {
+                restoring = true;
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
                     put(serdes.keyFrom(key), null);
                 } else {
                     put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }
+                restoring = false;
             }
         });
     }

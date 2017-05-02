@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
@@ -24,7 +25,9 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.ArrayDeque;
@@ -51,8 +54,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private final Deque<Completion> completions;
     private boolean autoComplete;
     private Map<TopicPartition, Long> offsets;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
+    private boolean closed;
+    private final ExtendedSerializer<K> keySerializer;
+    private final ExtendedSerializer<V> valueSerializer;
 
     /**
      * Create a mock producer
@@ -66,33 +70,76 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * @param keySerializer The serializer for key that implements {@link Serializer}.
      * @param valueSerializer The serializer for value that implements {@link Serializer}.
      */
-    public MockProducer(Cluster cluster, boolean autoComplete, Partitioner partitioner, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    public MockProducer(final Cluster cluster,
+                        final boolean autoComplete,
+                        final Partitioner partitioner,
+                        final Serializer<K> keySerializer,
+                        final Serializer<V> valueSerializer) {
         this.cluster = cluster;
         this.autoComplete = autoComplete;
         this.partitioner = partitioner;
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
+        this.keySerializer = ensureExtended(keySerializer);
+        this.valueSerializer = ensureExtended(valueSerializer);
         this.offsets = new HashMap<TopicPartition, Long>();
         this.sent = new ArrayList<ProducerRecord<K, V>>();
         this.completions = new ArrayDeque<Completion>();
     }
 
     /**
-     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers
+     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
      *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
      */
-    public MockProducer(boolean autoComplete, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    public MockProducer(final boolean autoComplete,
+                        final Serializer<K> keySerializer,
+                        final Serializer<V> valueSerializer) {
         this(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer);
     }
 
     /**
-     * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers
+     * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers.
      *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
      */
-    public MockProducer(boolean autoComplete, Partitioner partitioner, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    public MockProducer(final boolean autoComplete,
+                        final Partitioner partitioner,
+                        final Serializer<K> keySerializer,
+                        final Serializer<V> valueSerializer) {
         this(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
+    }
+
+    /**
+     * Create a new mock producer with invented metadata.
+     *
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), false, null, null, null)}
+     */
+    public MockProducer() {
+        this(Cluster.empty(), false, null, null, null);
+    }
+
+    public void initTransactions() {
+
+    }
+
+    public void beginTransaction() throws ProducerFencedException {
+
+    }
+
+    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  String consumerGroupId) throws ProducerFencedException {
+
+    }
+
+    public void commitTransaction() throws ProducerFencedException {
+
+    }
+
+    public void abortTransaction() throws ProducerFencedException {
+        
+    }
+        
+    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
+        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     /**
@@ -160,10 +207,19 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void close() {
+        close(0, null);
     }
 
     @Override
     public void close(long timeout, TimeUnit timeUnit) {
+        if (closed) {
+            throw new IllegalStateException("MockedProducer is already closed.");
+        }
+        closed = true;
+    }
+
+    public boolean closed() {
+        return closed;
     }
 
     /**
@@ -222,8 +278,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
                                                    + "].");
             return partition;
         }
-        byte[] keyBytes = keySerializer.serialize(topic, record.key());
-        byte[] valueBytes = valueSerializer.serialize(topic, record.value());
+        byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
+        byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
         return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster);
     }
 

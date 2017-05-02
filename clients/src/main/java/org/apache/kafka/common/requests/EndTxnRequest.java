@@ -96,8 +96,8 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     @Override
-    public EndTxnResponse getErrorResponse(Throwable e) {
-        return new EndTxnResponse(Errors.forException(e));
+    public EndTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new EndTxnResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static EndTxnRequest parse(ByteBuffer buffer, short version) {

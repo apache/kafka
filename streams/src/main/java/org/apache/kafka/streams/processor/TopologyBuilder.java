@@ -490,6 +490,9 @@ public class TopologyBuilder {
         if (stateFactories.containsKey(store.name()) || globalStateStores.containsKey(store.name())) {
             throw new TopologyBuilderException("StateStore " + store.name() + " is already added.");
         }
+        if (sourceName.equals(processorName)) {
+            throw new TopologyBuilderException("sourceName and processorName must be different.");
+        }
 
         validateTopicNotAlreadyRegistered(topic);
 

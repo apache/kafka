@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -28,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 
 public class CreateTopicsResponse extends AbstractResponse {
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String TOPIC_ERRORS_KEY_NAME = "topic_errors";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
@@ -60,6 +62,10 @@ public class CreateTopicsResponse extends AbstractResponse {
             return message;
         }
 
+        public ApiException exception() {
+            return error.exception(message);
+        }
+
         @Override
         public String toString() {
             return "Error(error=" + error + ", message=" + message + ")";
@@ -82,8 +88,14 @@ public class CreateTopicsResponse extends AbstractResponse {
      */
 
     private final Map<String, Error> errors;
+    private final int throttleTimeMs;
 
     public CreateTopicsResponse(Map<String, Error> errors) {
+        this(DEFAULT_THROTTLE_TIME, errors);
+    }
+
+    public CreateTopicsResponse(int throttleTimeMs, Map<String, Error> errors) {
+        this.throttleTimeMs = throttleTimeMs;
         this.errors = errors;
     }
 
@@ -100,12 +112,15 @@ public class CreateTopicsResponse extends AbstractResponse {
             errors.put(topic, new Error(error, errorMessage));
         }
 
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         this.errors = errors;
     }
 
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
         List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
         for (Map.Entry<String, Error> topicError : errors.entrySet()) {
@@ -119,6 +134,10 @@ public class CreateTopicsResponse extends AbstractResponse {
         }
         struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
         return struct;
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Map<String, Error> errors() {
