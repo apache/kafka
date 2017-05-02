@@ -41,13 +41,13 @@ class UserQuotaTest extends BaseQuotaTest with SaslTestHarness {
     this.serverConfig.setProperty(KafkaConfig.ProducerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, Long.MaxValue.toString)
     super.setUp()
-    val defaultProps = quotaProperties(defaultProducerQuota, defaultConsumerQuota)
+    val defaultProps = quotaProperties(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
     AdminUtils.changeUserOrUserClientIdConfig(zkUtils, ConfigEntityName.Default, defaultProps)
-    waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota)
+    waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
   }
 
-  override def overrideQuotas(producerQuota: Long, consumerQuota: Long) {
-    val props = quotaProperties(producerQuota, consumerQuota)
+  override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
+    val props = quotaProperties(producerQuota, consumerQuota, requestQuota)
     updateQuotaOverride(props)
   }
 

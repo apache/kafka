@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.transaction
 
-import java.util
 
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
@@ -24,19 +23,13 @@ import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.Node
-
-import java.util.concurrent.BlockingQueue
 
 import org.apache.kafka.common.protocol.Errors
 
 import collection.JavaConverters._
-
-case class CoordinatorEpochAndMarkers(metadataPartition: Int, coordinatorEpoch: Int, txnMarkerEntries: util.List[WriteTxnMarkersRequest.TxnMarkerEntry])
-case class DestinationBrokerAndQueuedMarkers(destBrokerNode: Node, markersQueue: BlockingQueue[CoordinatorEpochAndMarkers])
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
@@ -121,10 +114,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
 
-  def addTxnMarkerRequest(coordinatorPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
+  def addTxnMarkerRequest(txnTopicPartition: Int, metadata: TransactionMetadata, coordinatorEpoch: Int, completionCallback: WriteTxnMarkerCallback): Unit = {
     val metadataToWrite = metadata synchronized metadata.copy()
 
-    if (!transactionMarkerChannel.maybeAddPendingRequest(coordinatorPartition, metadata))
+    if (!transactionMarkerChannel.maybeAddPendingRequest(txnTopicPartition, metadata))
       // TODO: Not sure this is the correct response here?
       completionCallback(Errors.INVALID_TXN_STATE)
     else {
@@ -136,7 +129,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
         case PrepareAbort => TransactionResult.ABORT
         case s => throw new IllegalStateException("Unexpected txn metadata state while writing markers: " + s)
       }
-      transactionMarkerChannel.addRequestToSend(coordinatorPartition,
+      transactionMarkerChannel.addRequestToSend(txnTopicPartition,
         metadataToWrite.pid,
         metadataToWrite.producerEpoch,
         result,
@@ -145,8 +138,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
   }
 
-  def removeCompleted(metadataPartition: Int, pid: Long): Unit = {
-    transactionMarkerChannel.removeCompletedTxn(metadataPartition, pid)
+  def removeCompleted(txnTopicPartition: Int, pid: Long): Unit = {
+    transactionMarkerChannel.removeCompletedTxn(txnTopicPartition, pid)
   }
 
   def removeStateForPartition(transactionStateTopicPartitionId: Int): Unit = {
