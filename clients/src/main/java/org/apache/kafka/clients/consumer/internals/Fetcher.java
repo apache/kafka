@@ -962,7 +962,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-
+                nextInlineException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 

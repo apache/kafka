@@ -314,7 +314,7 @@ public class FetcherTest {
             fetcher.fetchedRecords();
             fail("fetchedRecords should have raised KafkaException");
         } catch (KafkaException e) {
-
+            assertEquals(1, subscriptions.position(tp1).longValue());
         }
     }
 
