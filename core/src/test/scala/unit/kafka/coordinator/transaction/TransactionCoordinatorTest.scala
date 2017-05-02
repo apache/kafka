@@ -526,7 +526,7 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRemoveTransactionsForPartitionOnEmigration(): Unit = {
-    EasyMock.expect(transactionManager.removeTransactionsForPartition(0))
+    EasyMock.expect(transactionManager.removeTransactionsForTxnTopicPartition(0))
     EasyMock.expect(transactionMarkerChannelManager.removeStateForPartition(0))
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
@@ -539,7 +539,7 @@ class TransactionCoordinatorTest {
   def shouldRetryOnCommitWhenTxnMarkerRequestFailsWithErrorOtherThanNotCoordinator(): Unit = {
     val prepareMetadata = mockPrepare(PrepareCommit, runCallback = true)
 
-    EasyMock.expect(transactionManager.coordinatorEpochFor(transactionalId))
+    EasyMock.expect(transactionManager.getTransactionState(transactionalId))
       .andReturn(Some(0))
 
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
@@ -572,8 +572,8 @@ class TransactionCoordinatorTest {
   def shouldNotRetryOnCommitWhenTxnMarkerRequestFailsWithNotCoordinator(): Unit = {
     val prepareMetadata = mockPrepare(PrepareCommit, runCallback = true)
 
-    EasyMock.expect(transactionManager.coordinatorEpochFor(transactionalId))
-      .andReturn(Some(0))
+    EasyMock.expect(transactionManager.getTransactionState(transactionalId))
+      .andReturn(Some(CoordinatorEpochAndTxnMetadata(0, prepareMetadata)))
 
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
       EasyMock.eq(0),
@@ -663,7 +663,7 @@ class TransactionCoordinatorTest {
     assertEquals(0, metadata.pid)
   }
 
-  private def mockPrepare(transactionState: TransactionState, runCallback: Boolean = false) = {
+  private def mockPrepare(transactionState: TransactionState, runCallback: Boolean = false): TransactionMetadata = {
     val originalMetadata = new TransactionMetadata(pid,
       epoch,
       txnTimeoutMs,
@@ -703,8 +703,8 @@ class TransactionCoordinatorTest {
     val prepareMetadata: TransactionMetadata = mockPrepare(transactionState, true)
     val finalState = if (transactionState == PrepareAbort) CompleteAbort else CompleteCommit
 
-    EasyMock.expect(transactionManager.coordinatorEpochFor(transactionalId))
-      .andReturn(Some(0))
+    EasyMock.expect(transactionManager.getTransactionState(transactionalId))
+      .andReturn(Some(CoordinatorEpochAndTxnMetadata(0, prepareMetadata)))
 
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
       EasyMock.eq(0),
@@ -716,10 +716,6 @@ class TransactionCoordinatorTest {
         capturedErrorsCallback.getValue.apply(Errors.NONE)
       }
     })
-
-    EasyMock.expect(transactionManager.getTransactionState(transactionalId))
-      .andReturn(Some(prepareMetadata))
-      .once()
 
     val completedMetadata = new TransactionMetadata(pid,
       epoch,

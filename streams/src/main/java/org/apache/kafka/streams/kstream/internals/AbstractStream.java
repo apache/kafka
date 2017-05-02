@@ -66,8 +66,7 @@ public abstract class AbstractStream<K> {
         };
     }
 
-    @SuppressWarnings("unchecked")
-    static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+    static <T, K>  StateStoreSupplier<KeyValueStore<K, T>> keyValueStore(final Serde<K> keySerde,
                                                                    final Serde<T> aggValueSerde,
                                                                    final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");

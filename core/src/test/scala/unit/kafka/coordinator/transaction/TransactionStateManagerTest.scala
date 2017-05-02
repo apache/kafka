@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.loadTransactionsForPartition(partitionId, 0)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0)
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -172,7 +172,7 @@ class TransactionStateManagerTest {
     assertTrue(transactionManager.isCoordinatorFor(txnId1))
     assertTrue(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.removeTransactionsForPartition(partitionId)
+    transactionManager.removeTransactionsForTxnTopicPartition(partitionId)
 
     // let the time advance to trigger the background thread removing
     scheduler.tick()
@@ -293,14 +293,14 @@ class TransactionStateManagerTest {
     val coordinatorEpoch = 10
     EasyMock.expect(replicaManager.getLog(EasyMock.anyObject(classOf[TopicPartition]))).andReturn(None)
     EasyMock.replay(replicaManager)
-    transactionManager.loadTransactionsForPartition(partitionId, coordinatorEpoch)
-    val epoch = transactionManager.coordinatorEpochFor(txnId1).get
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
+    val epoch = transactionManager.getTransactionState(txnId1).get.coordinatorEpoch
     assertEquals(coordinatorEpoch, epoch)
   }
 
   @Test
   def shouldReturnNoneIfTransactionIdPartitionNotOwned(): Unit = {
-    assertEquals(None, transactionManager.coordinatorEpochFor(txnId1))
+    assertEquals(None, transactionManager.getTransactionState(txnId1))
   }
 
   private def assertCallback(error: Errors): Unit = {
