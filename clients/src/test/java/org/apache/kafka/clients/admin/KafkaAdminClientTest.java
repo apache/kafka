@@ -19,14 +19,18 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.KafkaAdminClient.DescribeTopicsCall;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse.Error;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Arrays;
@@ -202,5 +206,19 @@ public class KafkaAdminClientTest {
                     }})), new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
+    }
+
+    @Test
+    public void testDescribeCallMakesGoodRequest() throws Exception {
+        DescribeTopicsCall dtc = new DescribeTopicsCall(
+            0,
+            null,
+            Collections.<String, KafkaFutureImpl<TopicDescription>>singletonMap("topic", null),
+            null
+        );
+        AbstractRequest.Builder builder = dtc.createRequest(100);
+        assertTrue(builder instanceof MetadataRequest.Builder);
+        assertEquals(1, ((MetadataRequest.Builder) builder).topics().size());
+        assertTrue(((MetadataRequest.Builder) builder).topics().contains("topic"));
     }
 }
