@@ -54,7 +54,7 @@ object TransactionCoordinator {
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
     val transactionMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, txnMarkerPurgatory, time)
+    new TransactionCoordinator(config.brokerId, pidManager, logManager, transactionMarkerChannelManager, txnMarkerPurgatory, scheduler, time)
   }
 
   private def initTransactionError(error: Errors): InitPidResult = {
@@ -79,6 +79,7 @@ class TransactionCoordinator(brokerId: Int,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
+                             scheduler: Scheduler,
                              time: Time) extends Logging {
   this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
 
@@ -381,11 +382,41 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
+  private def expireTransactions(): Unit = {
+    txnManager.transactionsToExpire().foreach{ idAndMetadata =>
+      idAndMetadata.metadata synchronized {
+        idAndMetadata.metadata.producerEpoch =  (idAndMetadata.metadata.producerEpoch + 1).toShort
+        idAndMetadata.metadata.prepareTransitionTo(Ongoing)
+
+        txnManager.appendTransactionToLog(idAndMetadata.transactionalId, idAndMetadata.metadata, (errors:Errors) => {
+          if (errors != Errors.NONE)
+          // TODO: Is this sufficient? It will be retried later if it failed
+            warn(s"failed to append transactionalId ${idAndMetadata.transactionalId} to log during transaction expiry. errors:$errors")
+          else
+            handleEndTransaction(idAndMetadata.transactionalId,
+              idAndMetadata.metadata.pid,
+              idAndMetadata.metadata.producerEpoch,
+              TransactionResult.ABORT,
+              (errors: Errors) => {
+                warn(s"rollback of transactionalId: ${idAndMetadata.transactionalId} failed during transaction expiry. errors: $errors")
+              }
+            )
+        })
+      }
+    }
+  }
+
   /**
    * Startup logic executed at the same time when the server starts up.
    */
   def startup(enablePidExpiration: Boolean = true) {
     info("Starting up.")
+    scheduler.startup()
+    scheduler.schedule("transaction-expiration",
+      expireTransactions,
+      TransactionManager.DefaultRemoveExpiredTransactionsIntervalMs,
+      TransactionManager.DefaultRemoveExpiredTransactionsIntervalMs
+    )
     if (enablePidExpiration)
       txnManager.enablePidExpiration()
     txnMarkerChannelManager.start()
@@ -401,6 +432,7 @@ class TransactionCoordinator(brokerId: Int,
   def shutdown() {
     info("Shutting down.")
     isActive.set(false)
+    scheduler.shutdown()
     pidManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
