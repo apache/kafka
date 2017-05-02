@@ -184,7 +184,7 @@ class TransactionStateManagerTest {
     assertEquals(None, transactionManager.getTransactionState(txnId2))
   }
 
-    @Test
+  @Test
   def testAppendTransactionToLog() {
     // first insert the initial transaction metadata
     transactionManager.addTransaction(txnId1, txnMetadata1)
