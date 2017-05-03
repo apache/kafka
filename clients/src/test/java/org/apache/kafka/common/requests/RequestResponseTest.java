@@ -511,7 +511,7 @@ public class RequestResponseTest {
         deserialized = (FetchRequest) deserialize(request, struct, request.version());
         assertEquals(request.isolationLevel(), deserialized.isolationLevel());
     }
-    
+
     @Test
     public void testJoinGroupRequestVersion0RebalanceTimeout() throws Exception {
         final short version = 0;
