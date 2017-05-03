@@ -1513,7 +1513,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val header = request.header
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
     // reject the request if not authorized to the group
-    if (!authorize(request.session, Read, new Resource(Group, txnOffsetCommitRequest.consumerGroupId) {
+    if (!authorize(request.session, Read, new Resource(Group, txnOffsetCommitRequest.consumerGroupId))) {
       val error = Errors.GROUP_AUTHORIZATION_FAILED
       val results = txnOffsetCommitRequest.offsets.keySet.asScala.map { topicPartition =>
         (topicPartition, error)
@@ -1544,7 +1544,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (isDebugEnabled)
           combinedCommitStatus.foreach { case (topicPartition, error) =>
             if (error != Errors.NONE) {
-              debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+              debug(s"TxnOffsetCommit request with correlation id ${header.correlationId} from client ${header.clientId} " +
                 s"on partition $topicPartition failed due to ${error.exceptionName}")
             }
           }
@@ -1571,12 +1571,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         // call coordinator to handle commit offset
-        //groupCoordinator.handleCommitOffsets(
-        //  txnOffsetCommitRequest.consumerGroupId,
-        //  txnOffsetCommitRequest.memberId,
-        //  txnOffsetCommitRequest.generationId,
-        //  partitionData,
-        //  sendResponseCallback)
+        groupCoordinator.handleCommitOffsets(
+          txnOffsetCommitRequest.consumerGroupId,
+          null,
+          -1,
+          partitionData,
+          sendResponseCallback,
+          txnOffsetCommitRequest.producerId,
+          txnOffsetCommitRequest.producerEpoch)
       }
     }
 

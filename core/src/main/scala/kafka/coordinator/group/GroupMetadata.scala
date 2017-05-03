@@ -146,6 +146,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private val members = new mutable.HashMap[String, MemberMetadata]
   private val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
+  private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, OffsetAndMetadata]]()
 
   var protocolType: Option[String] = None
   var generationId = 0
@@ -288,6 +289,23 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def prepareOffsetCommit(offsets: Map[TopicPartition, OffsetAndMetadata]) {
     pendingOffsetCommits ++= offsets
+  }
+
+  def prepareTxnOffsetCommit(producerId: Long, offsets: mutable.Map[TopicPartition, OffsetAndMetadata]) {
+    if (!pendingTransactionalOffsetCommits.contains(producerId)) {
+      pendingTransactionalOffsetCommits.put(producerId, offsets)
+    } else {
+      pendingTransactionalOffsetCommits(producerId) ++= offsets
+    }
+  }
+
+  def completePendingTxnOffsetCommit(producerId: Long): Unit = {
+    if (pendingTransactionalOffsetCommits.contains(producerId)) {
+      pendingTransactionalOffsetCommits(producerId).foreach { case (topicPartition, offsetAndMetadata) =>
+        offsets.put(topicPartition, offsetAndMetadata)
+      }
+      pendingTransactionalOffsetCommits.remove(producerId)
+    }
   }
 
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {

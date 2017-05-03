@@ -26,6 +26,7 @@ import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
 
@@ -397,7 +398,9 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
+                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
+                          producerId: Long = RecordBatch.NO_PRODUCER_ID,
+                          producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH) {
     if (!isActive.get) {
       responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
     } else if (!isCoordinatorForGroup(groupId)) {
@@ -410,14 +413,14 @@ class GroupCoordinator(val brokerId: Int,
           if (generationId < 0) {
             // the group is not relying on Kafka for group management, so allow the commit
             val group = groupManager.addGroup(new GroupMetadata(groupId))
-            doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)
+            doCommitOffsets(group, memberId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
           } else {
             // or this is a request coming from an older generation. either way, reject the commit
             responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
           }
 
         case Some(group) =>
-          doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)
+          doCommitOffsets(group, memberId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
       }
     }
   }
@@ -425,17 +428,19 @@ class GroupCoordinator(val brokerId: Int,
   private def doCommitOffsets(group: GroupMetadata,
                               memberId: String,
                               generationId: Int,
+                              producerId: Long,
+                              producerEpoch: Short,
                               offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                               responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
     var delayedOffsetStore: Option[DelayedStore] = None
-
     group synchronized {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
-      } else if (generationId < 0 && group.is(Empty)) {
+      } else if ((generationId < 0 && group.is(Empty)) || (producerId != RecordBatch.NO_PRODUCER_ID)) {
         // the group is only using Kafka to store offsets
+        // Also, for transactional offset commits we don't need to validate group membership and the generation.
         delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
-          offsetMetadata, responseCallback)
+          offsetMetadata, responseCallback, producerId, producerEpoch)
       } else if (group.is(AwaitingSync)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
       } else if (!group.has(memberId)) {
