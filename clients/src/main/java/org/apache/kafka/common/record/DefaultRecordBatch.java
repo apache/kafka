@@ -18,7 +18,6 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -229,8 +228,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     private CloseableIterator<Record> compressedIterator() {
         ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
-        final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(
-                new ByteBufferInputStream(buffer), magic()));
+        final DataInputStream stream = new DataInputStream(compressionType().wrapForInput(buffer, magic()));
 
         return new RecordIterator() {
             @Override
