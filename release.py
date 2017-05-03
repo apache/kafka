@@ -45,7 +45,6 @@ CAPITALIZED_PROJECT_NAME = "kafka".upper()
 REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, os.getcwd())
 # Remote name which points to Apache git
 PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
-DEV_BRANCH_NAME = "trunk"
 
 delete_gitrefs = False
 work_dir = None
@@ -145,6 +144,8 @@ Do you have all of of these setup? (y/n): """):
     fail("Please try again once you have all the prerequisites ready.")
 
 
+starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
+
 release_version = raw_input("Release version (without any RC info, e.g. 0.10.2.0): ")
 try:
     release_version_parts = release_version.split('.')
@@ -222,7 +223,7 @@ cmd("Commiting version number updates", ["git", "commit", "-a", "-m", "Bump vers
 # Command in explicit list due to messages with spaces
 cmd("Tagging release candidate %s" % rc_tag, ["git", "tag", "-a", rc_tag, "-m", rc_tag])
 rc_githash = cmd_output("git show-ref --hash " + rc_tag)
-cmd("Switching back to dev branch", "git checkout %s" % DEV_BRANCH_NAME)
+cmd("Switching back to your starting branch", "git checkout %s" % starting_branch)
 
 # Note that we don't use tempfile here because mkdtemp causes problems with sftp and being able to determine the absolute path to a file.
 # Instead we rely on a fixed path and if it
