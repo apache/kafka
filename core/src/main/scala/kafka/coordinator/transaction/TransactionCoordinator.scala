@@ -18,7 +18,6 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache, ReplicaManager}
 import kafka.utils.{Logging, Scheduler, ZkUtils}
@@ -28,8 +27,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
-import kafka.utils.CoreUtils.inWriteLock
-
 
 object TransactionCoordinator {
 
@@ -85,7 +82,7 @@ class TransactionCoordinator(brokerId: Int,
   import TransactionCoordinator._
 
   type InitPidCallback = InitPidResult => Unit
-  type TxnMetadataUpdateCallback = Errors => Unit
+  type AddPartitionsCallback = Errors => Unit
   type EndTxnCallback = Errors => Unit
 
   /* Active flag of the coordinator */
@@ -215,7 +212,7 @@ class TransactionCoordinator(brokerId: Int,
                                        pid: Long,
                                        epoch: Short,
                                        partitions: collection.Set[TopicPartition],
-                                       responseCallback: TxnMetadataUpdateCallback): Unit = {
+                                       responseCallback: AddPartitionsCallback): Unit = {
     val errors = validateTransactionalId(transactionalId)
     if (errors != Errors.NONE)
       responseCallback(errors)
@@ -275,7 +272,7 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
-      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch)
+      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, sendTxnMarkers)
   }
 
   def handleTxnEmigration(txnTopicPartitionId: Int) {
@@ -342,17 +339,26 @@ class TransactionCoordinator(brokerId: Int,
       // the log append was successful
       responseCallback(errors)
 
-      val nextState = if (command == TransactionResult.COMMIT) CompleteCommit else CompleteAbort
-      val newMetadata = metadata.copy()
-      newMetadata.state = nextState
-      newMetadata.txnLastUpdateTimestamp = time.milliseconds()
-      metadata.prepareTransitionTo(nextState)
-
-      if (errors == Errors.NONE)
-        txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, command, newMetadata)
+      if (errors == Errors.NONE) {
+        sendTxnMarkers(transactionalId, coordinatorEpoch, newMetadata, command)
+      }
     }
 
     txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, sendTxnMarkersCallback)
+  }
+
+  private def sendTxnMarkers(transactionalId: String,
+                             coordinatorEpoch: Int,
+                             metadata: TransactionMetadata,
+                             command: TransactionResult): Unit = {
+
+    val nextState = if (command == TransactionResult.COMMIT) CompleteCommit else CompleteAbort
+    val newMetadata = metadata.copy()
+    newMetadata.state = nextState
+    newMetadata.txnLastUpdateTimestamp = time.milliseconds()
+    metadata.prepareTransitionTo(nextState)
+
+    txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, command, newMetadata)
   }
 
   def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs
@@ -387,3 +393,8 @@ class TransactionCoordinator(brokerId: Int,
 }
 
 case class InitPidResult(pid: Long, epoch: Short, error: Errors)
+
+case class WriteTxnMarkerArgs(transactionalId: String,
+                              coordinatorEpoch: Int,
+                              txnMetadata: TransactionMetadata,
+                              txnResult: TransactionResult)

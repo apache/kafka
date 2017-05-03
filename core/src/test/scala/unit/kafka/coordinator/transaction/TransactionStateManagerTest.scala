@@ -156,7 +156,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, _ => ())
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -200,7 +200,7 @@ class TransactionStateManagerTest {
     txnMetadata1.prepareTransitionTo(Ongoing)
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, newMetadata, assertCallback)
 
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
@@ -212,37 +212,37 @@ class TransactionStateManagerTest {
     expectedError = Errors.COORDINATOR_NOT_AVAILABLE
 
     prepareForTxnMessageAppend(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.REQUEST_TIMED_OUT)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     // test NOT_COORDINATOR cases
     expectedError = Errors.NOT_COORDINATOR
 
     prepareForTxnMessageAppend(Errors.NOT_LEADER_FOR_PARTITION)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     // test NOT_COORDINATOR cases
     expectedError = Errors.UNKNOWN
 
     prepareForTxnMessageAppend(Errors.MESSAGE_TOO_LARGE)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
 
     prepareForTxnMessageAppend(Errors.RECORD_LIST_TOO_LARGE)
-    transactionManager.appendTransactionToLog(txnId1, failedMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, failedMetadata, assertCallback)
     assertEquals(Some(newMetadata), transactionManager.getTransactionState(txnId1))
   }
 
@@ -264,7 +264,7 @@ class TransactionStateManagerTest {
     txnMetadata1.producerEpoch = (txnMetadata1.producerEpoch + 1).toShort
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, newMetadata, assertCallback)
   }
 
   @Test(expected = classOf[IllegalStateException])
@@ -285,7 +285,7 @@ class TransactionStateManagerTest {
     txnMetadata1.pendingState = None
 
     // append the new metadata into log
-    transactionManager.appendTransactionToLog(txnId1, newMetadata, assertCallback)
+    transactionManager.appendTransactionToLog(txnId1, coordinatorEpoch = 10, newMetadata, assertCallback)
   }
 
   @Test
@@ -293,7 +293,8 @@ class TransactionStateManagerTest {
     val coordinatorEpoch = 10
     EasyMock.expect(replicaManager.getLog(EasyMock.anyObject(classOf[TopicPartition]))).andReturn(None)
     EasyMock.replay(replicaManager)
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, _ => ())
     val epoch = transactionManager.getTransactionState(txnId1).get.coordinatorEpoch
     assertEquals(coordinatorEpoch, epoch)
   }
@@ -301,6 +302,34 @@ class TransactionStateManagerTest {
   @Test
   def shouldReturnNoneIfTransactionIdPartitionNotOwned(): Unit = {
     assertEquals(None, transactionManager.getTransactionState(txnId1))
+  }
+
+  @Test
+  def shouldWriteTxnMarkersForTransactionInPreparedCommitState(): Unit = {
+    verifyWritesTxnMarkersInPrepareState(PrepareCommit)
+  }
+
+  @Test
+  def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
+    verifyWritesTxnMarkersInPrepareState(PrepareAbort)
+  }
+
+  private def verifyWritesTxnMarkersInPrepareState(state: TransactionState): Unit = {
+    txnMetadata1.state = state
+    txnMetadata1.addPartitions(Set[TopicPartition](new TopicPartition("topic1", 0),
+      new TopicPartition("topic1", 1)))
+
+    txnRecords += new SimpleRecord(txnMessageKeyBytes1, TransactionLog.valueToBytes(txnMetadata1))
+    val startOffset = 0L
+    val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords: _*)
+
+    prepareTxnLog(topicPartition, 0, records)
+
+    var receivedArgs: WriteTxnMarkerArgs = null
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, markerArgs => receivedArgs = markerArgs)
+    scheduler.tick()
+
+    assertEquals(txnId1, receivedArgs.transactionalId)
   }
 
   private def assertCallback(error: Errors): Unit = {
@@ -351,4 +380,5 @@ class TransactionStateManagerTest {
 
     EasyMock.replay(replicaManager)
   }
+
 }
