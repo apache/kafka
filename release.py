@@ -68,6 +68,12 @@ def fail(msg):
     print(msg)
     sys.exit(1)
 
+def print_output(output):
+    if output is None or len(output) == 0:
+        return
+    for line in output.split('\n'):
+        print(">", line)
+
 def cmd(action, cmd, *args, **kwargs):
     if isinstance(cmd, basestring) and not kwargs.get("shell", False):
         cmd = cmd.split()
@@ -79,12 +85,6 @@ def cmd(action, cmd, *args, **kwargs):
         stdin.write(kwargs["stdin"])
         stdin.seek(0)
         kwargs["stdin"] = stdin
-
-    def print_output(output):
-        if len(output) == 0:
-            return
-        for line in output.split('\n'):
-            print(">", line)
 
     print(action, cmd, stdin_log)
     try:
@@ -283,7 +283,17 @@ cmd("Verifying the correct year in NOTICE", "grep %s NOTICE" % current_year, cwd
 
 with open(os.path.join(artifacts_dir, "RELEASE_NOTES.html"), 'w') as f:
     print("Generating release notes")
-    subprocess.check_call(["./release_notes.py", release_version], stdout=f)
+    try:
+        subprocess.check_call(["./release_notes.py", release_version], stdout=f)
+    except subprocess.CalledProcessError as e:
+        print_output(e.output)
+
+        print("*************************************************")
+        print("*** First command failure occurred here.      ***")
+        print("*** Will now try to clean up working state.   ***")
+        print("*************************************************")
+        fail("")
+
 
 params = { 'release_version': release_version,
            'rc_tag': rc_tag,
