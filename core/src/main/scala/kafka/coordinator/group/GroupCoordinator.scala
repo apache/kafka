@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, immutable}
+import scala.math.max
 
 
 /**
@@ -649,24 +650,21 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(AwaitingSync))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
-    val delay = if (group.is(Empty)) {
-      group.initialRebalanceTimeout = time.milliseconds() + group.rebalanceTimeoutMs
-      scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.rebalanceTimeoutMs)
-    } else
-      group.rebalanceTimeoutMs
+    val delayedRebalance = if (group.is(Empty))
+      new InitialDelayedJoin(this,
+        joinPurgatory,
+        group,
+        groupConfig.groupInitialRebalanceDelayMs,
+        groupConfig.groupInitialRebalanceDelayMs,
+        max(group.rebalanceTimeoutMs - groupConfig.groupInitialRebalanceDelayMs, 0))
+    else
+      new DelayedJoin(this, group, group.rebalanceTimeoutMs)
 
-    val previousState = group.currentState
     group.transitionTo(PreparingRebalance)
 
-    info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
-    val delayedRebalance = new DelayedJoin(this, group, delay)
     val groupKey = GroupKey(group.groupId)
-    // if this is the first member joining the group just watch the operation rather than trying to complete it
-    if (previousState.eq(Empty))
-      joinPurgatory.watchOperation(delayedRebalance, Seq(groupKey))
-    else
-      // try complete when the group is in the non-empty state
-      joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
+    // try complete when the group is in the non-empty state
+    joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 
   private def onMemberFailure(group: GroupMetadata, member: MemberMetadata) {
@@ -694,17 +692,6 @@ class GroupCoordinator(val brokerId: Int,
   def onCompleteJoin(group: GroupMetadata) {
     var delayedStore: Option[DelayedStore] = None
     group synchronized {
-      if (group.generationId == 0) {
-        if (group.newMemberAdded && time.milliseconds() < group.initialRebalanceTimeout) {
-          group.newMemberAdded = false
-          val delay = scala.math.min(groupConfig.groupInitialRebalanceDelayMs, group.initialRebalanceTimeout - time.milliseconds()).toInt
-          val groupKey = GroupKey(group.groupId)
-          joinPurgatory.watchOperation(new DelayedJoin(this, group, delay), Seq(groupKey))
-          return
-        } else {
-          group.newMemberAdded = false
-        }
-      }
       // remove any members who haven't joined the group yet
       group.notYetRejoinedMembers.foreach { failedMember =>
         group.remove(failedMember.memberId)

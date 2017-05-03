@@ -1044,15 +1044,15 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
-  def shouldOnlyDelayRebalanceUptoRebalanceTimeout() {
+  def shouldDelayRebalanceUptoRebalanceTimeout() {
     val rebalanceTimeout = GroupInitialRebalanceDelay * 2
     val firstMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
     EasyMock.reset(replicaManager)
-    timer.advanceClock(GroupInitialRebalanceDelay - 1)
     val secondMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
     EasyMock.reset(replicaManager)
-    timer.advanceClock(GroupInitialRebalanceDelay - 1)
     val thirdMemberJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
+    timer.advanceClock(GroupInitialRebalanceDelay)
     EasyMock.reset(replicaManager)
 
     verifyDelayedTaskNotCompleted(firstMemberJoinFuture)
@@ -1060,7 +1060,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     verifyDelayedTaskNotCompleted(thirdMemberJoinFuture)
 
     // advance clock beyond rebalanceTimeout
-    timer.advanceClock(3)
+    timer.advanceClock(1)
 
     val firstResult = await(firstMemberJoinFuture, 1)
     val secondResult = await(secondMemberJoinFuture, 1)

@@ -17,7 +17,9 @@
 
 package kafka.coordinator.group
 
-import kafka.server.DelayedOperation
+import kafka.server.{DelayedOperation, DelayedOperationPurgatory, GroupKey}
+
+import scala.math.{max, min}
 
 /**
  * Delayed rebalance operations that are added to the purgatory when group is preparing for rebalance
@@ -41,4 +43,33 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete)
   override def onExpiration() = coordinator.onExpireJoin()
   override def onComplete() = coordinator.onCompleteJoin(group)
+}
+
+private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
+                                        purgatory: DelayedOperationPurgatory[DelayedJoin],
+                                        group: GroupMetadata,
+                                        configuredRebalanceDelay: Int,
+                                        delayMs: Int,
+                                        remainingMs: Int) extends DelayedJoin(coordinator, group, delayMs) {
+
+  override def tryComplete(): Boolean = false
+
+  override def onComplete(): Unit = {
+    group synchronized  {
+      if (group.newMemberAdded) {
+        group.newMemberAdded = false
+        val delay = min(configuredRebalanceDelay, remainingMs)
+        val remaining = max(remainingMs - delayMs, 0)
+        purgatory.tryCompleteElseWatch(new InitialDelayedJoin(coordinator,
+          purgatory,
+          group,
+          configuredRebalanceDelay,
+          delay,
+          remaining
+        ), Seq(GroupKey(group.groupId)))
+      } else
+        super.onComplete()
+    }
+  }
+
 }
