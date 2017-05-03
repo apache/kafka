@@ -28,6 +28,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
@@ -156,7 +157,7 @@ class TransactionStateManagerTest {
     assertFalse(transactionManager.isCoordinatorFor(txnId1))
     assertFalse(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, _ => ())
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _) => ())
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -294,7 +295,7 @@ class TransactionStateManagerTest {
     EasyMock.expect(replicaManager.getLog(EasyMock.anyObject(classOf[TopicPartition]))).andReturn(None)
     EasyMock.replay(replicaManager)
 
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, _ => ())
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
     val epoch = transactionManager.getTransactionState(txnId1).get.coordinatorEpoch
     assertEquals(coordinatorEpoch, epoch)
   }
@@ -325,11 +326,18 @@ class TransactionStateManagerTest {
 
     prepareTxnLog(topicPartition, 0, records)
 
-    var receivedArgs: WriteTxnMarkerArgs = null
-    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, markerArgs => receivedArgs = markerArgs)
+    var txnId: String = null
+    def rememberTxnMarkers(transactionalId: String,
+                           coordinatorEpoch: Int,
+                           metadata: TransactionMetadata,
+                           command: TransactionResult): Unit = {
+      txnId = transactionalId
+    }
+
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, rememberTxnMarkers)
     scheduler.tick()
 
-    assertEquals(txnId1, receivedArgs.transactionalId)
+    assertEquals(txnId1, txnId)
   }
 
   private def assertCallback(error: Errors): Unit = {

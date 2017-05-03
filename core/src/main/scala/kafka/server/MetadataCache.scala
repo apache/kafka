@@ -120,7 +120,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def getAllTopics: Set[String] = {
+  def getAllTopics(): Set[String] = {
     inReadLock(partitionMetadataLock) {
       cache.keySet.toSet
     }

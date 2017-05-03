@@ -44,7 +44,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   @Test
   def shouldReEnqueuePartitionsWhenBrokerDisconnected(): Unit = {
-    EasyMock.expect(markerChannel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
+    EasyMock.expect(markerChannel.addTxnMarkersToSend("pid1", 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](topic1)))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, true, null, null))
@@ -71,8 +71,6 @@ class TransactionMarkerRequestCompletionHandlerTest {
     val response = new WriteTxnMarkersResponse(createPidErrorMap(Errors.NONE))
 
     val metadata = new TransactionMetadata(0, 0, 0, PrepareCommit, mutable.Set[TopicPartition](topic1), 0, 0)
-    EasyMock.expect(markerChannel.pendingTxnMetadata(0, 0))
-      .andReturn(Some(metadata))
     EasyMock.replay(markerChannel)
 
     handler.onComplete(new ClientResponse(new RequestHeader(0, 0, "client", 1), null, null, 0, 0, false, null, response))
@@ -90,9 +88,6 @@ class TransactionMarkerRequestCompletionHandlerTest {
     purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata, (errors:Errors) => {
       completed = true
     }), Seq(0L))
-
-    EasyMock.expect(markerChannel.pendingTxnMetadata(0, 0))
-      .andReturn(Some(metadata))
 
     EasyMock.replay(markerChannel)
 

@@ -62,7 +62,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = WriteTxnMarkerArgs => Unit
+  type SendTxnMarkersCallback = (String, Int, TransactionMetadata, TransactionResult) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -252,7 +252,6 @@ class TransactionStateManager(brokerId: Int,
 
       loadedTransactions.foreach {
         case (transactionalId, txnMetadata) =>
-
           // if state is PrepareCommit or PrepareAbort we need to complete the transaction
           if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
             val command = if (txnMetadata.state == PrepareCommit) TransactionResult.COMMIT else TransactionResult.ABORT
