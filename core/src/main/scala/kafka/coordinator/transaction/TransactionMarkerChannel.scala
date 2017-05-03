@@ -19,7 +19,7 @@ package kafka.coordinator.transaction
 import java.util
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
-import kafka.common.{BrokerEndPointNotAvailableException, RequestAndCompletionHandler}
+import kafka.common.RequestAndCompletionHandler
 import kafka.server.{DelayedOperationPurgatory, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.clients.NetworkClient
@@ -33,48 +33,41 @@ import scala.collection.{concurrent, immutable, mutable}
 import collection.JavaConverters._
 
 class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
+                               txnStateManager: TransactionStateManager,
                                metadataCache: MetadataCache,
                                networkClient: NetworkClient,
                                time: Time) extends Logging {
-
-  // we need the txnTopicPartition so we can clean up when Transaction Log partitions emigrate
-  case class PendingTxnKey(txnTopicPartition: Int, producerId: Long)
 
   class BrokerRequestQueue(private var destination: Node) {
 
     // keep track of the requests per txn topic partition so we can easily clear the queue
     // during partition emigration
-    private val requestsPerTxnTopicPartition: concurrent.Map[Int, BlockingQueue[TxnMarkerEntry]]
-      = concurrent.TrieMap.empty[Int, BlockingQueue[TxnMarkerEntry]]
+    private val markersPerTxnTopicPartition: concurrent.Map[Int, BlockingQueue[TxnIdAndMarkerEntry]]
+      = concurrent.TrieMap.empty[Int, BlockingQueue[TxnIdAndMarkerEntry]]
 
-    def removeRequestsForPartition(partition: Int): Unit = {
-      requestsPerTxnTopicPartition.remove(partition)
+    def removeMarkersForTxnTopicPartition(partition: Int): Option[BlockingQueue[TxnIdAndMarkerEntry]] = {
+      markersPerTxnTopicPartition.remove(partition)
     }
 
     def maybeUpdateNode(node: Node): Unit = {
       destination = node
     }
 
-    def addRequests(txnTopicPartition: Int, txnMarkerEntry: TxnMarkerEntry): Unit = {
-      val queue = requestsPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, new LinkedBlockingQueue[TxnMarkerEntry]())
-      queue.add(txnMarkerEntry)
+    def addMarkers(txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
+      val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
+      queue.add(txnIdAndMarker)
     }
 
-    def eachMetadataPartition[B](f:(Int, BlockingQueue[TxnMarkerEntry]) => B): mutable.Iterable[B] =
-      requestsPerTxnTopicPartition.filter{ case(_, queue) => !queue.isEmpty}
-        .map{case(partition:Int, queue:BlockingQueue[TxnMarkerEntry]) => f(partition, queue)}
-
+    def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[TxnIdAndMarkerEntry]) => B): mutable.Iterable[B] =
+      markersPerTxnTopicPartition.filter { case(_, queue) => !queue.isEmpty }
+                                 .map { case(partition:Int, queue:BlockingQueue[TxnIdAndMarkerEntry]) => f(partition, queue) }
 
     def node: Node = destination
 
-    def totalQueuedRequests(): Int =
-      requestsPerTxnTopicPartition.map { case(_, queue) => queue.size()}
-        .sum
-
+    def totalQueuedRequests(): Int = markersPerTxnTopicPartition.map { case(_, queue) => queue.size()}.sum
   }
 
   private val brokerStateMap: concurrent.Map[Int, BrokerRequestQueue] = concurrent.TrieMap.empty[Int, BrokerRequestQueue]
-  private val pendingTxnMap: concurrent.Map[PendingTxnKey, TransactionMetadata] = concurrent.TrieMap.empty[PendingTxnKey, TransactionMetadata]
 
   // TODO: What is reasonable for this
   private val brokerNotAliveBackoffMs = 10
@@ -84,18 +77,29 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     brokerStateMap.get(brokerId)
   }
 
-  private[transaction]
-  def drainQueuedTransactionMarkers(txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): Iterable[RequestAndCompletionHandler] = {
-    brokerStateMap.flatMap {case (brokerId: Int, brokerRequestQueue: BrokerRequestQueue) =>
-      brokerRequestQueue.eachMetadataPartition{ case(partitionId, queue) =>
-        val markersToSend: java.util.List[TxnMarkerEntry] = new util.ArrayList[TxnMarkerEntry]()
-        queue.drainTo(markersToSend)
-        val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(this, txnMarkerPurgatory, partitionId, markersToSend, brokerId)
+  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry) {
+    val brokerId = broker.id
+
+    // we do not synchronize on the update of the broker node with the enqueuing,
+    // since even if there is a race condition we will just retry
+    val brokerRequestQueue = brokerStateMap.getOrElseUpdate(brokerId, new BrokerRequestQueue(broker))
+    brokerRequestQueue.maybeUpdateNode(broker)
+    brokerRequestQueue.addMarkers(txnTopicPartition, txnIdAndMarker)
+
+    trace(s"Added marker ${txnIdAndMarker.txnMarkerEntry} for transactional id ${txnIdAndMarker.txnId} to destination broker $brokerId")
+  }
+
+  private[transaction] def drainQueuedTransactionMarkers(txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): Iterable[RequestAndCompletionHandler] = {
+    brokerStateMap.flatMap { case (brokerId: Int, brokerRequestQueue: BrokerRequestQueue) =>
+      brokerRequestQueue.forEachTxnTopicPartition { case(partitionId, queue) =>
+        val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
+        queue.drainTo(txnIdAndMarkerEntries)
+        val markersToSend: java.util.List[TxnMarkerEntry] = txnIdAndMarkerEntries.asScala.map(_.txnMarkerEntry).asJava
+        val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(brokerId, partitionId, txnStateManager, this, txnIdAndMarkerEntries, txnMarkerPurgatory)
         RequestAndCompletionHandler(brokerRequestQueue.node, new WriteTxnMarkersRequest.Builder(markersToSend), requestCompletionHandler)
       }
     }
   }
-
 
   def addOrUpdateBroker(broker: Node) {
     brokerStateMap.putIfAbsent(broker.id(), new BrokerRequestQueue(broker)) match {
@@ -104,82 +108,39 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     }
   }
 
-  private[transaction] def addRequestForBroker(brokerId: Int, metadataPartition: Int, txnMarkerEntry: TxnMarkerEntry) {
-    val brokerQueue = brokerStateMap(brokerId)
-    brokerQueue.addRequests(metadataPartition, txnMarkerEntry)
-    trace(s"Added marker $txnMarkerEntry for broker $brokerId")
-  }
+  def addTxnMarkersToSend(transactionalId: String, pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
+    val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
+    val partitionsByDestination: immutable.Map[Node, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
+      var brokerNode: Option[Node] = None
 
-  def addRequestToSend(metadataPartition: Int, pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
-    val partitionsByDestination: immutable.Map[Int, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
-      val currentBrokers = mutable.Set.empty[Int]
-      var brokerId:Option[Int] = None
+      while (brokerNode.isEmpty) {
+        brokerNode = metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
 
-      while(brokerId.isEmpty) {
-        val leaderForPartition = metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
-        leaderForPartition match {
-          case Some(partitionInfo) =>
-            val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-            if (currentBrokers.add(leaderId)) {
-              try {
-                metadataCache.getAliveEndpoint(leaderId, interBrokerListenerName) match {
-                  case Some(broker) =>
-                    addOrUpdateBroker(broker)
-                    brokerId = Some(leaderId)
-                  case None =>
-                    currentBrokers.remove(leaderId)
-                    trace(s"alive endpoint for broker with id: $leaderId not available. retrying")
-
-                }
-              } catch {
-                case _:BrokerEndPointNotAvailableException =>
-                  currentBrokers.remove(leaderId)
-                  trace(s"alive endpoint for broker with id: $leaderId not available. retrying")
-              }
-            }
-          case None =>
-            trace(s"couldn't find leader for partition: $topicPartition")
-        }
-        if (brokerId.isEmpty)
+        if (brokerNode.isEmpty) {
+          trace(s"Couldn't find leader endpoint for partition: $topicPartition, retrying.")
           time.sleep(brokerNotAliveBackoffMs)
+        }
       }
-      brokerId.get
+      brokerNode.get
     }
 
-    for ((brokerId: Int, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
-      val txnMarker = new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
-      addRequestForBroker(brokerId, metadataPartition, txnMarker)
+    for ((broker: Node, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
+      val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, topicPartitions.toList.asJava))
+      addMarkersForBroker(broker, txnTopicPartition, txnIdAndMarker)
     }
+
     networkClient.wakeup()
-  }
-
-  def maybeAddPendingRequest(metadataPartition: Int, metadata: TransactionMetadata): Boolean = {
-    val existingMetadataToWrite = pendingTxnMap.putIfAbsent(PendingTxnKey(metadataPartition, metadata.pid), metadata)
-    existingMetadataToWrite.isEmpty
-  }
-
-  def removeCompletedTxn(metadataPartition: Int, pid: Long): Unit = {
-    pendingTxnMap.remove(PendingTxnKey(metadataPartition, pid))
-  }
-
-  def pendingTxnMetadata(metadataPartition: Int, pid: Long): Option[TransactionMetadata] = {
-    pendingTxnMap.get(PendingTxnKey(metadataPartition, pid))
   }
 
   def clear(): Unit = {
     brokerStateMap.clear()
-    pendingTxnMap.clear()
   }
 
-  def removeStateForPartition(partition: Int): mutable.Iterable[Long] = {
+  def removeMarkersForTxnTopicPartition(partition: Int): Unit = {
     brokerStateMap.foreach { case(_, brokerQueue) =>
-      brokerQueue.removeRequestsForPartition(partition)
+      brokerQueue.removeMarkersForTxnTopicPartition(partition)
     }
-    pendingTxnMap.filter { case (key: PendingTxnKey, _) => key.txnTopicPartition == partition }
-      .map { case (key: PendingTxnKey, _) =>
-        pendingTxnMap.remove(key)
-        key.producerId
-      }
   }
-
 }
+
+case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)

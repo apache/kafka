@@ -120,7 +120,7 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
-  def getAllTopics(): Set[String] = {
+  def getAllTopics: Set[String] = {
     inReadLock(partitionMetadataLock) {
       cache.keySet.toSet
     }
@@ -156,6 +156,24 @@ class MetadataCache(brokerId: Int) extends Logging {
   def getPartitionInfo(topic: String, partitionId: Int): Option[PartitionStateInfo] = {
     inReadLock(partitionMetadataLock) {
       cache.get(topic).flatMap(_.get(partitionId))
+    }
+  }
+
+  def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
+    inReadLock(partitionMetadataLock) {
+      cache.get(topic).flatMap(_.get(partitionId)) match {
+        case Some(partitionInfo) =>
+          val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+          try {
+            getAliveEndpoint(leaderId, listenerName)
+          } catch {
+            case e: BrokerEndPointNotAvailableException =>
+              None
+          }
+
+        case None =>
+          None
+      }
     }
   }
 

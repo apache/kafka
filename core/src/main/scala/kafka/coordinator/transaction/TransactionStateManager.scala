@@ -291,7 +291,7 @@ class TransactionStateManager(brokerId: Int,
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
                              txnMetadata: TransactionMetadata,
-                             responseCallback: Errors => Unit) {
+                             responseCallback: Errors => Unit): Unit = {
 
     // generate the message for this transaction metadata
     val keyBytes = TransactionLog.keyToBytes(transactionalId)
@@ -354,40 +354,33 @@ class TransactionStateManager(brokerId: Int,
       }
 
       if (responseError == Errors.NONE) {
-        def completeStateTransition(metadata: TransactionMetadata, newState: TransactionState): Boolean = {
-          // there is no transition in this case
-          if (metadata.state == Empty && newState == Empty)
-            true
-          else
-            metadata.completeTransitionTo(txnMetadata.state)
-        }
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
-          getTransactionState(transactionalId) match {
-            case Some(epochAndMetadata) =>
-              epochAndMetadata synchronized {
-                val metadata = epochAndMetadata.transactionMetadata
+        getTransactionState(transactionalId) match {
+          case Some(epochAndMetadata) =>
+            epochAndMetadata synchronized {
+              val metadata = epochAndMetadata.transactionMetadata
 
-                if (metadata.pid == txnMetadata.pid &&
-                  metadata.producerEpoch == txnMetadata.producerEpoch &&
-                  epochAndMetadata.coordinatorEpoch == coordinatorEpoch &&
-                  metadata.txnTimeoutMs == txnMetadata.txnTimeoutMs &&
-                  completeStateTransition(metadata, txnMetadata.state)) {
-                  // only topic-partition lists could possibly change (state should have transited in the above condition)
-                  metadata.addPartitions(txnMetadata.topicPartitions.toSet)
-                } else {
-                  throw new IllegalStateException(s"Completing transaction state transition to $txnMetadata while its current state is $metadata.")
-                }
+              if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch && metadata.completeTransitionTo(txnMetadata)) {
+                debug(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
+              } else {
+                // the cache may have been changed due to txn topic partition emigration and immigration,
+                // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
+                info(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
+                  s"has been appended to the log. The cached metadata have been changed to $epochAndMetadata since it was written to the log last time")
+
+                responseError = Errors.NOT_COORDINATOR
               }
+            }
 
-            case None =>
-              // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-              // return NOT_COORDINATOR to let the client retry
-              debug(s"Updating $transactionalId's transaction state to $txnMetadata for $transactionalId failed after the transaction message " +
-                s"has been appended to the log. The partition for $transactionalId may have migrated as the metadata is no longer in the cache")
+          case None =>
+            // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
+            // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
+            info(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
+              s"has been appended to the log. The partition ${partitionFor(transactionalId)} may have migrated as the metadata is no longer in the cache")
 
-              responseError = Errors.NOT_COORDINATOR
-          }
+            responseError = Errors.NOT_COORDINATOR
+        }
       }
 
       responseCallback(responseError)

@@ -22,25 +22,25 @@ import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
 import collection.JavaConversions._
 
-class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: TransactionMarkerChannel,
-                                                txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
+class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnTopicPartition: Int,
-                                                txnMarkerEntries: java.util.List[TxnMarkerEntry],
-                                                brokerId: Int) extends RequestCompletionHandler with Logging {
+                                                txnStateManager: TransactionStateManager,
+                                                txnMarkerChannel: TransactionMarkerChannel,
+                                                txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry],
+                                                txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]) extends RequestCompletionHandler with Logging {
   override def onComplete(response: ClientResponse): Unit = {
     val correlationId = response.requestHeader.correlationId
     if (response.wasDisconnected) {
       trace(s"Cancelled request $response due to node ${response.destination} being disconnected")
       // re-enqueue the markers
-      for (txnMarker: TxnMarkerEntry <- txnMarkerEntries) {
-        transactionMarkerChannel.addRequestToSend(
-          txnTopicPartition,
+      for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
+        val txnMarker = txnIdAndMarker.txnMarkerEntry
+        txnMarkerChannel.addTxnMarkersToSend(txnIdAndMarker.txnId,
           txnMarker.producerId(),
           txnMarker.producerEpoch(),
           txnMarker.transactionResult(),
@@ -52,43 +52,50 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      for (txnMarker: TxnMarkerEntry <- txnMarkerEntries) {
-        val errors = writeTxnMarkerResponse.errors(txnMarker.producerId())
+      for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
+        val transactionalId = txnIdAndMarker.txnId
+        val txnMarker = txnIdAndMarker.txnMarkerEntry
 
-        if (errors == null)
-          throw new IllegalStateException("WriteTxnMarkerResponse does not contain expected error map for pid " + txnMarker.producerId())
+        txnStateManager.getTransactionState(transactionalId) match {
+          case None =>
+            // txn topic partition has likely emigrated, just cancel it from the purgatory
+            txnMarkerPurgatory.cancelForKey(transactionalId)
 
-        val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
-        for ((topicPartition: TopicPartition, error: Errors) <- errors) {
-          error match {
-            case Errors.NONE =>
-              transactionMarkerChannel.pendingTxnMetadata(txnTopicPartition, txnMarker.producerId()) match {
-                case None =>
-                  // TODO: probably need to respond with Errors.NOT_COORDINATOR
-                  throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${txnTopicPartition} has likely emigrated")
-                case Some(metadata) =>
-                  // do not synchronize on this metadata since it will only be accessed by the sender thread
-                  metadata.topicPartitions -= topicPartition
+          case Some(epochAndMetadata) =>
+            val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
+            val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
+
+            if (errors == null)
+              throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for pid ${txnMarker.producerId}")
+
+            epochAndMetadata synchronized {
+              for ((topicPartition: TopicPartition, error: Errors) <- errors) {
+                error match {
+                  case Errors.NONE =>
+                    epochAndMetadata.transactionMetadata.topicPartitions -= topicPartition
+
+                  case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
+                       Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+                    retryPartitions += topicPartition
+
+                  case errors: Errors =>
+                    throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while sending txn marker for $transactionalId")
+                }
               }
-            case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
-                 Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
-              retryPartitions += topicPartition
-            case _ =>
-              throw new IllegalStateException("Writing txn marker request failed permanently for pid " + txnMarker.producerId())
-          }
+            }
 
-          if (retryPartitions.nonEmpty) {
-            // re-enqueue with possible new leaders of the partitions
-            transactionMarkerChannel.addRequestToSend(
-              txnTopicPartition,
-              txnMarker.producerId(),
-              txnMarker.producerEpoch(),
-              txnMarker.transactionResult,
-              txnMarker.coordinatorEpoch(),
-              retryPartitions.toSet)
-          }
-          val completed = txnMarkerPurgatory.checkAndComplete(txnMarker.producerId())
-          trace(s"Competed $completed transactions for producerId ${txnMarker.producerId()}")
+            if (retryPartitions.nonEmpty) {
+              // re-enqueue with possible new leaders of the partitions
+              txnMarkerChannel.addTxnMarkersToSend(
+                transactionalId,
+                txnMarker.producerId(),
+                txnMarker.producerEpoch(),
+                txnMarker.transactionResult,
+                txnMarker.coordinatorEpoch(),
+                retryPartitions.toSet)
+            } else {
+              txnMarkerPurgatory.checkAndComplete(txnMarker.producerId)
+            }
         }
       }
     }

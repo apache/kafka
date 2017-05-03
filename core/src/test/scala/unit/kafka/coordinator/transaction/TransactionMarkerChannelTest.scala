@@ -48,8 +48,8 @@ class TransactionMarkerChannelTest {
   def shouldAddEmptyBrokerQueueWhenAddingNewBroker(): Unit = {
     channel.addOrUpdateBroker(new Node(1, "host", 10))
     channel.addOrUpdateBroker(new Node(2, "host", 10))
-    assertEquals(0, channel.queueForBroker(1).get.eachMetadataPartition{case(partition:Int, _) => partition}.size)
-    assertEquals(0, channel.queueForBroker(2).get.eachMetadataPartition{case(partition:Int, _) => partition}.size)
+    assertEquals(0, channel.queueForBroker(1).get.forEachTxnTopicPartition{case(partition:Int, _) => partition}.size)
+    assertEquals(0, channel.queueForBroker(2).get.forEachTxnTopicPartition{case(partition:Int, _) => partition}.size)
   }
 
   @Test
@@ -64,7 +64,7 @@ class TransactionMarkerChannelTest {
     EasyMock.replay(metadataCache)
 
     channel.addOrUpdateBroker(new Node(1, "host", 10))
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     val brokerRequestQueue = channel.queueForBroker(1).get
     assertEquals(newDestination, brokerRequestQueue.node)
@@ -104,7 +104,7 @@ class TransactionMarkerChannelTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(2, listenerName)).andReturn(Some(new Node(2, "otherhost", 10)))
 
     EasyMock.replay(metadataCache)
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
     assertEquals(1, channel.queueForBroker(1).get.totalQueuedRequests())
     assertEquals(1, channel.queueForBroker(2).get.totalQueuedRequests())
@@ -118,7 +118,7 @@ class TransactionMarkerChannelTest {
     EasyMock.expect(networkClient.wakeup())
 
     EasyMock.replay(metadataCache, networkClient)
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     EasyMock.verify(networkClient)
   }
@@ -130,7 +130,7 @@ class TransactionMarkerChannelTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(1, listenerName)).andReturn(Some(new Node(1, "host", 10)))
 
     EasyMock.replay(metadataCache)
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     assertEquals(1, channel.queueForBroker(1).get.totalQueuedRequests())
     EasyMock.verify(metadataCache)
@@ -152,7 +152,7 @@ class TransactionMarkerChannelTest {
     val metadata = new TransactionMetadata(2, 0, 0, PrepareCommit, mutable.Set.empty, 0, 0)
     channel.maybeAddPendingRequest(1, metadata)
 
-    channel.removeStateForPartition(0)
+    channel.removeMarkersForTxnTopicPartition(0)
 
     assertEquals(None, channel.pendingTxnMetadata(0, 0))
     assertEquals(None, channel.pendingTxnMetadata(0, 1))
@@ -166,10 +166,10 @@ class TransactionMarkerChannelTest {
     channel.addRequestForBroker(1, 1, new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList()))
     channel.addRequestForBroker(1, 1, new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList()))
 
-    channel.removeStateForPartition(1)
+    channel.removeMarkersForTxnTopicPartition(1)
 
 
-    val result = channel.queueForBroker(1).get.eachMetadataPartition{case (partition:Int, _) => partition}.toList
+    val result = channel.queueForBroker(1).get.forEachTxnTopicPartition{case (partition:Int, _) => partition}.toList
     assertEquals(List(0), result)
   }
 

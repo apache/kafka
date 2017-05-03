@@ -76,7 +76,7 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1, partition2))
 
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
@@ -108,8 +108,8 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1)).anyTimes()
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
-    channel.addRequestToSend(1, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition2))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(1, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition2))
 
     val expectedPartition1Request = new WriteTxnMarkersRequest.Builder(
       Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(0, 0, 0, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
@@ -131,7 +131,7 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     val result = requestGenerator()
     assertTrue(result.nonEmpty)
@@ -149,7 +149,7 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     EasyMock.verify(metadataCache)
   }
@@ -164,7 +164,7 @@ class TransactionMarkerChannelManagerTest {
       .andReturn(Some(broker1))
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     EasyMock.verify(metadataCache)
   }
@@ -181,7 +181,7 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.replay(metadataCache)
 
-    channel.addRequestToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
+    channel.addTxnMarkersToSend(0, 0, 0, TransactionResult.COMMIT, 0, Set[TopicPartition](partition1))
 
     EasyMock.verify(metadataCache)
   }
@@ -198,7 +198,7 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.replay(metadataCache)
 
-    channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
+    channelManager.addTxnMarkersToSend(metadataPartition, metadata, 0, completionCallback)
 
     assertEquals(Some(metadata), channel.pendingTxnMetadata(metadataPartition, 1))
 
@@ -213,7 +213,7 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getAliveEndpoint(EasyMock.eq(1), EasyMock.anyObject())).andReturn(Some(broker1))
     EasyMock.replay(metadataCache)
 
-    channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
+    channelManager.addTxnMarkersToSend(metadataPartition, metadata, 0, completionCallback)
     assertEquals(1, requestGenerator().size)
   }
 
@@ -226,7 +226,7 @@ class TransactionMarkerChannelManagerTest {
 
     EasyMock.replay(metadataCache)
 
-    channelManager.addTxnMarkerRequest(metadataPartition, metadata, 0, completionCallback)
+    channelManager.addTxnMarkersToSend(metadataPartition, metadata, 0, completionCallback)
     assertEquals(1,purgatory.watched)
   }
 
@@ -261,7 +261,7 @@ class TransactionMarkerChannelManagerTest {
     purgatory.tryCompleteElseWatch(new DelayedTxnMarker(metadata3, (error:Errors) => {}),Seq(2L))
     channel.maybeAddPendingRequest(1, metadata3)
 
-    channelManager.removeStateForPartition(0)
+    channelManager.removeMarkersForTxnTopicPartition(0)
 
     assertEquals(1, purgatory.watched)
     // should not complete as they've been removed

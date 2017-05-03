@@ -89,7 +89,7 @@ private[coordinator] object TransactionMetadata {
   def isValidTransition(oldState: TransactionState, newState: TransactionState): Boolean = TransactionMetadata.validPreviousStates(newState).contains(oldState)
 
   private val validPreviousStates: Map[TransactionState, Set[TransactionState]] =
-    Map(Empty -> Set(),
+    Map(Empty -> Set(Empty),
       Ongoing -> Set(Ongoing, Empty, CompleteCommit, CompleteAbort),
       PrepareCommit -> Set(Ongoing),
       PrepareAbort -> Set(Ongoing),
@@ -99,22 +99,22 @@ private[coordinator] object TransactionMetadata {
 
 /**
   *
-  * @param pid                   producer id
+  * @param producerId            producer id
   * @param producerEpoch         current epoch of the producer
   * @param txnTimeoutMs          timeout to be used to abort long running transactions
-  * @param state                 the current state of the transaction
-  * @param topicPartitions       set of partitions that are part of this transaction
-  * @param transactionStartTime  time the transaction was started, i.e., when first partition is added
-  * @param lastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
+  * @param state                 current state of the transaction
+  * @param topicPartitions       current set of partitions that are part of this transaction
+  * @param txnStartTimestamp     time the transaction was started, i.e., when first partition is added
+  * @param txnLastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
   */
 @nonthreadsafe
-private[coordinator] class TransactionMetadata(val pid: Long,
+private[coordinator] class TransactionMetadata(val producerId: Long,
                                                var producerEpoch: Short,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
-                                               var transactionStartTime: Long = -1,
-                                               var lastUpdateTimestamp: Long) {
+                                               var txnStartTimestamp: Long = -1,
+                                               var txnLastUpdateTimestamp: Long) {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -138,37 +138,141 @@ private[coordinator] class TransactionMetadata(val pid: Long,
     }
   }
 
-  def completeTransitionTo(newState: TransactionState): Boolean = {
+  def completeTransitionTo(newMetadata: TransactionMetadata): Boolean = {
+    // metadata transition is valid only if all the following conditions are met:
+    //
+    // 1. the new state is already indicated in the pending state.
+    // 2. the pid is the same (i.e. this field should never be changed)
+    // 3. the epoch should be either the same value or old value + 1.
+    // 4. the last update time is no smaller than the old value.
+    // 4. the old partitions set is a subset of the new partitions set.
+    //
+    // plus, we should only try to update the metadata after the corresponding log entry has been successfully written and replicated (see TransactionStateManager#appendTransactionToLog)
+    //
+    // if valid, transition is done via overwriting the whole object to ensure synchronization
+
     val toState = pendingState.getOrElse(throw new IllegalStateException("Completing transaction state transition while it does not have a pending state"))
-    if (toState != newState) {
+
+    if (toState != newMetadata.state ||
+      producerId != newMetadata.producerId ||
+      txnLastUpdateTimestamp <= newMetadata.txnLastUpdateTimestamp) {
+
       false
     } else {
-      pendingState = None
-      state = toState
-      true
+      val updated = toState match {
+        case Empty => // from initPid
+          if (producerEpoch > newMetadata.producerEpoch ||
+            producerEpoch < newMetadata.producerEpoch - 1 ||
+            newMetadata.topicPartitions.nonEmpty ||
+            newMetadata.txnStartTimestamp != -1) {
+
+            false
+          } else {
+            txnTimeoutMs = newMetadata.txnTimeoutMs
+            producerEpoch = newMetadata.producerEpoch
+
+            true
+          }
+
+        case Ongoing => // from addPartitions
+          if (producerEpoch != newMetadata.producerEpoch ||
+            !topicPartitions.subsetOf(newMetadata.topicPartitions) ||
+            txnTimeoutMs != newMetadata.txnTimeoutMs ||
+            txnStartTimestamp < newMetadata.txnStartTimestamp) {
+
+            false
+          } else {
+            txnStartTimestamp = newMetadata.txnStartTimestamp
+            addPartitions(newMetadata.topicPartitions)
+
+            true
+          }
+
+        case PrepareAbort => // from endTxn
+          if (producerEpoch != newMetadata.producerEpoch ||
+            !topicPartitions.equals(newMetadata.topicPartitions) ||
+            txnTimeoutMs != newMetadata.txnTimeoutMs ||
+            txnStartTimestamp != newMetadata.txnStartTimestamp) {
+
+            false
+          } else {
+
+            true
+          }
+
+        case PrepareCommit => // from endTxn
+          if (producerEpoch != newMetadata.producerEpoch ||
+            !topicPartitions.equals(newMetadata.topicPartitions) ||
+            txnTimeoutMs != newMetadata.txnTimeoutMs ||
+            txnStartTimestamp != newMetadata.txnStartTimestamp) {
+
+            false
+          } else {
+
+            true
+          }
+
+        case CompleteAbort => // from write markers
+          if (producerEpoch != newMetadata.producerEpoch ||
+            newMetadata.topicPartitions.nonEmpty ||
+            txnTimeoutMs != newMetadata.txnTimeoutMs ||
+            newMetadata.txnStartTimestamp == -1) {
+
+            false
+          } else {
+            txnStartTimestamp = newMetadata.txnStartTimestamp
+            topicPartitions.clear()
+
+            true
+          }
+
+        case CompleteCommit => // from write markers
+          if (producerEpoch != newMetadata.producerEpoch ||
+            newMetadata.topicPartitions.nonEmpty ||
+            txnTimeoutMs != newMetadata.txnTimeoutMs ||
+            newMetadata.txnStartTimestamp == -1) {
+
+            false
+          } else {
+            txnStartTimestamp = newMetadata.txnStartTimestamp
+            topicPartitions.clear()
+
+            true
+          }
+      }
+
+      if (updated) {
+        txnLastUpdateTimestamp = newMetadata.txnLastUpdateTimestamp
+        pendingState = None
+        state = toState
+      }
+
+      updated
     }
   }
 
-  def copy(): TransactionMetadata =
-    new TransactionMetadata(pid, producerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, transactionStartTime, lastUpdateTimestamp)
+  def pendingTransitionInProgress: Boolean = pendingState.isDefined
 
-  override def toString = s"TransactionMetadata($pendingState, $pid, $producerEpoch, $txnTimeoutMs, $state, $topicPartitions, $transactionStartTime, $lastUpdateTimestamp)"
+  def copy(): TransactionMetadata =
+    new TransactionMetadata(producerId, producerEpoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition] ++ topicPartitions, txnStartTimestamp, txnLastUpdateTimestamp)
+
+  override def toString = s"TransactionMetadata($pendingState, $producerId, $producerEpoch, $txnTimeoutMs, $state, $topicPartitions, $txnStartTimestamp, $txnLastUpdateTimestamp)"
 
   override def equals(that: Any): Boolean = that match {
     case other: TransactionMetadata =>
-      pid == other.pid &&
+      producerId == other.producerId &&
       producerEpoch == other.producerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
       topicPartitions.equals(other.topicPartitions) &&
-      transactionStartTime.equals(other.transactionStartTime) &&
-      lastUpdateTimestamp.equals(other.lastUpdateTimestamp)
+      txnStartTimestamp.equals(other.txnStartTimestamp) &&
+      txnLastUpdateTimestamp.equals(other.txnLastUpdateTimestamp)
     case _ => false
   }
 
 
   override def hashCode(): Int = {
-    val state = Seq(pid, txnTimeoutMs, topicPartitions, lastUpdateTimestamp)
+    val state = Seq(producerId, txnTimeoutMs, topicPartitions, txnLastUpdateTimestamp)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

@@ -527,7 +527,7 @@ class TransactionCoordinatorTest {
   @Test
   def shouldRemoveTransactionsForPartitionOnEmigration(): Unit = {
     EasyMock.expect(transactionManager.removeTransactionsForTxnTopicPartition(0))
-    EasyMock.expect(transactionMarkerChannelManager.removeStateForPartition(0))
+    EasyMock.expect(transactionMarkerChannelManager.removeMarkersForTxnTopicPartition(0))
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
     coordinator.handleTxnEmigration(0)
@@ -542,7 +542,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
       .andReturn(Some(0))
 
-    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
+    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkersToSend(
       EasyMock.eq(0),
       EasyMock.anyObject(),
       EasyMock.anyInt(),
@@ -575,7 +575,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(0, prepareMetadata)))
 
-    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
+    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkersToSend(
       EasyMock.eq(0),
       EasyMock.anyObject(),
       EasyMock.anyInt(),
@@ -706,7 +706,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(0, prepareMetadata)))
 
-    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkerRequest(
+    EasyMock.expect(transactionMarkerChannelManager.addTxnMarkersToSend(
       EasyMock.eq(0),
       EasyMock.anyObject(),
       EasyMock.anyInt(),
