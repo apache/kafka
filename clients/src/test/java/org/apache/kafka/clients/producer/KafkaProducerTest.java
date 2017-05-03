@@ -409,4 +409,13 @@ public class KafkaProducerTest {
 
     }
 
+    @Test
+    public void closeShouldBeIdempotent() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Producer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+        producer.close();
+        producer.close();
+    }
+
 }

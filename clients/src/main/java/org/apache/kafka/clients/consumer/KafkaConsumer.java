@@ -1533,6 +1533,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException If the <code>timeout</code> is negative.
      */
     public void close(long timeout, TimeUnit timeUnit) {
+        if (closed)
+            return;
         if (timeout < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
