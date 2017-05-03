@@ -18,7 +18,6 @@ package kafka.api
 
 import java.util.Properties
 
-import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs

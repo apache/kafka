@@ -15,12 +15,11 @@
   * See the License for the specific language governing permissions and
   * limitations under the License.
   */
-package integration.kafka.server
+package kafka.server
 
 import java.util.Properties
 
 import kafka.api.CustomKafkaServerSasl
-import kafka.server.MultipleListenersWithSameSecurityProtocolBaseTest
 import org.apache.kafka.common.network.ListenerName
 
 
