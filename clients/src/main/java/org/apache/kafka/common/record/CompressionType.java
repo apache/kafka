@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
@@ -25,6 +26,7 @@ import java.io.OutputStream;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
+import java.nio.ByteBuffer;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
@@ -39,8 +41,8 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
-            return buffer;
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
+            return new ByteBufferInputStream(buffer);
         }
     },
 
@@ -55,9 +57,9 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
             try {
-                return new GZIPInputStream(buffer);
+                return new GZIPInputStream(new ByteBufferInputStream(buffer));
             } catch (Exception e) {
                 throw new KafkaException(e);
             }
@@ -75,9 +77,9 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
             try {
-                return (InputStream) SnappyConstructors.INPUT.invoke(buffer);
+                return (InputStream) SnappyConstructors.INPUT.invoke(new ByteBufferInputStream(buffer));
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -85,6 +87,25 @@ public enum CompressionType {
     },
 
     LZ4(3, "lz4", 1.0f) {
+        transient private final ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier> bufferSupplier =
+            new ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>() {
+                @Override
+                protected KafkaLZ4BlockInputStream.BufferSupplier initialValue() {
+                    return new KafkaLZ4BlockInputStream.BufferSupplier() {
+                        ByteBuffer theBuffer;
+
+                        @Override
+                        public ByteBuffer get(int size) {
+                            if (theBuffer == null || theBuffer.capacity() < size) {
+                                theBuffer = ByteBuffer.allocate(size);
+                            }
+                            theBuffer.limit(size);
+                            return theBuffer;
+                        }
+                    };
+                }
+            };
+
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
@@ -96,9 +117,9 @@ public enum CompressionType {
         }
 
         @Override
-        public InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion) {
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
             try {
-                return (InputStream) LZ4Constructors.INPUT.invoke(buffer,
+                return (InputStream) LZ4Constructors.INPUT.invoke(buffer, bufferSupplier.get(),
                         messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Throwable e) {
                 throw new KafkaException(e);
@@ -118,7 +139,7 @@ public enum CompressionType {
 
     public abstract OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize);
 
-    public abstract InputStream wrapForInput(ByteBufferInputStream buffer, byte messageVersion);
+    public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion);
 
     public static CompressionType forId(int id) {
         switch (id) {
@@ -156,7 +177,8 @@ public enum CompressionType {
     private static class LZ4Constructors {
         static final MethodHandle INPUT = findConstructor(
                 "org.apache.kafka.common.record.KafkaLZ4BlockInputStream",
-                MethodType.methodType(void.class, InputStream.class, Boolean.TYPE));
+                MethodType.methodType(void.class, ByteBuffer.class,
+                                      BufferSupplier.class, Boolean.TYPE));
 
         static final MethodHandle OUTPUT = findConstructor(
                 "org.apache.kafka.common.record.KafkaLZ4BlockOutputStream",
