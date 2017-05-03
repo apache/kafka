@@ -296,14 +296,29 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     producerOffsets ++= offsets
   }
 
-  def completePendingTxnOffsetCommit(producerId: Long): Unit = {
-    if (pendingTransactionalOffsetCommits.contains(producerId)) {
-      pendingTransactionalOffsetCommits(producerId).foreach { case (topicPartition, offsetAndMetadata) =>
-        offsets.put(topicPartition, offsetAndMetadata)
-      }
+  /* Remove a pending transactional offset commit if the actual offset commit record was not written to the log.
+   * We will return an error and the client will retry the request, potentially to a different coordinator.
+   */
+  def failPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition, offsetAndMetadata: OffsetAndMetadata): Unit = {
+    val pendingOffsets = pendingTransactionalOffsetCommits.getOrElse(producerId, mutable.Map.empty[TopicPartition, OffsetAndMetadata])
+    pendingOffsets.remove(topicPartition)
+    if (pendingOffsets.isEmpty)
       pendingTransactionalOffsetCommits.remove(producerId)
-    }
   }
+
+  /* Complete a pending transactional offset commit. This is called when a commit or abort maker is received */
+  def completePendingTxnOffsetCommit(producerId: Long, isCommit: Boolean): Unit = {
+    if (isCommit) {
+      val producerOffsets = pendingTransactionalOffsetCommits.getOrElse(producerId, Map.empty[TopicPartition, OffsetAndMetadata])
+      offsets ++= producerOffsets
+    }
+    pendingTransactionalOffsetCommits.remove(producerId)
+  }
+
+  def activeProducers = pendingTransactionalOffsetCommits.keySet
+
+  def hasPendingOffsetCommitsFromProducer(producerId: Long) =
+    pendingTransactionalOffsetCommits.getOrElse(producerId, Map.empty[TopicPartition, OffsetAndMetadata]).nonEmpty
 
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
