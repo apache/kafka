@@ -216,6 +216,35 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testBuildControlRecord() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            long producerId = 73;
+            short epoch = 13;
+            long initialOffset = 983L;
+            MemoryRecords records = MemoryRecords.withControlRecord(initialOffset, ControlRecordType.COMMIT,
+                    producerId, epoch);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+            assertEquals(1, batches.size());
+
+            RecordBatch batch = batches.get(0);
+            assertEquals(RecordBatch.CONTROL_SEQUENCE, batch.baseSequence());
+            assertEquals(producerId, batch.producerId());
+            assertEquals(epoch, batch.producerEpoch());
+            assertEquals(initialOffset, batch.baseOffset());
+            assertTrue(batch.isValid());
+
+            List<Record> createdRecords = TestUtils.toList(batch);
+            assertEquals(1, createdRecords.size());
+
+            Record record = createdRecords.get(0);
+            assertTrue(record.isValid());
+            assertTrue(record.isControlRecord());
+            assertEquals(ControlRecordType.COMMIT, ControlRecordType.parse(record.key()));
+        }
+    }
+
+    @Test
     public void testFilterToPreservesProducerInfo() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             ByteBuffer buffer = ByteBuffer.allocate(2048);

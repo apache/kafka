@@ -446,14 +446,14 @@ public class MemoryRecords extends AbstractRecords {
         return builder.build();
     }
 
-    public static MemoryRecords withControlRecord(ControlRecordType type, long pid, short epoch) {
-        return withControlRecord(0L, type, pid, epoch);
+    public static MemoryRecords withControlRecord(ControlRecordType type, long producerId, short producerEpoch) {
+        return withControlRecord(0L, type, producerId, producerEpoch);
     }
 
-    public static MemoryRecords withControlRecord(long initialOffset, ControlRecordType type, long pid, short epoch) {
+    public static MemoryRecords withControlRecord(long initialOffset, ControlRecordType type, long producerId, short producerEpoch) {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, initialOffset, RecordBatch.NO_TIMESTAMP, pid, epoch,
+                TimestampType.CREATE_TIME, initialOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch,
                 RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
         builder.appendControlRecord(System.currentTimeMillis(), type, null);
         return builder.build();
