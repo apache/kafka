@@ -253,7 +253,7 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleTxnImmigration(transactionStateTopicPartitionId: Int, coordinatorEpoch: Int) {
-      txnManager.loadTransactionsForPartition(transactionStateTopicPartitionId, coordinatorEpoch)
+      txnManager.loadTransactionsForPartition(transactionStateTopicPartitionId, coordinatorEpoch, writeTxnMarkers)
   }
 
   def handleTxnEmigration(transactionStateTopicPartitionId: Int) {
@@ -299,6 +299,7 @@ class TransactionCoordinator(brokerId: Int,
       }
   }
 
+
   private def commitOrAbort(transactionalId: String,
                             pid: Long,
                             epoch: Short,
@@ -322,59 +323,64 @@ class TransactionCoordinator(brokerId: Int,
       if (errors == Errors.NONE)
         txnManager.coordinatorEpochFor(transactionalId) match {
           case Some(coordinatorEpoch) =>
-            def completionCallback(error: Errors): Unit = {
-              error match {
-                case Errors.NONE =>
-                  txnManager.getTransactionState(transactionalId) match {
-                    case Some(preparedCommitMetadata) =>
-                      val completedState = if (nextState == PrepareCommit) CompleteCommit else CompleteAbort
-                      val committedMetadata = new TransactionMetadata(pid,
-                        epoch,
-                        preparedCommitMetadata.txnTimeoutMs,
-                        completedState,
-                        preparedCommitMetadata.topicPartitions,
-                        preparedCommitMetadata.transactionStartTime,
-                        time.milliseconds())
-                      preparedCommitMetadata.prepareTransitionTo(completedState)
-
-                      def writeCommittedTransactionCallback(error: Errors): Unit =
-                        error match {
-                          case Errors.NONE =>
-                            trace(s"completed txn for transactionalId: $transactionalId state after commit: ${txnManager.getTransactionState(transactionalId)}")
-                            txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionalId), pid)
-                          case Errors.NOT_COORDINATOR =>
-                            // this one should be completed by the new coordinator
-                            warn(s"no longer the coordinator for transactionalId: $transactionalId")
-                          case _ =>
-                            warn(s"error: $error caught for transactionalId: $transactionalId when appending state: $completedState. retrying")
-                            // retry until success
-                            txnManager.appendTransactionToLog(transactionalId, committedMetadata, writeCommittedTransactionCallback)
-                        }
-
-                      txnManager.appendTransactionToLog(transactionalId, committedMetadata, writeCommittedTransactionCallback)
-                    case None =>
-                      // this one should be completed by the new coordinator
-                      warn(s"no longer the coordinator for transactionalId: $transactionalId")
-                  }
-                case Errors.NOT_COORDINATOR =>
-                  warn(s"no longer the coordinator for transactionalId: $transactionalId")
-                case _ =>
-                  warn(s"error: $error caught when writing transaction markers for transactionalId: $transactionalId. retrying")
-                  txnMarkerChannelManager.addTxnMarkerRequest(txnManager.partitionFor(transactionalId),
-                    newMetadata,
-                    coordinatorEpoch,
-                    completionCallback)
-              }
-            }
-
-            txnMarkerChannelManager.addTxnMarkerRequest(txnManager.partitionFor(transactionalId), newMetadata, coordinatorEpoch, completionCallback)
+            writeTxnMarkers(WriteTxnMarkerArgs(transactionalId, pid, epoch, nextState, newMetadata, coordinatorEpoch))
           case None =>
             // this one should be completed by the new coordinator
             warn(s"no longer the coordinator for transactionalId: $transactionalId")
         }
     }
-
     txnManager.appendTransactionToLog(transactionalId, newMetadata, logAppendCallback)
+  }
+
+
+  private def writeTxnMarkers(transactionMarkersArgs: WriteTxnMarkerArgs) = {
+    def completionCallback(error: Errors): Unit = {
+      error match {
+        case Errors.NONE =>
+          txnManager.getTransactionState(transactionMarkersArgs.transactionalId) match {
+            case Some(preparedCommitMetadata) =>
+              val completedState = if (transactionMarkersArgs.nextState == PrepareCommit) CompleteCommit else CompleteAbort
+              val committedMetadata = new TransactionMetadata(transactionMarkersArgs.pid,
+                transactionMarkersArgs.epoch,
+                preparedCommitMetadata.txnTimeoutMs,
+                completedState,
+                preparedCommitMetadata.topicPartitions,
+                preparedCommitMetadata.transactionStartTime,
+                time.milliseconds())
+              preparedCommitMetadata.prepareTransitionTo(completedState)
+
+              def writeCommittedTransactionCallback(error: Errors): Unit = {
+                error match {
+                  case Errors.NONE =>
+                    txnMarkerChannelManager.removeCompleted(txnManager.partitionFor(transactionMarkersArgs.transactionalId), transactionMarkersArgs.pid)
+                  case Errors.NOT_COORDINATOR =>
+                    // this one should be completed by the new coordinator
+                    warn(s"no longer the coordinator for transactionalId: ${transactionMarkersArgs.transactionalId}")
+                  case _ =>
+                    warn(s"error: $error caught for transactionalId: ${transactionMarkersArgs.transactionalId} when appending state: $completedState. retrying")
+                    // retry until success
+                    txnManager.appendTransactionToLog(transactionMarkersArgs.transactionalId, committedMetadata, writeCommittedTransactionCallback)
+                }
+              }
+              txnManager.appendTransactionToLog(transactionMarkersArgs.transactionalId, committedMetadata, writeCommittedTransactionCallback)
+            case None =>
+              // this one should be completed by the new coordinator
+              warn(s"no longer the coordinator for transactionalId: ${transactionMarkersArgs.transactionalId}")
+          }
+        case Errors.NOT_COORDINATOR =>
+          warn(s"no longer the coordinator for transactionalId: ${transactionMarkersArgs.transactionalId}")
+        case _ =>
+          warn(s"error: $error caught when writing transaction markers for transactionalId: ${transactionMarkersArgs.transactionalId}. retrying")
+          txnMarkerChannelManager.addTxnMarkerRequest(txnManager.partitionFor(transactionMarkersArgs.transactionalId),
+            transactionMarkersArgs.newMetadata,
+            transactionMarkersArgs.coordinatorEpoch,
+            completionCallback)
+      }
+    }
+    txnMarkerChannelManager.addTxnMarkerRequest(txnManager.partitionFor(transactionMarkersArgs.transactionalId),
+      transactionMarkersArgs.newMetadata,
+      transactionMarkersArgs.coordinatorEpoch,
+      completionCallback)
   }
 
   def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs
@@ -409,3 +415,9 @@ class TransactionCoordinator(brokerId: Int,
 }
 
 case class InitPidResult(pid: Long, epoch: Short, error: Errors)
+case class WriteTxnMarkerArgs(transactionalId: String,
+                              pid: Long,
+                              epoch: Short,
+                              nextState: TransactionState,
+                              newMetadata: TransactionMetadata,
+                              coordinatorEpoch: Int)
