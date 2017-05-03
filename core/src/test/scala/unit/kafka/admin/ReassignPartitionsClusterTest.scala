@@ -307,7 +307,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     startBrokers(Seq(100, 101))
     createTopic(zkUtils, topicName, Map(0 -> Seq(100)), servers = servers)
 
-    //When we execute an assignment that specifies an invalid broker ID (102: invalid broker ID in this case)
+    //When we execute an assignment that specifies an invalid brokerID (102: invalid broker ID in this case)
     val topicJson = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[101, 102]}]}"""
     ReassignPartitionsCommand.executeAssignment(zkUtils, topicJson, NoThrottle)
   }
