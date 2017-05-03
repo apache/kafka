@@ -146,6 +146,9 @@ Do you have all of of these setup? (y/n): """):
 
 starting_branch = cmd_output('git rev-parse --abbrev-ref HEAD')
 
+cmd("Verifying that you have no unstaged git changes", 'git diff --exit-code --quiet')
+cmd("Verifying that you have no staged git changes", 'git diff --cached --exit-code --quiet')
+
 release_version = raw_input("Release version (without any RC info, e.g. 0.10.2.0): ")
 try:
     release_version_parts = release_version.split('.')
