@@ -516,7 +516,8 @@ public class RequestResponseTest {
     public void testJoinGroupRequestVersion0RebalanceTimeout() throws Exception {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
-        assertEquals(jgr.sessionTimeout(), jgr.rebalanceTimeout());
+        JoinGroupRequest jgr2 = new JoinGroupRequest(jgr.toStruct(), version);
+        assertEquals(jgr2.rebalanceTimeout(), jgr.rebalanceTimeout());
     }
 
     private RequestHeader createRequestHeader() {
@@ -572,7 +573,6 @@ public class RequestResponseTest {
         return new HeartbeatResponse(Errors.NONE);
     }
 
-    @SuppressWarnings("deprecation")
     private JoinGroupRequest createJoinGroupRequest(int version) {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
         List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
