@@ -306,7 +306,7 @@ class TransactionStateManagerTest {
   @Test
   def shouldOnlyConsiderTransactionsInTheOngoingStateForExpiry(): Unit = {
     txnMetadata1.state = Ongoing
-    txnMetadata1.lastUpdateTimestamp = time.milliseconds()
+    txnMetadata1.transactionStartTime = time.milliseconds()
     transactionManager.addTransaction(txnId1, txnMetadata1)
     transactionManager.addTransaction(txnId2, txnMetadata2)
 

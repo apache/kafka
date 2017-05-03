@@ -148,7 +148,7 @@ class TransactionStateManager(brokerId: Int,
     transactionMetadataCache.filter { case (_, metadata) =>
       metadata.state match {
         case Ongoing =>
-          metadata.lastUpdateTimestamp + metadata.txnTimeoutMs < now
+          metadata.transactionStartTime + metadata.txnTimeoutMs < now
         case _ => false
       }
     }.map {case (id, metadata) =>
