@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
+import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.{KafkaException, Topic}
 import kafka.log.LogConfig
@@ -34,7 +34,7 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
-import scala.collection.{concurrent, mutable}
+import scala.collection.mutable
 import scala.collection.JavaConverters._
 
 
@@ -46,7 +46,7 @@ object TransactionManager {
 }
 
 /**
- * Transaction manager is part of the transaction coordinator, it manages:
+ * Transaction state manager is part of the transaction coordinator, it manages:
  *
  * 1. the transaction log, which is a special internal topic.
  * 2. the transaction metadata including its ongoing transaction status.
@@ -60,6 +60,8 @@ class TransactionStateManager(brokerId: Int,
                               time: Time) extends Logging {
 
   this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
+
+  type WriteTxnMarkers = WriteTxnMarkerArgs => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -161,7 +163,7 @@ class TransactionStateManager(brokerId: Int,
     zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName).getOrElse(config.transactionLogNumPartitions)
   }
 
-  private def loadTransactionMetadata(topicPartition: TopicPartition) {
+  private def loadTransactionMetadata(topicPartition: TopicPartition, writeTxnMarkers: WriteTxnMarkers) {
     def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     val startMs = time.milliseconds()
@@ -221,6 +223,16 @@ class TransactionStateManager(brokerId: Int,
 
                 throw new KafkaException("Loading transaction topic partition failed.")
               }
+              // if state is PrepareCommit or PrepareAbort we need to complete the transaction
+              if (currentTxnMetadata.state == PrepareCommit || currentTxnMetadata.state == PrepareAbort) {
+                writeTxnMarkers(WriteTxnMarkerArgs(transactionalId,
+                  txnMetadata.pid,
+                  txnMetadata.producerEpoch,
+                  txnMetadata.state,
+                  txnMetadata,
+                  coordinatorEpochFor(transactionalId).get
+                ))
+              }
           }
 
           removedTransactionalIds.foreach { transactionalId =>
@@ -243,7 +255,7 @@ class TransactionStateManager(brokerId: Int,
    * When this broker becomes a leader for a transaction log partition, load this partition and
    * populate the transaction metadata cache with the transactional ids.
    */
-  def loadTransactionsForPartition(partition: Int, coordinatorEpoch: Int) {
+  def loadTransactionsForPartition(partition: Int, coordinatorEpoch: Int, writeTxnMarkers: WriteTxnMarkers) {
     validateTransactionTopicPartitionCountIsStable()
 
     val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partition)
@@ -256,7 +268,7 @@ class TransactionStateManager(brokerId: Int,
     def loadTransactions() {
       info(s"Loading transaction metadata from $topicPartition")
       try {
-        loadTransactionMetadata(topicPartition)
+        loadTransactionMetadata(topicPartition, writeTxnMarkers)
       } catch {
         case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
       } finally {
