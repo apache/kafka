@@ -174,39 +174,44 @@ class TransactionStateManager(brokerId: Int,
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         var currOffset = log.logStartOffset
-        while (currOffset < highWaterMark
-                && loadingPartitions.contains(topicPartition.partition())
-                && !shuttingDown.get()) {
-          buffer.clear()
-          val fileRecords = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None, minOneMessage = true)
-            .records.asInstanceOf[FileRecords]
-          val bufferRead = fileRecords.readInto(buffer, 0)
 
-          MemoryRecords.readableRecords(bufferRead).batches.asScala.foreach { batch =>
-            for (record <- batch.asScala) {
-              require(record.hasKey, "Transaction state log's key should not be null")
-              TransactionLog.readMessageKey(record.key) match {
+        try {
+          while (currOffset < highWaterMark
+            && loadingPartitions.contains(topicPartition.partition())
+            && !shuttingDown.get()) {
+            buffer.clear()
+            val fileRecords = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None, minOneMessage = true)
+              .records.asInstanceOf[FileRecords]
+            val bufferRead = fileRecords.readInto(buffer, 0)
 
-                case txnKey: TxnKey =>
-                  // load transaction metadata along with transaction state
-                  val transactionalId: String = txnKey.transactionalId
-                  if (!record.hasValue) {
-                    loadedTransactions.remove(transactionalId)
-                  } else {
-                    val txnMetadata = TransactionLog.readMessageValue(record.value)
-                    loadedTransactions.put(transactionalId, txnMetadata)
-                  }
+            MemoryRecords.readableRecords(bufferRead).batches.asScala.foreach { batch =>
+              for (record <- batch.asScala) {
+                require(record.hasKey, "Transaction state log's key should not be null")
+                TransactionLog.readMessageKey(record.key) match {
 
-                case unknownKey =>
-                  // TODO: Metrics
-                  throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
+                  case txnKey: TxnKey =>
+                    // load transaction metadata along with transaction state
+                    val transactionalId: String = txnKey.transactionalId
+                    if (!record.hasValue) {
+                      loadedTransactions.remove(transactionalId)
+                    } else {
+                      val txnMetadata = TransactionLog.readMessageValue(record.value)
+                      loadedTransactions.put(transactionalId, txnMetadata)
+                    }
+
+                  case unknownKey =>
+                    // TODO: Metrics
+                    throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
+                }
+
+                currOffset = batch.nextOffset
               }
-
-              currOffset = batch.nextOffset
             }
-          }
 
-          info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds")
+            info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds")
+          }
+        } catch {
+          case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
         }
     }
 
@@ -240,15 +245,11 @@ class TransactionStateManager(brokerId: Int,
 
     def loadTransactions() {
       info(s"Loading transaction metadata from $topicPartition")
-      val loadedTransactions = try {
-        loadTransactionMetadata(topicPartition, coordinatorEpoch)
-      } catch {
-        case t: Throwable => error(s"Error loading transactions from transaction log $topicPartition", t)
-      } finally {
-        inLock(stateLock) {
-          addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
-          loadingPartitions.remove(partitionId)
-        }
+      val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
+
+      inLock(stateLock) {
+        addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
+        loadingPartitions.remove(partitionId)
       }
     }
 

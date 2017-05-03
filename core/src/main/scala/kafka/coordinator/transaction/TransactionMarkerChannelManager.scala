@@ -143,6 +143,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
                         // retry appending
                         txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, txnMetadata, retryAppendCallback)
+
+                      case errors: Errors =>
+                        throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while appending to transaction log for $transactionalId")
                     }
 
                   txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, txnMetadata, retryAppendCallback)
