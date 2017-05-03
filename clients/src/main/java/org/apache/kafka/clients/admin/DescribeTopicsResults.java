@@ -37,14 +37,14 @@ public class DescribeTopicsResults {
 
     /**
      * Return a map from topic names to futures which can be used to check the status of
-     * individual deletions.
+     * individual topics.
      */
     public Map<String, KafkaFuture<TopicDescription>> results() {
         return futures;
     }
 
     /**
-     * Return a future which succeeds only if all the topic deletions succeed.
+     * Return a future which succeeds only if all the topic descriptions succeed.
      */
     public KafkaFuture<Map<String, TopicDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).

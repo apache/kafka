@@ -108,27 +108,24 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   @Test
   def testCreateDeleteTopics(): Unit = {
     client = AdminClient.create(createConfig())
-    val newTopics : List[NewTopic] = List(
-        new NewTopic("mytopic", 1, 1),
-        new NewTopic("mytopic2", 1, 1))
-    client.createTopics(newTopics.asJava,
-      new CreateTopicsOptions().validateOnly(true)).all().get()
+    val topics = Seq("mytopic", "mytopic2")
+    val newTopics = topics.map(new NewTopic(_, 1, 1))
+    client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
     waitForTopics(client, List(), List("mytopic", "mytopic2"))
 
-    client.createTopics(newTopics.asJava).all().get()
+    client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, List("mytopic", "mytopic2"), List())
 
     val results = client.createTopics(newTopics.asJava).results()
-    assert(results.containsKey("mytopic"))
+    assertTrue(results.containsKey("mytopic"))
     assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
-    assert(results.containsKey("mytopic2"))
+    assertTrue(results.containsKey("mytopic2"))
     assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
+    val topicsFromDescribe = client.describeTopics(Seq("mytopic", "mytopic2").asJava).all.get().asScala.keys
+    assertEquals(topics.toSet, topicsFromDescribe)
 
-    val deleteTopics : Set[String] = Set("mytopic", "mytopic2")
-    client.deleteTopics(deleteTopics.asJava).all().get()
+    client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), List("mytopic", "mytopic2"))
-
-    client.close()
   }
 
   @Test

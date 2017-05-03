@@ -85,12 +85,9 @@ object TransactionMarkerChannelManager {
       channel)
   }
 
-
   private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel,
                                             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): () => Iterable[RequestAndCompletionHandler] = {
-    def generateRequests(): Iterable[RequestAndCompletionHandler] = transactionMarkerChannel.drainQueuedTransactionMarkers(txnMarkerPurgatory)
-
-    generateRequests
+    () => transactionMarkerChannel.drainQueuedTransactionMarkers(txnMarkerPurgatory)
   }
 }
 

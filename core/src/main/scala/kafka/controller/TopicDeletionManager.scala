@@ -56,32 +56,34 @@ import scala.collection.{Set, mutable}
  *    if no replica is in TopicDeletionStarted state and at least one replica is in TopicDeletionFailed state, then
  *    it marks the topic for deletion retry.
  * @param controller
- * @param initialTopicsToBeDeleted The topics that are queued up for deletion in zookeeper at the time of controller failover
- * @param initialTopicsIneligibleForDeletion The topics ineligible for deletion due to any of the conditions mentioned in #3 above
  */
-class TopicDeletionManager(controller: KafkaController, initialTopicsToBeDeleted: Set[String] = Set.empty, initialTopicsIneligibleForDeletion: Set[String] = Set.empty) extends Logging {
+class TopicDeletionManager(controller: KafkaController) extends Logging {
   this.logIdent = "[Topic Deletion Manager " + controller.config.brokerId + "], "
   val controllerContext = controller.controllerContext
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
-  val topicsToBeDeleted: mutable.Set[String] = if (isDeleteTopicEnabled) {
-    mutable.Set.empty[String] ++ initialTopicsToBeDeleted
-  } else {
-    // if delete topic is disabled clean the topic entries under /admin/delete_topics
-    val zkUtils = controllerContext.zkUtils
-    for (topic <- initialTopicsToBeDeleted) {
-      val deleteTopicPath = getDeleteTopicPath(topic)
-      info("Removing " + deleteTopicPath + " since delete topic is disabled")
-      zkUtils.zkClient.delete(deleteTopicPath)
-    }
-    mutable.Set.empty[String]
-  }
-  val topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
-    (initialTopicsIneligibleForDeletion & topicsToBeDeleted)
-  val partitionsToBeDeleted: mutable.Set[TopicAndPartition] = topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
+  val topicsToBeDeleted = mutable.Set.empty[String]
+  val partitionsToBeDeleted = mutable.Set.empty[TopicAndPartition]
+  val topicsIneligibleForDeletion = mutable.Set.empty[String]
 
-  def start() {
+  def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
+    if (isDeleteTopicEnabled) {
+      topicsToBeDeleted ++= initialTopicsToBeDeleted
+      partitionsToBeDeleted ++= topicsToBeDeleted.flatMap(controllerContext.partitionsForTopic)
+      topicsIneligibleForDeletion ++= initialTopicsIneligibleForDeletion & topicsToBeDeleted
+    } else {
+      // if delete topic is disabled clean the topic entries under /admin/delete_topics
+      val zkUtils = controllerContext.zkUtils
+      for (topic <- initialTopicsToBeDeleted) {
+        val deleteTopicPath = getDeleteTopicPath(topic)
+        info("Removing " + deleteTopicPath + " since delete topic is disabled")
+        zkUtils.zkClient.delete(deleteTopicPath)
+      }
+    }
+  }
+
+  def tryTopicDeletion(): Unit = {
     if (isDeleteTopicEnabled) {
       resumeDeletions()
     }
@@ -90,8 +92,7 @@ class TopicDeletionManager(controller: KafkaController, initialTopicsToBeDeleted
   /**
    * Invoked when the current controller resigns. At this time, all state for topic deletion should be cleared.
    */
-  def shutdown() {
-    // Only allow one shutdown to go through
+  def reset() {
     if (isDeleteTopicEnabled) {
       topicsToBeDeleted.clear()
       partitionsToBeDeleted.clear()
