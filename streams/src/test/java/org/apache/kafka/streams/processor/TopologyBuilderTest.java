@@ -735,7 +735,7 @@ public class TopologyBuilderTest {
     public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
         final String sameNameForSourceAndProcessor = "sameName";
         final TopologyBuilder topologyBuilder = new TopologyBuilder()
-            .addGlobalStore(new MockStateStoreSupplier.MockStateStore("anyName", false),
+            .addGlobalStore(new MockStateStoreSupplier("anyName", false, false),
                 sameNameForSourceAndProcessor,
                 null,
                 null,
