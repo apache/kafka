@@ -1264,7 +1264,6 @@ public interface KTable<K, V> {
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
-     * @param joinSerde serializer for join result value type
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
@@ -1273,7 +1272,6 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final Serde<VR> joinSerde,
                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
 
 
@@ -1521,7 +1519,6 @@ public interface KTable<K, V> {
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
-     * @param joinSerde serializer for join result value type
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
@@ -1531,7 +1528,6 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final Serde<VR> joinSerde,
                                     final StateStoreSupplier<KeyValueStore> storeSupplier);
 
 
@@ -1776,7 +1772,6 @@ public interface KTable<K, V> {
      * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param <VO>   the value type of the other {@code KTable}
      * @param <VR>   the value type of the result {@code KTable}
-     * @param joinSerde serializer for join result value type
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
@@ -1786,7 +1781,6 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final Serde<VR> joinSerde,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**

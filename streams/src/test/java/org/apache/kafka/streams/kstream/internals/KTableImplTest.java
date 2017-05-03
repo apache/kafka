@@ -447,17 +447,17 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInJoin() throws Exception {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, null, (StateStoreSupplier<KeyValueStore>) null);
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInLeftJoin() throws Exception {
-        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, null, (StateStoreSupplier<KeyValueStore>) null);
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInOuterJoin() throws Exception {
-        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, null, (StateStoreSupplier<KeyValueStore>) null);
+        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
     }
 
     @Test(expected = NullPointerException.class)
