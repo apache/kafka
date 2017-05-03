@@ -313,6 +313,7 @@ class Log(@volatile var dir: File,
                 s"${indexFile.getAbsolutePath} and rebuilding index...")
               Files.deleteIfExists(timeIndexFile.toPath)
               Files.delete(indexFile.toPath)
+              segment.txnIndex.delete()
               recoverSegment(segment)
           }
         } else {
@@ -814,16 +815,8 @@ class Log(@volatile var dir: File,
       appendInfo
     })
 
-    if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
-      val record = batch.iterator.next()
-      val controlRecordType = ControlRecordType.parse(record.key)
-      val completedTxn = appendInfo.appendControlRecord(controlRecordType, batch.producerEpoch, firstOffset,
-        record.timestamp)
-      completedTxns += completedTxn
-    } else {
-      appendInfo.append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, lastOffset,
-        batch.isTransactional)
-    }
+    val maybeCompletedTxn = appendInfo.append(batch, firstOffset, lastOffset)
+    maybeCompletedTxn.foreach(completedTxns += _)
   }
 
   /**

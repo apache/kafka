@@ -16,14 +16,12 @@
  */
 package kafka.log
 
-import java.io.File
+import java.io.{File, IOException}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
-import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.Logging
+import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.utils.Utils
@@ -43,29 +41,27 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTr
  * may span multiple segments. Recovering the index therefore requires scanning the earlier segments in
  * order to find the start of the transactions.
  */
+@nonthreadsafe
 class TransactionIndex(val startOffset: Long, @volatile var file: File) extends Logging {
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
-  private val lock = new ReentrantReadWriteLock
 
   if (file.exists)
     openChannel()
 
   def append(abortedTxn: AbortedTxn): Unit = {
-    inWriteLock(lock) {
-      lastOffset.foreach { offset =>
-        if (offset >= abortedTxn.lastOffset)
-          throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially")
-      }
-      lastOffset = Some(abortedTxn.lastOffset)
-      Utils.writeFully(channel, abortedTxn.buffer.duplicate())
+    lastOffset.foreach { offset =>
+      if (offset >= abortedTxn.lastOffset)
+        throw new IllegalArgumentException("The last offset of appended transactions must increase sequentially")
     }
+    lastOffset = Some(abortedTxn.lastOffset)
+    Utils.writeFully(channel, abortedTxn.buffer.duplicate())
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
 
-  def delete(): Boolean = inWriteLock(lock) {
+  def delete(): Boolean = {
     maybeChannel.forall { channel =>
       channel.force(true)
       close()
@@ -81,26 +77,24 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   }
 
   private def openChannel(): FileChannel = {
-    inWriteLock(lock) {
-      val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE,
-        StandardOpenOption.CREATE)
-      maybeChannel = Some(channel)
-      channel.position(channel.size)
-      channel
-    }
+    val channel = FileChannel.open(file.toPath, StandardOpenOption.READ, StandardOpenOption.WRITE,
+      StandardOpenOption.CREATE)
+    maybeChannel = Some(channel)
+    channel.position(channel.size)
+    channel
   }
 
-  def truncate() = inWriteLock(lock) {
+  def truncate() = {
     maybeChannel.foreach(_.truncate(0))
     lastOffset = None
   }
 
-  def close(): Unit = inWriteLock(lock) {
+  def close(): Unit = {
     maybeChannel.foreach(_.close())
     maybeChannel = None
   }
 
-  def renameTo(f: File): Unit = inWriteLock(lock) {
+  def renameTo(f: File): Unit = {
     try {
       if (file.exists)
         Utils.atomicMoveWithFallback(file.toPath, f.toPath)
@@ -108,17 +102,15 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   }
 
   def truncateTo(offset: Long): Unit = {
-    inWriteLock(lock) {
-      val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
-      var newLastOffset: Option[Long] = None
-      for ((abortedTxn, position) <- iterator(() => buffer)) {
-        if (abortedTxn.lastOffset >= offset) {
-          channel.truncate(position)
-          lastOffset = newLastOffset
-          return
-        }
-        newLastOffset = Some(abortedTxn.lastOffset)
+    val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
+    var newLastOffset: Option[Long] = None
+    for ((abortedTxn, position) <- iterator(() => buffer)) {
+      if (abortedTxn.lastOffset >= offset) {
+        channel.truncate(position)
+        lastOffset = newLastOffset
+        return
       }
+      newLastOffset = Some(abortedTxn.lastOffset)
     }
   }
 
@@ -132,27 +124,34 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
           override def hasNext: Boolean = channel.position - position >= AbortedTxn.TotalSize
 
           override def next(): (AbortedTxn, Int) = {
-            val buffer = allocate()
-            Utils.readFully(channel, buffer, position)
-            buffer.flip()
+            try {
+              val buffer = allocate()
+              Utils.readFully(channel, buffer, position)
+              buffer.flip()
 
-            val abortedTxn = new AbortedTxn(buffer)
-            if (abortedTxn.version > AbortedTxn.CurrentVersion)
-              throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
-                s"current version is ${AbortedTxn.CurrentVersion}")
-            val nextEntry = (abortedTxn, position)
-            position += AbortedTxn.TotalSize
-            nextEntry
+              val abortedTxn = new AbortedTxn(buffer)
+              if (abortedTxn.version > AbortedTxn.CurrentVersion)
+                throw new KafkaException(s"Unexpected aborted transaction version ${abortedTxn.version}, " +
+                  s"current version is ${AbortedTxn.CurrentVersion}")
+              val nextEntry = (abortedTxn, position)
+              position += AbortedTxn.TotalSize
+              nextEntry
+            } catch {
+              case e: IOException =>
+                // We received an unexpected error reading from the index file. We propagate this as an
+                // UNKNOWN error to the consumer, which will cause it to retry the fetch.
+                throw new KafkaException(s"Failed to read from the transaction index $file", e)
+            }
           }
         }
     }
   }
 
-  def allAbortedTxns: List[AbortedTxn] = inReadLock(lock) {
+  def allAbortedTxns: List[AbortedTxn] = {
     iterator(() => ByteBuffer.allocate(AbortedTxn.TotalSize)).map(_._1).toList
   }
 
-  def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = inReadLock(lock) {
+  def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = {
     val abortedTransactions = ListBuffer.empty[AbortedTransaction]
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
     for ((abortedTxn, _) <- iterator(() => buffer)) {

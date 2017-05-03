@@ -92,6 +92,19 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     this.maxTimestamp = lastTimestamp
   }
 
+  def append(batch: RecordBatch, firstOffset: Long, lastOffset: Long): Option[CompletedTxn] = {
+    if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
+      val record = batch.iterator.next()
+      val controlRecordType = ControlRecordType.parse(record.key)
+      val completedTxn = appendControlRecord(controlRecordType, batch.producerEpoch, firstOffset, record.timestamp)
+      Some(completedTxn)
+    } else {
+      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, lastOffset,
+        batch.isTransactional)
+      None
+    }
+  }
+
   def append(epoch: Short,
              firstSeq: Int,
              lastSeq: Int,
