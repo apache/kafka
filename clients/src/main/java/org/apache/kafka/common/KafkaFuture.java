@@ -48,6 +48,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
         public AllOfAdapter(int remainingResponses, KafkaFuture future) {
             this.remainingResponses = remainingResponses;
             this.future = future;
+            maybeComplete();
         }
 
         @Override
@@ -59,9 +60,13 @@ public abstract class KafkaFuture<T> implements Future<T> {
                 future.completeExceptionally(exception);
             } else {
                 remainingResponses--;
-                if (remainingResponses <= 0)
-                    future.complete(null);
+                maybeComplete();
             }
+        }
+
+        private void maybeComplete() {
+            if (remainingResponses <= 0)
+                future.complete(null);
         }
     }
 
