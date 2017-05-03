@@ -209,6 +209,12 @@ object ReassignPartitionsCommand extends Logging {
       throw new AdminCommandFailedException("The proposed assignment contains non-existent partitions: " +
         nonExistentPartitions)
 
+    //Check that all brokers in the proposed assignment exist in the cluster
+    val existingBrokerIDs = zkUtils.getSortedBrokerList()
+    val nonExistingBrokerIDs = partitionsToBeReassigned.toMap.values.flatten.filterNot(existingBrokerIDs.contains).toSet
+    if (nonExistingBrokerIDs.nonEmpty)
+      throw new AdminCommandFailedException("The proposed assignment contains non-existent broker IDs: " + nonExistingBrokerIDs.mkString(","))
+
     partitionsToBeReassigned
   }
 
