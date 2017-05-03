@@ -17,104 +17,172 @@
 
 package kafka.utils
 
-import org.apache.log4j.Logger
+import org.apache.log4j.spi.{LocationInfo, LoggerFactory, LoggingEvent}
+import org.apache.log4j.{Logger, Priority}
 
 trait Logging {
-  val loggerName = this.getClass.getName
-  lazy val logger = Logger.getLogger(loggerName)
+  protected val loggerName: String = this.getClass.getName
+  protected lazy val logger: Logger =
+    Logger.getLogger(loggerName, new TraitAwareLocationInfoProvidingLoggerFactory)
+  private[this] val traitImplFqcn = classOf[Logging].getName + "$class"
 
-  protected var logIdent: String = null
+  protected var logIdent: String = _
 
   // Force initialization to register Log4jControllerMBean
   private val log4jController = Log4jController
 
-  private def msgWithLogIdent(msg: String) = 
+  /**
+    * A [[LoggerFactory]] to create a [[Logger]] which does little tricky interpolation to correct
+    * logging location of logging which happens through calling [[Logging]] trait method.
+    *
+    * When a class extends Logging trait, Scala crates dedicated methods of those in [[Logging]] trait in
+    * each implementation classes, in order to implement mixin on java which inhibit multiple-inheritance.
+    * Hence, if an instance of class invokes [[Logging#warn]] method, the call stack would look like:
+    * {{{
+    * at org.apache.log4j.Category.log(Category.java:856)
+    * at kafka.utils.Logging$class.warn(Logging.scala:154) <-- an exact method defined in trait
+    * at kafka.utils.LoggingTest$TestLogger.warn(LoggingTest.scala:42) <-- a method grown in concrete class by mixin
+    * at kafka.utils.LoggingTest$TestLogger.logWarnByTraitMethod(LoggingTest.scala:44) <-- this is the practical logging location
+    * }}}
+    * In order to find a exact location of which the logging performed, we need to dig into call stack and find
+    * the first location where the method of [[Logging]] trait called so we can find the practical position
+    * of the logging by finding +2 more lower stack element.
+    */
+  private[this] class TraitAwareLocationInfoProvidingLoggerFactory extends LoggerFactory {
+    override def makeNewLoggerInstance(name: String): Logger = new Logger(name) {
+      override def forcedLog(fqcn: String, level: Priority, message: Any, t: Throwable): Unit = {
+        callAppenders(new LoggingEvent(fqcn, this, level, message, t) {
+          private[this] var locationInfoCache: LocationInfo = _
+
+          private[this] def isInvokedThroughTraitMethod(traitElem: StackTraceElement,
+                                                        implElem: StackTraceElement): Boolean = {
+            try {
+              // Scala trait mixin creates a dedicated method in concrete class which implements a trait.
+              // If implElem points a method which had defined through processing trait mixin, the class must be
+              // an implementation of Logging trait(interface in byte code level) and the method name should
+              // corresponds to the one's in Logging trait.
+              classOf[Logging].isAssignableFrom(Class.forName(implElem.getClassName)) &&
+                traitElem.getMethodName == implElem.getMethodName
+            } catch {
+              case _: Throwable => false
+            }
+          }
+
+          private[this] def findPracticalLoggingLocation(): LocationInfo = {
+            val callStack = (new Throwable).getStackTrace
+            callStack.view.dropWhile { elem =>
+              elem.getClassName != traitImplFqcn
+            }.take(3).toList match {
+              // If this logging invoked through trait method, the call stack should have exactly the expected
+              // pattern. See isInvokedThroughTraitMethod for the detail.
+              case traitElem :: implElem :: callerElem :: Nil
+                if isInvokedThroughTraitMethod(traitElem, implElem) =>
+                new LocationInfo(callerElem.getFileName, callerElem.getClassName, callerElem.getMethodName,
+                  String.valueOf(callerElem.getLineNumber))
+              // Otherwise this logging might be invoked through directly calling logger fields method.
+              // just fallback to the original implementation.
+              case _ => super.getLocationInformation
+            }
+          }
+
+          override def getLocationInformation: LocationInfo = {
+            if (locationInfoCache == null) {
+              locationInfoCache = findPracticalLoggingLocation()
+            }
+            locationInfoCache
+          }
+        })
+      }
+    }
+  }
+
+  private def msgWithLogIdent(msg: String) =
     if(logIdent == null) msg else logIdent + msg
 
-  def trace(msg: => String): Unit = {
-    if (logger.isTraceEnabled())
+  final def trace(msg: => String): Unit = {
+    if (logger.isTraceEnabled)
       logger.trace(msgWithLogIdent(msg))
   }
-  def trace(e: => Throwable): Any = {
-    if (logger.isTraceEnabled())
-      logger.trace(logIdent,e)
+  final def trace(e: => Throwable): Any = {
+    if (logger.isTraceEnabled)
+      logger.trace(logIdent, e)
   }
-  def trace(msg: => String, e: => Throwable) = {
-    if (logger.isTraceEnabled())
-      logger.trace(msgWithLogIdent(msg),e)
+  final def trace(msg: => String, e: => Throwable): Unit = {
+    if (logger.isTraceEnabled)
+      logger.trace(msgWithLogIdent(msg), e)
   }
-  def swallowTrace(action: => Unit) {
+  final def swallowTrace(action: => Unit) {
     CoreUtils.swallow(logger.trace, action)
   }
 
   def isDebugEnabled: Boolean = logger.isDebugEnabled
 
-  def debug(msg: => String): Unit = {
-    if (logger.isDebugEnabled())
+  final def debug(msg: => String): Unit = {
+    if (logger.isDebugEnabled)
       logger.debug(msgWithLogIdent(msg))
   }
-  def debug(e: => Throwable): Any = {
-    if (logger.isDebugEnabled())
-      logger.debug(logIdent,e)
+  final def debug(e: => Throwable): Any = {
+    if (logger.isDebugEnabled)
+      logger.debug(logIdent, e)
   }
-  def debug(msg: => String, e: => Throwable) = {
-    if (logger.isDebugEnabled())
-      logger.debug(msgWithLogIdent(msg),e)
+  final def debug(msg: => String, e: => Throwable): Unit = {
+    if (logger.isDebugEnabled)
+      logger.debug(msgWithLogIdent(msg), e)
   }
-  def swallowDebug(action: => Unit) {
+  final def swallowDebug(action: => Unit) {
     CoreUtils.swallow(logger.debug, action)
   }
 
-  def info(msg: => String): Unit = {
-    if (logger.isInfoEnabled())
+  final def info(msg: => String): Unit = {
+    if (logger.isInfoEnabled)
       logger.info(msgWithLogIdent(msg))
   }
-  def info(e: => Throwable): Any = {
-    if (logger.isInfoEnabled())
-      logger.info(logIdent,e)
+  final def info(e: => Throwable): Any = {
+    if (logger.isInfoEnabled)
+      logger.info(logIdent, e)
   }
-  def info(msg: => String,e: => Throwable) = {
-    if (logger.isInfoEnabled())
-      logger.info(msgWithLogIdent(msg),e)
+  final def info(msg: => String, e: => Throwable): Unit = {
+    if (logger.isInfoEnabled)
+      logger.info(msgWithLogIdent(msg), e)
   }
-  def swallowInfo(action: => Unit) {
+  final def swallowInfo(action: => Unit) {
     CoreUtils.swallow(logger.info, action)
   }
 
-  def warn(msg: => String): Unit = {
+  final def warn(msg: => String): Unit = {
     logger.warn(msgWithLogIdent(msg))
   }
-  def warn(e: => Throwable): Any = {
-    logger.warn(logIdent,e)
+  final def warn(e: => Throwable): Any = {
+    logger.warn(logIdent, e)
   }
-  def warn(msg: => String, e: => Throwable) = {
-    logger.warn(msgWithLogIdent(msg),e)
+  final def warn(msg: => String, e: => Throwable): Unit = {
+    logger.warn(msgWithLogIdent(msg), e)
   }
-  def swallowWarn(action: => Unit) {
+  final def swallowWarn(action: => Unit) {
     CoreUtils.swallow(logger.warn, action)
   }
-  def swallow(action: => Unit) = swallowWarn(action)
+  final def swallow(action: => Unit): Unit = swallowWarn(action)
 
-  def error(msg: => String): Unit = {
+  final def error(msg: => String): Unit = {
     logger.error(msgWithLogIdent(msg))
-  }		
-  def error(e: => Throwable): Any = {
-    logger.error(logIdent,e)
   }
-  def error(msg: => String, e: => Throwable) = {
-    logger.error(msgWithLogIdent(msg),e)
+  final def error(e: => Throwable): Any = {
+    logger.error(logIdent, e)
   }
-  def swallowError(action: => Unit) {
+  final def error(msg: => String, e: => Throwable): Unit = {
+    logger.error(msgWithLogIdent(msg), e)
+  }
+  final def swallowError(action: => Unit) {
     CoreUtils.swallow(logger.error, action)
   }
 
-  def fatal(msg: => String): Unit = {
+  final def fatal(msg: => String): Unit = {
     logger.fatal(msgWithLogIdent(msg))
   }
-  def fatal(e: => Throwable): Any = {
-    logger.fatal(logIdent,e)
-  }	
-  def fatal(msg: => String, e: => Throwable) = {
-    logger.fatal(msgWithLogIdent(msg),e)
+  final def fatal(e: => Throwable): Any = {
+    logger.fatal(logIdent, e)
+  }
+  final def fatal(msg: => String, e: => Throwable): Unit = {
+    logger.fatal(msgWithLogIdent(msg), e)
   }
 }
