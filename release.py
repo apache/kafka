@@ -58,9 +58,9 @@ def fail(msg):
 
     if delete_gitrefs:
         try:
-            cmd("Resetting repository working state", "git reset --hard HEAD && git checkout trunk", shell=True)
+            cmd("Resetting repository working state to branch %s" % starting_branch, "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
             cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_version, shell=True)
-            cmd("Deleting git tag %s", "git tag -d %s" % rc_tag, shell=True)
+            cmd("Deleting git tag %s" %rc_tag , "git tag -d %s" % rc_tag, shell=True)
         except subprocess.CalledProcessError:
             print("Failed when trying to clean up git references added by this script. You may need to clean up branches/tags yourself before retrying.")
             print("Expected git branch: " + release_version)
@@ -393,8 +393,8 @@ if not user_ok("Ok to push RC tag %s (y/n)?: " % rc_tag):
     fail("Ok, giving up")
 cmd("Pushing RC tag", "git push %s %s" % (PUSH_REMOTE_NAME, rc_tag))
 
-# Move back to trunk and clean out the temporary release branch (e.g. 0.10.2.0) we used to generate everything
-cmd("Resetting repository working state", "git reset --hard HEAD && git checkout trunk", shell=True)
+# Move back to starting branch and clean out the temporary release branch (e.g. 0.10.2.0) we used to generate everything
+cmd("Resetting repository working state", "git reset --hard HEAD && git checkout %s" % starting_branch, shell=True)
 cmd("Deleting git branches %s" % release_version, "git branch -D %s" % release_version, shell=True)
 
 
