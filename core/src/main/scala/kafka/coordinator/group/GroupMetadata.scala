@@ -292,12 +292,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def prepareTxnOffsetCommit(producerId: Long, offsets: mutable.Map[TopicPartition, OffsetAndMetadata]) {
-    if (!pendingTransactionalOffsetCommits.contains(producerId)) {
-      pendingTransactionalOffsetCommits.put(producerId, offsets)
-    } else {
-      pendingTransactionalOffsetCommits(producerId) ++= offsets
-    }
-  }
+    val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId, mutable.Map.empty[TopicPartition, OffsetAndMetadata])
+    producerOffsets ++= offsets
+ }
 
   def completePendingTxnOffsetCommit(producerId: Long): Unit = {
     if (pendingTransactionalOffsetCommits.contains(producerId)) {
