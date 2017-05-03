@@ -252,7 +252,7 @@ cmd("Creating source archive", "git archive --format tar.gz --prefix kafka-%(rel
 cmd("Building artifacts", "gradle", cwd=kafka_dir, env=jdk7_env)
 cmd("Building artifacts", "./gradlew clean releaseTarGzAll aggregatedJavadoc", cwd=kafka_dir, env=jdk7_env)
 # This should be removed with KAFKA-4421
-cmd("Building artifacts for Scala 2.12", "./gradlew releaseTarGz -PscalaVersion=2.12.1", cwd=kafka_dir, env=jdk8_env)
+cmd("Building artifacts for Scala 2.12", "./gradlew releaseTarGz -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
 cmd("Copying artifacts", "cp %s/core/build/distributions/* %s" % (kafka_dir, artifacts_dir), shell=True)
 cmd("Copying artifacts", "cp -R %s/build/docs/javadoc %s" % (kafka_dir, artifacts_dir))
 
@@ -299,7 +299,7 @@ with open(os.path.expanduser("~/.gradle/gradle.properties")) as f:
 if not user_ok("Going to build and upload mvn artifacts based on these settings:\n" + contents + '\nOK (y/n)?: '):
     fail("Retry again later")
 cmd("Building and uploading archives", "./gradlew uploadArchivesAll", cwd=kafka_dir, env=jdk7_env)
-cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12.1", cwd=kafka_dir, env=jdk8_env)
+cmd("Building and uploading archives", "./gradlew uploadCoreArchives_2_12 -PscalaVersion=2.12", cwd=kafka_dir, env=jdk8_env)
 
 release_notification_props = { 'release_version': release_version,
                                'rc': rc,
