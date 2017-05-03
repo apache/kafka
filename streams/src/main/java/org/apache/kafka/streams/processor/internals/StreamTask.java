@@ -60,7 +60,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
     private final RecordCollector recordCollector;
     private final Producer<byte[], byte[]> producer;
     private final int maxBufferedSize;
-    private final boolean exactlyOnceEnabled;
 
     private boolean commitRequested = false;
     private boolean commitOffsetNeeded = false;
@@ -111,7 +110,6 @@ public class StreamTask extends AbstractTask implements Punctuator {
         super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache, config);
         punctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
-        exactlyOnceEnabled = config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
         this.metrics = new TaskMetrics(metrics);
 
         // create queues for each assigned partition and associate them
@@ -140,7 +138,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.debug("{} Initializing", logPrefix);
         initializeStateStores();
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
-        if (exactlyOnceEnabled) {
+        if (eosEnabled) {
             producer.initTransactions();
             producer.beginTransaction();
         }
@@ -157,7 +155,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     @Override
     public void resume() {
         log.debug("{} Resuming", logPrefix);
-        if (exactlyOnceEnabled) {
+        if (eosEnabled) {
             producer.beginTransaction();
         }
         initTopology();
@@ -288,7 +286,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
                 stateMgr.putOffsetLimit(partition, offset);
             }
 
-            if (exactlyOnceEnabled) {
+            if (eosEnabled) {
                 producer.sendOffsetsToTransaction(consumedOffsetsAndMetadata, applicationId);
                 producer.commitTransaction();
                 if (startNewTransaction) {
@@ -401,7 +399,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
             closeStateManager(false);
             throw e;
         } finally {
-            if (exactlyOnceEnabled) {
+            if (eosEnabled) {
                 if (!clean) {
                     try {
                         producer.abortTransaction();

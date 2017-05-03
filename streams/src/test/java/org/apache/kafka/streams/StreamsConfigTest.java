@@ -71,7 +71,7 @@ public class StreamsConfigTest {
     }
 
     @Test(expected = ConfigException.class)
-    public void shouldThrowExceptionBootstrapServersIsNotSet() {
+    public void shouldThrowExceptionIfBootstrapServersIsNotSet() {
         props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
         new StreamsConfig(props);
     }
