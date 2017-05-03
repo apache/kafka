@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.Merger;
+import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
@@ -53,6 +54,7 @@ import java.util.Map;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class KGroupedStreamImplTest {
 
@@ -200,7 +202,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateSessionWindows() throws Exception {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        groupedStream.aggregate(new Initializer<Integer>() {
+        KTable table = groupedStream.aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -215,21 +217,22 @@ public class KGroupedStreamImplTest {
             public Integer apply(final String aggKey, final Integer aggOne, final Integer aggTwo) {
                 return aggOne + aggTwo;
             }
-        }, SessionWindows.with(30), Serdes.Integer(), "session-store")
-                .foreach(new ForeachAction<Windowed<String>, Integer>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final Integer value) {
-                        results.put(key, value);
-                    }
-                });
+        }, SessionWindows.with(30), Serdes.Integer(), "session-store");
+        table.foreach(new ForeachAction<Windowed<String>, Integer>() {
+            @Override
+            public void apply(final Windowed<String> key, final Integer value) {
+                results.put(key, value);
+            }
+        });
 
         doAggregateSessionWindows(results);
+        assertEquals(table.queryableStoreName(), "session-store");
     }
 
     @Test
     public void shouldAggregateSessionWindowsWithInternalStoreName() throws Exception {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        groupedStream.aggregate(new Initializer<Integer>() {
+        KTable table = groupedStream.aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -244,15 +247,16 @@ public class KGroupedStreamImplTest {
             public Integer apply(final String aggKey, final Integer aggOne, final Integer aggTwo) {
                 return aggOne + aggTwo;
             }
-        }, SessionWindows.with(30), Serdes.Integer())
-            .foreach(new ForeachAction<Windowed<String>, Integer>() {
-                @Override
-                public void apply(final Windowed<String> key, final Integer value) {
-                    results.put(key, value);
-                }
-            });
+        }, SessionWindows.with(30), Serdes.Integer());
+        table.foreach(new ForeachAction<Windowed<String>, Integer>() {
+            @Override
+            public void apply(final Windowed<String> key, final Integer value) {
+                results.put(key, value);
+            }
+        });
 
         doAggregateSessionWindows(results);
+        assertNull(table.queryableStoreName());
     }
 
     private void doCountSessionWindows(final Map<Windowed<String>, Long> results) throws Exception {
@@ -278,27 +282,29 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountSessionWindows() throws Exception {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        groupedStream.count(SessionWindows.with(30), "session-store")
-                .foreach(new ForeachAction<Windowed<String>, Long>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final Long value) {
-                        results.put(key, value);
-                    }
-                });
+        KTable table = groupedStream.count(SessionWindows.with(30), "session-store");
+        table.foreach(new ForeachAction<Windowed<String>, Long>() {
+            @Override
+            public void apply(final Windowed<String> key, final Long value) {
+                results.put(key, value);
+            }
+        });
         doCountSessionWindows(results);
+        assertEquals(table.queryableStoreName(), "session-store");
     }
 
     @Test
     public void shouldCountSessionWindowsWithInternalStoreName() throws Exception {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        groupedStream.count(SessionWindows.with(30))
-            .foreach(new ForeachAction<Windowed<String>, Long>() {
-                @Override
-                public void apply(final Windowed<String> key, final Long value) {
-                    results.put(key, value);
-                }
-            });
+        KTable table = groupedStream.count(SessionWindows.with(30));
+        table.foreach(new ForeachAction<Windowed<String>, Long>() {
+            @Override
+            public void apply(final Windowed<String> key, final Long value) {
+                results.put(key, value);
+            }
+        });
         doCountSessionWindows(results);
+        assertNull(table.queryableStoreName());
     }
 
     private void doReduceSessionWindows(final Map<Windowed<String>, String> results) throws Exception {
@@ -324,40 +330,42 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceSessionWindows() throws Exception {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        groupedStream.reduce(
+        KTable table = groupedStream.reduce(
                 new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
                         return value1 + ":" + value2;
                     }
                 }, SessionWindows.with(30),
-                "session-store")
-                .foreach(new ForeachAction<Windowed<String>, String>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final String value) {
-                        results.put(key, value);
-                    }
-                });
+                "session-store");
+        table.foreach(new ForeachAction<Windowed<String>, String>() {
+            @Override
+            public void apply(final Windowed<String> key, final String value) {
+                results.put(key, value);
+            }
+        });
         doReduceSessionWindows(results);
+        assertEquals(table.queryableStoreName(), "session-store");
     }
 
     @Test
     public void shouldReduceSessionWindowsWithInternalStoreName() throws Exception {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        groupedStream.reduce(
-            new Reducer<String>() {
-                @Override
-                public String apply(final String value1, final String value2) {
-                    return value1 + ":" + value2;
-                }
-            }, SessionWindows.with(30))
-            .foreach(new ForeachAction<Windowed<String>, String>() {
-                @Override
-                public void apply(final Windowed<String> key, final String value) {
-                    results.put(key, value);
-                }
-            });
+        KTable table = groupedStream.reduce(
+                new Reducer<String>() {
+                    @Override
+                    public String apply(final String value1, final String value2) {
+                        return value1 + ":" + value2;
+                    }
+                }, SessionWindows.with(30));
+        table.foreach(new ForeachAction<Windowed<String>, String>() {
+            @Override
+            public void apply(final Windowed<String> key, final String value) {
+                results.put(key, value);
+            }
+        });
         doReduceSessionWindows(results);
+        assertNull(table.queryableStoreName());
     }
 
 
@@ -409,11 +417,11 @@ public class KGroupedStreamImplTest {
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT,
-                                MockAggregator.TOSTRING_ADDER,
-                                null,
-                                SessionWindows.with(10),
-                                Serdes.String(),
-                                "storeName");
+                MockAggregator.TOSTRING_ADDER,
+                null,
+                SessionWindows.with(10),
+                Serdes.String(),
+                "storeName");
     }
 
     @Test(expected = NullPointerException.class)
@@ -488,13 +496,13 @@ public class KGroupedStreamImplTest {
         driver.process(TOPIC, "2", "B");
         driver.process(TOPIC, "2", "B");
         assertThat(results, equalTo(Arrays.asList(
-            KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
-            KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
-            KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
-            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
-            KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
-            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
-            KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
+                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
         )));
     }
 
@@ -518,13 +526,13 @@ public class KGroupedStreamImplTest {
     public void shouldCountWindowedWithInternalStoreName() throws Exception {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
         groupedStream.count(
-            TimeWindows.of(500L))
-            .foreach(new ForeachAction<Windowed<String>, Long>() {
-                @Override
-                public void apply(final Windowed<String> key, final Long value) {
-                    results.add(KeyValue.pair(key, value));
-                }
-            });
+                TimeWindows.of(500L))
+                .foreach(new ForeachAction<Windowed<String>, Long>() {
+                    @Override
+                    public void apply(final Windowed<String> key, final Long value) {
+                        results.add(KeyValue.pair(key, value));
+                    }
+                });
 
         doCountWindowed(results);
     }

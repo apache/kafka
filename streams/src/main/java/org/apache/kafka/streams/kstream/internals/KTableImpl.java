@@ -74,6 +74,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
     private final String queryableStoreName;
+    private final boolean isQueryable;
 
     private boolean sendOldValues = false;
     private final Serde<K> keySerde;
@@ -83,12 +84,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       String name,
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
-                      final String queryableStoreName) {
+                      final String queryableStoreName,
+                      boolean isQueryable) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = null;
         this.valSerde = null;
+        this.isQueryable = isQueryable;
     }
 
     public KTableImpl(KStreamBuilder topology,
@@ -97,16 +100,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                       final Serde<K> keySerde,
                       final Serde<V> valSerde,
                       Set<String> sourceNodes,
-                      final String queryableStoreName) {
+                      final String queryableStoreName,
+                      boolean isQueryable) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.keySerde = keySerde;
         this.valSerde = valSerde;
+        this.isQueryable = isQueryable;
     }
 
     @Override
     public String queryableStoreName() {
+        if (!isQueryable) {
+            return null;
+        }
+        return this.queryableStoreName;
+    }
+
+    String internalStoreName() {
         return this.queryableStoreName;
     }
 
@@ -124,7 +136,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         if (storeSupplier != null) {
             topology.addStateStore(storeSupplier, name);
         }
-        return new KTableImpl<>(topology, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName);
+        return new KTableImpl<>(topology, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, internalStoreName != null);
     }
 
     @Override
@@ -180,9 +192,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.addProcessor(name, processorSupplier, this.name);
         if (storeSupplier != null) {
             topology.addStateStore(storeSupplier, name);
-            return new KTableImpl<>(topology, name, processorSupplier, this.keySerde, valueSerde, sourceNodes, internalStoreName);
+            return new KTableImpl<>(topology, name, processorSupplier, this.keySerde, valueSerde, sourceNodes, internalStoreName, true);
         } else {
-            return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.queryableStoreName);
+            return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
         }
     }
 
@@ -536,9 +548,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-                new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, this.queryableStoreName()),
+                new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, this.internalStoreName(), false),
                 new KTableImpl<K, V1, R>(topology, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes,
-                        other.queryableStoreName()),
+                        ((KTableImpl<K, ?, ?>) other).internalStoreName(), false),
                 internalQueryableName
         );
 
@@ -552,7 +564,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
             topology.addStateStore(storeSupplier, joinMergeName);
         }
 
-        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, internalQueryableName);
+        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, internalQueryableName, internalQueryableName != null);
     }
 
     @Override

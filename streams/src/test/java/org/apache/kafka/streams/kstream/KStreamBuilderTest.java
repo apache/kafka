@@ -43,6 +43,7 @@ import java.util.regex.Pattern;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 public class KStreamBuilderTest {
 
@@ -166,8 +167,8 @@ public class KStreamBuilderTest {
 
     @Test
     public void shouldStillMaterializeSourceKTableIfStateNameNotSpecified() throws Exception {
-        builder.table("topic1", "table1");
-        builder.table("topic2", (String) null);
+        KTable table1 = builder.table("topic1", "table1");
+        KTable table2 = builder.table("topic2", (String) null);
 
         final ProcessorTopology topology = builder.build(null);
 
@@ -179,6 +180,8 @@ public class KStreamBuilderTest {
         assertEquals(2, topology.storeToChangelogTopic().size());
         assertEquals("topic1", topology.storeToChangelogTopic().get("table1"));
         assertEquals("topic2", topology.storeToChangelogTopic().get(internalStoreName));
+        assertEquals(table1.queryableStoreName(), "table1");
+        assertNull(table2.queryableStoreName());
     }
 
     @Test

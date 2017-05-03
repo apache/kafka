@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 
 public class KGroupedTableImplTest {
@@ -162,6 +163,7 @@ public class KGroupedTableImplTest {
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, "reduced");
 
         doShouldReduce(reduced, topic);
+        assertEquals(reduced.queryableStoreName(), "reduced");
     }
 
     @Test
@@ -180,5 +182,6 @@ public class KGroupedTableImplTest {
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
 
         doShouldReduce(reduced, topic);
+        assertNull(reduced.queryableStoreName());
     }
 }

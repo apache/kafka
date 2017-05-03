@@ -525,7 +525,8 @@ public class KStreamBuilder extends TopologyBuilder {
                                         final Serde<K> keySerde,
                                         final Serde<V> valSerde,
                                         final String topic,
-                                        final StateStoreSupplier<KeyValueStore> storeSupplier) {
+                                        final StateStoreSupplier<KeyValueStore> storeSupplier,
+                                        final boolean isQueryable) {
         final String source = newName(KStreamImpl.SOURCE_NAME);
         final String name = newName(KTableImpl.SOURCE_NAME);
         final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeSupplier.name());
@@ -536,7 +537,7 @@ public class KStreamBuilder extends TopologyBuilder {
         addProcessor(name, processorSupplier, source);
 
         final KTableImpl<K, ?, V> kTable = new KTableImpl<>(this, name, processorSupplier,
-                keySerde, valSerde, Collections.singleton(source), storeSupplier.name());
+                keySerde, valSerde, Collections.singleton(source), storeSupplier.name(), isQueryable);
 
         addStateStore(storeSupplier, name);
         connectSourceStoreAndTopic(storeSupplier.name(), topic);
@@ -588,7 +589,7 @@ public class KStreamBuilder extends TopologyBuilder {
                 false,
                 Collections.<String, String>emptyMap(),
                 true);
-        return doTable(offsetReset, keySerde, valSerde, topic, storeSupplier);
+        return doTable(offsetReset, keySerde, valSerde, topic, storeSupplier, queryableStoreName != null);
     }
 
     /**
@@ -657,7 +658,8 @@ public class KStreamBuilder extends TopologyBuilder {
                                      final Serde<V> valSerde,
                                      final String topic,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier) {
-        return doTable(offsetReset, keySerde, valSerde, topic, storeSupplier);
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doTable(offsetReset, keySerde, valSerde, topic, storeSupplier, true);
     }
 
     /**

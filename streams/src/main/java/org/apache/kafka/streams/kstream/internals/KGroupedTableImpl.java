@@ -47,6 +47,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     protected final Serde<? extends K> keySerde;
     protected final Serde<? extends V> valSerde;
+    private boolean isQueryable = true;
 
     public KGroupedTableImpl(final KStreamBuilder topology,
                              final String name,
@@ -56,6 +57,13 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
+        this.isQueryable = true;
+    }
+
+    private void determineIsQueryable(final String queryableStoreName) {
+        if (queryableStoreName == null) {
+            isQueryable = false;
+        } // no need for else {} since isQueryable is true by default
     }
 
     @Override
@@ -64,7 +72,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final Serde<T> aggValueSerde,
                                       final String queryableStoreName) {
-
+        determineIsQueryable(queryableStoreName);
         return aggregate(initializer, adder, subtractor, keyValueStore(keySerde, aggValueSerde, getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
@@ -81,6 +89,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor,
                                       final String queryableStoreName) {
+        determineIsQueryable(queryableStoreName);
         return aggregate(initializer, adder, subtractor, null, getOrCreateName(queryableStoreName, AGGREGATE_NAME));
     }
 
@@ -133,13 +142,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         topology.addStateStore(storeSupplier, funcName);
 
         // return the KTable representation with the intermediate topic as the sources
-        return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name());
+        return new KTableImpl<>(topology, funcName, aggregateSupplier, Collections.singleton(sourceName), storeSupplier.name(), isQueryable);
     }
 
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor,
                                final String queryableStoreName) {
+        determineIsQueryable(queryableStoreName);
         return reduce(adder, subtractor, keyValueStore(keySerde, valSerde, getOrCreateName(queryableStoreName, REDUCE_NAME)));
     }
 
@@ -162,6 +172,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     @Override
     public KTable<K, Long> count(final String queryableStoreName) {
+        determineIsQueryable(queryableStoreName);
         return count(keyValueStore(keySerde, Serdes.Long(), getOrCreateName(queryableStoreName, AGGREGATE_NAME)));
     }
 
