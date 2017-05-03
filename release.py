@@ -92,7 +92,13 @@ def cmd(action, cmd, *args, **kwargs):
         print_output(output)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
-        raise
+
+        print("*************************************************")
+        print("*** First command failure occurred here.      ***")
+        print("*** Will now try to clean up working state.   ***")
+        print("*************************************************")
+        fail("")
+
 
 def cmd_output(cmd, *args, **kwargs):
     if isinstance(cmd, basestring):
