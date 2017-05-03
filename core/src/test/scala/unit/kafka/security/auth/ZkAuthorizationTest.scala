@@ -30,7 +30,7 @@ import scala.util.{Try, Success, Failure}
 import javax.security.auth.login.Configuration
 
 class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
-  val jaasFile = kafka.utils.JaasTestUtils.writeZkFile
+  val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
 
   @Before

@@ -20,8 +20,10 @@ package kafka.api
 import java.io.File
 import java.util.Properties
 import javax.security.auth.login.Configuration
+
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
+import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
@@ -29,12 +31,13 @@ import org.apache.kafka.common.config.SaslConfigs
 
 /*
  * Implements an enumeration for the modes enabled here:
- * zk only, kafka only, both.
+ * zk only, kafka only, both, custom KafkaServer.
  */
 sealed trait SaslSetupMode
 case object ZkSasl extends SaslSetupMode
 case object KafkaSasl extends SaslSetupMode
 case object Both extends SaslSetupMode
+case object CustomKafkaServerSasl extends SaslSetupMode
 
 /*
  * Trait used in SaslTestHarness and EndToEndAuthorizationTest to setup keytab and jaas files.
@@ -43,11 +46,13 @@ trait SaslSetup {
   private val workDir = TestUtils.tempDir()
   private val kdcConf = MiniKdc.createConfig
   private var kdc: MiniKdc = null
-  private var serverKeytabFile: Option[File] = null
-  private var clientKeytabFile: Option[File] = null
+  private var serverKeytabFile: Option[File] = None
+  private var clientKeytabFile: Option[File] = None
+  private var jaasContext: Seq[JaasSection] = Seq()
 
   def startSasl(kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String],
-                mode: SaslSetupMode = Both, kafkaServerJaasEntryName: String = JaasTestUtils.KafkaServerContextName) {
+                mode: SaslSetupMode = Both, kafkaServerJaasEntryName: String = JaasTestUtils.KafkaServerContextName,
+                withDefaultJaasContext: Boolean = true) {
     // Important if tests leak consumers, producers or brokers
     LoginManager.closeAll()
     val hasKerberos = mode != ZkSasl && (kafkaClientSaslMechanism == Some("GSSAPI") || kafkaServerSaslMechanisms.contains("GSSAPI"))
@@ -60,27 +65,39 @@ trait SaslSetup {
       kdc.start()
       kdc.createPrincipal(serverKeytabFile, JaasTestUtils.KafkaServerPrincipalUnqualifiedName + "/localhost")
       kdc.createPrincipal(clientKeytabFile, JaasTestUtils.KafkaClientPrincipalUnqualifiedName, JaasTestUtils.KafkaClientPrincipalUnqualifiedName2)
-    } else {
-      this.clientKeytabFile = None
-      this.serverKeytabFile = None
     }
-    setJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+    if (withDefaultJaasContext) {
+      setJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
+      writeJaasConfigurationToFile()
+    } else
+        setJaasConfiguration(mode, kafkaServerJaasEntryName, kafkaServerSaslMechanisms, kafkaClientSaslMechanism)
     if (mode == Both || mode == ZkSasl)
       System.setProperty("zookeeper.authProvider.1", "org.apache.zookeeper.server.auth.SASLAuthenticationProvider")
   }
 
   protected def setJaasConfiguration(mode: SaslSetupMode, kafkaServerEntryName: String,
                                      kafkaServerSaslMechanisms: List[String], kafkaClientSaslMechanism: Option[String]) {
-    val jaasFile = mode match {
-      case ZkSasl => JaasTestUtils.writeZkFile()
-      case KafkaSasl => JaasTestUtils.writeKafkaFile(kafkaServerEntryName, kafkaServerSaslMechanisms,
-        kafkaClientSaslMechanism, serverKeytabFile, clientKeytabFile)
-      case Both => JaasTestUtils.writeZkAndKafkaFiles(kafkaServerEntryName, kafkaServerSaslMechanisms,
-        kafkaClientSaslMechanism, serverKeytabFile, clientKeytabFile)
+    val jaasSection = mode match {
+      case ZkSasl => JaasTestUtils.zkSections
+      case KafkaSasl =>
+        Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
+          JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism, clientKeytabFile))
+      case CustomKafkaServerSasl => Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName,
+        kafkaServerSaslMechanisms, serverKeytabFile))
+      case Both => Seq(JaasTestUtils.kafkaServerSection(kafkaServerEntryName, kafkaServerSaslMechanisms, serverKeytabFile),
+        JaasTestUtils.kafkaClientSection(kafkaClientSaslMechanism, clientKeytabFile)) ++ JaasTestUtils.zkSections
     }
+    jaasContext = jaasContext ++ jaasSection
+  }
+
+  protected def writeJaasConfigurationToFile() {
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
-    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasFile)
+    System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, JaasTestUtils.writeJaasContextsToFile(jaasContext))
+  }
+
+  protected def removeJaasSection(context: String) {
+    jaasContext = jaasContext.filter(_.contextName != context)
   }
 
   def closeSasl() {

@@ -22,7 +22,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.GroupAuthorizationException
-import org.junit.{Before,Test}
+import org.junit.{Before, Test}
 
 import scala.collection.immutable.List
 import scala.collection.JavaConverters._
