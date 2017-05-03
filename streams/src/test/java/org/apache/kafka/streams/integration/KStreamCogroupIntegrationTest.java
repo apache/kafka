@@ -49,18 +49,28 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.SessionWindow;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
+import org.apache.kafka.streams.kstream.internals.WindowedDeserializer;
+import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
+import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 @Category({IntegrationTest.class})
 public class KStreamCogroupIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(1);
-    private static final String APP_ID = "cogroup-integration-test";
+    private static final String APP_ID = "cogroup-integration-test-";
     private static final String COGROUP_STORE_NAME = "cogroup";
     private static final String TABLE_STORE_NAME = "table";
     private static final String INPUT_TOPIC_1 = "input-topic-1-";
@@ -69,11 +79,11 @@ public class KStreamCogroupIntegrationTest {
     private static final String OUTPUT_TOPIC = "output-topic-";
     private static final AtomicInteger TEST_NUMBER = new AtomicInteger();
     private static final Initializer<String> INITIALIZER = new Initializer<String>() {
-        @Override
-        public String apply() {
-            return "";
-        }
-    };
+            @Override
+            public String apply() {
+                return "";
+            }
+        };
     private static final Aggregator<Long, String, String> AGGREGATOR_1 = new Aggregator<Long, String, String>() {
             @Override
             public String apply(Long key, String value, String aggregate) {
@@ -105,33 +115,34 @@ public class KStreamCogroupIntegrationTest {
             }
         };
     private static final Merger<Long, String> MERGER = new Merger<Long, String>() {
-        @Override
-        public String apply(Long aggKey, String aggOne, String aggTwo) {
-            return aggOne + "+" + aggTwo;
-        }
-    };
+            @Override
+            public String apply(Long aggKey, String aggOne, String aggTwo) {
+                LoggerFactory.getLogger(KStreamCogroupIntegrationTest.class).error("aggOne:" + aggOne + " aggTwo:" + aggTwo);
+                return aggOne + aggTwo;
+            }
+        };
     private static final Properties PRODUCER_CONFIG = new Properties();
     private static final Properties CONSUMER_CONFIG = new Properties();
     private static final Properties STREAMS_CONFIG = new Properties();
     private static final List<Input<Long, String>> INPUTS = Arrays.asList(
-            new Input<>(INPUT_TOPIC_1, new KeyValue<>(1L, "a")),
-            new Input<>(INPUT_TOPIC_2, new KeyValue<>(2L, "a")),
-            new Input<>(INPUT_TOPIC_3, new KeyValue<>(1L, "a")),
-            new Input<>(INPUT_TOPIC_1, new KeyValue<>(1L, "b")),
-            new Input<>(INPUT_TOPIC_2, new KeyValue<>(2L, "b")),
-            new Input<>(INPUT_TOPIC_3, new KeyValue<>(1L, "b")),
-            new Input<>(INPUT_TOPIC_1, new KeyValue<>(2L, "c")),
-            new Input<>(INPUT_TOPIC_2, new KeyValue<>(1L, "c")),
-            new Input<>(INPUT_TOPIC_3, new KeyValue<>(2L, "c")),
-            new Input<>(INPUT_TOPIC_1, new KeyValue<>(2L, "a")),
-            new Input<>(INPUT_TOPIC_2, new KeyValue<>(1L, "a")),
-            new Input<>(INPUT_TOPIC_3, new KeyValue<>(2L, "a")),
-            new Input<>(INPUT_TOPIC_1, new KeyValue<>(2L, "b")),
-            new Input<>(INPUT_TOPIC_2, new KeyValue<>(1L, "b")),
-            new Input<>(INPUT_TOPIC_3, new KeyValue<>(2L, "b")),
-            new Input<>(INPUT_TOPIC_1, new KeyValue<>(1L, "c")),
-            new Input<>(INPUT_TOPIC_2, new KeyValue<>(2L, "c")),
-            new Input<>(INPUT_TOPIC_3, new KeyValue<>(1L, "c"))
+            new Input<>(INPUT_TOPIC_1, 10L, new KeyValue<>(1L, "a")),
+            new Input<>(INPUT_TOPIC_2, 10L, new KeyValue<>(2L, "a")),
+            new Input<>(INPUT_TOPIC_3, 11L, new KeyValue<>(1L, "a")),
+            new Input<>(INPUT_TOPIC_1, 11L, new KeyValue<>(1L, "b")),
+            new Input<>(INPUT_TOPIC_2, 12L, new KeyValue<>(2L, "b")),
+            new Input<>(INPUT_TOPIC_3, 12L, new KeyValue<>(1L, "b")),
+            new Input<>(INPUT_TOPIC_1, 20L, new KeyValue<>(2L, "c")),
+            new Input<>(INPUT_TOPIC_2, 20L, new KeyValue<>(1L, "c")),
+            new Input<>(INPUT_TOPIC_3, 21L, new KeyValue<>(2L, "c")),
+            new Input<>(INPUT_TOPIC_1, 21L, new KeyValue<>(2L, "a")),
+            new Input<>(INPUT_TOPIC_2, 22L, new KeyValue<>(1L, "a")),
+            new Input<>(INPUT_TOPIC_3, 22L, new KeyValue<>(2L, "a")),
+            new Input<>(INPUT_TOPIC_1, 16L, new KeyValue<>(2L, "b")),
+            new Input<>(INPUT_TOPIC_2, 16L, new KeyValue<>(1L, "b")),
+            new Input<>(INPUT_TOPIC_3, 17L, new KeyValue<>(2L, "b")),
+            new Input<>(INPUT_TOPIC_1, 17L, new KeyValue<>(1L, "c")),
+            new Input<>(INPUT_TOPIC_2, 18L, new KeyValue<>(2L, "c")),
+            new Input<>(INPUT_TOPIC_3, 18L, new KeyValue<>(1L, "c"))
         );
 
     @BeforeClass
@@ -163,7 +174,7 @@ public class KStreamCogroupIntegrationTest {
         CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
 
         final KStreamBuilder builder = new KStreamBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
@@ -177,35 +188,35 @@ public class KStreamCogroupIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
         
-        final List<String> outputs = Arrays.asList(
-                "1a", // Key 1
-                "2a", // Key 2
-                "1a3a", // Key 1
-                "1a3a1b", // Key 1
-                "2a2b", // Key 2
-                "1a3a1b3b", // Key 1
-                "2a2b1c", // Key 2
-                "1a3a1b3b2c", // Key 1
-                "2a2b1c3c", // Key 2
-                "2a2b1c3c1a", // Key 2
-                "1a3a1b3b2c2a", // Key 1
-                "2a2b1c3c1a3a", // Key 2
-                "2a2b1c3c1a3a1b", // Key 2
-                "1a3a1b3b2c2a2b", // Key 1
-                "2a2b1c3c1a3a1b3b", // Key 2
-                "1a3a1b3b2c2a2b1c", // Key 1
-                "2a2b1c3c1a3a1b3b2c", // Key 2
-                "1a3a1b3b2c2a2b1c3c" // Key 1
+        final List<KeyValue<Long, String>> expecteds = Arrays.asList(
+                KeyValue.pair(1L, "1a"),
+                KeyValue.pair(2L, "2a"),
+                KeyValue.pair(1L, "1a3a"),
+                KeyValue.pair(1L, "1a3a1b"),
+                KeyValue.pair(2L, "2a2b"),
+                KeyValue.pair(1L, "1a3a1b3b"),
+                KeyValue.pair(2L, "2a2b1c"),
+                KeyValue.pair(1L, "1a3a1b3b2c"),
+                KeyValue.pair(2L, "2a2b1c3c"),
+                KeyValue.pair(2L, "2a2b1c3c1a"),
+                KeyValue.pair(1L, "1a3a1b3b2c2a"),
+                KeyValue.pair(2L, "2a2b1c3c1a3a"),
+                KeyValue.pair(2L, "2a2b1c3c1a3a1b"),
+                KeyValue.pair(1L, "1a3a1b3b2c2a2b"),
+                KeyValue.pair(2L, "2a2b1c3c1a3a1b3b"),
+                KeyValue.pair(1L, "1a3a1b3b2c2a2b1c"),
+                KeyValue.pair(2L, "2a2b1c3c1a3a1b3b2c"),
+                KeyValue.pair(1L, "1a3a1b3b2c2a2b1c3c")
             );
 
         try {
             streams.start();
 
-            Iterator<String> outputIterator = outputs.iterator();
+            final Iterator<KeyValue<Long, String>> expectedsIterator = expecteds.iterator();
             for (final Input<Long, String> input : INPUTS) {
                 IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
-                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+                List<KeyValue<Long, String>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
+                assertThat(outputs.get(0), equalTo(expectedsIterator.next()));
             }
         } finally {
             streams.close();
@@ -217,53 +228,60 @@ public class KStreamCogroupIntegrationTest {
         final int testNumber = TEST_NUMBER.getAndIncrement();
         final Properties producerConfig = producerConfig();
         final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, WindowedDeserializer.class);
+        consumerConfig.put("key.deserializer.inner.class", LongDeserializer.class.getName());
         CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
+
+        final long timestamp = CLUSTER.time.milliseconds();
 
         final KStreamBuilder builder = new KStreamBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream2 = builder.<Long, String>stream(INPUT_TOPIC_2 + testNumber).groupByKey();
         KGroupedStream<Long, String> stream3 = builder.<Long, String>stream(INPUT_TOPIC_3 + testNumber).groupByKey();
-        stream1.cogroup(INITIALIZER, AGGREGATOR_1, MERGER, SessionWindows.with(10L), null, COGROUP_STORE_NAME)
+        stream1.cogroup(INITIALIZER, AGGREGATOR_1, MERGER, SessionWindows.with(5L), null, COGROUP_STORE_NAME)
                 .cogroup(stream2, AGGREGATOR_2)
                 .cogroup(stream3, AGGREGATOR_3)
                 .aggregate()
-                .to(OUTPUT_TOPIC + testNumber);
+                .to(Serdes.serdeFrom(new WindowedSerializer<>(new LongSerializer()), new WindowedDeserializer<>(new LongDeserializer())), null, OUTPUT_TOPIC + testNumber);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
 
-        // TODO
-        final List<String> outputs = Arrays.asList(
-                "1a", // Key 1
-                "2a", // Key 2
-                "1a3a", // Key 1
-                "1a3a1b", // Key 1
-                "2a2b", // Key 2
-                "1a3a1b3b", // Key 1
-                "2a2b1c", // Key 2
-                "1a3a1b3b2c", // Key 1
-                "2a2b1c3c", // Key 2
-                "2a2b1c3c1a", // Key 2
-                "1a3a1b3b2c2a", // Key 1
-                "2a2b1c3c1a3a", // Key 2
-                "2a2b1c3c1a3a1b", // Key 2
-                "1a3a1b3b2c2a2b", // Key 1
-                "2a2b1c3c1a3a1b3b", // Key 2
-                "1a3a1b3b2c2a2b1c", // Key 1
-                "2a2b1c3c1a3a1b3b2c", // Key 2
-                "1a3a1b3b2c2a2b1c3c" // Key 1
+        final List<List<KeyValue<Windowed<Long>, String>>> expecteds = Arrays.asList(
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a")), // endMs = timestamp + 10L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a")), // endMs = timestamp + 10L
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a")), // endMs = timestamp + 11L
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b")), // endMs = timestamp + 11L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b")), // endMs = timestamp + 12L
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b")), // endMs = timestamp + 12L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c")), // endMs = timestamp + 20L
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c")), // endMs = timestamp + 20L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c")), // endMs = timestamp + 21L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a")), // endMs = timestamp + 21L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c2a")), // endMs = timestamp + 22L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a3a")), // endMs = timestamp + 22L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b")), // endMs = timestamp + 22L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b")), // endMs = timestamp + 22L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b3b")), // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b1c")), // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b3b2c")), // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b1c3c")) // endMs = timestamp + 22L 
             );
 
         try {
             streams.start();
 
-            Iterator<String> outputIterator = outputs.iterator();
+            final Iterator<List<KeyValue<Windowed<Long>, String>>> expectedsIterator = expecteds.iterator();
             for (final Input<Long, String> input : INPUTS) {
-                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
-                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+                IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, timestamp + input.timestamp);
+                final List<KeyValue<Windowed<Long>, String>> expected = expectedsIterator.next();
+                List<KeyValue<Windowed<Long>, String>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, expected.size());
+                final Iterator<KeyValue<Windowed<Long>, String>> expectedIterator = expected.iterator();
+                for (final KeyValue<Windowed<Long>, String> output : outputs) {
+                    assertThat(output, equalTo(expectedIterator.next()));
+                }
             }
         } finally {
             streams.close();
@@ -275,10 +293,15 @@ public class KStreamCogroupIntegrationTest {
         final int testNumber = TEST_NUMBER.getAndIncrement();
         final Properties producerConfig = producerConfig();
         final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
+        consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, WindowedDeserializer.class);
+        consumerConfig.put("key.deserializer.inner.class", LongDeserializer.class.getName());
         CLUSTER.createTopic(INPUT_TOPIC_1 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_2 + testNumber, 2, 1);
         CLUSTER.createTopic(INPUT_TOPIC_3 + testNumber, 2, 1);
-        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber);
+        CLUSTER.createTopic(OUTPUT_TOPIC + testNumber, 2, 1);
+
+        long timestamp = CLUSTER.time.milliseconds();
+        timestamp = timestamp - (timestamp % 10);
 
         final KStreamBuilder builder = new KStreamBuilder();
         KGroupedStream<Long, String> stream1 = builder.<Long, String>stream(INPUT_TOPIC_1 + testNumber).groupByKey();
@@ -288,40 +311,39 @@ public class KStreamCogroupIntegrationTest {
                 .cogroup(stream2, AGGREGATOR_2)
                 .cogroup(stream3, AGGREGATOR_3)
                 .aggregate()
-                .to(OUTPUT_TOPIC + testNumber);
+                .to(Serdes.serdeFrom(new WindowedSerializer<>(new LongSerializer()), new WindowedDeserializer<>(new LongDeserializer())), null, OUTPUT_TOPIC + testNumber);
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
 
-        // TODO
-        final List<String> outputs = Arrays.asList(
-                "1a", // Key 1
-                "2a", // Key 2
-                "1a3a", // Key 1
-                "1a3a1b", // Key 1
-                "2a2b", // Key 2
-                "1a3a1b3b", // Key 1
-                "2a2b1c", // Key 2
-                "1a3a1b3b2c", // Key 1
-                "2a2b1c3c", // Key 2
-                "2a2b1c3c1a", // Key 2
-                "1a3a1b3b2c2a", // Key 1
-                "2a2b1c3c1a3a", // Key 2
-                "2a2b1c3c1a3a1b", // Key 2
-                "1a3a1b3b2c2a2b", // Key 1
-                "2a2b1c3c1a3a1b3b", // Key 2
-                "1a3a1b3b2c2a2b1c", // Key 1
-                "2a2b1c3c1a3a1b3b2c", // Key 2
-                "1a3a1b3b2c2a2b1c3c" // Key 1
+        final List<KeyValue<Windowed<Long>, String>> expecteds = Arrays.asList(
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c"), // endMs = timestamp + 30L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c"), // endMs = timestamp + 30L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c"), // endMs = timestamp + 30L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a"), // endMs = timestamp + 30L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c2a"), // endMs = timestamp + 30L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a3a"), // endMs = timestamp + 30L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1b"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2b"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1b3b"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2b1c"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1b3b2c"), // endMs = timestamp + 20L
+                KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2b1c3c") // endMs = timestamp + 20L
             );
 
         try {
             streams.start();
 
-            Iterator<String> outputIterator = outputs.iterator();
+            final Iterator<KeyValue<Windowed<Long>, String>> expectedsIterator = expecteds.iterator();
             for (final Input<Long, String> input : INPUTS) {
-                IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
-                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+                IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, timestamp + input.timestamp);
+                List<KeyValue<Windowed<Long>, String>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
+                assertThat(outputs.get(0), equalTo(expectedsIterator.next()));
             }
         } finally {
             streams.close();
@@ -350,35 +372,35 @@ public class KStreamCogroupIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
 
-        final List<String> outputs = Arrays.asList(
-                "1a", // Key 2
-                "2a", // Key 4
-                "1a3a", // Key 2
-                "1a3a1b", // Key 2
-                "2a2b", // Key 4
-                "1a3a1b3b", // Key 2
-                "2a2b1c", // Key 4
-                "1a3a1b3b2c", // Key 2
-                "2a2b1c3c", // Key 4
-                "2a2b1c3c1a", // Key 4
-                "1a3a1b3b2c2a", // Key 2
-                "2a2b1c3c1a3a", // Key 4
-                "2a2b1c3c1a3a1b", // Key 4
-                "1a3a1b3b2c2a2b", // Key 2
-                "2a2b1c3c1a3a1b3b", // Key 4
-                "1a3a1b3b2c2a2b1c", // Key 2
-                "2a2b1c3c1a3a1b3b2c", // Key 4
-                "1a3a1b3b2c2a2b1c3c" // Key 2
+        final List<KeyValue<Long, String>> expecteds = Arrays.asList(
+                KeyValue.pair(2L, "1a"), // Key 1
+                KeyValue.pair(4L, "2a"), // Key 2
+                KeyValue.pair(2L, "1a3a"), // Key 1
+                KeyValue.pair(2L, "1a3a1b"), // Key 1
+                KeyValue.pair(4L, "2a2b"), // Key 2
+                KeyValue.pair(2L, "1a3a1b3b"), // Key 1
+                KeyValue.pair(4L, "2a2b1c"), // Key 2
+                KeyValue.pair(2L, "1a3a1b3b2c"), // Key 1
+                KeyValue.pair(4L, "2a2b1c3c"), // Key 2
+                KeyValue.pair(4L, "2a2b1c3c1a"), // Key 2
+                KeyValue.pair(2L, "1a3a1b3b2c2a"), // Key 1
+                KeyValue.pair(4L, "2a2b1c3c1a3a"), // Key 2
+                KeyValue.pair(4L, "2a2b1c3c1a3a1b"), // Key 2
+                KeyValue.pair(2L, "1a3a1b3b2c2a2b"), // Key 1
+                KeyValue.pair(4L, "2a2b1c3c1a3a1b3b"), // Key 2
+                KeyValue.pair(2L, "1a3a1b3b2c2a2b1c"), // Key 1
+                KeyValue.pair(4L, "2a2b1c3c1a3a1b3b2c"), // Key 2
+                KeyValue.pair(2L, "1a3a1b3b2c2a2b1c3c") // Key 1
             );
 
         try {
             streams.start();
 
-            Iterator<String> outputIterator = outputs.iterator();
+            final Iterator<KeyValue<Long, String>> expectedsIterator = expecteds.iterator();
             for (final Input<Long, String> input : INPUTS) {
                 IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
-                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+                List<KeyValue<Long, String>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
+                assertThat(outputs.get(0), equalTo(expectedsIterator.next()));
             }
         } finally {
             streams.close();
@@ -386,7 +408,7 @@ public class KStreamCogroupIntegrationTest {
     }
 
     @Test
-    public void testCogroupEnableSendingOldValuesAndView() throws InterruptedException, ExecutionException {
+    public void testCogroupViewAndEnableSendingOldValues() throws InterruptedException, ExecutionException {
         final int testNumber = TEST_NUMBER.getAndIncrement();
         final Properties producerConfig = producerConfig();
         final Properties consumerConfig = consumerConfig("consumer-" + testNumber);
@@ -407,35 +429,35 @@ public class KStreamCogroupIntegrationTest {
 
         final KafkaStreams streams = new KafkaStreams(builder, streamsConfig(APP_ID + testNumber));
 
-        final List<String> outputs = Arrays.asList(
-                "1a+null", // Key 1
-                "2a+null", // Key 2
-                "1a+a", // Key 1
-                "1a1b+a", // Key 1
-                "2a2b+null", // Key 2
-                "1a1b+b", // Key 1
-                "2a2b1c+null", // Key 2
-                "1a1b2c+b", // Key 1
-                "2a2b1c+c", // Key 2
-                "2a2b1c1a+c", // Key 2
-                "1a1b2c2a+b", // Key 1
-                "2a2b1c1a+a", // Key 2
-                "2a2b1c1a1b+a", // Key 2
-                "1a1b2c2a2b+b", // Key 1
-                "2a2b1c1a1b+b", // Key 2
-                "1a1b2c2a2b1c+b", // Key 1
-                "2a2b1c1a1b2c+b", // Key 2
-                "1a1b2c2a2b1c+c" // Key 1
+        final List<KeyValue<Long, String>> expecteds = Arrays.asList(
+                KeyValue.pair(1L, "1a+null"),
+                KeyValue.pair(2L, "2a+null"),
+                KeyValue.pair(1L, "1a+a"),
+                KeyValue.pair(1L, "1a1b+a"),
+                KeyValue.pair(2L, "2a2b+null"),
+                KeyValue.pair(1L, "1a1b+b"),
+                KeyValue.pair(2L, "2a2b1c+null"),
+                KeyValue.pair(1L, "1a1b2c+b"),
+                KeyValue.pair(2L, "2a2b1c+c"),
+                KeyValue.pair(2L, "2a2b1c1a+c"),
+                KeyValue.pair(1L, "1a1b2c2a+b"),
+                KeyValue.pair(2L, "2a2b1c1a+a"),
+                KeyValue.pair(2L, "2a2b1c1a1b+a"),
+                KeyValue.pair(1L, "1a1b2c2a2b+b"),
+                KeyValue.pair(2L, "2a2b1c1a1b+b"),
+                KeyValue.pair(1L, "1a1b2c2a2b1c+b"),
+                KeyValue.pair(2L, "2a2b1c1a1b2c+b"),
+                KeyValue.pair(1L, "1a1b2c2a2b1c+c")
             );
 
         try {
             streams.start();
 
-            Iterator<String> outputIterator = outputs.iterator();
+            final Iterator<KeyValue<Long, String>> expectedsIterator = expecteds.iterator();
             for (final Input<Long, String> input : INPUTS) {
                 IntegrationTestUtils.produceKeyValuesSynchronously(input.topic + testNumber, Collections.singleton(input.keyValue), producerConfig, CLUSTER.time);
-                List<KeyValue<Long, String>> output = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
-                assertThat(output.get(0).value, equalTo(outputIterator.next()));
+                List<KeyValue<Long, String>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC + testNumber, 1);
+                assertThat(outputs.get(0), equalTo(expectedsIterator.next()));
             }
         } finally {
             streams.close();
@@ -462,10 +484,12 @@ public class KStreamCogroupIntegrationTest {
 
     private static final class Input<K, V> {
         String topic;
+        long timestamp;
         KeyValue<K, V> keyValue;
 
-        Input(final String topic, final KeyValue<K, V> keyValue) {
+        Input(final String topic, final long timestamp, final KeyValue<K, V> keyValue) {
             this.topic = topic;
+            this.timestamp = timestamp;
             this.keyValue = keyValue;
         }
     }
