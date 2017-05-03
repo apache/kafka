@@ -264,7 +264,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(topicPartition.toString, loadTransactions)
+    scheduler.schedule(topicPartition.toString, loadTransactions _)
   }
 
   /**
@@ -299,7 +299,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(topicPartition.toString, removeTransactions)
+    scheduler.schedule(topicPartition.toString, removeTransactions _)
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
