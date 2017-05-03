@@ -19,6 +19,7 @@ package kafka.utils
 import java.io.{File, BufferedWriter, FileWriter}
 import java.util.Properties
 import kafka.server.KafkaConfig
+import org.apache.kafka.common.utils.Java
 
 object JaasTestUtils {
 
@@ -28,30 +29,26 @@ object JaasTestUtils {
                              principal: String,
                              debug: Boolean,
                              serviceName: Option[String]) extends JaasModule {
-    def toJaasModule: JaasModule = {
-      if (isIBMJdk) {
-        JaasModule(
-          "com.ibm.security.auth.module.Krb5LoginModule",
-          debug = debug,
-          entries =  Map(
-            "principal" -> principal,
-            "credsType" -> "both"
-          ) ++ (if (useKeyTab) Map("useKeytab" -> s"file:$keyTab") else Map.empty)
-        )
-      } else {
-        JaasModule(
-          "com.sun.security.auth.module.Krb5LoginModule",
-          debug = debug,
-          entries = Map(
-            "useKeyTab" -> useKeyTab.toString,
-            "storeKey" -> storeKey.toString,
-            "keyTab" -> keyTab,
-            "principal" -> principal,
-            "serviceName" -> serviceName
-          )
-        )
-      }
-    }
+
+    def name =
+      if (Java.isIBMJdk)
+        "com.ibm.security.auth.module.Krb5LoginModule"
+      else
+        "com.sun.security.auth.module.Krb5LoginModule"
+
+    def entries: Map[String, String] =
+      if (Java.isIBMJdk) 
+        Map(
+          "principal" -> principal,
+          "credsType" -> "both"
+        ) ++ (if (useKeyTab) Map("useKeytab" -> s"file:$keyTab") else Map.empty)
+      else 
+        Map(
+          "useKeyTab" -> useKeyTab.toString,
+          "storeKey" -> storeKey.toString,
+          "keyTab" -> keyTab,
+          "principal" -> principal
+        ) ++ serviceName.map(s => Map("serviceName" -> s)).getOrElse(Map.empty)
   }
 
   case class PlainLoginModule(username: String,
@@ -136,7 +133,6 @@ object JaasTestUtils {
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
-  val isIBMJdk = System.getProperty("java.vendor").contains("IBM")
   val serviceName = "kafka"
 
   def saslConfigs(saslProperties: Option[Properties]): Properties = {
@@ -144,8 +140,10 @@ object JaasTestUtils {
       case Some(properties) => properties
       case None => new Properties
     }
-    if (isIBMJdk)
-      result.put(KafkaConfig.SaslKerberosServiceNameProp, JaasTestUtils.serviceName)
+    // IBM Kerberos module doesn't support the serviceName JAAS property, hence it needs to be
+    // passed as a Kafka property
+    if (Java.isIBMJdk && !result.contains(KafkaConfig.SaslKerberosServiceNameProp))
+      result.put(KafkaConfig.SaslKerberosServiceNameProp, serviceName)
     result
   }
 
@@ -175,7 +173,7 @@ object JaasTestUtils {
           keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
           principal = KafkaServerPrincipal,
           debug = true,
-          serviceName = serviceName)
+          serviceName = Some(serviceName))
       case "PLAIN" =>
         PlainLoginModule(
           KafkaPlainAdmin,
@@ -209,7 +207,7 @@ object JaasTestUtils {
           keyTab = keytabLocation.getOrElse(throw new IllegalArgumentException("Keytab location not specified for GSSAPI")).getAbsolutePath,
           principal = clientPrincipal,
           debug = true,
-          serviceName = serviceName
+          serviceName = Some(serviceName)
         )
       case "PLAIN" =>
         PlainLoginModule(

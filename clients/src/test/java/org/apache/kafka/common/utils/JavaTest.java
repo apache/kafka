@@ -16,33 +16,33 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.StringTokenizer;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
-public final class Java {
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
-    private Java() {
+public class JavaTest {
+
+    private String javaVendor;
+
+    @Before
+    public void before() {
+        javaVendor = System.getProperty("java.vendor");
     }
 
-    public static final String JVM_SPEC_VERSION = System.getProperty("java.specification.version");
-
-    private static final int JVM_MAJOR_VERSION;
-    private static final int JVM_MINOR_VERSION;
-
-    static {
-        final StringTokenizer st = new StringTokenizer(JVM_SPEC_VERSION, ".");
-        JVM_MAJOR_VERSION = Integer.parseInt(st.nextToken());
-        if (st.hasMoreTokens()) {
-            JVM_MINOR_VERSION = Integer.parseInt(st.nextToken());
-        } else {
-            JVM_MINOR_VERSION = 0;
-        }
+    @After
+    public void after() {
+        System.setProperty("java.vendor", javaVendor);
     }
 
-    public static final boolean IS_JAVA9_COMPATIBLE = JVM_MAJOR_VERSION > 1 ||
-            (JVM_MAJOR_VERSION == 1 && JVM_MINOR_VERSION >= 9);
-
-    public static boolean isIBMJdk() {
-        return System.getProperty("java.vendor").contains("IBM");
+    @Test
+    public void testIsIBMJdk() {
+        System.setProperty("java.vendor", "Oracle Corporation");
+        assertFalse(Java.isIBMJdk());
+        System.setProperty("java.vendor", "IBM Corporation");
+        assertTrue(Java.isIBMJdk());
     }
 
 }
