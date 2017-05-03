@@ -21,7 +21,9 @@ import java.io.OutputStream
 import java.util.zip.GZIPOutputStream
 import java.util.zip.GZIPInputStream
 import java.io.InputStream
+import java.nio.ByteBuffer
 
+import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier
 import org.apache.kafka.common.record.{KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
 
 object CompressionFactory {
@@ -40,15 +42,23 @@ object CompressionFactory {
     }
   }
   
-  def apply(compressionCodec: CompressionCodec, messageVersion: Byte, stream: InputStream): InputStream = {
+  def apply(compressionCodec: CompressionCodec, messageVersion: Byte, buffer: ByteBuffer): InputStream = {
     compressionCodec match {
-      case DefaultCompressionCodec => new GZIPInputStream(stream)
-      case GZIPCompressionCodec => new GZIPInputStream(stream)
+      case DefaultCompressionCodec => new GZIPInputStream(new ByteBufferBackedInputStream(buffer))
+      case GZIPCompressionCodec => new GZIPInputStream(new ByteBufferBackedInputStream(buffer))
       case SnappyCompressionCodec => 
         import org.xerial.snappy.SnappyInputStream
-        new SnappyInputStream(stream)
+        new SnappyInputStream(new ByteBufferBackedInputStream(buffer))
       case LZ4CompressionCodec =>
-        new KafkaLZ4BlockInputStream(stream, messageVersion == Message.MagicValue_V0)
+        new KafkaLZ4BlockInputStream(buffer, new BufferSupplier {
+          /**
+            * Supplies the buffer to decompress data into for this stream
+            *
+            * @param size
+            * @return a decompression ByteBuffer of capacity >= size
+            */
+          override def get(size: Int): ByteBuffer = ByteBuffer.allocate(size);
+        }, messageVersion == Message.MagicValue_V0)
       case _ =>
         throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
     }

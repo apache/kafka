@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -81,7 +82,7 @@ public class MemoryRecordsBuilder {
         @Override
         public Constructor get() throws ClassNotFoundException, NoSuchMethodException {
             return Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream")
-                .getConstructor(InputStream.class, Boolean.TYPE);
+                .getConstructor(ByteBuffer.class, BufferSupplier.class, Boolean.TYPE);
         }
     });
 
@@ -396,7 +397,26 @@ public class MemoryRecordsBuilder {
         return builtRecords != null ? builtRecords.sizeInBytes() : estimatedBytesWritten();
     }
 
-    private static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, byte messageVersion, int bufferSize) {
+    protected static final ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>
+        LZ4_DECOMPRESSION_BUFFER_SUPPLIER = new ThreadLocal<KafkaLZ4BlockInputStream.BufferSupplier>() {
+            @Override
+            protected KafkaLZ4BlockInputStream.BufferSupplier initialValue() {
+                return new KafkaLZ4BlockInputStream.BufferSupplier() {
+                    ByteBuffer theBuffer;
+
+                    @Override
+                    public ByteBuffer get(int size) {
+                        if (theBuffer == null || theBuffer.capacity() < size) {
+                            theBuffer = ByteBuffer.allocate(size);
+                        }
+                        theBuffer.limit(size);
+                        return theBuffer;
+                    }
+                };
+            }
+        };
+
+    protected static DataOutputStream wrapForOutput(ByteBufferOutputStream buffer, CompressionType type, byte messageVersion, int bufferSize) {
         try {
             switch (type) {
                 case NONE:
@@ -426,24 +446,27 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public static DataInputStream wrapForInput(ByteBufferInputStream buffer, CompressionType type, byte messageVersion) {
+    public static DataInputStream wrapForInput(ByteBuffer buffer, CompressionType type, byte messageVersion) {
         try {
             switch (type) {
                 case NONE:
-                    return buffer;
+                    return new ByteBufferInputStream(buffer);
                 case GZIP:
-                    return new DataInputStream(new GZIPInputStream(buffer));
+                    return new DataInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer)));
                 case SNAPPY:
                     try {
-                        InputStream stream = (InputStream) snappyInputStreamSupplier.get().newInstance(buffer);
+                        InputStream stream = (InputStream) snappyInputStreamSupplier.get().newInstance(new ByteBufferInputStream(buffer));
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
                 case LZ4:
                     try {
-                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(buffer,
-                                messageVersion == Record.MAGIC_VALUE_V0);
+                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(
+                            buffer,
+                            LZ4_DECOMPRESSION_BUFFER_SUPPLIER.get(),
+                            messageVersion == Record.MAGIC_VALUE_V0
+                        );
                         return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
