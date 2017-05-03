@@ -168,8 +168,8 @@ class LogTest {
     val log = createLog(2048)
     val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))
     log.appendAsLeader(records, leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
-    assertEquals(Some(1), log.latestPidSnapshotOffset)
+    log.takeProducerSnapshot()
+    assertEquals(Some(1), log.latestProducerSnapshotOffset)
   }
 
   @Test
@@ -255,17 +255,17 @@ class LogTest {
     val log = createLog(2048)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes))), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes))), leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
+    log.takeProducerSnapshot()
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes))), leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
+    log.takeProducerSnapshot()
 
     log.truncateTo(2)
-    assertEquals(Some(2), log.latestPidSnapshotOffset)
+    assertEquals(Some(2), log.latestProducerSnapshotOffset)
     assertEquals(2, log.latestPidMapOffset)
 
     log.truncateTo(1)
-    assertEquals(None, log.latestPidSnapshotOffset)
+    assertEquals(None, log.latestProducerSnapshotOffset)
     assertEquals(1, log.latestPidMapOffset)
   }
 
@@ -274,19 +274,19 @@ class LogTest {
     val records = TestUtils.singletonRecords("foo".getBytes)
     val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
     log.appendAsLeader(records, leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
+    log.takeProducerSnapshot()
 
     log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
     log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
+    log.takeProducerSnapshot()
 
     assertEquals(3, log.logSegments.size)
     assertEquals(3, log.latestPidMapOffset)
-    assertEquals(Some(3), log.latestPidSnapshotOffset)
+    assertEquals(Some(3), log.latestProducerSnapshotOffset)
 
     log.truncateFullyAndStartAt(29)
     assertEquals(1, log.logSegments.size)
-    assertEquals(None, log.latestPidSnapshotOffset)
+    assertEquals(None, log.latestProducerSnapshotOffset)
     assertEquals(29, log.latestPidMapOffset)
   }
 
@@ -296,14 +296,14 @@ class LogTest {
     val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, epoch = 0, sequence = 0)
     val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
     log.appendAsLeader(records, leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
+    log.takeProducerSnapshot()
 
     val pid2 = 2L
     log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, epoch = 0, sequence = 0),
       leaderEpoch = 0)
     log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, epoch = 0, sequence = 1),
       leaderEpoch = 0)
-    log.maybeTakePidSnapshot()
+    log.takeProducerSnapshot()
 
     assertEquals(3, log.logSegments.size)
     assertEquals(Set(pid1, pid2), log.activePids.keySet)
@@ -315,16 +315,24 @@ class LogTest {
   }
 
   @Test
-  def testPeriodicPidSnapshot() {
-    val snapshotInterval = 100
-    val log = createLog(2048, pidSnapshotIntervalMs = snapshotInterval)
-
+  def testSnapshotWhenSegmentRolls() {
+    val log = createLog(2048)
     log.appendAsLeader(TestUtils.singletonRecords("foo".getBytes), leaderEpoch = 0)
-    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
-    assertEquals(None, log.latestPidSnapshotOffset)
+    log.roll(1L)
+    assertEquals(Some(1L), log.latestProducerSnapshotOffset)
 
-    time.sleep(snapshotInterval)
-    assertEquals(Some(2), log.latestPidSnapshotOffset)
+    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
+    log.roll(2L)
+    assertEquals(Some(2L), log.latestProducerSnapshotOffset)
+
+    // roll triggers a flush at the starting offset of the new segment. this should
+    // cause the older snapshot to be removed
+    assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
+
+    // even if we flush within the active segment, the snapshot should remain
+    log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
+    log.flush(3L)
+    assertEquals(Some(2L), log.latestProducerSnapshotOffset)
   }
 
   @Test
@@ -2232,8 +2240,7 @@ class LogTest {
       scheduler = time.scheduler,
       time = time,
       maxPidExpirationMs = maxPidExpirationMs,
-      pidExpirationCheckIntervalMs = pidExpirationCheckIntervalMs,
-      pidSnapshotIntervalMs = pidSnapshotIntervalMs)
+      pidExpirationCheckIntervalMs = pidExpirationCheckIntervalMs)
     log
   }
 }

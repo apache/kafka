@@ -193,7 +193,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 1, epoch, 1L, 1L)
 
     // Take snapshot
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
 
     // Check that file exists and it is not empty
     assertEquals("Directory doesn't contain a single file as expected", 1, idMappingDir.list().length)
@@ -206,7 +206,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 0, epoch, 0L)
     append(idMapping, pid, 1, epoch, 1L)
 
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     val recoveredMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)
     recoveredMapping.truncateAndReload(0L, 3L, time.milliseconds)
 
@@ -220,7 +220,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 0, epoch, 0L, 0)
     append(idMapping, pid, 1, epoch, 1L, 1)
 
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     val recoveredMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)
     recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
@@ -230,24 +230,26 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
-  def testRemoveOldSnapshot(): Unit = {
+  def testDeleteSnapshotsBefore(): Unit = {
     val epoch = 0.toShort
     append(idMapping, pid, 0, epoch, 0L)
     append(idMapping, pid, 1, epoch, 1L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(1, idMappingDir.listFiles().length)
     assertEquals(Set(2), currentSnapshotOffsets)
 
     append(idMapping, pid, 2, epoch, 2L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(2, idMappingDir.listFiles().length)
     assertEquals(Set(2, 3), currentSnapshotOffsets)
 
-    // we only retain two snapshot files, so the next snapshot should cause the oldest to be deleted
-    append(idMapping, pid, 3, epoch, 3L)
-    idMapping.maybeTakeSnapshot()
-    assertEquals(2, idMappingDir.listFiles().length)
-    assertEquals(Set(3, 4), currentSnapshotOffsets)
+    idMapping.deleteSnapshotsBefore(3L)
+    assertEquals(1, idMappingDir.listFiles().length)
+    assertEquals(Set(3), currentSnapshotOffsets)
+
+    idMapping.deleteSnapshotsBefore(4L)
+    assertEquals(0, idMappingDir.listFiles().length)
+    assertEquals(Set(), currentSnapshotOffsets)
   }
 
   @Test
@@ -256,12 +258,12 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     append(idMapping, pid, 0, epoch, 0L)
     append(idMapping, pid, 1, epoch, 1L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(1, idMappingDir.listFiles().length)
     assertEquals(Set(2), currentSnapshotOffsets)
 
     append(idMapping, pid, 2, epoch, 2L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(2, idMappingDir.listFiles().length)
     assertEquals(Set(2, 3), currentSnapshotOffsets)
 
@@ -271,7 +273,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Set(), currentSnapshotOffsets)
 
     append(idMapping, pid, 0, epoch, 0L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(1, idMappingDir.listFiles().length)
     assertEquals(Set(1), currentSnapshotOffsets)
   }
@@ -283,12 +285,12 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
     assertEquals(Some(99), idMapping.firstUnstableOffset)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
 
     appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 105)
     idMapping.onHighWatermarkUpdated(106)
     assertEquals(None, idMapping.firstUnstableOffset)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
 
     append(idMapping, pid, sequence + 1, epoch, offset = 106)
     idMapping.truncateAndReload(0L, 106, time.milliseconds())
@@ -315,17 +317,17 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     append(idMapping, pid, 0, epoch, 0L)
     append(idMapping, pid, 1, epoch, 1L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
 
     val anotherPid = 2L
     append(idMapping, anotherPid, 0, epoch, 2L)
     append(idMapping, anotherPid, 1, epoch, 3L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(Set(2, 4), currentSnapshotOffsets)
 
     idMapping.evictUnretainedPids(2)
     assertEquals(Set(4), currentSnapshotOffsets)
-    assertEquals(Set(anotherPid), idMapping.activePids.keySet)
+    assertEquals(Set(anotherPid), idMapping.activeProducers.keySet)
     assertEquals(None, idMapping.lastEntry(pid))
 
     val maybeEntry = idMapping.lastEntry(anotherPid)
@@ -333,18 +335,14 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(3L, maybeEntry.get.lastOffset)
 
     idMapping.evictUnretainedPids(3)
-    assertEquals(Set(anotherPid), idMapping.activePids.keySet)
+    assertEquals(Set(anotherPid), idMapping.activeProducers.keySet)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(4, idMapping.mapEndOffset)
 
     idMapping.evictUnretainedPids(5)
-    assertEquals(Set(), idMapping.activePids.keySet)
+    assertEquals(Set(), idMapping.activeProducers.keySet)
     assertEquals(Set(), currentSnapshotOffsets)
     assertEquals(5, idMapping.mapEndOffset)
-
-    idMapping.maybeTakeSnapshot()
-    // shouldn't be any new snapshot because the log is empty
-    assertEquals(Set(), currentSnapshotOffsets)
   }
 
   @Test
@@ -352,12 +350,12 @@ class ProducerStateManagerTest extends JUnitSuite {
     val epoch = 0.toShort
     append(idMapping, pid, 0, epoch, 0L, 0L)
 
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(1, idMappingDir.listFiles().length)
     assertEquals(Set(1), currentSnapshotOffsets)
 
     // nothing changed so there should be no new snapshot
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
     assertEquals(1, idMappingDir.listFiles().length)
     assertEquals(Set(1), currentSnapshotOffsets)
   }
@@ -370,7 +368,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 0, epoch, 1L, 2L)
     append(idMapping, pid, 1, epoch, 2L, 3L)
     append(idMapping, pid, 2, epoch, 3L, 4L)
-    idMapping.maybeTakeSnapshot()
+    idMapping.takeSnapshot()
 
     intercept[OutOfOrderSequenceException] {
       val recoveredMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)

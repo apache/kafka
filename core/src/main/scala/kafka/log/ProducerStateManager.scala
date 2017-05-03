@@ -28,7 +28,6 @@ import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, InvalidRecordException, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
-import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 
 private[log] object ProducerIdEntry {
@@ -339,7 +338,7 @@ class ProducerStateManager(val config: LogConfig,
   /**
    * Get a copy of the active producers
    */
-  def activePids: immutable.Map[Long, ProducerIdEntry] = producers.toMap
+  def activeProducers: immutable.Map[Long, ProducerIdEntry] = producers.toMap
 
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
     while (true) {
@@ -423,10 +422,7 @@ class ProducerStateManager(val config: LogConfig,
    */
   def lastEntry(producerId: Long): Option[ProducerIdEntry] = producers.get(producerId)
 
-  /**
-   * Write a new snapshot if there have been updates since the last one.
-   */
-  def maybeTakeSnapshot() {
+  def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
       val snapshotFile = Log.pidSnapshotFilename(logDir, lastMapOffset)
@@ -435,8 +431,6 @@ class ProducerStateManager(val config: LogConfig,
 
       // Update the last snap offset according to the serialized map
       lastSnapOffset = lastMapOffset
-
-      maybeRemoveOldestSnapshot()
     }
   }
 
@@ -444,6 +438,8 @@ class ProducerStateManager(val config: LogConfig,
    * Get the last offset (exclusive) of the latest snapshot file.
    */
   def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
+
+  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
 
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
@@ -480,12 +476,8 @@ class ProducerStateManager(val config: LogConfig,
     unreplicatedTxns += completedTxn
   }
 
-  private def maybeRemoveOldestSnapshot() {
-    val list = listSnapshotFiles
-    if (list.size > maxPidSnapshotsToRetain) {
-      val toDelete = list.minBy(file => Log.offsetFromFilename(file.getName))
-      Files.deleteIfExists(toDelete.toPath)
-    }
+  def deleteSnapshotsBefore(offset: Long): Unit = {
+    deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) < offset)
   }
 
   private def listSnapshotFiles: List[File] = {
@@ -493,6 +485,14 @@ class ProducerStateManager(val config: LogConfig,
       logDir.listFiles.filter(f => f.isFile && isSnapshotFile(f.getName)).toList
     else
       List.empty[File]
+  }
+
+  private def oldestSnapshotFile: Option[File] = {
+    val files = listSnapshotFiles
+    if (files.nonEmpty)
+      Some(files.minBy(file => Log.offsetFromFilename(file.getName)))
+    else
+      None
   }
 
   private def latestSnapshotFile: Option[File] = {

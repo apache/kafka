@@ -227,11 +227,10 @@ class ReplicaManagerTest {
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => {})
       rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
 
-      def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) = {
+      def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) =
         responseStatus.values.foreach { status =>
           assertEquals(Errors.NONE, status.error)
         }
-      }
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -259,26 +258,25 @@ class ReplicaManagerTest {
         fetchCallbackFired = true
       }
 
+      def fetchMessages(fetchInfos: Seq[(TopicPartition, PartitionData)],
+                        isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): Unit = {
+        rm.fetchMessages(
+          timeout = 1000,
+          replicaId = 1,
+          fetchMinBytes = 0,
+          fetchMaxBytes = Int.MaxValue,
+          hardMaxBytesLimit = false,
+          fetchInfos = fetchInfos,
+          responseCallback = fetchCallback,
+          isolationLevel = isolationLevel)
+      }
+
       // fetch as follower to advance the high watermark
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = 1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords, 0, 100000)),
-        responseCallback = fetchCallback,
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords, 0, 100000)),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // fetch should return empty since LSO should be stuck at 0
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = 1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        responseCallback = fetchCallback,
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       assertTrue(fetchCallbackFired)
@@ -298,14 +296,7 @@ class ReplicaManagerTest {
 
       // the LSO has advanced, but the appended commit marker has not been replicated, so
       // none of the data from the transaction should be visible yet
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = 1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        responseCallback = fetchCallback,
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       assertTrue(fetchCallbackFired)
@@ -314,25 +305,11 @@ class ReplicaManagerTest {
       fetchCallbackFired = false
 
       // fetch as follower to advance the high watermark
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = 1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords + 1, 0, 100000)),
-        responseCallback = fetchCallback,
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords + 1, 0, 100000)),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // now all of the records should be fetchable
-      rm.fetchMessages(
-        timeout = 1000,
-        replicaId = 1,
-        fetchMinBytes = 0,
-        fetchMaxBytes = Int.MaxValue,
-        hardMaxBytesLimit = false,
-        fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        responseCallback = fetchCallback,
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
         isolationLevel = IsolationLevel.READ_COMMITTED)
 
       assertTrue(fetchCallbackFired)
@@ -342,7 +319,7 @@ class ReplicaManagerTest {
       rm.shutdown(checkpointHW = false)
     }
   }
-  
+
   @Test
   def testFetchBeyondHighWatermarkReturnEmptyResponse() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)

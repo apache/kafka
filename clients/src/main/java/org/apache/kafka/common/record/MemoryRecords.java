@@ -403,6 +403,12 @@ public class MemoryRecords extends AbstractRecords {
                 pid, epoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
     }
 
+    public static MemoryRecords withTransactionalRecords(long initialOffset, CompressionType compressionType, long pid,
+                                                         short epoch, int baseSequence, SimpleRecord... records) {
+        return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME,
+                pid, epoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
+    }
+
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
                                             TimestampType timestampType, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compressionType, timestampType, RecordBatch.NO_PRODUCER_ID,
@@ -430,10 +436,14 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withControlRecord(ControlRecordType type, long pid, short epoch) {
+        return withControlRecord(0L, type, pid, epoch);
+    }
+
+    public static MemoryRecords withControlRecord(long initialOffset, ControlRecordType type, long pid, short epoch) {
         ByteBuffer buffer = ByteBuffer.allocate(128);
         MemoryRecordsBuilder builder = builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, pid, epoch, RecordBatch.CONTROL_SEQUENCE, true,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                TimestampType.CREATE_TIME, initialOffset, RecordBatch.NO_TIMESTAMP, pid, epoch,
+                RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
         builder.appendControlRecord(System.currentTimeMillis(), type, null);
         return builder.build();
     }

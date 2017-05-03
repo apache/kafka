@@ -48,8 +48,10 @@ import java.lang.{Long => JLong}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
-    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, Map.empty[Long, ProducerAppendInfo], null,
-    false)
+    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false,
+    producerAppendInfos = Map.empty[Long, ProducerAppendInfo],
+    completedTransactions = Nil,
+    isDuplicate = false)
 }
 
 /**
@@ -143,8 +145,7 @@ class Log(@volatile var dir: File,
           scheduler: Scheduler,
           time: Time = Time.SYSTEM,
           val maxPidExpirationMs: Int = 60 * 60 * 1000,
-          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000,
-          val pidSnapshotIntervalMs: Int = 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -223,18 +224,11 @@ class Log(@volatile var dir: File,
     },
     tags)
 
-  scheduler.schedule(name = "PeriodicPidExpirationCheck", fun = () => {
+  scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
   }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
-
-  scheduler.schedule(name = "PeriodicPidSnapshotTask", fun = () => {
-    lock synchronized {
-      producerStateManager.maybeTakeSnapshot()
-    }
-  }, period = pidSnapshotIntervalMs, unit = TimeUnit.MILLISECONDS)
-
 
   /** The name of this log */
   def name  = dir.getName()
@@ -246,13 +240,10 @@ class Log(@volatile var dir: File,
       new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir)))
   }
 
-  /* Load the log segments from the log files on disk */
-  private def loadSegments() {
+  private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
     var swapFiles = Set[File]()
 
-    // first do a pass through the files in the log directory and remove any temporary files
-    // and find any interrupted swap operations
-    for(file <- dir.listFiles if file.isFile) {
+    for (file <- dir.listFiles if file.isFile) {
       if(!file.canRead)
         throw new IOException("Could not read file " + file)
       val filename = file.getName
@@ -263,35 +254,37 @@ class Log(@volatile var dir: File,
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the .index file, complete the swap operation later
         // if an index just delete it, it will be rebuilt
-        val baseName = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
-        if(baseName.getPath.endsWith(IndexFileSuffix)) {
+        val baseFile = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
+        if (isIndexFile(baseFile)) {
           Files.deleteIfExists(file.toPath)
-        } else if(baseName.getPath.endsWith(LogFileSuffix)){
-          // delete the index
-          val index = new File(CoreUtils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
-          Files.deleteIfExists(index.toPath())
+        } else if (isLogFile(baseFile)) {
+          // delete the index files
+          val offset = offsetFromFilename(baseFile.getName)
+          Files.deleteIfExists(Log.indexFilename(dir, offset).toPath)
+          Files.deleteIfExists(Log.timeIndexFilename(dir, offset).toPath)
+          Files.deleteIfExists(Log.txnIndexFilename(dir, offset).toPath)
           swapFiles += file
         }
       }
     }
+    swapFiles
+  }
 
-    // now do a second pass and load all the .log and all index files
-    for(file <- dir.listFiles if file.isFile) {
+  private def loadSegmentFiles(): Unit = {
+    // load segments in ascending order because transactional data from one segment may depend on the
+    // segments that come before it
+    for (file <- dir.listFiles.sortBy(_.getName) if file.isFile) {
       val filename = file.getName
-      if(filename.endsWith(IndexFileSuffix) || filename.endsWith(TimeIndexFileSuffix)) {
+      if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
-        val logFile =
-          if (filename.endsWith(TimeIndexFileSuffix))
-            new File(file.getAbsolutePath.replace(TimeIndexFileSuffix, LogFileSuffix))
-          else
-            new File(file.getAbsolutePath.replace(IndexFileSuffix, LogFileSuffix))
-
-        if(!logFile.exists) {
+        val offset = offsetFromFilename(filename)
+        val logFile = logFilename(dir, offset)
+        if (!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
           Files.deleteIfExists(file.toPath)
         }
-      } else if(filename.endsWith(LogFileSuffix)) {
-        // if its a log file, load the corresponding log segment
+      } else if (isLogFile(file)) {
+        // if it's a log file, load the corresponding log segment
         val startOffset = offsetFromFilename(filename)
         val indexFile = Log.indexFilename(dir, startOffset)
         val timeIndexFile = Log.timeIndexFilename(dir, startOffset)
@@ -299,12 +292,12 @@ class Log(@volatile var dir: File,
         val indexFileExists = indexFile.exists()
         val timeIndexFileExists = timeIndexFile.exists()
         val segment = new LogSegment(dir = dir,
-                                     startOffset = startOffset,
-                                     indexIntervalBytes = config.indexInterval,
-                                     maxIndexSize = config.maxIndexSize,
-                                     rollJitterMs = config.randomSegmentJitter,
-                                     time = time,
-                                     fileAlreadyExists = true)
+          startOffset = startOffset,
+          indexIntervalBytes = config.indexInterval,
+          maxIndexSize = config.maxIndexSize,
+          rollJitterMs = config.randomSegmentJitter,
+          time = time,
+          fileAlreadyExists = true)
 
         if (indexFileExists) {
           try {
@@ -313,25 +306,44 @@ class Log(@volatile var dir: File,
             if (!timeIndexFileExists)
               segment.timeIndex.resize(0)
             segment.timeIndex.sanityCheck()
+            segment.txnIndex.sanityCheck()
           } catch {
             case e: java.lang.IllegalArgumentException =>
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
                 s"${indexFile.getAbsolutePath} and rebuilding index...")
               Files.deleteIfExists(timeIndexFile.toPath)
               Files.delete(indexFile.toPath)
-              segment.recover(config.maxMessageSize)
+              recoverSegment(segment)
           }
         } else {
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
-          segment.recover(config.maxMessageSize)
+          recoverSegment(segment)
         }
         segments.put(startOffset, segment)
       }
     }
+  }
 
-    // Finally, complete any interrupted swap operations. To be crash-safe,
-    // log files that are replaced by the swap segment should be renamed to .deleted
-    // before the swap file is restored as the new segment file.
+  private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
+    val stateManager = new ProducerStateManager(config, topicPartition, dir, maxPidExpirationMs)
+    stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
+    logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
+      val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
+      val fetchDataInfo = segment.read(startOffset, Some(segment.baseOffset), Int.MaxValue)
+      if (fetchDataInfo != null)
+        loadPidsFromLog(stateManager, fetchDataInfo.records)
+    }
+
+    // Once we have loaded the segment's data, we take a snapshot to ensure that we won't
+    // need to reload the same segments a second time if we have to recover another segment.
+    stateManager.updateMapEndOffset(segment.baseOffset)
+    stateManager.takeSnapshot()
+
+    val activeProducers = stateManager.activeProducers.values
+    segment.recover(config.maxMessageSize, activeProducers, leaderEpochCache)
+  }
+
+  private def completeSwapOperations(swapFiles: Set[File]): Unit = {
     for (swapFile <- swapFiles) {
       val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
       val filename = logFile.getName
@@ -341,20 +353,35 @@ class Log(@volatile var dir: File,
       val timeIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TimeIndexFileSuffix) + SwapFileSuffix)
       val timeIndex = new TimeIndex(timeIndexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
       val txnIndexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, TxnIndexFileSuffix) + SwapFileSuffix)
-      val txnIndex = new TransactionIndex(txnIndexFile)
+      val txnIndex = new TransactionIndex(startOffset, txnIndexFile)
       val swapSegment = new LogSegment(FileRecords.open(swapFile),
-                                       index = index,
-                                       timeIndex = timeIndex,
-                                       txnIndex = txnIndex,
-                                       baseOffset = startOffset,
-                                       indexIntervalBytes = config.indexInterval,
-                                       rollJitterMs = config.randomSegmentJitter,
-                                       time = time)
+        index = index,
+        timeIndex = timeIndex,
+        txnIndex = txnIndex,
+        baseOffset = startOffset,
+        indexIntervalBytes = config.indexInterval,
+        rollJitterMs = config.randomSegmentJitter,
+        time = time)
       info("Found log file %s from interrupted swap operation, repairing.".format(swapFile.getPath))
-      swapSegment.recover(config.maxMessageSize)
-      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.nextOffset)
+      recoverSegment(swapSegment)
+      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.nextOffset())
       replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
     }
+  }
+
+  /* Load the log segments from the log files on disk */
+  private def loadSegments() {
+    // first do a pass through the files in the log directory and remove any temporary files
+    // and find any interrupted swap operations
+    val swapFiles = removeTempFilesAndCollectSwapFiles()
+
+    // now do a second pass and load all the log and index files
+    loadSegmentFiles()
+
+    // Finally, complete any interrupted swap operations. To be crash-safe,
+    // log files that are replaced by the swap segment should be renamed to .deleted
+    // before the swap file is restored as the new segment file.
+    completeSwapOperations(swapFiles)
 
     if(logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
@@ -367,13 +394,11 @@ class Log(@volatile var dir: File,
                                      fileAlreadyExists = false,
                                      initFileSize = this.initFileSize(),
                                      preallocate = config.preallocate))
-    } else {
-      if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-        recoverLog()
-        // reset the index size of the currently active log segment to allow more entries
-        activeSegment.index.resize(config.maxIndexSize)
-        activeSegment.timeIndex.resize(config.maxIndexSize)
-      }
+    } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+      recoverLog()
+      // reset the index size of the currently active log segment to allow more entries
+      activeSegment.index.resize(config.maxIndexSize)
+      activeSegment.timeIndex.resize(config.maxIndexSize)
     }
   }
 
@@ -384,50 +409,52 @@ class Log(@volatile var dir: File,
   private def recoverLog() {
     // if we have the clean shutdown marker, skip recovery
     if(hasCleanShutdownFile) {
-      this.recoveryPoint = activeSegment.nextOffset
+      this.recoveryPoint = activeSegment.nextOffset()
       return
     }
 
     // okay we need to actually recovery this log
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
-      val curr = unflushed.next
-      info("Recovering unflushed segment %d in log %s.".format(curr.baseOffset, name))
+      val segment = unflushed.next
+      info("Recovering unflushed segment %d in log %s.".format(segment.baseOffset, name))
       val truncatedBytes =
         try {
-          curr.recover(config.maxMessageSize, Some(leaderEpochCache))
+          recoverSegment(segment, Some(leaderEpochCache))
         } catch {
           case _: InvalidOffsetException =>
-            val startOffset = curr.baseOffset
+            val startOffset = segment.baseOffset
             warn("Found invalid offset during recovery for log " + dir.getName +". Deleting the corrupt segment and " +
                  "creating an empty one with starting offset " + startOffset)
-            curr.truncateTo(startOffset)
+            segment.truncateTo(startOffset)
         }
       if(truncatedBytes > 0) {
         // we had an invalid message, delete all remaining log
-        warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
+        warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(segment.baseOffset, name,
+          segment.nextOffset()))
         unflushed.foreach(deleteSegment)
       }
     }
   }
-
-  private def buildAndRecoverPidMap(lastOffset: Long) {
-    lock synchronized {
-      info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
-      val currentTimeMs = time.milliseconds
-      producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
-      logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
-        val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
-        val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
-        if (fetchDataInfo != null)
-          loadPidsFromLog(fetchDataInfo.records)
-      }
-      producerStateManager.updateMapEndOffset(lastOffset)
-      updateFirstUnstableOffset()
-    }
+  private def buildAndRecoverPidMap(lastOffset: Long): Unit = {
+    buildAndRecoverPidMap(producerStateManager, lastOffset)
+    updateFirstUnstableOffset()
   }
 
-  private def loadPidsFromLog(records: Records): Unit = {
+  private def buildAndRecoverPidMap(producerStateManager: ProducerStateManager, lastOffset: Long) {
+    info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
+    val currentTimeMs = time.milliseconds
+    producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
+    logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+      val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
+      val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+      if (fetchDataInfo != null)
+        loadPidsFromLog(producerStateManager, fetchDataInfo.records)
+    }
+    producerStateManager.updateMapEndOffset(lastOffset)
+  }
+
+  private def loadPidsFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
     val pidsToLoad = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
@@ -440,10 +467,8 @@ class Log(@volatile var dir: File,
     completedTxns.foreach(producerStateManager.completeTxn)
   }
 
-  private[log] def activePids: Map[Long, ProducerIdEntry] = {
-    lock synchronized {
-      producerStateManager.activePids
-    }
+  private[log] def activePids: Map[Long, ProducerIdEntry] = lock synchronized {
+    producerStateManager.activeProducers
   }
 
   /**
@@ -463,6 +488,7 @@ class Log(@volatile var dir: File,
   def close() {
     debug(s"Closing log $name")
     lock synchronized {
+      producerStateManager.takeSnapshot()
       logSegments.foreach(_.close())
     }
   }
@@ -1141,7 +1167,8 @@ class Log(@volatile var dir: File,
       val logFile = logFilename(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
       val timeIndexFile = timeIndexFilename(dir, newOffset)
-      for(file <- List(logFile, indexFile, timeIndexFile); if file.exists) {
+      val txnIndexFile = txnIndexFilename(dir, newOffset)
+      for(file <- List(logFile, indexFile, timeIndexFile, txnIndexFile) if file.exists) {
         warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
         file.delete()
       }
@@ -1156,6 +1183,10 @@ class Log(@volatile var dir: File,
           seg.log.trim()
         }
       }
+
+      // take a snapshot of the producer states to facilitate recovery
+      producerStateManager.takeSnapshot()
+
       val segment = new LogSegment(dir,
                                    startOffset = newOffset,
                                    indexIntervalBytes = config.indexInterval,
@@ -1202,6 +1233,11 @@ class Log(@volatile var dir: File,
           time.milliseconds + " unflushed = " + unflushedMessages)
     for(segment <- logSegments(this.recoveryPoint, offset))
       segment.flush()
+
+    // always retain a snapshot from the start of the active segment
+    val minSnapshotOffsetRetained = math.min(offset, activeSegment.baseOffset)
+    producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetRetained)
+
     lock synchronized {
       if(offset > this.recoveryPoint) {
         this.recoveryPoint = offset
@@ -1222,10 +1258,10 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def maybeTakePidSnapshot(): Unit = producerStateManager.maybeTakeSnapshot()
-
-  private[log] def latestPidSnapshotOffset: Option[Long] = producerStateManager.latestSnapshotOffset
-
+  // visible for testing
+  private[log] def takeProducerSnapshot(): Unit = producerStateManager.takeSnapshot()
+  private[log] def latestProducerSnapshotOffset: Option[Long] = producerStateManager.latestSnapshotOffset
+  private[log] def oldestProducerSnapshotOffset: Option[Long] = producerStateManager.oldestSnapshotOffset
   private[log] def latestPidMapOffset: Long = producerStateManager.mapEndOffset
 
   /**
@@ -1542,5 +1578,13 @@ object Log {
 
     new TopicPartition(topic, partition.toInt)
   }
+
+  private def isIndexFile(file: File): Boolean = {
+    val filename = file.getName
+    filename.endsWith(IndexFileSuffix) || filename.endsWith(TimeIndexFileSuffix) || filename.endsWith(TxnIndexFileSuffix)
+  }
+
+  private def isLogFile(file: File): Boolean =
+    file.getPath.endsWith(LogFileSuffix)
 
 }

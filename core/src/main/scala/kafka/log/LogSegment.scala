@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
+import scala.collection.mutable
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
@@ -76,7 +77,7 @@ class LogSegment(val log: FileRecords,
     this(FileRecords.open(Log.logFilename(dir, startOffset), fileAlreadyExists, initFileSize, preallocate),
          new OffsetIndex(Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          new TimeIndex(Log.timeIndexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
-         new TransactionIndex(Log.txnIndexFilename(dir, startOffset)),
+         new TransactionIndex(startOffset, Log.txnIndexFilename(dir, startOffset)),
          startOffset,
          indexIntervalBytes,
          rollJitterMs,
@@ -233,7 +234,9 @@ class LogSegment(val log: FileRecords,
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
+  def recover(maxMessageSize: Int,
+              activeProducers: Iterable[ProducerIdEntry] = Seq.empty,
+              leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
     timeIndex.truncate()
@@ -243,6 +246,14 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
+      // map of PID -> first transaction offset
+      val ongoingTransactions = mutable.Map.empty[Long, Long]
+      activeProducers.foreach { entry =>
+        entry.currentTxnFirstOffset.foreach { firstOffset =>
+          ongoingTransactions.put(entry.producerId, firstOffset)
+        }
+      }
+
       for (batch <- log.batches(maxMessageSize).asScala) {
         batch.ensureValid()
 
@@ -264,11 +275,23 @@ class LogSegment(val log: FileRecords,
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           leaderEpochCache.foreach { cache =>
             if (batch.partitionLeaderEpoch > cache.latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
-              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
+          }
+
+          if (batch.hasProducerId) {
+            val producerId = batch.producerId
+            if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
+              val firstOffset = ongoingTransactions.remove(producerId).getOrElse(throw new IllegalStateException())
+              val record = batch.iterator.next()
+              val controlRecordType = ControlRecordType.parse(record.key)
+              if (controlRecordType == ControlRecordType.ABORT) {
+                val lastStableOffset = ongoingTransactions.headOption.map(_._2).getOrElse(batch.lastOffset)
+                txnIndex.append(new AbortedTxn(producerId, firstOffset, batch.lastOffset, lastStableOffset))
+              }
+            } else if (batch.isTransactional && !ongoingTransactions.contains(producerId))
+              ongoingTransactions.put(producerId, batch.baseOffset)
           }
         }
-
-        // TODO: Also need to rebuild the transaction index. This depends on information in ProducerIdMapping
       }
     } catch {
       case e: CorruptRecordException =>

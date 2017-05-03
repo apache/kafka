@@ -392,11 +392,13 @@ private[log] class Cleaner(val id: Int,
     indexFile.delete()
     timeIndexFile.delete()
     txnIndexFile.delete()
+
+    val startOffset = segments.head.baseOffset
     val records = FileRecords.open(logFile, false, log.initFileSize(), log.config.preallocate)
-    val index = new OffsetIndex(indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
-    val timeIndex = new TimeIndex(timeIndexFile, segments.head.baseOffset, segments.head.timeIndex.maxIndexSize)
-    val txnIndex = new TransactionIndex(txnIndexFile)
-    val cleaned = new LogSegment(records, index, timeIndex, txnIndex, segments.head.baseOffset,
+    val index = new OffsetIndex(indexFile, startOffset, segments.head.index.maxIndexSize)
+    val timeIndex = new TimeIndex(timeIndexFile, startOffset, segments.head.timeIndex.maxIndexSize)
+    val txnIndex = new TransactionIndex(startOffset, txnIndexFile)
+    val cleaned = new LogSegment(records, index, timeIndex, txnIndex, startOffset,
       segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
 
     try {

@@ -43,7 +43,7 @@ private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTr
  * may span multiple segments. Recovering the index therefore requires scanning the earlier segments in
  * order to find the start of the transactions.
  */
-class TransactionIndex(@volatile var file: File) extends Logging {
+class TransactionIndex(val startOffset: Long, @volatile var file: File) extends Logging {
   // note that the file is not created until we need it
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
@@ -92,6 +92,7 @@ class TransactionIndex(@volatile var file: File) extends Logging {
 
   def truncate() = inWriteLock(lock) {
     maybeChannel.foreach(_.truncate(0))
+    lastOffset = None
   }
 
   def close(): Unit = inWriteLock(lock) {
@@ -109,11 +110,14 @@ class TransactionIndex(@volatile var file: File) extends Logging {
   def truncateTo(offset: Long): Unit = {
     inWriteLock(lock) {
       val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
+      var newLastOffset: Option[Long] = None
       for ((abortedTxn, position) <- iterator(() => buffer)) {
         if (abortedTxn.lastOffset >= offset) {
           channel.truncate(position)
+          lastOffset = newLastOffset
           return
         }
+        newLastOffset = Some(abortedTxn.lastOffset)
       }
     }
   }
@@ -160,6 +164,14 @@ class TransactionIndex(@volatile var file: File) extends Logging {
     }
     TxnIndexSearchResult(abortedTransactions.toList, isComplete = false)
   }
+
+  def sanityCheck(): Unit = {
+    val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
+    for ((abortedTxn, _) <- iterator(() => buffer)) {
+      require(abortedTxn.lastOffset >= startOffset)
+    }
+  }
+
 }
 
 private[log] object AbortedTxn {

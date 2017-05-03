@@ -27,11 +27,12 @@ import org.scalatest.junit.JUnitSuite
 class TransactionIndexTest extends JUnitSuite {
   var file: File = _
   var index: TransactionIndex = _
+  val offset = 0L
 
   @Before
   def setup: Unit = {
     file = TestUtils.tempFile()
-    index = new TransactionIndex(file)
+    index = new TransactionIndex(offset, file)
   }
 
   @After
@@ -49,10 +50,25 @@ class TransactionIndexTest extends JUnitSuite {
     abortedTxns.foreach(index.append)
     index.close()
 
-    val reopenedIndex = new TransactionIndex(file)
+    val reopenedIndex = new TransactionIndex(0L, file)
     val anotherAbortedTxn = new AbortedTxn(producerId = 3L, firstOffset = 50, lastOffset = 60, lastStableOffset = 55)
     reopenedIndex.append(anotherAbortedTxn)
     assertEquals(abortedTxns ++ List(anotherAbortedTxn), reopenedIndex.allAbortedTxns)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testSanityCheck(): Unit = {
+    val abortedTxns = List(
+      new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
+      new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13),
+      new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
+      new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
+    abortedTxns.foreach(index.append)
+    index.close()
+
+    // open the index with a different starting offset to fake invalid data
+    val reopenedIndex = new TransactionIndex(100L, file)
+    reopenedIndex.sanityCheck()
   }
 
   @Test(expected = classOf[IllegalArgumentException])

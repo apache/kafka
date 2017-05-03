@@ -42,7 +42,7 @@ class LogSegmentTest {
     txnIdxFile.delete()
     val idx = new OffsetIndex(idxFile, offset, 1000)
     val timeIdx = new TimeIndex(timeIdxFile, offset, 1500)
-    val txnIndex = new TransactionIndex(txnIdxFile)
+    val txnIndex = new TransactionIndex(offset, txnIdxFile)
     val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, Time.SYSTEM)
     segments += seg
     seg
@@ -254,6 +254,62 @@ class LogSegmentTest {
     seg.recover(64*1024)
     for(i <- 0 until 100)
       assertEquals(i, seg.read(i, Some(i + 1), 1024).records.records.iterator.next().offset)
+  }
+
+  @Test
+  def testRecoverTransactionIndex(): Unit = {
+    val segment = createSegment(100)
+    val epoch = 0.toShort
+    val sequence = 0
+
+    val pid1 = 5L
+    val pid2 = 10L
+
+    // append transactional records from pid1
+    segment.append(firstOffset = 100L, largestOffset = 101L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 100L, MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
+        pid1, epoch, sequence, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    // append transactional records from pid2
+    segment.append(firstOffset = 102L, largestOffset = 103L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
+        pid2, epoch, sequence, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    // append a non-transactional records
+    segment.append(firstOffset = 104L, largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
+        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+
+    // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
+    segment.append(firstOffset = 106L, largestOffset = 106L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 106L, MemoryRecords.withControlRecord(106L, ControlRecordType.ABORT,
+        pid2, epoch))
+
+    // commit the transaction from pid1
+    segment.append(firstOffset = 107L, largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
+      shallowOffsetOfMaxTimestamp = 107L, MemoryRecords.withControlRecord(107L, ControlRecordType.COMMIT,
+        pid1, epoch))
+
+    segment.recover(64 * 1024, Seq.empty)
+
+    var abortedTxns = segment.txnIndex.allAbortedTxns
+    assertEquals(1, abortedTxns.size)
+    var abortedTxn = abortedTxns.head
+    assertEquals(pid2, abortedTxn.producerId)
+    assertEquals(102L, abortedTxn.firstOffset)
+    assertEquals(106L, abortedTxn.lastOffset)
+    assertEquals(100L, abortedTxn.lastStableOffset)
+
+    // recover again, but this time assuming the transaction from pid2 began on a previous segment
+    segment.recover(64 * 1024, Seq(ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, Some(75L))))
+
+    abortedTxns = segment.txnIndex.allAbortedTxns
+    assertEquals(1, abortedTxns.size)
+    abortedTxn = abortedTxns.head
+    assertEquals(pid2, abortedTxn.producerId)
+    assertEquals(75L, abortedTxn.firstOffset)
+    assertEquals(106L, abortedTxn.lastOffset)
+    assertEquals(100L, abortedTxn.lastStableOffset)
   }
 
   /**
