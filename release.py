@@ -34,6 +34,7 @@ from __future__ import print_function
 
 import datetime
 from getpass import getpass
+import json
 import os
 import subprocess
 import sys
@@ -41,10 +42,12 @@ import tempfile
 
 PROJECT_NAME = "kafka"
 CAPITALIZED_PROJECT_NAME = "kafka".upper()
+SCRIPT_DIR = os.path.dirname(__file__)
 # Location of the local git repository
-REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, os.getcwd())
+REPO_HOME = os.environ.get("%s_HOME" % CAPITALIZED_PROJECT_NAME, SCRIPT_DIR)
 # Remote name which points to Apache git
 PUSH_REMOTE_NAME = os.environ.get("PUSH_REMOTE_NAME", "apache")
+PREFS_FILE = os.path.join(SCRIPT_DIR, '.release-settings.json')
 
 delete_gitrefs = False
 work_dir = None
@@ -122,6 +125,20 @@ mkdir %s
         # This is ok. The command fails if the directory already exists
         pass
 
+def get_pref(prefs, name, request_fn):
+    "Get a preference from existing preference dictionary or invoke a function that can collect it from the user"
+    val = prefs.get(name)
+    if not val:
+        val = request_fn()
+        prefs[name] = val
+    return val
+
+# Load saved preferences
+prefs = {}
+if os.path.exists(PREFS_FILE):
+    with open(PREFS_FILE, 'r') as prefs_fp:
+        prefs = json.load(prefs_fp)
+
 if not user_ok("""Requirements:
 1. Updated docs to reference the new release version where appropriate.
 2. JDK7 and JDK8 compilers and libraries
@@ -140,7 +157,11 @@ if not user_ok("""Requirements:
 
 If any of these are missing, see https://cwiki.apache.org/confluence/display/KAFKA/Release+Process for instructions on setting them up.
 
-Do you have all of of these setup? (y/n): """):
+Some of these may be used from these previous settings loaded from %s:
+
+%s
+
+Do you have all of of these setup? (y/n): """ % (PREFS_FILE, json.dumps(prefs, indent=2))):
     fail("Please try again once you have all the prerequisites ready.")
 
 
@@ -182,38 +203,49 @@ if not rc:
     sys.exit(0)
 
 # Prereq checks
-apache_id = raw_input("Enter your apache username: ")
+apache_id = get_pref(prefs, 'apache_id', lambda: raw_input("Enter your apache username: "))
 
-jdk7_java_home = raw_input("Enter the path for JAVA_HOME for a JDK7 compiler (blank to use default JAVA_HOME): ")
+
+jdk7_java_home = get_pref(prefs, 'jdk7', lambda: raw_input("Enter the path for JAVA_HOME for a JDK7 compiler (blank to use default JAVA_HOME): "))
 jdk7_env = dict(os.environ) if jdk7_java_home.strip() else None
 if jdk7_env is not None: jdk7_env['JAVA_HOME'] = jdk7_java_home
 if "1.7.0" not in cmd_output("java -version", env=jdk7_env):
     fail("You must be able to build artifacts with JDK7 for Scala 2.10 and 2.11 artifacts")
 
-jdk8_java_home = raw_input("Enter the path for JAVA_HOME for a JDK8 compiler (blank to use default JAVA_HOME): ")
+jdk8_java_home = get_pref(prefs, 'jdk8', lambda: raw_input("Enter the path for JAVA_HOME for a JDK8 compiler (blank to use default JAVA_HOME): "))
 jdk8_env = dict(os.environ) if jdk8_java_home.strip() else None
 if jdk8_env is not None: jdk8_env['JAVA_HOME'] = jdk8_java_home
 if "1.8.0" not in cmd_output("java -version", env=jdk8_env):
     fail("You must be able to build artifacts with JDK8 for Scala 2.12 artifacts")
 
-print("Here are the available GPG keys:")
-available_keys = cmd_output("gpg --list-secret-keys")
-print(available_keys)
-key_name = raw_input("Which user name (enter the user name without email address): ")
-if key_name not in available_keys:
-    fail("Couldn't find the requested key.")
 
-gpg_passphrase = getpass("Passphrase for this GPG key: ")
+def select_gpg_key():
+    print("Here are the available GPG keys:")
+    available_keys = cmd_output("gpg --list-secret-keys")
+    print(available_keys)
+    key_name = raw_input("Which user name (enter the user name without email address): ")
+    if key_name not in available_keys:
+        fail("Couldn't find the requested key.")
+    return key_name
+
+key_name = get_pref(prefs, 'gpg-key', select_gpg_key)
+
+gpg_passphrase = get_pref(prefs, 'gpg-pass', lambda: getpass("Passphrase for this GPG key: "))
 # Do a quick validation so we can fail fast if the password is incorrect
 with tempfile.NamedTemporaryFile() as gpg_test_tempfile:
     gpg_test_tempfile.write("abcdefg")
-    cmd("Testing GPG key & passphrase", ["gpg", "--batch", "--passphrase-fd", "0", "-u", key_name, "--armor", "--output", gpg_test_tempfile.name + ".asc", "--detach-sig", gpg_test_tempfile.name], stdin=gpg_passphrase)
+    cmd("Testing GPG key & passphrase", ["gpg", "--batch", "--pinentry-mode", "loopback", "--passphrase-fd", "0", "-u", key_name, "--armor", "--output", gpg_test_tempfile.name + ".asc", "--detach-sig", gpg_test_tempfile.name], stdin=gpg_passphrase)
+
+# Save preferences
+print("Saving preferences to %s" % PREFS_FILE)
+with open(PREFS_FILE, 'w') as prefs_fp:
+    prefs = json.dump(prefs, prefs_fp)
 
 # Generate RC
 try:
     int(rc)
 except ValueError:
-    fail("Invalid release candidate number")
+    fail("Invalid release candidate number: %s" % rc)
 rc_tag = release_version + '-rc' + rc
 
 delete_gitrefs = True # Since we are about to start creating new git refs, enable cleanup function on failure to try to delete them
