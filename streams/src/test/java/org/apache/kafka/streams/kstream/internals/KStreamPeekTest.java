@@ -103,8 +103,6 @@ public class KStreamPeekTest {
                 new KeyValue<>(3, "three"));
         
         String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
-
-        final List<KeyValue<Integer, String>> actualRecords = new ArrayList<>();
         
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
