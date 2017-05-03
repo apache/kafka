@@ -284,8 +284,6 @@ class TransactionStateManager(brokerId: Int,
     def removeTransactions() {
       var numTxnsRemoved = 0
 
-
-
       inLock(stateLock) {
         for (transactionalId <- transactionMetadataCache.keys) {
           if (partitionFor(transactionalId) == partition) {
@@ -295,7 +293,7 @@ class TransactionStateManager(brokerId: Int,
             numTxnsRemoved += 1
           }
         }
-        
+
         replicaManager.forceCompleteDelayedProduce(
           new TopicPartitionOperationKey(topicPartition))
 
