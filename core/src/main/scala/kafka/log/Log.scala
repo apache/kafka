@@ -335,7 +335,7 @@ class Log(@volatile var dir: File,
     }
 
     // Once we have loaded the segment's data, we take a snapshot to ensure that we won't
-    // need to reload the same segments a second time if we have to recover another segment.
+    // need to reload the same segment a second time if we have to recover another segment.
     stateManager.updateMapEndOffset(segment.baseOffset)
     stateManager.takeSnapshot()
 

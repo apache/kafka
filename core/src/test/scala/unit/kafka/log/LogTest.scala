@@ -2131,6 +2131,69 @@ class LogTest {
   }
 
   @Test
+  def testTransactionIndexUpdatedThroughReplication(): Unit = {
+    val epoch = 0.toShort
+    val log = createLog(1024 * 1024)
+
+    val buffer = ByteBuffer.allocate(2048)
+    def allAbortedTransactions = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+
+    def appendTransactional(pid: Long): (Long, Int) => Unit = {
+      var sequence = 0
+      (offset: Long, numRecords: Int) => {
+        val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch, sequence, true)
+        for (seq <- sequence until sequence + numRecords) {
+          val record = new SimpleRecord(s"$seq".getBytes)
+          builder.append(record)
+        }
+
+        sequence += numRecords
+        builder.close()
+      }
+    }
+
+    def appendControl(pid: Long, offset: Long, controlType: ControlRecordType): Unit = {
+      val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch,
+        RecordBatch.CONTROL_SEQUENCE, true)
+      builder.appendControlRecord(RecordBatch.NO_TIMESTAMP, controlType, null)
+      builder.close()
+    }
+
+    val pid1 = 1L
+    val pid2 = 2L
+    val pid3 = 3L
+    val pid4 = 4L
+
+    val appendPid1 = appendTransactional(pid1)
+    val appendPid2 = appendTransactional(pid2)
+    val appendPid3 = appendTransactional(pid3)
+    val appendPid4 = appendTransactional(pid4)
+
+    appendPid1(0L, 5)
+    appendPid2(5L, 2)
+    appendPid1(7L, 4)
+    appendPid3(11L, 3)
+    appendPid1(14L, 10)
+    appendControl(pid1, 24L, ControlRecordType.ABORT)
+    appendPid2(25L, 6)
+    appendPid4(31L, 3)
+    appendPid3(34L, 9)
+    appendControl(pid3, 43L, ControlRecordType.COMMIT)
+    appendPid4(44L, 8)
+    appendPid2(52L, 7)
+    appendControl(pid2, 59L, ControlRecordType.ABORT)
+    appendPid4(60L, 4)
+    appendControl(pid4, 64L, ControlRecordType.COMMIT)
+
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+    log.appendAsFollower(records)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 24L, 5L), new AbortedTxn(pid2, 5L, 59L, 31L)), allAbortedTransactions)
+  }
+
+  @Test
   def testLastStableOffsetWithMixedProducerData() {
     val log = createLog(1024 * 1024)
 

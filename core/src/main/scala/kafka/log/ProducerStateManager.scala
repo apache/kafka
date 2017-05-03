@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, InvalidRecordException, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
+import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 
 private[log] object ProducerIdEntry {
@@ -56,6 +57,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   private var lastOffset = initialEntry.lastOffset
   private var maxTimestamp = initialEntry.timestamp
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
+  private val transactions = ListBuffer.empty[OngoingTxn]
 
   def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
     this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
@@ -110,6 +112,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     if (isTransactional && currentTxnFirstOffset.isEmpty) {
       val firstOffset = lastOffset - (lastSeq - firstSeq)
       currentTxnFirstOffset = Some(firstOffset)
+      transactions += OngoingTxn(producerId, firstOffset)
     }
   }
 
@@ -150,19 +153,17 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   def lastEntry: ProducerIdEntry =
     ProducerIdEntry(producerId, epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp, currentTxnFirstOffset)
 
-  def startedTransaction: Option[OngoingTxn] = currentTxnFirstOffset.map { offset =>
-    OngoingTxn(producerId, offset)
-  }
+  def startedTransactions: List[OngoingTxn] = transactions.toList
 
 }
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
-private[log] case class OngoingTxn(pid: Long, firstOffset: Long) extends Ordered[OngoingTxn] {
+private[log] case class OngoingTxn(producerId: Long, firstOffset: Long) extends Ordered[OngoingTxn] {
   override def compare(that: OngoingTxn): Int = {
     val res = this.firstOffset compare that.firstOffset
     if (res == 0)
-      this.pid compare that.pid
+      this.producerId compare that.producerId
     else
       res
   }
@@ -410,7 +411,7 @@ class ProducerStateManager(val config: LogConfig,
       throw new IllegalArgumentException("Invalid PID passed to update")
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)
-    appendInfo.startedTransaction.foreach(ongoingTxns += _)
+    appendInfo.startedTransactions.foreach(ongoingTxns += _)
   }
 
   def updateMapEndOffset(lastOffset: Long): Unit = {
@@ -449,7 +450,7 @@ class ProducerStateManager(val config: LogConfig,
     val evictedPidEntries = producers.filter(_._2.lastOffset < logStartOffset)
     val evictedPids = evictedPidEntries.keySet
 
-    ongoingTxns.retain(txn => !evictedPids.contains(txn.pid))
+    ongoingTxns.retain(txn => !evictedPids.contains(txn.producerId))
     unreplicatedTxns.retain(txn => !evictedPids.contains(txn.producerId))
     producers --= evictedPids
 

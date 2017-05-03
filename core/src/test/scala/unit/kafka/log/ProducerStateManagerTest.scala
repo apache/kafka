@@ -138,7 +138,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(16L, lastEntry.firstOffset)
     assertEquals(20L, lastEntry.lastOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(Some(OngoingTxn(pid, 16L)), appendInfo.startedTransaction)
+    assertEquals(List(OngoingTxn(pid, 16L)), appendInfo.startedTransactions)
 
     appendInfo.append(epoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
     lastEntry = appendInfo.lastEntry
@@ -148,7 +148,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(26L, lastEntry.firstOffset)
     assertEquals(30L, lastEntry.lastOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(Some(OngoingTxn(pid, 16L)), appendInfo.startedTransaction)
+    assertEquals(List(OngoingTxn(pid, 16L)), appendInfo.startedTransactions)
 
     val completedTxn = appendInfo.appendControlRecord(ControlRecordType.COMMIT, epoch, 40L, time.milliseconds())
     assertEquals(pid, completedTxn.producerId)
@@ -163,7 +163,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(40L, lastEntry.firstOffset)
     assertEquals(40L, lastEntry.lastOffset)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
-    assertEquals(None, appendInfo.startedTransaction)
+    assertEquals(List.empty[OngoingTxn], appendInfo.startedTransactions)
   }
 
   @Test(expected = classOf[OutOfOrderSequenceException])
