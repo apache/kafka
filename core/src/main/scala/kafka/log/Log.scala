@@ -460,7 +460,7 @@ class Log(@volatile var dir: File,
     records.batches.asScala.foreach { batch =>
       if (batch.hasProducerId) {
         val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducer(batch, pidsToLoad, completedTxns, lastEntry, assignOffsets = false, loadingFromLog = true)
+        updateProducerState(batch, pidsToLoad, completedTxns, lastEntry, assignOffsets = false, loadingFromLog = true)
       }
     }
     pidsToLoad.values.foreach(producerStateManager.update)
@@ -772,7 +772,7 @@ class Log(@volatile var dir: File,
               true
 
             case maybeLastEntry =>
-              updateProducer(batch, producerAppendInfos, completedTxns, maybeLastEntry, assignOffsets = true,
+              updateProducerState(batch, producerAppendInfos, completedTxns, maybeLastEntry, assignOffsets = true,
                 loadingFromLog = false)
               false
           }
@@ -783,7 +783,7 @@ class Log(@volatile var dir: File,
             completedTxns.toList, isDuplicate = isDuplicate)
         } else {
           val lastEntry = producerStateManager.lastEntry(batch.producerId)
-          updateProducer(batch, producerAppendInfos, completedTxns, lastEntry, assignOffsets = false,
+          updateProducerState(batch, producerAppendInfos, completedTxns, lastEntry, assignOffsets = false,
             loadingFromLog = false)
         }
       }
@@ -796,12 +796,12 @@ class Log(@volatile var dir: File,
       isDuplicate = false)
   }
 
-  private def updateProducer(batch: RecordBatch,
-                             producers: mutable.Map[Long, ProducerAppendInfo],
-                             completedTxns: ListBuffer[CompletedTxn],
-                             lastEntry: Option[ProducerIdEntry],
-                             assignOffsets: Boolean,
-                             loadingFromLog: Boolean): Unit = {
+  private def updateProducerState(batch: RecordBatch,
+                                  producers: mutable.Map[Long, ProducerAppendInfo],
+                                  completedTxns: ListBuffer[CompletedTxn],
+                                  lastEntry: Option[ProducerIdEntry],
+                                  assignOffsets: Boolean,
+                                  loadingFromLog: Boolean): Unit = {
     val pid = batch.producerId
     val (firstOffset, lastOffset) = if (assignOffsets)
       (nextOffsetMetadata.messageOffset, nextOffsetMetadata.messageOffset + batch.countOrNull - 1)

@@ -23,9 +23,9 @@ import java.nio.file.Files
 import kafka.common.KafkaException
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
+import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, InvalidTxnStateException, OutOfOrderSequenceException, ProducerFencedException}
 import org.apache.kafka.common.protocol.types._
-import org.apache.kafka.common.record.{ControlRecordType, InvalidRecordException, RecordBatch}
+import org.apache.kafka.common.record.{ControlRecordType, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
 import scala.collection.mutable.ListBuffer
@@ -48,16 +48,20 @@ private[log] case class ProducerIdEntry(producerId: Long, epoch: Short, lastSeq:
   }
 }
 
+/**
+ * This class is used to validate the records appended by a given producer before they are written to the log.
+ * It is initialized with the producer's state after the last successful append, and transitively validates the
+ * sequence numbers and epochs of each new record. Additionally, this class accumulates transaction metadata
+ * as the incoming records are validated.
+ */
 private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
-  // the initialEntry here is the last successful appended batch. we validate incoming entries transitively, starting
-  // with the last appended entry.
   private var epoch = initialEntry.epoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
   private var lastOffset = initialEntry.lastOffset
   private var maxTimestamp = initialEntry.timestamp
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
-  private val transactions = ListBuffer.empty[OngoingTxn]
+  private val transactions = ListBuffer.empty[StartedTxn]
 
   def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
     this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
@@ -106,13 +110,12 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     this.lastOffset = lastOffset
 
     if (currentTxnFirstOffset.isDefined && !isTransactional)
-      // FIXME: Do we need a new error code here?
-      throw new InvalidRecordException(s"Expected transactional write from producer $producerId")
+      throw new InvalidTxnStateException(s"Expected transactional write from producer $producerId")
 
     if (isTransactional && currentTxnFirstOffset.isEmpty) {
       val firstOffset = lastOffset - (lastSeq - firstSeq)
       currentTxnFirstOffset = Some(firstOffset)
-      transactions += OngoingTxn(producerId, firstOffset)
+      transactions += StartedTxn(producerId, firstOffset)
     }
   }
 
@@ -153,14 +156,14 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   def lastEntry: ProducerIdEntry =
     ProducerIdEntry(producerId, epoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp, currentTxnFirstOffset)
 
-  def startedTransactions: List[OngoingTxn] = transactions.toList
+  def startedTransactions: List[StartedTxn] = transactions.toList
 
 }
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
-private[log] case class OngoingTxn(producerId: Long, firstOffset: Long) extends Ordered[OngoingTxn] {
-  override def compare(that: OngoingTxn): Int = {
+private[log] case class StartedTxn(producerId: Long, firstOffset: Long) extends Ordered[StartedTxn] {
+  override def compare(that: StartedTxn): Int = {
     val res = this.firstOffset compare that.firstOffset
     if (res == 0)
       this.producerId compare that.producerId
@@ -185,8 +188,6 @@ object ProducerStateManager {
   private val VersionOffset = 0
   private val CrcOffset = VersionOffset + 2
   private val PidEntriesOffset = CrcOffset + 4
-
-  private val maxPidSnapshotsToRetain = 2
 
   val PidSnapshotEntrySchema = new Schema(
     new Field(PidField, Type.INT64, "The producer ID"),
@@ -296,7 +297,7 @@ class ProducerStateManager(val config: LogConfig,
   private var lastSnapOffset = 0L
 
   // ongoing transactions sorted by the first offset of the transaction
-  private val ongoingTxns = mutable.TreeSet.empty[OngoingTxn]
+  private val ongoingTxns = mutable.TreeSet.empty[StartedTxn]
 
   // completed transactions whose markers are at offsets above the high watermark
   private val unreplicatedTxns = mutable.TreeSet.empty[CompletedTxn]
@@ -351,7 +352,7 @@ class ProducerStateManager(val config: LogConfig,
               if (!isExpired(currentTime, entry)) {
                 producers.put(pid, entry)
                 entry.currentTxnFirstOffset.foreach { offset =>
-                  ongoingTxns += OngoingTxn(pid, offset)
+                  ongoingTxns += StartedTxn(pid, offset)
                 }
               }
             }
@@ -423,6 +424,9 @@ class ProducerStateManager(val config: LogConfig,
    */
   def lastEntry(producerId: Long): Option[ProducerIdEntry] = producers.get(producerId)
 
+  /**
+   * Take a snapshot at the current end offset if one does not already exist.
+   */
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
@@ -440,6 +444,9 @@ class ProducerStateManager(val config: LogConfig,
    */
   def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
 
+  /**
+   * Get the last offset (exclusive) of the oldest snapshot file.
+   */
   def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
 
   /**
@@ -473,7 +480,7 @@ class ProducerStateManager(val config: LogConfig,
   }
 
   def completeTxn(completedTxn: CompletedTxn): Unit = {
-    ongoingTxns -= OngoingTxn(completedTxn.producerId, completedTxn.firstOffset)
+    ongoingTxns -= StartedTxn(completedTxn.producerId, completedTxn.firstOffset)
     unreplicatedTxns += completedTxn
   }
 

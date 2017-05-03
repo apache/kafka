@@ -22,8 +22,8 @@ import java.util.Properties
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, OutOfOrderSequenceException, ProducerFencedException}
-import org.apache.kafka.common.record.{ControlRecordType, InvalidRecordException, RecordBatch}
+import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, InvalidTxnStateException, OutOfOrderSequenceException, ProducerFencedException}
+import org.apache.kafka.common.record.{ControlRecordType, RecordBatch}
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -138,7 +138,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(16L, lastEntry.firstOffset)
     assertEquals(20L, lastEntry.lastOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(List(OngoingTxn(pid, 16L)), appendInfo.startedTransactions)
+    assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
 
     appendInfo.append(epoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
     lastEntry = appendInfo.lastEntry
@@ -148,7 +148,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(26L, lastEntry.firstOffset)
     assertEquals(30L, lastEntry.lastOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(List(OngoingTxn(pid, 16L)), appendInfo.startedTransactions)
+    assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
 
     val completedTxn = appendInfo.appendControlRecord(ControlRecordType.COMMIT, epoch, 40L, time.milliseconds())
     assertEquals(pid, completedTxn.producerId)
@@ -163,7 +163,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(40L, lastEntry.firstOffset)
     assertEquals(40L, lastEntry.lastOffset)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
-    assertEquals(List.empty[OngoingTxn], appendInfo.startedTransactions)
+    assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
   }
 
   @Test(expected = classOf[OutOfOrderSequenceException])
@@ -179,7 +179,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 2, bumpedEpoch, 2L)
   }
 
-  @Test(expected = classOf[InvalidRecordException])
+  @Test(expected = classOf[InvalidTxnStateException])
   def testNonTransactionalAppendWithOngoingTransaction(): Unit = {
     val epoch = 0.toShort
     append(idMapping, pid, 0, epoch, 0L, isTransactional = true)
