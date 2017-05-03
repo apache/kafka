@@ -437,6 +437,7 @@ class TransactionCoordinator(brokerId: Int,
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()
+    txnMarkerPurgatory.shutdown()
     pidManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
