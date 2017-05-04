@@ -91,12 +91,19 @@ class TransactionCoordinator(brokerId: Int,
   def handleInitPid(transactionalId: String,
                     transactionTimeoutMs: Int,
                     responseCallback: InitPidCallback): Unit = {
-      if (transactionalId == null || transactionalId.isEmpty) {
-        // if the transactional id is not specified, then always blindly accept the request
-        // and return a new pid from the pid manager
-        val pid = pidManager.nextPid()
-        responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
-      } else if (!txnManager.isCoordinatorFor(transactionalId)) {
+
+     if (transactionalId == null) {
+      // if the transactional id is null, then always blindly accept the request
+      // and return a new pid from the pid manager
+      val pid = pidManager.nextPid()
+      responseCallback(InitPidResult(pid, epoch = 0, Errors.NONE))
+    }
+     else if (transactionalId.isEmpty) {
+        //If transactional id is empty then return error as invalid request. This is
+        // to make TransactionCoordinator's behavior consistent with producer client
+        responseCallback(initTransactionError(Errors.INVALID_REQUEST))
+      }
+     else if (!txnManager.isCoordinatorFor(transactionalId)) {
         // check if it is the assigned coordinator for the transactional id
         responseCallback(initTransactionError(Errors.NOT_COORDINATOR))
       } else if (txnManager.isCoordinatorLoadingInProgress(transactionalId)) {
