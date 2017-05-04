@@ -116,17 +116,17 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
             throw new IllegalStateException("can't add additional streams after aggregate has been called");
         }
         switch (aggregationType) {
-        case AGGREGATE:
-            cogroups.put(groupedStream, new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator));
-            break;
-        case SESSION_WINDOW_AGGREGATE:
-            cogroups.put(groupedStream, new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger));
-            break;
-        case WINDOW_AGGREGATE:
-            cogroups.put(groupedStream, new KStreamWindowAggregate<>(windows, storeSupplier.name(), initializer, aggregator));
-            break;
-        default:
-            throw new IllegalStateException(String.format("Unrecognized AggregationType %s", aggregationType));
+            case AGGREGATE:
+                cogroups.put(groupedStream, new KStreamAggregate<>(storeSupplier.name(), initializer, aggregator));
+                break;
+            case SESSION_WINDOW_AGGREGATE:
+                cogroups.put(groupedStream, new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger));
+                break;
+            case WINDOW_AGGREGATE:
+                cogroups.put(groupedStream, new KStreamWindowAggregate<>(windows, storeSupplier.name(), initializer, aggregator));
+                break;
+            default:
+                throw new IllegalStateException(String.format("Unrecognized AggregationType %s", aggregationType));
         }
         return this;
     }
