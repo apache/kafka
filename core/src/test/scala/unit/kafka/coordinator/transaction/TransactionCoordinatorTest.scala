@@ -617,7 +617,7 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldAbortExpiredTransactions(): Unit = {
+  def shouldAbortExpiredTransactionsInOngoingState(): Unit = {
     EasyMock.expect(transactionManager.transactionsToExpire())
     .andReturn(List(TransactionalIdAndMetadata(transactionalId,
       new TransactionMetadata(pid, epoch, 0, Ongoing, partitions, time.milliseconds(), time.milliseconds()))))
@@ -659,6 +659,24 @@ class TransactionCoordinatorTest {
     time.sleep(TransactionManager.DefaultRemoveExpiredTransactionsIntervalMs)
     scheduler.tick()
     EasyMock.verify(transactionManager)
+  }
+
+  @Test
+  def shouldNotAbortExpiredTransactionsThatHaveAPendingStateTransition(): Unit = {
+    val metadata = new TransactionMetadata(pid, epoch, 0, Ongoing, partitions, time.milliseconds(), time.milliseconds())
+    metadata.prepareTransitionTo(PrepareCommit)
+
+    EasyMock.expect(transactionManager.transactionsToExpire())
+      .andReturn(List(TransactionalIdAndMetadata(transactionalId,
+        metadata)))
+    
+    EasyMock.replay(transactionManager, transactionMarkerChannelManager)
+    coordinator.startup(false)
+
+    time.sleep(TransactionManager.DefaultRemoveExpiredTransactionsIntervalMs)
+    scheduler.tick()
+    EasyMock.verify(transactionManager)
+
   }
 
   private def validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(state: TransactionState) = {

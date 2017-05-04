@@ -84,7 +84,7 @@ class TransactionStateManager(brokerId: Int,
   def enablePidExpiration() {
     if (!scheduler.isStarted)
       scheduler.startup()
-    // TODO: add transaction and pid expiration logic
+    // TODO: add pid expiration logic
   }
 
   /**
