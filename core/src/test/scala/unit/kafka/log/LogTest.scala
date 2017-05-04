@@ -2111,18 +2111,18 @@ class LogTest {
     appendPid3(3) // 17
     appendNonTransactionalAsLeader(log, 2) // 19
     appendPid1(10) // 29
-    appendControlAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
+    appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
     appendPid2(6) // 36
     appendPid4(3) // 39
     appendNonTransactionalAsLeader(log, 10) // 49
     appendPid3(9) // 58
-    appendControlAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
+    appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
     appendPid4(8) // 67
     appendPid2(7) // 74
-    appendControlAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
+    appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
     appendNonTransactionalAsLeader(log, 10) // 85
     appendPid4(4) // 89
-    appendControlAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
+    appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
     val abortedTransactions = allAbortedTransactions(log)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
@@ -2151,18 +2151,18 @@ class LogTest {
     appendPid3(3) // 17
     appendNonTransactionalAsLeader(log, 2) // 19
     appendPid1(10) // 29
-    appendControlAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
+    appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
     appendPid2(6) // 36
     appendPid4(3) // 39
     appendNonTransactionalAsLeader(log, 10) // 49
     appendPid3(9) // 58
-    appendControlAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
+    appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
     appendPid4(8) // 67
     appendPid2(7) // 74
-    appendControlAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
+    appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
     appendNonTransactionalAsLeader(log, 10) // 85
     appendPid4(4) // 89
-    appendControlAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
+    appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
     // delete all the offset and transaction index files to force recovery
     log.logSegments.foreach { segment =>
@@ -2200,18 +2200,18 @@ class LogTest {
     appendPid3(14L, 3)
     appendNonTransactionalToBuffer(buffer, 17L, 2)
     appendPid1(19L, 10)
-    appendControlToBuffer(buffer, pid1, epoch, 29L, ControlRecordType.ABORT)
+    appendEndTxnMarkerToBuffer(buffer, pid1, epoch, 29L, ControlRecordType.ABORT)
     appendPid2(30L, 6)
     appendPid4(36L, 3)
     appendNonTransactionalToBuffer(buffer, 39L, 10)
     appendPid3(49L, 9)
-    appendControlToBuffer(buffer, pid3, epoch, 58L, ControlRecordType.COMMIT)
+    appendEndTxnMarkerToBuffer(buffer, pid3, epoch, 58L, ControlRecordType.COMMIT)
     appendPid4(59L, 8)
     appendPid2(67L, 7)
-    appendControlToBuffer(buffer, pid2, epoch, 74L, ControlRecordType.ABORT)
+    appendEndTxnMarkerToBuffer(buffer, pid2, epoch, 74L, ControlRecordType.ABORT)
     appendNonTransactionalToBuffer(buffer, 75L, 10)
     appendPid4(85L, 4)
-    appendControlToBuffer(buffer, pid4, epoch, 89L, ControlRecordType.COMMIT)
+    appendEndTxnMarkerToBuffer(buffer, pid4, epoch, 89L, ControlRecordType.COMMIT)
 
     buffer.flip()
 
@@ -2219,6 +2219,23 @@ class LogTest {
 
     val abortedTransactions = allAbortedTransactions(log)
     assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+  }
+
+  @Test(expected = classOf[TransactionCoordinatorFencedException])
+  def testZombieCoordinatorFenced(): Unit = {
+    val pid = 1L
+    val epoch = 0.toShort
+    val log = createLog(1024 * 1024)
+
+    val append = appendTransactionalAsLeader(log, pid, epoch)
+
+    append(10)
+    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+
+    append(5)
+    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.COMMIT, coordinatorEpoch = 2)
+
+    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
   }
 
   @Test
@@ -2350,8 +2367,9 @@ class LogTest {
     }
   }
 
-  private def appendControlAsLeader(log: Log, pid: Long, producerEpoch: Short, controlType: ControlRecordType): Unit = {
-    val records = endTxnRecords(controlType, pid, producerEpoch)
+  private def appendEndTxnMarkerAsLeader(log: Log, pid: Long, producerEpoch: Short,
+                                         controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
+    val records = endTxnRecords(controlType, pid, producerEpoch, coordinatorEpoch = coordinatorEpoch)
     log.appendAsLeader(records, isFromClient = false, leaderEpoch = 0)
   }
 
@@ -2377,7 +2395,7 @@ class LogTest {
     }
   }
 
-  private def appendControlToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
+  private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
                                     controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
     val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, producerId, producerEpoch,
       RecordBatch.CONTROL_SEQUENCE, true)

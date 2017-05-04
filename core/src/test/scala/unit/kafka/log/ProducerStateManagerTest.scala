@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, InvalidTxnStateException, OutOfOrderSequenceException, ProducerFencedException}
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
@@ -450,6 +450,47 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
     appendEndTxnMarker(idMapping, pid, 3.toShort, ControlRecordType.COMMIT, offset=100)
+  }
+
+  @Test
+  def testCoordinatorFencing(): Unit = {
+    val epoch = 5.toShort
+    val sequence = 0
+
+    append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 1)
+
+    val lastEntry = idMapping.lastEntry(pid)
+    assertEquals(Some(1), lastEntry.map(_.coordinatorEpoch))
+
+    // writing with the current epoch is allowed
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 101, coordinatorEpoch = 1)
+
+    // bumping the epoch is allowed
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 102, coordinatorEpoch = 2)
+
+    // old epochs are not allowed
+    try {
+      appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 103, coordinatorEpoch = 1)
+      fail("Expected coordinator to be fenced")
+    } catch {
+      case e: TransactionCoordinatorFencedException =>
+    }
+  }
+
+
+  @Test(expected = classOf[TransactionCoordinatorFencedException])
+  def testCoordinatorFencedAfterReload(): Unit = {
+    val epoch = 0.toShort
+    append(idMapping, pid, 0, epoch, offset = 99, isTransactional = true)
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 1)
+    idMapping.takeSnapshot()
+
+    val recoveredMapping = new ProducerStateManager(partition, idMappingDir, maxPidExpirationMs)
+    recoveredMapping.truncateAndReload(0L, 2L, 70000)
+
+    // append from old coordinator should be rejected
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 100, coordinatorEpoch = 0)
   }
 
   private def appendEndTxnMarker(mapping: ProducerStateManager,
