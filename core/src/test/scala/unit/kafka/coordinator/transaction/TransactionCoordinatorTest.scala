@@ -84,25 +84,25 @@ class TransactionCoordinatorTest {
 
 
   @Test
-  def shouldAcceptInitPidAndReturnNextPidWhenTransactionalIdIsEmpty(): Unit = {
+  def shouldReturnInvalidRequestWhenTransactionalIdIsEmpty(): Unit = {
     mockPidManager()
     EasyMock.replay(pidManager)
 
     coordinator.handleInitPid("", txnTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(0L, 0, Errors.NONE), result)
+    assertEquals(InitPidResult(-1L, -1, Errors.INVALID_REQUEST), result)
     coordinator.handleInitPid("", txnTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(1L, 0, Errors.NONE), result)
+    assertEquals(InitPidResult(-1L, -1, Errors.INVALID_REQUEST), result)
   }
 
   @Test
-  def shouldAcceptInitPidAndReturnNextPidWhenTransactionalIdIsNull(): Unit = {
+  def shouldReturnInvalidRequestWhenTransactionalIdIsNull(): Unit = {
     mockPidManager()
     EasyMock.replay(pidManager)
 
     coordinator.handleInitPid(null, txnTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(0L, 0, Errors.NONE), result)
+    assertEquals(InitPidResult(-1L, -1, Errors.INVALID_REQUEST), result)
     coordinator.handleInitPid(null, txnTimeoutMs, initPidMockCallback)
-    assertEquals(InitPidResult(1L, 0, Errors.NONE), result)
+    assertEquals(InitPidResult(-1L, -1, Errors.INVALID_REQUEST), result)
   }
 
   @Test
