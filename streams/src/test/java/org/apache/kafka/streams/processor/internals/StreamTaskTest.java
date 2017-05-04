@@ -75,8 +75,6 @@ import static org.junit.Assert.fail;
 
 public class StreamTaskTest {
 
-    private boolean cleanRun = false;
-
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
     private final Deserializer<Integer> intDeserializer = new IntegerDeserializer();
     private final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
@@ -152,14 +150,13 @@ public class StreamTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        if (task != null) {
-            try {
-                task.close(cleanRun);
-            } catch (final Exception e) {
-                // ignore exceptions
+        try {
+            if (task != null) {
+                task.close(true);
             }
+        } finally {
+            Utils.delete(baseDir);
         }
-        Utils.delete(baseDir);
     }
 
     @SuppressWarnings("unchecked")
@@ -206,8 +203,6 @@ public class StreamTaskTest {
         assertEquals(0, task.numBuffered());
         assertEquals(3, source1.numReceived);
         assertEquals(3, source2.numReceived);
-
-        cleanRun = true;
     }
 
     @Test
@@ -230,8 +225,6 @@ public class StreamTaskTest {
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
         }
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -285,8 +278,6 @@ public class StreamTaskTest {
         assertEquals(1, source2.numReceived);
 
         assertEquals(0, consumer.paused().size());
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -350,8 +341,6 @@ public class StreamTaskTest {
         assertFalse(task.maybePunctuate());
 
         processor.supplier.checkAndClearPunctuateResult(20L, 30L, 40L);
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -393,8 +382,6 @@ public class StreamTaskTest {
             assertTrue("message=" + message + " should contain offset", message.contains("offset=" + offset));
             assertTrue("message=" + message + " should contain processor", message.contains("processor=" + processorNode.name()));
         }
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -424,8 +411,6 @@ public class StreamTaskTest {
             assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
-
-        cleanRun = true;
     }
 
     @Test
@@ -447,8 +432,6 @@ public class StreamTaskTest {
         };
         streamTask.flushState();
         assertTrue(flushed.get());
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -510,8 +493,6 @@ public class StreamTaskTest {
                                                                           ProcessorStateManager.CHECKPOINT_FILE_NAME));
 
         assertThat(checkpoint.read(), equalTo(Collections.singletonMap(partition, offset + 1)));
-
-        cleanRun = true;
     }
 
     @Test
@@ -523,8 +504,6 @@ public class StreamTaskTest {
         } catch (final IllegalStateException e) {
             // pass
         }
-
-        cleanRun = true;
     }
 
     @Test
@@ -533,31 +512,23 @@ public class StreamTaskTest {
         assertThat(processor.punctuatedAt, equalTo(5L));
         task.punctuate(processor, 10);
         assertThat(processor.punctuatedAt, equalTo(10L));
-
-        cleanRun = true;
     }
 
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccesfullPunctuate() throws Exception {
         task.punctuate(processor, 5);
         assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
-
-        cleanRun = true;
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() throws Exception {
         task.schedule(1);
-
-        cleanRun = true;
     }
 
     @Test
     public void shouldNotThrowIExceptionOnScheduleIfCurrentNodeIsNotNull() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
         task.schedule(1);
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -569,13 +540,11 @@ public class StreamTaskTest {
             task.close(true);
             fail("should have thrown runtime exception");
         } catch (final RuntimeException e) {
-            // ok
+            task = null;
         }
         assertTrue(processor.closed);
         assertTrue(source1.closed);
         assertTrue(source2.closed);
-
-        cleanRun = true;
     }
 
     @Test
@@ -586,8 +555,6 @@ public class StreamTaskTest {
 
         assertTrue(producer.transactionInitialized());
         assertTrue(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -598,8 +565,6 @@ public class StreamTaskTest {
 
         assertFalse(producer.transactionInitialized());
         assertFalse(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -616,8 +581,6 @@ public class StreamTaskTest {
         assertTrue(producer.sentOffsets());
         assertTrue(producer.transactionCommitted());
         assertFalse(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -634,8 +597,6 @@ public class StreamTaskTest {
         assertFalse(producer.sentOffsets());
         assertFalse(producer.transactionCommitted());
         assertFalse(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -651,8 +612,6 @@ public class StreamTaskTest {
 
         task.resume();
         assertTrue(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -668,8 +627,6 @@ public class StreamTaskTest {
 
         task.resume();
         assertFalse(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -684,8 +641,6 @@ public class StreamTaskTest {
 
         task.commit(true);
         assertTrue(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -700,8 +655,6 @@ public class StreamTaskTest {
 
         task.commit(true);
         assertFalse(producer.transactionStarted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -711,9 +664,8 @@ public class StreamTaskTest {
             eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
         task.close(false);
+        task = null;
         assertTrue(producer.transactionAborted());
-
-        cleanRun = true;
     }
 
     @Test
@@ -724,8 +676,6 @@ public class StreamTaskTest {
 
         task.close(false);
         assertFalse(producer.transactionAborted());
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")
@@ -737,10 +687,8 @@ public class StreamTaskTest {
             changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
         task.close(true);
-
+        task = null;
         assertTrue(producer.closed());
-
-        cleanRun = true;
     }
 
     @SuppressWarnings("unchecked")

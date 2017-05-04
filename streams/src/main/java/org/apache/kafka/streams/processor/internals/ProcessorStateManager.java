@@ -335,11 +335,7 @@ public class ProcessorStateManager implements StateManager {
         // write the checkpoint file before closing, to indicate clean shutdown
         try {
             if (checkpoint == null) {
-                assert eosEnabled : "Missing checkpoint file: this indicates a bug. Please report to dev@kafka.apache.org";
                 checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
-            } else {
-                assert !eosEnabled : "Did not expect to find an checkpoint file as EOS is enabled:" +
-                    " this indicates a bug. Please report to dev@kafka.apache.org";
             }
             checkpoint.write(checkpointedOffsets);
         } catch (final IOException e) {

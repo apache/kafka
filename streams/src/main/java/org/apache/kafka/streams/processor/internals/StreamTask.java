@@ -383,6 +383,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      *     - commit offsets
      * - close state
      *   - if (clean) write checkpoint
+     * - if (eos) close producer
      * </pre>
      * @param clean shut down cleanly (ie, incl. flush and commit) if {@code true} --
      *              otherwise, just close open resources
