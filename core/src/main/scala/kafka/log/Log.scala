@@ -42,13 +42,12 @@ import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
 import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-
 import java.util.Map.{Entry => JEntry}
 import java.lang.{Long => JLong}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
-    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, isDuplicate = false)
+    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
 }
 
 /**
@@ -64,7 +63,6 @@ object LogAppendInfo {
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
- * @param isDuplicate Indicates whether the message set is a duplicate of a message at the tail of the log.
  */
 case class LogAppendInfo(var firstOffset: Long,
                          var lastOffset: Long,
@@ -75,8 +73,7 @@ case class LogAppendInfo(var firstOffset: Long,
                          targetCodec: CompressionCodec,
                          shallowCount: Int,
                          validBytes: Int,
-                         offsetsMonotonic: Boolean,
-                         isDuplicate: Boolean = false)
+                         offsetsMonotonic: Boolean)
 
 /**
  * A class used to hold useful metadata about a completed transaction. This is used to build
@@ -527,7 +524,7 @@ class Log(@volatile var dir: File,
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
-    if (appendInfo.shallowCount == 0 || appendInfo.isDuplicate)
+    if (appendInfo.shallowCount == 0)
       return appendInfo
 
     // trim any invalid bytes or partial messages before appending it to the on-disk log
@@ -598,7 +595,13 @@ class Log(@volatile var dir: File,
 
         // now that we have valid records, offsets assigned, and timestamps updated, we need to
         // validate the idempotent/transactional state of the producers and collect some metadata
-        val (updatedProducers, completedTxns) = analyzeAndValidateProducerState(validRecords)
+        val (updatedProducers, completedTxns, maybeDuplicate) = analyzeAndValidateProducerState(validRecords, isFromClient)
+        maybeDuplicate.foreach { duplicate =>
+          appendInfo.firstOffset = duplicate.firstOffset
+          appendInfo.lastOffset = duplicate.lastOffset
+          appendInfo.logAppendTime = duplicate.timestamp
+          return appendInfo
+        }
 
         // maybe roll the log if this segment is full
         val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
@@ -680,14 +683,17 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def analyzeAndValidateProducerState(records: MemoryRecords): (Map[Long, ProducerAppendInfo], List[CompletedTxn]) = {
+  private def analyzeAndValidateProducerState(records: MemoryRecords, isFromClient: Boolean):
+  (mutable.Map[Long, ProducerAppendInfo], List[CompletedTxn], Option[ProducerIdEntry]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     for (batch <- records.batches.asScala if batch.hasProducerId) {
-      val lastEntry = producerStateManager.lastEntry(batch.producerId)
-      updateProducers(batch, updatedProducers, completedTxns, lastEntry, loadingFromLog = false)
+      val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
+      if (maybeLastEntry.exists(_.isDuplicate(batch)))
+        return (updatedProducers, completedTxns.toList, maybeLastEntry)
+      updateProducers(batch, updatedProducers, completedTxns, maybeLastEntry, loadingFromLog = false)
     }
-    (updatedProducers.toMap, completedTxns.toList)
+    (updatedProducers, completedTxns.toList, None)
   }
 
   /**
@@ -759,25 +765,12 @@ class Log(@volatile var dir: File,
       val messageCodec = CompressionCodec.getCompressionCodec(batch.compressionType.id)
       if (messageCodec != NoCompressionCodec)
         sourceCodec = messageCodec
-
-      if (batch.hasProducerId && isFromClient) {
-        val pid = batch.producerId
-        val maybeLastEntry = producerStateManager.lastEntry(pid)
-        maybeLastEntry.foreach { lastEntry =>
-          if (lastEntry.isDuplicate(batch)) {
-            val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
-            return LogAppendInfo(lastEntry.firstOffset, lastEntry.lastOffset, lastEntry.timestamp,
-              offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec, targetCodec, shallowMessageCount,
-              validBytesCount, monotonic, isDuplicate = true)
-          }
-        }
-      }
     }
 
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
     LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
-      targetCodec, shallowMessageCount, validBytesCount, monotonic, isDuplicate = false)
+      targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 
   private def updateProducers(batch: RecordBatch,
