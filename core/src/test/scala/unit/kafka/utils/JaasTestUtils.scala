@@ -82,7 +82,7 @@ object JaasTestUtils {
     }
   }
 
-  class JaasSection(contextName: String,
+  case class JaasSection(contextName: String,
                     jaasModule: Seq[JaasModule]) {
     override def toString: String = {
       s"""|$contextName {
@@ -122,29 +122,9 @@ object JaasTestUtils {
   val KafkaScramAdmin = "scram-admin"
   val KafkaScramAdminPassword = "scram-admin-secret"
 
-  def writeZkFile(): String = {
+  def writeJaasContextsToFile(jaasContexts: Seq[JaasSection]): String = {
     val jaasFile = TestUtils.tempFile()
-    writeToFile(jaasFile, zkSections)
-    jaasFile.getCanonicalPath
-  }
-
-  def writeKafkaFile(serverEntryName: String, kafkaServerSaslMechanisms: List[String],
-                     kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File],
-                     clientKeyTabLocation: Option[File]): String = {
-    val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(serverEntryName, kafkaServerSaslMechanisms, serverKeyTabLocation),
-      kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
-    writeToFile(jaasFile, kafkaSections)
-    jaasFile.getCanonicalPath
-  }
-
-  def writeZkAndKafkaFiles(serverEntryName: String, kafkaServerSaslMechanisms: List[String],
-                           kafkaClientSaslMechanism: Option[String], serverKeyTabLocation: Option[File],
-                           clientKeyTabLocation: Option[File]): String = {
-    val jaasFile = TestUtils.tempFile()
-    val kafkaSections = Seq(kafkaServerSection(serverEntryName, kafkaServerSaslMechanisms, serverKeyTabLocation),
-      kafkaClientSection(kafkaClientSaslMechanism, clientKeyTabLocation))
-    writeToFile(jaasFile, kafkaSections ++ zkSections)
+    writeToFile(jaasFile,jaasContexts)
     jaasFile.getCanonicalPath
   }
 
@@ -152,12 +132,12 @@ object JaasTestUtils {
   def clientLoginModule(mechanism: String, keytabLocation: Option[File]): String =
     kafkaClientModule(mechanism, keytabLocation, KafkaClientPrincipal, KafkaPlainUser, KafkaPlainPassword, KafkaScramUser, KafkaScramPassword).toString
 
-  private def zkSections: Seq[JaasSection] = Seq(
+  def zkSections: Seq[JaasSection] = Seq(
     new JaasSection(ZkServerContextName, Seq(JaasModule(ZkModule, false, Map("user_super" -> ZkUserSuperPasswd, s"user_$ZkUser" -> ZkUserPassword)))),
     new JaasSection(ZkClientContextName, Seq(JaasModule(ZkModule, false, Map("username" -> ZkUser, "password" -> ZkUserPassword))))
   )
 
-  private def kafkaServerSection(contextName: String, mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
+  def kafkaServerSection(contextName: String, mechanisms: List[String], keytabLocation: Option[File]): JaasSection = {
     val modules = mechanisms.map {
       case "GSSAPI" =>
         Krb5LoginModule(
@@ -215,7 +195,7 @@ object JaasTestUtils {
   /*
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
-  private def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
+  def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {
     new JaasSection(KafkaClientContextName, mechanism.map(m =>
       kafkaClientModule(m, keytabLocation, KafkaClientPrincipal2, KafkaPlainUser2, KafkaPlainPassword2, KafkaScramUser2, KafkaScramPassword2)).toSeq)
   }

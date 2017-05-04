@@ -18,15 +18,22 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableImpl<K, ?, V> parent1;
     private final KTableImpl<K, ?, V> parent2;
+    private final String queryableName;
+    private boolean sendOldValues = false;
 
-    public KTableKTableJoinMerger(KTableImpl<K, ?, V> parent1, KTableImpl<K, ?, V> parent2) {
+    public KTableKTableJoinMerger(final KTableImpl<K, ?, V> parent1,
+                                  final KTableImpl<K, ?, V> parent2,
+                                  final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
+        this.queryableName = queryableName;
     }
 
     @Override
@@ -43,13 +50,35 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
     public void enableSendingOldValues() {
         parent1.enableSendingOldValues();
         parent2.enableSendingOldValues();
+        sendOldValues = true;
     }
 
-    private static final class KTableKTableJoinMergeProcessor<K, V>
+    private class KTableKTableJoinMergeProcessor<K, V>
         extends AbstractProcessor<K, Change<V>> {
+        private KeyValueStore<K, V> store;
+        private TupleForwarder<K, V> tupleForwarder;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            super.init(context);
+            if (queryableName != null) {
+                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TupleForwarder<>(store, context,
+                    new ForwardingCacheFlushListener<K, V>(context, sendOldValues),
+                    sendOldValues);
+            }
+        }
+
         @Override
         public void process(K key, Change<V> value) {
-            context().forward(key, value);
+
+            if (queryableName != null) {
+                store.put(key, value.newValue);
+                tupleForwarder.maybeForward(key, value.newValue, value.oldValue);
+            } else {
+                context().forward(key, value);
+            }
         }
     }
 
