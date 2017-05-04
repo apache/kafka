@@ -30,6 +30,7 @@ import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Rule, Test}
+import org.apache.kafka.common.requests.MetadataResponse
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
@@ -138,6 +139,11 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   def testGetAllBrokerVersions(): Unit = {
     client = AdminClient.create(createConfig())
     val nodes = client.describeCluster().nodes().get()
+    val clusterId = client.describeCluster().clusterIdFuture().get()
+    assertEquals(servers.head.apis.clusterId, clusterId)
+    val controller = client.describeCluster().controller().get()
+    assertEquals(servers.head.apis.metadataCache.getControllerId.
+      getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
     val nodesToVersions = client.apiVersions(nodes).all().get()
     val brokers = brokerList.split(",")
     assert(brokers.size == nodesToVersions.size())
