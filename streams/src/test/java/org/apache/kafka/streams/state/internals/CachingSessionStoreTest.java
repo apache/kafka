@@ -16,12 +16,23 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import static org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest.toList;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Random;
+
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -29,21 +40,12 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.test.MockCacheFlushListener;
 import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
-
-import static org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest.toList;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 
 
 public class CachingSessionStoreTest {
@@ -159,6 +161,22 @@ public class CachingSessionStoreTest {
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
         assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void shouldPutAndMaybeForward() throws Exception {
+        final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
+        final Windowed<String> a2 = new Windowed<>("a", new SessionWindow(0, 1));
+        final MockCacheFlushListener<Windowed<String>, Long> flushListener = new MockCacheFlushListener<>();
+        cachingStore.setFlushListener(flushListener);
+        cachingStore.put(a1, 1L);
+        cachingStore.flush();
+        flushListener.checkAndClearProcessResult(Arrays.asList(KeyValue.pair(a1, new Change<>(1L, null))));
+
+        cachingStore.remove(a1);
+        cachingStore.put(a2, 2L);
+        cachingStore.flush();
+        flushListener.checkAndClearProcessResult(Arrays.asList(KeyValue.pair(a1, new Change<>(null, 1L)), KeyValue.pair(a2, new Change<>(2L, null))));
     }
 
     @Test
