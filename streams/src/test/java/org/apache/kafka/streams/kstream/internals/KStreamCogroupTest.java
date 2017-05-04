@@ -22,7 +22,7 @@ import static org.junit.Assert.assertTrue;
 public class KStreamCogroupTest {
 
     private boolean sendOldValues = false;
-    private final KTableValueGetterSupplier<String, Long> PARENT_VALUE_GETTER_SUPPLIER = new KTableValueGetterSupplier<String, Long>() {
+    private final KTableValueGetterSupplier<String, Long> parentValueGetterSupplier = new KTableValueGetterSupplier<String, Long>() {
             @Override
             public KTableValueGetter<String, Long> get() {
                 return null;
@@ -33,7 +33,7 @@ public class KStreamCogroupTest {
                 return null;
             }
         };
-    private final KStreamAggProcessorSupplier PARENT = new KStreamAggProcessorSupplier<String, String, Change<Long>, Long>() {
+    private final KStreamAggProcessorSupplier parent = new KStreamAggProcessorSupplier<String, String, Change<Long>, Long>() {
             @Override
             public Processor<String, Change<Long>> get() {
                 return null;
@@ -41,7 +41,7 @@ public class KStreamCogroupTest {
     
             @Override
             public KTableValueGetterSupplier<String, Long> view() {
-                return PARENT_VALUE_GETTER_SUPPLIER;
+                return parentValueGetterSupplier;
             }
     
             @Override
@@ -49,8 +49,8 @@ public class KStreamCogroupTest {
                 sendOldValues = true;
             }
         };
-    private final KStreamCogroup<String, Long> KSTREAM_COGROUP = new KStreamCogroup<String, Long>(Collections.singleton(PARENT));
-    private final Processor<String, Change<Long>> processor = KSTREAM_COGROUP.get();
+    private final KStreamCogroup<String, Long> cogroup = new KStreamCogroup<String, Long>(Collections.singleton(parent));
+    private final Processor<String, Change<Long>> processor = cogroup.get();
     private MockProcessorContext context;
     private List<KeyValue> results = new ArrayList<>();
 
@@ -73,14 +73,14 @@ public class KStreamCogroupTest {
 
     @Test
     public void shouldEnableSendingOldValuesOfParent() {
-        KSTREAM_COGROUP.enableSendingOldValues();
+        cogroup.enableSendingOldValues();
         assertTrue(sendOldValues);
     }
 
     @Test
     public void shouldReturnViewOfParent() {
-        final KTableValueGetterSupplier<String, Long> valueGetterSupplier = KSTREAM_COGROUP.view();
-        assertEquals(PARENT_VALUE_GETTER_SUPPLIER, valueGetterSupplier);
+        final KTableValueGetterSupplier<String, Long> valueGetterSupplier = cogroup.view();
+        assertEquals(parentValueGetterSupplier, valueGetterSupplier);
     }
 
     @SuppressWarnings("unchecked")
@@ -93,7 +93,7 @@ public class KStreamCogroupTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldPassChangeUnchanged() {
-        KSTREAM_COGROUP.enableSendingOldValues();
+        cogroup.enableSendingOldValues();
         processor.process("key", new Change<>(1L, 0L));
         assertEquals(new KeyValue<>("key", new Change<>(1L, 0L)), (KeyValue<String, Change<Long>>) results.get(0));
     }
