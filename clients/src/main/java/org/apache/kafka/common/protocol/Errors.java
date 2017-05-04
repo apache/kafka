@@ -56,6 +56,7 @@ import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.ProducerIdAuthorizationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -64,6 +65,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -460,7 +462,23 @@ public enum Errors {
             public ApiException build(String message) {
                 return new ConcurrentTransactionsException(message);
             }
+        }),
+    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(52, "Transaction Id authorization failed",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new TransactionalIdAuthorizationException(message);
+            }
+        }),
+    PRODUCER_ID_AUTHORIZATION_FAILED(53, "Producer Id authorization failed",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new ProducerIdAuthorizationException(message);
+            }
         });
+
+
              
     private interface ApiExceptionBuilder {
         ApiException build(String message);

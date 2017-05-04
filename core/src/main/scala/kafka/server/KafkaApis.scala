@@ -34,9 +34,9 @@ import kafka.coordinator.transaction.{InitPidResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.{Response, Session}
-import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Topic, Write}
+import kafka.security.auth._
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -1374,35 +1374,44 @@ class KafkaApis(val requestChannel: RequestChannel,
     val initPidRequest = request.body[InitPidRequest]
     val transactionalId = initPidRequest.transactionalId
 
-    // Send response callback
-    def sendResponseCallback(result: InitPidResult): Unit = {
-      def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
-        trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
-        responseBody
+    if(authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+      // Send response callback
+      def sendResponseCallback(result: InitPidResult): Unit = {
+        def createResponse(throttleTimeMs: Int): AbstractResponse = {
+          val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
+          trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
+          responseBody
+        }
+        sendResponseMaybeThrottle(request, createResponse)
       }
-      sendResponseMaybeThrottle(request, createResponse)
+      txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
     }
-    txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+    else
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
     val endTxnRequest = request.body[EndTxnRequest]
+    val transactionalId = endTxnRequest.transactionalId
 
-    def sendResponseCallback(error: Errors) {
-      def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody = new EndTxnResponse(throttleTimeMs, error)
-        trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId}.")
-        responseBody
+    if(authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+      def sendResponseCallback(error: Errors) {
+        def createResponse(throttleTimeMs: Int): AbstractResponse = {
+          val responseBody = new EndTxnResponse(throttleTimeMs, error)
+          trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId}.")
+          responseBody
+        }
+
+        sendResponseMaybeThrottle(request, createResponse)
       }
-      sendResponseMaybeThrottle(request, createResponse)
-    }
 
-    txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId(),
-      endTxnRequest.producerId(),
-      endTxnRequest.producerEpoch(),
-      endTxnRequest.command(),
-      sendResponseCallback)
+      txnCoordinator.handleEndTransaction(endTxnRequest.transactionalId(),
+        endTxnRequest.producerId(),
+        endTxnRequest.producerEpoch(),
+        endTxnRequest.command(),
+        sendResponseCallback)
+    } else
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
@@ -1417,21 +1426,35 @@ class KafkaApis(val requestChannel: RequestChannel,
     val transactionalId = addPartitionsToTxnRequest.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
 
-    // Send response callback
-    def sendResponseCallback(error: Errors): Unit = {
-      def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(throttleTimeMs, error)
-        trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
-        responseBody
+    if(!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+    else {
+      val (_, unAuthorized) = partitionsToAdd.asScala.partition {
+        tp => authorize(request.session, Write, new Resource(Topic, tp.topic))
       }
-      sendResponseMaybeThrottle(request, createResponse)
+      if (unAuthorized.nonEmpty)
+        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TOPIC_AUTHORIZATION_FAILED))
+      else {
+        // Send response callback
+        def sendResponseCallback(error: Errors): Unit = {
+          def createResponse(throttleTimeMs: Int): AbstractResponse = {
+            val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(throttleTimeMs, error)
+            trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
+            responseBody
+          }
+
+          sendResponseMaybeThrottle(request, createResponse)
+        }
+
+        txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+          addPartitionsToTxnRequest.producerId(),
+          addPartitionsToTxnRequest.producerEpoch(),
+          partitionsToAdd.asScala.toSet,
+          sendResponseCallback)
+      }
     }
 
-    txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-      addPartitionsToTxnRequest.producerId(),
-      addPartitionsToTxnRequest.producerEpoch(),
-      partitionsToAdd.asScala.toSet,
-      sendResponseCallback)
+
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request): Unit = {
@@ -1440,22 +1463,29 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = addOffsetsToTxnRequest.consumerGroupId
     val offsetTopicPartition = new TopicPartition(GroupMetadataTopicName, groupCoordinator.partitionFor(groupId))
 
-    // Send response callback
-    def sendResponseCallback(error: Errors): Unit = {
-      def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(throttleTimeMs, error)
-        trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: errors: $error from client ${request.header.clientId}")
-        responseBody
+    if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+    else if (!authorize(request.session, Read, new Resource(Group, groupId)))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.GROUP_AUTHORIZATION_FAILED))
+    else {
+        // Send response callback
+        def sendResponseCallback(error: Errors): Unit = {
+          def createResponse(throttleTimeMs: Int): AbstractResponse = {
+            val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(throttleTimeMs, error)
+            trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: errors: $error from client ${request.header.clientId}")
+            responseBody
+          }
+          sendResponseMaybeThrottle(request, createResponse)
+        }
+
+        txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+          addOffsetsToTxnRequest.producerId(),
+          addOffsetsToTxnRequest.producerEpoch(),
+          Set[TopicPartition](offsetTopicPartition),
+          sendResponseCallback)
       }
-      sendResponseMaybeThrottle(request, createResponse)
     }
 
-    txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-      addOffsetsToTxnRequest.producerId(),
-      addOffsetsToTxnRequest.producerEpoch(),
-      Set[TopicPartition](offsetTopicPartition),
-      sendResponseCallback)
-  }
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
     val emptyResponse = new java.util.HashMap[TopicPartition, Errors]()

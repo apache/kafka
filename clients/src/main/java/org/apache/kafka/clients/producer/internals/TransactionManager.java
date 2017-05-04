@@ -580,6 +580,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unexpected error in InitPidResponse; " + error.message()));
             }
@@ -622,7 +624,7 @@ public class TransactionManager {
                 fatal(new KafkaException(error.exception()));
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
-            } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+            } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED || error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatal(error.exception());
             } else {
                 fatal(new KafkaException("Could not add partitions to transaction due to unknown error: " +
@@ -719,6 +721,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
             }
@@ -759,6 +763,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }
