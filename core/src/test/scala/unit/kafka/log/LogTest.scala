@@ -22,6 +22,7 @@ import java.util.Properties
 
 import org.apache.kafka.common.errors.{CorruptRecordException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException}
 import kafka.api.ApiVersion
+import kafka.common.KafkaException
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
@@ -1158,6 +1159,24 @@ class LogTest extends JUnitSuite {
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case _: Exception => // its GOOD!
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForExistingInvalidDir() {
+    val dir1 = new File(logDir + "/non_kafka_dir")
+    try {
+      Log.parseTopicPartitionName(dir1)
+      fail("KafkaException should have been thrown for dir: " + dir1.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // should only throw KafkaException
+    }
+    val dir2 = new File(logDir + "/non_kafka_dir-delete")
+    try {
+      Log.parseTopicPartitionName(dir2)
+      fail("KafkaException should have been thrown for dir: " + dir2.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // should only throw KafkaException
     }
   }
 
