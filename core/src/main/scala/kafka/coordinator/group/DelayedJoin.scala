@@ -31,7 +31,6 @@ import scala.math.{max, min}
  * the group are marked as failed, and complete this operation to proceed rebalance with
  * the rest of the group.
  */
-
 private[group] class DelayedJoin(coordinator: GroupCoordinator,
                                  group: GroupMetadata,
                                  rebalanceTimeout: Long) extends DelayedOperation(rebalanceTimeout) {
@@ -45,6 +44,14 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
   override def onComplete() = coordinator.onCompleteJoin(group)
 }
 
+/**
+  * Delayed rebalance operation that is added to the purgatory when a group is transitioning from
+  * Empty to PreparingRebalance
+  *
+  * When onComplete is triggered we check if any new members have been added and if there is still time remaining
+  * before the rebalance timeout. If both are true we then schedule a further delay. Otherwise we complete the
+  * rebalance.
+  */
 private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
                                         purgatory: DelayedOperationPurgatory[DelayedJoin],
                                         group: GroupMetadata,

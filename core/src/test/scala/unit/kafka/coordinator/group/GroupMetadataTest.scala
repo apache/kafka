@@ -22,7 +22,7 @@ import kafka.common.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 
 import org.junit.Assert._
-import org.junit.{Assert, Before, Test}
+import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
 
 /**
@@ -45,9 +45,6 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Test
   def testCanRebalanceWhenStable() {
-    group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
-    group.transitionTo(Stable)
     assertTrue(group.canRebalance)
   }
 
@@ -65,21 +62,15 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testCanRebalanceWhenInitialRebalance(): Unit = {
-    assertTrue(group.canRebalance)
-  }
-
-  @Test
   def testCannotRebalanceWhenDead() {
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(Empty)
     group.transitionTo(Dead)
     assertFalse(group.canRebalance)
   }
 
   @Test
   def testStableToPreparingRebalanceTransition() {
-    group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
-    group.transitionTo(Stable)
     group.transitionTo(PreparingRebalance)
     assertState(group, PreparingRebalance)
   }
@@ -114,6 +105,8 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Test
   def testEmptyToDeadTransition() {
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(Empty)
     group.transitionTo(Dead)
     assertState(group, Dead)
   }
@@ -136,7 +129,12 @@ class GroupMetadataTest extends JUnitSuite {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(AwaitingSync)
     group.transitionTo(Stable)
-    validateIllegalTransition(Stable)
+    try {
+      group.transitionTo(Stable)
+      fail("should have failed due to illegal transition")
+    } catch {
+      case e: IllegalStateException => // ok
+    }
   }
 
   @Test(expected = classOf[IllegalStateException])
@@ -144,31 +142,23 @@ class GroupMetadataTest extends JUnitSuite {
     group.transitionTo(AwaitingSync)
   }
 
-  @Test
-  def testStableToAwaitingSyncIllegalTransition() {
-    group.transitionTo(PreparingRebalance)
-    group.transitionTo(AwaitingSync)
-    group.transitionTo(Stable)
-    validateIllegalTransition(AwaitingSync)
-  }
-
-  @Test
+  @Test(expected = classOf[IllegalStateException])
   def testPreparingRebalanceToPreparingRebalanceIllegalTransition() {
     group.transitionTo(PreparingRebalance)
-    validateIllegalTransition(PreparingRebalance)
+    group.transitionTo(PreparingRebalance)
   }
 
-  @Test
+  @Test(expected = classOf[IllegalStateException])
   def testPreparingRebalanceToStableIllegalTransition() {
     group.transitionTo(PreparingRebalance)
-    validateIllegalTransition(Stable)
+    group.transitionTo(Stable)
   }
 
-  @Test
+  @Test(expected = classOf[IllegalStateException])
   def testAwaitingSyncToAwaitingSyncIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(AwaitingSync)
-    validateIllegalTransition(AwaitingSync)
+    group.transitionTo(AwaitingSync)
   }
 
   def testDeadToDeadIllegalTransition() {
@@ -178,34 +168,25 @@ class GroupMetadataTest extends JUnitSuite {
     assertState(group, Dead)
   }
 
-  @Test
+  @Test(expected = classOf[IllegalStateException])
   def testDeadToStableIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    validateIllegalTransition(Stable)
+    group.transitionTo(Stable)
   }
 
-  @Test
+  @Test(expected = classOf[IllegalStateException])
   def testDeadToPreparingRebalanceIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    validateIllegalTransition(PreparingRebalance)
+    group.transitionTo(PreparingRebalance)
   }
 
-  private def validateIllegalTransition(state: GroupState) = {
-    try {
-      group.transitionTo(state)
-      Assert.fail()
-    } catch {
-      case _: IllegalStateException => // success
-    }
-  }
-
-  @Test
+  @Test(expected = classOf[IllegalStateException])
   def testDeadToAwaitingSyncIllegalTransition() {
     group.transitionTo(PreparingRebalance)
     group.transitionTo(Dead)
-    validateIllegalTransition(AwaitingSync)
+    group.transitionTo(AwaitingSync)
   }
 
   @Test

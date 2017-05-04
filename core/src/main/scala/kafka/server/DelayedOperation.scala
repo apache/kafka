@@ -135,7 +135,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
                                                              reaperEnabled: Boolean = true)
         extends Logging with KafkaMetricsGroup {
 
-
   /* a list of operation watching keys */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
 
@@ -198,35 +197,11 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     if (isCompletedByMe)
       return true
 
-    if (addWatches(operation, watchKeys))
-      return false
-
-    isCompletedByMe = operation.safeTryComplete()
-    if (isCompletedByMe)
-      return true
-
-    // if it cannot be completed by now and hence is watched, add to the expire queue also
-    addToExpireQueue(operation)
-
-    false
-  }
-
-  private def addToExpireQueue(operation: T) = {
-    if (!operation.isCompleted) {
-      timeoutTimer.add(operation)
-      if (operation.isCompleted) {
-        // cancel the timer task
-        operation.cancel()
-      }
-    }
-  }
-
-  private def addWatches(operation:T, watchKeys: Seq[Any]): Boolean = {
     var watchCreated = false
     for(key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
       if (operation.isCompleted)
-        return true
+        return false
       watchForOperation(key, operation)
 
       if (!watchCreated) {
@@ -234,6 +209,20 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         estimatedTotalOperations.incrementAndGet()
       }
     }
+
+    isCompletedByMe = operation.safeTryComplete()
+    if (isCompletedByMe)
+      return true
+
+    // if it cannot be completed by now and hence is watched, add to the expire queue also
+    if (!operation.isCompleted) {
+      timeoutTimer.add(operation)
+      if (operation.isCompleted) {
+        // cancel the timer task
+        operation.cancel()
+      }
+    }
+
     false
   }
 
@@ -329,18 +318,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       operations.add(t)
     }
 
-    def cancel(): List[T] = {
-      val iter = operations.iterator()
-      var cancelled = new ListBuffer[T]()
-      while (iter.hasNext) {
-        val curr = iter.next()
-        curr.cancel()
-        iter.remove()
-        cancelled += curr
-      }
-      cancelled.toList
-    }
-
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
       var completed = 0
@@ -361,6 +338,18 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         removeKeyIfEmpty(key, this)
 
       completed
+    }
+
+    def cancel(): List[T] = {
+      val iter = operations.iterator()
+      var cancelled = new ListBuffer[T]()
+      while (iter.hasNext) {
+        val curr = iter.next()
+        curr.cancel()
+        iter.remove()
+        cancelled += curr
+      }
+      cancelled.toList
     }
 
     // traverse the list and purge elements that are already completed by others

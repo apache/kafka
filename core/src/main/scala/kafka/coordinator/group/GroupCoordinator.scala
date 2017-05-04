@@ -664,7 +664,6 @@ class GroupCoordinator(val brokerId: Int,
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
 
     val groupKey = GroupKey(group.groupId)
-    // try complete when the group is in the non-empty state
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
 

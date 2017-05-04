@@ -142,8 +142,6 @@ case class GroupSummary(state: String,
 @nonthreadsafe
 private[group] class GroupMetadata(val groupId: String, initialState: GroupState = Empty) {
 
-
-
   private var state: GroupState = initialState
   private val members = new mutable.HashMap[String, MemberMetadata]
   private val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
@@ -171,7 +169,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (leaderId == null)
       leaderId = member.memberId
     members.put(member.memberId, member)
-
   }
 
   def remove(memberId: String) {
@@ -206,8 +203,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     assertValidTransition(groupState)
     state = groupState
   }
-
-
 
   def selectProtocol: String = {
     if (members.isEmpty)
