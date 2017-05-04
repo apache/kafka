@@ -281,12 +281,12 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     }
 
     @Override
-    public synchronized void mark(int readlimit) {
+    public void mark(int readlimit) {
         throw new RuntimeException("mark not supported");
     }
 
     @Override
-    public synchronized void reset() throws IOException {
+    public void reset() throws IOException {
         throw new RuntimeException("reset not supported");
     }
 
