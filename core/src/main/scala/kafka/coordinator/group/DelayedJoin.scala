@@ -56,7 +56,7 @@ private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
 
   override def onComplete(): Unit = {
     group synchronized  {
-      if (group.newMemberAdded) {
+      if (group.newMemberAdded && remainingMs != 0) {
         group.newMemberAdded = false
         val delay = min(configuredRebalanceDelay, remainingMs)
         val remaining = max(remainingMs - delayMs, 0)
