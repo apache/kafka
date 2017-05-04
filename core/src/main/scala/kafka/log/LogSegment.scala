@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
-import scala.collection.mutable
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
@@ -138,8 +137,24 @@ class LogSegment(val log: FileRecords,
 
   @nonthreadsafe
   def updateTxnIndex(completedTxn: CompletedTxn, lastStableOffset: Long) {
-    if (completedTxn.isAborted)
+    if (completedTxn.isAborted) {
+      trace(s"Writing aborted transaction $completedTxn to transaction index, last stable offset is $lastStableOffset")
       txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset))
+    }
+  }
+
+  private def updateProducerState(producerStateManager: ProducerStateManager, batch: RecordBatch): Unit = {
+    if (batch.hasProducerId) {
+      val producerId = batch.producerId
+      val lastEntry = producerStateManager.lastEntry(producerId)
+      val appendInfo = new ProducerAppendInfo(batch.producerId, lastEntry, loadingFromLog = true)
+      val maybeCompletedTxn = appendInfo.append(batch)
+      producerStateManager.update(appendInfo)
+      maybeCompletedTxn.foreach { completedTxn =>
+        val lastStableOffset = producerStateManager.completeTxn(completedTxn)
+        updateTxnIndex(completedTxn, lastStableOffset)
+      }
+    }
   }
 
   /**
@@ -230,12 +245,14 @@ class LogSegment(val log: FileRecords,
    *
    * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
    * is corrupt.
+   * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
+   *                             the transaction index.
    * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
   def recover(maxMessageSize: Int,
-              activeProducers: Iterable[ProducerIdEntry] = Seq.empty,
+              producerStateManager: ProducerStateManager,
               leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
@@ -246,14 +263,6 @@ class LogSegment(val log: FileRecords,
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      // map of PID -> first transaction offset
-      val ongoingTransactions = mutable.Map.empty[Long, Long]
-      activeProducers.foreach { entry =>
-        entry.currentTxnFirstOffset.foreach { firstOffset =>
-          ongoingTransactions.put(entry.producerId, firstOffset)
-        }
-      }
-
       for (batch <- log.batches(maxMessageSize).asScala) {
         batch.ensureValid()
 
@@ -277,20 +286,7 @@ class LogSegment(val log: FileRecords,
             if (batch.partitionLeaderEpoch > cache.latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
               cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
           }
-
-          if (batch.hasProducerId) {
-            val producerId = batch.producerId
-            if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
-              val firstOffset = ongoingTransactions.remove(producerId).getOrElse(throw new IllegalStateException())
-              val record = batch.iterator.next()
-              val controlRecordType = ControlRecordType.parse(record.key)
-              if (controlRecordType == ControlRecordType.ABORT) {
-                val lastStableOffset = ongoingTransactions.headOption.map(_._2).getOrElse(batch.lastOffset)
-                txnIndex.append(new AbortedTxn(producerId, firstOffset, batch.lastOffset, lastStableOffset))
-              }
-            } else if (batch.isTransactional && !ongoingTransactions.contains(producerId))
-              ongoingTransactions.put(producerId, batch.baseOffset)
-          }
+          updateProducerState(producerStateManager, batch)
         }
       }
     } catch {

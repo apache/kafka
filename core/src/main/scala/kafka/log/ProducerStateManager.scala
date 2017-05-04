@@ -295,10 +295,9 @@ object ProducerStateManager {
  * been deleted.
  */
 @nonthreadsafe
-class ProducerStateManager(val config: LogConfig,
-                           val topicPartition: TopicPartition,
+class ProducerStateManager(val topicPartition: TopicPartition,
                            val logDir: File,
-                           val maxPidExpirationMs: Int) extends Logging {
+                           val maxPidExpirationMs: Int = 60 * 60 * 1000) extends Logging {
   import ProducerStateManager._
 
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
@@ -334,12 +333,6 @@ class ProducerStateManager(val config: LogConfig,
    * or aborted.
    */
   def firstUndecidedOffset: Option[Long] = ongoingTxns.headOption.map(_.firstOffset)
-
-  /**
-   * Get the next first undecided offset once the given transaction is completed.
-   */
-  def firstUndecidedOffsetExcluding(txn: CompletedTxn): Option[Long] =
-    ongoingTxns.find(ongoingTxn => txn.firstOffset != ongoingTxn.firstOffset).map(_.firstOffset)
 
   /**
    * Returns the last offset of this map
@@ -415,7 +408,7 @@ class ProducerStateManager(val config: LogConfig,
       }
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
-      evictUnretainedPids(logStartOffset)
+      evictUnretainedProducers(logStartOffset)
     }
   }
 
@@ -468,13 +461,13 @@ class ProducerStateManager(val config: LogConfig,
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
    * the new start offset and removes all pids which have a smaller last written offset.
    */
-  def evictUnretainedPids(logStartOffset: Long) {
-    val evictedPidEntries = producers.filter(_._2.lastOffset < logStartOffset)
-    val evictedPids = evictedPidEntries.keySet
+  def evictUnretainedProducers(logStartOffset: Long) {
+    val evictedProducerEntries = producers.filter(_._2.lastOffset < logStartOffset)
+    val evictedProducers = evictedProducerEntries.keySet
 
-    ongoingTxns.retain(txn => !evictedPids.contains(txn.producerId))
-    unreplicatedTxns.retain(txn => !evictedPids.contains(txn.producerId))
-    producers --= evictedPids
+    ongoingTxns.retain(txn => !evictedProducers.contains(txn.producerId))
+    unreplicatedTxns.retain(txn => !evictedProducers.contains(txn.producerId))
+    producers --= evictedProducers
 
     deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= logStartOffset)
     if (lastMapOffset < logStartOffset)
@@ -494,9 +487,14 @@ class ProducerStateManager(val config: LogConfig,
     lastMapOffset = 0L
   }
 
-  def completeTxn(completedTxn: CompletedTxn): Unit = {
+  /**
+   * Complete the transaction and return the last stable offset.
+   */
+  def completeTxn(completedTxn: CompletedTxn): Long = {
     ongoingTxns -= StartedTxn(completedTxn.producerId, completedTxn.firstOffset)
     unreplicatedTxns += completedTxn
+    val lastStableOffset = firstUndecidedOffset.getOrElse(completedTxn.lastOffset + 1)
+    lastStableOffset
   }
 
   def deleteSnapshotsBefore(offset: Long): Unit = {

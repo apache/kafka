@@ -16,20 +16,25 @@
  */
  package kafka.log
 
+import java.io.File
+
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{RecordBatch, _}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
-import org.junit.{After, Test}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection._
 
 class LogSegmentTest {
   
+  val topicPartition = new TopicPartition("topic", 0)
   val segments = mutable.ArrayBuffer[LogSegment]()
-  
+  var logDir: File = _
+
   /* create a segment with the given base offset */
   def createSegment(offset: Long, indexIntervalBytes: Int = 10): LogSegment = {
     val msFile = TestUtils.tempFile()
@@ -54,12 +59,20 @@ class LogSegmentTest {
       records.map { s => new SimpleRecord(offset * 10, s.getBytes) }: _*)
   }
 
+  @Before
+  def setup(): Unit = {
+    logDir = TestUtils.tempDir()
+  }
+
   @After
   def teardown() {
     for(seg <- segments) {
       seg.index.delete()
+      seg.timeIndex.delete()
+      seg.txnIndex.delete()
       seg.log.delete()
     }
+    Utils.delete(logDir)
   }
 
   /**
@@ -251,7 +264,7 @@ class LogSegmentTest {
       seg.append(i, i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
     val indexFile = seg.index.file
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
-    seg.recover(64*1024)
+    seg.recover(64*1024,   new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100)
       assertEquals(i, seg.read(i, Some(i + 1), 1024).records.records.iterator.next().offset)
   }
@@ -275,7 +288,7 @@ class LogSegmentTest {
       shallowOffsetOfMaxTimestamp = 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
         pid2, epoch, sequence, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
-    // append a non-transactional records
+    // append non-transactional records
     segment.append(firstOffset = 104L, largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
         new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
@@ -290,7 +303,8 @@ class LogSegmentTest {
       shallowOffsetOfMaxTimestamp = 107L, MemoryRecords.withControlRecord(107L, ControlRecordType.COMMIT,
         pid1, epoch))
 
-    segment.recover(64 * 1024, Seq.empty)
+
+    segment.recover(64 * 1024, new ProducerStateManager(topicPartition, logDir))
 
     var abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
@@ -301,7 +315,10 @@ class LogSegmentTest {
     assertEquals(100L, abortedTxn.lastStableOffset)
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
-    segment.recover(64 * 1024, Seq(ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, Some(75L))))
+    val stateManager = new ProducerStateManager(topicPartition, logDir)
+    val oldEntry = ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, Some(75L))
+    stateManager.update(new ProducerAppendInfo(pid2, oldEntry, loadingFromLog = true))
+    segment.recover(64 * 1024, stateManager)
 
     abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
@@ -323,7 +340,7 @@ class LogSegmentTest {
       seg.append(i, i, i * 10, i, records(i, i.toString))
     val timeIndexFile = seg.timeIndex.file
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
-    seg.recover(64*1024)
+    seg.recover(64*1024, new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100) {
       assertEquals(i, seg.findOffsetByTimestamp(i * 10).get.offset)
       if (i < 99)
@@ -347,7 +364,7 @@ class LogSegmentTest {
       val recordPosition = seg.log.searchForOffsetWithSize(offsetToBeginCorruption, 0)
       val position = recordPosition.position + TestUtils.random.nextInt(15)
       TestUtils.writeNonsenseToFile(seg.log.file, position, (seg.log.file.length - position).toInt)
-      seg.recover(64*1024)
+      seg.recover(64*1024, new ProducerStateManager(topicPartition, logDir))
       assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList,
         seg.log.batches.asScala.map(_.lastOffset).toList)
       seg.delete()

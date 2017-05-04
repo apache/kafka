@@ -31,7 +31,6 @@ import org.scalatest.junit.JUnitSuite
 
 class ProducerStateManagerTest extends JUnitSuite {
   var idMappingDir: File = null
-  var config: LogConfig = null
   var idMapping: ProducerStateManager = null
   val partition = new TopicPartition("test", 0)
   val pid = 1L
@@ -40,9 +39,8 @@ class ProducerStateManagerTest extends JUnitSuite {
 
   @Before
   def setUp(): Unit = {
-    config = LogConfig(new Properties)
     idMappingDir = TestUtils.tempDir()
-    idMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)
+    idMapping = new ProducerStateManager(partition, idMappingDir, maxPidExpirationMs)
   }
 
   @After
@@ -103,9 +101,10 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 0, epoch, 0L)
 
     val bumpedEpoch = 1.toShort
-    val completedTxn = appendControl(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
+    val (completedTxn, lastStableOffset) = appendControl(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
     assertEquals(1L, completedTxn.firstOffset)
     assertEquals(1L, completedTxn.lastOffset)
+    assertEquals(2L, lastStableOffset)
     assertTrue(completedTxn.isAborted)
     assertEquals(pid, completedTxn.producerId)
 
@@ -207,7 +206,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 1, epoch, 1L)
 
     idMapping.takeSnapshot()
-    val recoveredMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, idMappingDir, maxPidExpirationMs)
     recoveredMapping.truncateAndReload(0L, 3L, time.milliseconds)
 
     // entry added after recovery
@@ -221,7 +220,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 1, epoch, 1L, 1)
 
     idMapping.takeSnapshot()
-    val recoveredMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)
+    val recoveredMapping = new ProducerStateManager(partition, idMappingDir, maxPidExpirationMs)
     recoveredMapping.truncateAndReload(0L, 1L, 70000)
 
     // entry added after recovery. The pid should be expired now, and would not exist in the pid mapping. Hence
@@ -307,7 +306,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
     assertEquals(Some(99), idMapping.firstUnstableOffset)
     append(idMapping, 2L, 0, epoch, offset = 106)
-    idMapping.evictUnretainedPids(100)
+    idMapping.evictUnretainedProducers(100)
     assertEquals(None, idMapping.firstUnstableOffset)
   }
 
@@ -325,7 +324,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     idMapping.takeSnapshot()
     assertEquals(Set(2, 4), currentSnapshotOffsets)
 
-    idMapping.evictUnretainedPids(2)
+    idMapping.evictUnretainedProducers(2)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(Set(anotherPid), idMapping.activeProducers.keySet)
     assertEquals(None, idMapping.lastEntry(pid))
@@ -334,12 +333,12 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertTrue(maybeEntry.isDefined)
     assertEquals(3L, maybeEntry.get.lastOffset)
 
-    idMapping.evictUnretainedPids(3)
+    idMapping.evictUnretainedProducers(3)
     assertEquals(Set(anotherPid), idMapping.activeProducers.keySet)
     assertEquals(Set(4), currentSnapshotOffsets)
     assertEquals(4, idMapping.mapEndOffset)
 
-    idMapping.evictUnretainedPids(5)
+    idMapping.evictUnretainedProducers(5)
     assertEquals(Set(), idMapping.activeProducers.keySet)
     assertEquals(Set(), currentSnapshotOffsets)
     assertEquals(5, idMapping.mapEndOffset)
@@ -371,7 +370,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     idMapping.takeSnapshot()
 
     intercept[OutOfOrderSequenceException] {
-      val recoveredMapping = new ProducerStateManager(config, partition, idMappingDir, maxPidExpirationMs)
+      val recoveredMapping = new ProducerStateManager(partition, idMappingDir, maxPidExpirationMs)
       recoveredMapping.truncateAndReload(0L, 1L, time.milliseconds)
       append(recoveredMapping, pid2, 1, epoch, 4L, 5L)
     }
@@ -402,7 +401,6 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, anotherPid, sequence, epoch, offset = 105, isTransactional = true)
     assertEquals(Some(99L), idMapping.firstUndecidedOffset)
     assertEquals(Some(99L), idMapping.firstUnstableOffset)
-    assertEquals(Some(105L), idMapping.firstUndecidedOffsetExcluding(CompletedTxn(pid, 99L, 109L, isAborted = false)))
 
     appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 109)
     assertEquals(Some(105L), idMapping.firstUndecidedOffset)
@@ -413,7 +411,6 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     idMapping.onHighWatermarkUpdated(110L)
     assertEquals(Some(105L), idMapping.firstUnstableOffset)
-    assertEquals(None, idMapping.firstUndecidedOffsetExcluding(CompletedTxn(anotherPid, 105L, 112L, isAborted = true)))
 
     appendControl(idMapping, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
     assertEquals(None, idMapping.firstUndecidedOffset)
@@ -457,13 +454,13 @@ class ProducerStateManagerTest extends JUnitSuite {
                             epoch: Short,
                             controlType: ControlRecordType,
                             offset: Long,
-                            timestamp: Long = time.milliseconds()): CompletedTxn = {
+                            timestamp: Long = time.milliseconds()): (CompletedTxn, Long) = {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
     val completedTxn = producerAppendInfo.appendControlRecord(controlType, epoch, offset, timestamp)
     mapping.update(producerAppendInfo)
-    mapping.completeTxn(completedTxn)
+    val lastStableOffset = mapping.completeTxn(completedTxn)
     mapping.updateMapEndOffset(offset + 1)
-    completedTxn
+    (completedTxn, lastStableOffset)
   }
 
   private def append(mapping: ProducerStateManager,

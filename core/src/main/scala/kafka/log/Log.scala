@@ -160,7 +160,7 @@ class Log(@volatile var dir: File,
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
-  private val producerStateManager = new ProducerStateManager(config, topicPartition, dir, maxPidExpirationMs)
+  private val producerStateManager = new ProducerStateManager(topicPartition, dir, maxPidExpirationMs)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -183,7 +183,7 @@ class Log(@volatile var dir: File,
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     leaderEpochCache.clearEarliest(logStartOffset)
 
-    buildAndRecoverPidMap(logEndOffset)
+    loadProducerState(logEndOffset)
 
     info("Completed load of log %s with %d log segments, log start offset %d and log end offset %d in %d ms"
       .format(name, segments.size(), logStartOffset, logEndOffset, time.milliseconds - startMs))
@@ -317,21 +317,20 @@ class Log(@volatile var dir: File,
   }
 
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
-    val stateManager = new ProducerStateManager(config, topicPartition, dir, maxPidExpirationMs)
+    val stateManager = new ProducerStateManager(topicPartition, dir, maxPidExpirationMs)
     stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
       val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
       val fetchDataInfo = segment.read(startOffset, None, Int.MaxValue)
       if (fetchDataInfo != null)
-        loadPidsFromLog(stateManager, fetchDataInfo.records)
+        loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
+    val bytesTruncated = segment.recover(config.maxMessageSize, stateManager, leaderEpochCache)
 
-    // Once we have loaded the segment's data, we take a snapshot to ensure that we won't
-    // need to reload the same segment a second time if we have to recover another segment.
+    // once we have recovered the segment's data, take a snapshot to ensure that we won't
+    // need to reload the same segment again while recovering another segment.
     stateManager.takeSnapshot()
-
-    val activeProducers = stateManager.activeProducers.values
-    segment.recover(config.maxMessageSize, activeProducers, leaderEpochCache)
+    bytesTruncated
   }
 
   private def completeSwapOperations(swapFiles: Set[File]): Unit = {
@@ -428,13 +427,8 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def buildAndRecoverPidMap(lastOffset: Long): Unit = {
-    buildAndRecoverPidMap(producerStateManager, lastOffset)
-    updateFirstUnstableOffset()
-  }
-
-  private def buildAndRecoverPidMap(producerStateManager: ProducerStateManager, lastOffset: Long) {
-    info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
+  private def loadProducerState(lastOffset: Long): Unit = {
+    info(s"Loading producer state from offset $lastOffset for partition $topicPartition")
     val currentTimeMs = time.milliseconds
     producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
 
@@ -448,23 +442,24 @@ class Log(@volatile var dir: File,
         val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
         val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
         if (fetchDataInfo != null)
-          loadPidsFromLog(producerStateManager, fetchDataInfo.records)
+          loadProducersFromLog(producerStateManager, fetchDataInfo.records)
       }
     }
 
     producerStateManager.updateMapEndOffset(lastOffset)
+    updateFirstUnstableOffset()
   }
 
-  private def loadPidsFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
-    val pidsToLoad = mutable.Map.empty[Long, ProducerAppendInfo]
+  private def loadProducersFromLog(producerStateManager: ProducerStateManager, records: Records): Unit = {
+    val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
       if (batch.hasProducerId) {
         val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducers(batch, pidsToLoad, completedTxns, lastEntry, loadingFromLog = true)
+        updateProducers(batch, loadedProducers, completedTxns, lastEntry, loadingFromLog = true)
       }
     }
-    pidsToLoad.values.foreach(producerStateManager.update)
+    loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
   }
 
@@ -601,9 +596,9 @@ class Log(@volatile var dir: File,
             .format(validRecords.sizeInBytes, config.segmentSize))
         }
 
-        // now that we have valid records, offsets assigned, and timestamps updated, we need
-        // to validate the idempotent/transactional state of the producers
-        val (updatedProducers, completedTxns) = validateAppendProducerState(validRecords)
+        // now that we have valid records, offsets assigned, and timestamps updated, we need to
+        // validate the idempotent/transactional state of the producers and collect some metadata
+        val (updatedProducers, completedTxns) = analyzeAndValidateProducerState(validRecords)
 
         // maybe roll the log if this segment is full
         val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
@@ -622,14 +617,11 @@ class Log(@volatile var dir: File,
           producerStateManager.update(producerAppendInfo)
         }
 
-        // update the transaction index and last stable offset. The ordering is important.
-        // The index must be updated before we can advance the LSO, but the LSO value must take
-        // into account the completed transaction.
+        // update the transaction index with the true last stable offset. The last offset visible
+        // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
         for (completedTxn <- completedTxns) {
-          val firstUnstableOffset = producerStateManager.firstUndecidedOffsetExcluding(completedTxn)
-          val lastStableOffset = firstUnstableOffset.getOrElse(completedTxn.lastOffset + 1)
+          val lastStableOffset = producerStateManager.completeTxn(completedTxn)
           segment.updateTxnIndex(completedTxn, lastStableOffset)
-          producerStateManager.completeTxn(completedTxn)
         }
 
         // always update the last pid map offset so that the snapshot reflects the current offset
@@ -688,7 +680,7 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def validateAppendProducerState(records: MemoryRecords): (Map[Long, ProducerAppendInfo], List[CompletedTxn]) = {
+  private def analyzeAndValidateProducerState(records: MemoryRecords): (Map[Long, ProducerAppendInfo], List[CompletedTxn]) = {
     val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     for (batch <- records.batches.asScala if batch.hasProducerId) {
@@ -789,10 +781,10 @@ class Log(@volatile var dir: File,
   }
 
   private def updateProducers(batch: RecordBatch,
-                                  producers: mutable.Map[Long, ProducerAppendInfo],
-                                  completedTxns: ListBuffer[CompletedTxn],
-                                  lastEntry: Option[ProducerIdEntry],
-                                  loadingFromLog: Boolean): Unit = {
+                              producers: mutable.Map[Long, ProducerAppendInfo],
+                              completedTxns: ListBuffer[CompletedTxn],
+                              lastEntry: Option[ProducerIdEntry],
+                              loadingFromLog: Boolean): Unit = {
     val pid = batch.producerId
     val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
     val maybeCompletedTxn = appendInfo.append(batch)
@@ -1008,7 +1000,7 @@ class Log(@volatile var dir: File,
         deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearEarliest(logStartOffset)
-        producerStateManager.evictUnretainedPids(logStartOffset)
+        producerStateManager.evictUnretainedProducers(logStartOffset)
       }
     }
     numToDelete
@@ -1261,7 +1253,7 @@ class Log(@volatile var dir: File,
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
         this.logStartOffset = math.min(targetOffset, this.logStartOffset)
         leaderEpochCache.clearLatest(targetOffset)
-        buildAndRecoverPidMap(targetOffset)
+        loadProducerState(targetOffset)
       }
     }
   }
