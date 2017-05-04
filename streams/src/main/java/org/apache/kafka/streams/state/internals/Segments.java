@@ -86,7 +86,7 @@ class Segments {
                     minSegmentId = maxSegmentId;
                 }
             }
-            return segments.get(key);
+            return previousSegment == null ? newSegment : previousSegment;
         } else {
             return null;
         }
