@@ -43,7 +43,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{ControlRecordType, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -1451,7 +1451,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           case TransactionResult.COMMIT => ControlRecordType.COMMIT
           case TransactionResult.ABORT => ControlRecordType.ABORT
         }
-        partition -> MemoryRecords.withControlRecord(controlRecordType, producerId, marker.producerEpoch)
+        val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+        partition -> MemoryRecords.withEndTransactionMarker(endTxnMarker, producerId, marker.producerEpoch)
       }.toMap
 
       replicaManager.appendRecords(

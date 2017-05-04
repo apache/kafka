@@ -21,6 +21,7 @@ import java.io.File
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.record.MemoryRecords.withEndTransactionMarker
 import org.apache.kafka.common.record.{RecordBatch, _}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
@@ -295,14 +296,11 @@ class LogSegmentTest {
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
     segment.append(firstOffset = 106L, largestOffset = 106L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 106L, MemoryRecords.withControlRecord(106L, ControlRecordType.ABORT,
-        pid2, epoch))
+      shallowOffsetOfMaxTimestamp = 106L,  endTxnRecords(ControlRecordType.ABORT, pid2, epoch, offset = 106L))
 
     // commit the transaction from pid1
     segment.append(firstOffset = 107L, largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 107L, MemoryRecords.withControlRecord(107L, ControlRecordType.COMMIT,
-        pid1, epoch))
-
+      shallowOffsetOfMaxTimestamp = 107L, endTxnRecords(ControlRecordType.COMMIT, pid1, epoch, offset = 107L))
 
     segment.recover(64 * 1024, new ProducerStateManager(topicPartition, logDir))
 
@@ -316,7 +314,7 @@ class LogSegmentTest {
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
     val stateManager = new ProducerStateManager(topicPartition, logDir)
-    val oldEntry = ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, Some(75L))
+    val oldEntry = ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L))
     stateManager.update(new ProducerAppendInfo(pid2, oldEntry, loadingFromLog = true))
     segment.recover(64 * 1024, stateManager)
 
@@ -327,6 +325,15 @@ class LogSegmentTest {
     assertEquals(75L, abortedTxn.firstOffset)
     assertEquals(106L, abortedTxn.lastOffset)
     assertEquals(100L, abortedTxn.lastStableOffset)
+  }
+
+  private def endTxnRecords(controlRecordType: ControlRecordType,
+                            producerId: Long,
+                            epoch: Short,
+                            offset: Long = 0L,
+                            coordinatorEpoch: Int = 0): MemoryRecords = {
+    val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
+    withEndTransactionMarker(offset, marker, producerId, epoch)
   }
 
   /**

@@ -216,13 +216,14 @@ public class MemoryRecordsTest {
     }
 
     @Test
-    public void testBuildControlRecord() {
+    public void testBuildEndTxnMarker() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             long producerId = 73;
-            short epoch = 13;
+            short producerEpoch = 13;
             long initialOffset = 983L;
-            MemoryRecords records = MemoryRecords.withControlRecord(initialOffset, ControlRecordType.COMMIT,
-                    producerId, epoch);
+            int coordinatorEpoch = 347;
+            EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
+            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, marker, producerId, producerEpoch);
 
             List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
             assertEquals(1, batches.size());
@@ -230,7 +231,7 @@ public class MemoryRecordsTest {
             RecordBatch batch = batches.get(0);
             assertEquals(RecordBatch.CONTROL_SEQUENCE, batch.baseSequence());
             assertEquals(producerId, batch.producerId());
-            assertEquals(epoch, batch.producerEpoch());
+            assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(initialOffset, batch.baseOffset());
             assertTrue(batch.isValid());
 
@@ -240,7 +241,9 @@ public class MemoryRecordsTest {
             Record record = createdRecords.get(0);
             assertTrue(record.isValid());
             assertTrue(record.isControlRecord());
-            assertEquals(ControlRecordType.COMMIT, ControlRecordType.parse(record.key()));
+            EndTransactionMarker deserializedMarker = EndTransactionMarker.deserialize(record);
+            assertEquals(ControlRecordType.COMMIT, deserializedMarker.controlType());
+            assertEquals(coordinatorEpoch, deserializedMarker.coordinatorEpoch());
         }
     }
 

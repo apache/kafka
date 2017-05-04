@@ -657,7 +657,8 @@ class LogValidatorTest {
   @Test(expected = classOf[InvalidRecordException])
   def testControlRecordsNotAllowedFromClients() {
     val offset = 1234567
-    val records = MemoryRecords.withControlRecord(ControlRecordType.COMMIT, 23423L, 5)
+    val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    val records = MemoryRecords.withEndTransactionMarker(endTxnMarker, 23423L, 5)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       now = System.currentTimeMillis(),

@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{DuplicateSequenceNumberException, InvalidTxnStateException, OutOfOrderSequenceException, ProducerFencedException}
-import org.apache.kafka.common.record.{ControlRecordType, RecordBatch}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -88,7 +88,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertTrue(maybeLastEntry.isDefined)
 
     val lastEntry = maybeLastEntry.get
-    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(epoch, lastEntry.producerEpoch)
     assertEquals(sequence, lastEntry.firstSeq)
     assertEquals(sequence, lastEntry.lastSeq)
     assertEquals(offset, lastEntry.lastOffset)
@@ -101,7 +101,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 0, epoch, 0L)
 
     val bumpedEpoch = 1.toShort
-    val (completedTxn, lastStableOffset) = appendControl(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
+    val (completedTxn, lastStableOffset) = appendEndTxnMarker(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
     assertEquals(1L, completedTxn.firstOffset)
     assertEquals(1L, completedTxn.lastOffset)
     assertEquals(2L, lastStableOffset)
@@ -112,7 +112,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertTrue(maybeLastEntry.isDefined)
 
     val lastEntry = maybeLastEntry.get
-    assertEquals(bumpedEpoch, lastEntry.epoch)
+    assertEquals(bumpedEpoch, lastEntry.producerEpoch)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
     assertEquals(RecordBatch.NO_SEQUENCE, lastEntry.firstSeq)
     assertEquals(RecordBatch.NO_SEQUENCE, lastEntry.lastSeq)
@@ -124,14 +124,15 @@ class ProducerStateManagerTest extends JUnitSuite {
 
   @Test
   def updateProducerTransactionState(): Unit = {
-    val epoch = 0.toShort
+    val producerEpoch = 0.toShort
+    val coordinatorEpoch = 15
     val offset = 9L
-    append(idMapping, pid, 0, epoch, offset)
+    append(idMapping, pid, 0, producerEpoch, offset)
 
     val appendInfo = new ProducerAppendInfo(pid, idMapping.lastEntry(pid), loadingFromLog = false)
-    appendInfo.append(epoch, 1, 5, time.milliseconds(), 20L, isTransactional = true)
+    appendInfo.append(producerEpoch, 1, 5, time.milliseconds(), 20L, isTransactional = true)
     var lastEntry = appendInfo.lastEntry
-    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(producerEpoch, lastEntry.producerEpoch)
     assertEquals(1, lastEntry.firstSeq)
     assertEquals(5, lastEntry.lastSeq)
     assertEquals(16L, lastEntry.firstOffset)
@@ -139,9 +140,9 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
 
-    appendInfo.append(epoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
+    appendInfo.append(producerEpoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
     lastEntry = appendInfo.lastEntry
-    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(producerEpoch, lastEntry.producerEpoch)
     assertEquals(6, lastEntry.firstSeq)
     assertEquals(10, lastEntry.lastSeq)
     assertEquals(26L, lastEntry.firstOffset)
@@ -149,18 +150,20 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
     assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
 
-    val completedTxn = appendInfo.appendControlRecord(ControlRecordType.COMMIT, epoch, 40L, time.milliseconds())
+    val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
+    val completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, 40L, time.milliseconds())
     assertEquals(pid, completedTxn.producerId)
     assertEquals(16L, completedTxn.firstOffset)
     assertEquals(40L, completedTxn.lastOffset)
     assertFalse(completedTxn.isAborted)
 
     lastEntry = appendInfo.lastEntry
-    assertEquals(epoch, lastEntry.epoch)
+    assertEquals(producerEpoch, lastEntry.producerEpoch)
     assertEquals(10, lastEntry.firstSeq)
     assertEquals(10, lastEntry.lastSeq)
     assertEquals(40L, lastEntry.firstOffset)
     assertEquals(40L, lastEntry.lastOffset)
+    assertEquals(coordinatorEpoch, lastEntry.coordinatorEpoch)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
     assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
   }
@@ -172,7 +175,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     append(idMapping, pid, 1, epoch, 1L)
 
     val bumpedEpoch = 1.toShort
-    appendControl(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
+    appendEndTxnMarker(idMapping, pid, bumpedEpoch, ControlRecordType.ABORT, 1L)
 
     // next append is invalid since we expect the sequence to be reset
     append(idMapping, pid, 2, bumpedEpoch, 2L)
@@ -286,7 +289,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Some(99), idMapping.firstUnstableOffset)
     idMapping.takeSnapshot()
 
-    appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 105)
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 105)
     idMapping.onHighWatermarkUpdated(106)
     assertEquals(None, idMapping.firstUnstableOffset)
     idMapping.takeSnapshot()
@@ -402,7 +405,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(Some(99L), idMapping.firstUndecidedOffset)
     assertEquals(Some(99L), idMapping.firstUnstableOffset)
 
-    appendControl(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 109)
+    appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 109)
     assertEquals(Some(105L), idMapping.firstUndecidedOffset)
     assertEquals(Some(99L), idMapping.firstUnstableOffset)
 
@@ -412,7 +415,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     idMapping.onHighWatermarkUpdated(110L)
     assertEquals(Some(105L), idMapping.firstUnstableOffset)
 
-    appendControl(idMapping, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
+    appendEndTxnMarker(idMapping, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
     assertEquals(None, idMapping.firstUndecidedOffset)
     assertEquals(Some(105L), idMapping.firstUnstableOffset)
 
@@ -446,17 +449,19 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(None, idMapping.firstUndecidedOffset)
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
-    appendControl(idMapping, pid, 3.toShort, ControlRecordType.COMMIT, offset=100)
+    appendEndTxnMarker(idMapping, pid, 3.toShort, ControlRecordType.COMMIT, offset=100)
   }
 
-  private def appendControl(mapping: ProducerStateManager,
-                            pid: Long,
-                            epoch: Short,
-                            controlType: ControlRecordType,
-                            offset: Long,
-                            timestamp: Long = time.milliseconds()): (CompletedTxn, Long) = {
+  private def appendEndTxnMarker(mapping: ProducerStateManager,
+                                 pid: Long,
+                                 epoch: Short,
+                                 controlType: ControlRecordType,
+                                 offset: Long,
+                                 coordinatorEpoch: Int = 0,
+                                 timestamp: Long = time.milliseconds()): (CompletedTxn, Long) = {
     val producerAppendInfo = new ProducerAppendInfo(pid, mapping.lastEntry(pid).getOrElse(ProducerIdEntry.Empty))
-    val completedTxn = producerAppendInfo.appendControlRecord(controlType, epoch, offset, timestamp)
+    val endTxnMarker = new EndTransactionMarker(controlType, coordinatorEpoch)
+    val completedTxn = producerAppendInfo.appendEndTxnMarker(endTxnMarker, epoch, offset, timestamp)
     mapping.update(producerAppendInfo)
     val lastStableOffset = mapping.completeTxn(completedTxn)
     mapping.updateMapEndOffset(offset + 1)

@@ -349,7 +349,7 @@ class LogTest {
       new SimpleRecord("bar".getBytes),
       new SimpleRecord("baz".getBytes))
     log.appendAsLeader(records, leaderEpoch = 0)
-    val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid, epoch),
+    val commitAppendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.ABORT, pid, epoch),
       isFromClient = false, leaderEpoch = 0)
     log.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
 
@@ -361,6 +361,15 @@ class LogTest {
     val reopenedLog = createLog(1024 * 1024)
     reopenedLog.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
     assertEquals(None, reopenedLog.firstUnstableOffset)
+  }
+
+  private def endTxnRecords(controlRecordType: ControlRecordType,
+                            producerId: Long,
+                            epoch: Short,
+                            offset: Long = 0L,
+                            coordinatorEpoch: Int = 0): MemoryRecords = {
+    val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
+    MemoryRecords.withEndTransactionMarker(offset, marker, producerId, epoch)
   }
 
   @Test
@@ -2068,7 +2077,7 @@ class LogTest {
     assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
 
     // now transaction is committed
-    val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.COMMIT, pid, epoch),
+    val commitAppendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.COMMIT, pid, epoch),
       isFromClient = false, leaderEpoch = 0)
 
     // first unstable offset is not updated until the high watermark is advanced
@@ -2247,7 +2256,7 @@ class LogTest {
     assertEquals(Some(firstAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
 
     // now first producer's transaction is aborted
-    val abortAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid1, epoch),
+    val abortAppendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.ABORT, pid1, epoch),
       isFromClient = false, leaderEpoch = 0)
     log.onHighWatermarkIncremented(abortAppendInfo.lastOffset + 1)
 
@@ -2255,7 +2264,7 @@ class LogTest {
     assertEquals(Some(secondAppendInfo.firstOffset), log.firstUnstableOffset.map(_.messageOffset))
 
     // commit the second transaction
-    val commitAppendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.COMMIT, pid2, epoch),
+    val commitAppendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.COMMIT, pid2, epoch),
       isFromClient = false, leaderEpoch = 0)
     log.onHighWatermarkIncremented(commitAppendInfo.lastOffset + 1)
 
@@ -2291,7 +2300,7 @@ class LogTest {
     assertEquals(3L, log.logEndOffsetMetadata.segmentBaseOffset)
 
     // now abort the transaction
-    val appendInfo = log.appendAsLeader(MemoryRecords.withControlRecord(ControlRecordType.ABORT, pid, epoch),
+    val appendInfo = log.appendAsLeader(endTxnRecords(ControlRecordType.ABORT, pid, epoch),
       isFromClient = false, leaderEpoch = 0)
     log.onHighWatermarkIncremented(appendInfo.lastOffset + 1)
     assertEquals(None, log.firstUnstableOffset.map(_.messageOffset))
@@ -2342,7 +2351,7 @@ class LogTest {
   }
 
   private def appendControlAsLeader(log: Log, pid: Long, producerEpoch: Short, controlType: ControlRecordType): Unit = {
-    val records = MemoryRecords.withControlRecord(controlType, pid, producerEpoch)
+    val records = endTxnRecords(controlType, pid, producerEpoch)
     log.appendAsLeader(records, isFromClient = false, leaderEpoch = 0)
   }
 
@@ -2368,11 +2377,12 @@ class LogTest {
     }
   }
 
-  private def appendControlToBuffer(buffer: ByteBuffer, pid: Long, epoch: Short, offset: Long,
-                                    controlType: ControlRecordType): Unit = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch,
+  private def appendControlToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
+                                    controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
+    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, producerId, producerEpoch,
       RecordBatch.CONTROL_SEQUENCE, true)
-    builder.appendControlRecord(RecordBatch.NO_TIMESTAMP, controlType, null)
+    val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
+    builder.appendControlRecord(RecordBatch.NO_TIMESTAMP, controlType, marker.serializeValue())
     builder.close()
   }
 

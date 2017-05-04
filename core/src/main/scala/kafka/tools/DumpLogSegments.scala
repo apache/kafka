@@ -144,9 +144,9 @@ object DumpLogSegments {
   private def dumpPidSnapshot(file: File): Unit = {
     try {
       ProducerStateManager.readSnapshot(file).foreach { case (pid, entry) =>
-        println(s"pid: $pid epoch: ${entry.epoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
+        println(s"producerId: $pid producerEpoch: ${entry.producerEpoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
           s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp} " +
-          s"currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")
       }
     } catch {
       case e: CorruptSnapshotException =>
