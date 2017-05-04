@@ -152,7 +152,7 @@ object DumpLogSegments {
     val startOffset = file.getName.split("\\.")(0).toLong
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
-    val index = new OffsetIndex(file, baseOffset = startOffset)
+    val index = new OffsetIndex(file, baseOffset = startOffset, writable = false)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
@@ -187,8 +187,8 @@ object DumpLogSegments {
     val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val fileRecords = FileRecords.open(logFile, false)
     val indexFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.IndexFileSuffix)
-    val index = new OffsetIndex(indexFile, baseOffset = startOffset)
-    val timeIndex = new TimeIndex(file, baseOffset = startOffset)
+    val index = new OffsetIndex(indexFile, baseOffset = startOffset, writable = false)
+    val timeIndex = new TimeIndex(file, baseOffset = startOffset, writable = false)
 
     //Check that index passes sanityCheck, this is the check that determines if indexes will be rebuilt on startup or not.
     if (indexSanityOnly) {
