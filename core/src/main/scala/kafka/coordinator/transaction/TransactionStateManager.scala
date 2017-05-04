@@ -91,13 +91,11 @@ class TransactionStateManager(brokerId: Int,
   def getTransactionState(transactionalId: String): Option[CoordinatorEpochAndTxnMetadata] = {
     val partitionId = partitionFor(transactionalId)
 
-    transactionMetadataCache.get(partitionId) match {
-      case Some(txnMetadataCacheEntry) =>
-        txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId) match {
-          case null => None
-          case txnMetadata => Some(CoordinatorEpochAndTxnMetadata(txnMetadataCacheEntry.coordinatorEpoch, txnMetadata))
-        }
-      case None => None
+    transactionMetadataCache.get(partitionId).flatMap { cacheEntry =>
+      cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
+        case null => None
+        case txnMetadata => Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata))
+      }
     }
   }
 
@@ -229,6 +227,12 @@ class TransactionStateManager(brokerId: Int,
     val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
     if (currentTxnMetadataCacheEntry.isDefined) {
+      val coordinatorEpoch = currentTxnMetadataCacheEntry.get.coordinatorEpoch
+      val metadataPerTxnId = currentTxnMetadataCacheEntry.get.metadataPerTransactionalId
+      info(s"The metadata cache for txn partition $txnTopicPartition has already exist with epoch $coordinatorEpoch " +
+        s"and ${metadataPerTxnId.size} entries while trying to add to it; " +
+        s"it is likely that another process for loading from the transaction log has just executed earlier before")
+
       throw new IllegalStateException(s"The metadata cache entry for txn partition $txnTopicPartition has already exist while trying to add to it.")
     }
   }
@@ -284,7 +288,8 @@ class TransactionStateManager(brokerId: Int,
             info(s"Removed ${txnMetadataCacheEntry.metadataPerTransactionalId.size} cached transaction metadata for $topicPartition on follower transition")
 
           case None =>
-            throw new IllegalStateException(s"The metadata cache entry for txn partition $partitionId does not exist while trying to remove it.")
+            info(s"Trying to remove cached transaction metadata for $topicPartition on follower transition but there is no entries remaining; " +
+              s"it is likely that another process for removing the cached entries has just executed earlier before")
         }
 
         loadingPartitions.remove(partitionId)

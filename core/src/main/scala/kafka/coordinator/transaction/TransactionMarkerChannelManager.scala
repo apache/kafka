@@ -157,13 +157,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
             case None =>
               // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-              // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
+              // we will stop appending the completed log entry to transaction topic as the new leader should be doing it.
               info(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
                 s"has been appended to the log. The partition ${txnStateManager.partitionFor(transactionalId)} may have migrated as the metadata is no longer in the cache")
           }
 
-        case errors: Errors =>
-          throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} before appending to txn log for $transactionalId")
+        case other =>
+          throw new IllegalStateException(s"Unexpected error ${other.exceptionName} before appending to txn log for $transactionalId")
       }
     }
 

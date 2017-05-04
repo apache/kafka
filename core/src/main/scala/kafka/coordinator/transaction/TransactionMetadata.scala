@@ -188,7 +188,7 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
             true
           }
 
-        case PrepareAbort => // from endTxn
+        case PrepareAbort | PrepareCommit => // from endTxn
           if (producerEpoch != newMetadata.producerEpoch ||
             !topicPartitions.equals(newMetadata.topicPartitions) ||
             txnTimeoutMs != newMetadata.txnTimeoutMs ||
@@ -200,33 +200,7 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
             true
           }
 
-        case PrepareCommit => // from endTxn
-          if (producerEpoch != newMetadata.producerEpoch ||
-            !topicPartitions.equals(newMetadata.topicPartitions) ||
-            txnTimeoutMs != newMetadata.txnTimeoutMs ||
-            txnStartTimestamp != newMetadata.txnStartTimestamp) {
-
-            false
-          } else {
-
-            true
-          }
-
-        case CompleteAbort => // from write markers
-          if (producerEpoch != newMetadata.producerEpoch ||
-            newMetadata.topicPartitions.nonEmpty ||
-            txnTimeoutMs != newMetadata.txnTimeoutMs ||
-            newMetadata.txnStartTimestamp == -1) {
-
-            false
-          } else {
-            txnStartTimestamp = newMetadata.txnStartTimestamp
-            topicPartitions.clear()
-
-            true
-          }
-
-        case CompleteCommit => // from write markers
+        case CompleteAbort | CompleteCommit => // from write markers
           if (producerEpoch != newMetadata.producerEpoch ||
             newMetadata.topicPartitions.nonEmpty ||
             txnTimeoutMs != newMetadata.txnTimeoutMs ||

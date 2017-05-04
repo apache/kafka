@@ -229,20 +229,20 @@ class TransactionCoordinator(brokerId: Int,
             val metadata = epochAndMetadata.transactionMetadata
 
             if (metadata.producerId != pid) {
-              (Errors.INVALID_PID_MAPPING, null)
+              (Errors.INVALID_PID_MAPPING, null, null)
             } else if (metadata.producerEpoch != epoch) {
-              (Errors.INVALID_PRODUCER_EPOCH, null)
+              (Errors.INVALID_PRODUCER_EPOCH, null, null)
             } else if (metadata.pendingState.isDefined) {
               // return a retriable exception to let the client backoff and retry
-              (Errors.CONCURRENT_TRANSACTIONS, null)
+              (Errors.CONCURRENT_TRANSACTIONS, null, null)
             } else if (metadata.state == PrepareCommit || metadata.state == PrepareAbort) {
-              (Errors.CONCURRENT_TRANSACTIONS, null)
+              (Errors.CONCURRENT_TRANSACTIONS, null, null)
             } else {
               if (metadata.state == CompleteAbort || metadata.state == CompleteCommit)
                 metadata.topicPartitions.clear()
               if (partitions.subsetOf(metadata.topicPartitions)) {
                 // this is an optimization: if the partitions are already in the metadata reply OK immediately
-                (Errors.NONE, null)
+                (Errors.NONE, epochAndMetadata.coordinatorEpoch, null)
               } else {
                 val now = time.milliseconds()
                 val newMetadata = new TransactionMetadata(pid,
@@ -393,8 +393,3 @@ class TransactionCoordinator(brokerId: Int,
 }
 
 case class InitPidResult(pid: Long, epoch: Short, error: Errors)
-
-case class WriteTxnMarkerArgs(transactionalId: String,
-                              coordinatorEpoch: Int,
-                              txnMetadata: TransactionMetadata,
-                              txnResult: TransactionResult)

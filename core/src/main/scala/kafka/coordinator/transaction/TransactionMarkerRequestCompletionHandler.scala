@@ -78,8 +78,8 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                        Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                     retryPartitions += topicPartition
 
-                  case errors: Errors =>
-                    throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while sending txn marker for $transactionalId")
+                  case other =>
+                    throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
                 }
               }
             }
