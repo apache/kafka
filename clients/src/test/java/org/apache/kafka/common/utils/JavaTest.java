@@ -47,9 +47,9 @@ public class JavaTest {
 
     @Test
     public void testLoadKerberosLoginModule() throws ClassNotFoundException {
-        String clazz = (Java.isIBMJdk()
+        String clazz = Java.isIBMJdk()
                 ? "com.ibm.security.auth.module.Krb5LoginModule"
-                : "com.sun.security.auth.module.Krb5LoginModule");
+                : "com.sun.security.auth.module.Krb5LoginModule";
         Class.forName(clazz);
     }
 

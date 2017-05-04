@@ -37,12 +37,12 @@ object JaasTestUtils {
         "com.sun.security.auth.module.Krb5LoginModule"
 
     def entries: Map[String, String] =
-      if (Java.isIBMJdk) 
+      if (Java.isIBMJdk)
         Map(
           "principal" -> principal,
           "credsType" -> "both"
         ) ++ (if (useKeyTab) Map("useKeytab" -> s"file:$keyTab") else Map.empty)
-      else 
+      else
         Map(
           "useKeyTab" -> useKeyTab.toString,
           "storeKey" -> storeKey.toString,
