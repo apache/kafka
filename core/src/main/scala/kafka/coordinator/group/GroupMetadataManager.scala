@@ -749,10 +749,6 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  private def addProducerGroups(producerId: Long, groups: Set[String]) = openGroupsForProducer synchronized {
-    openGroupsForProducer.getOrElseUpdate(producerId, mutable.Set.empty[String]) ++= groups
-  }
-
   private def addProducerGroup(producerId: Long, groupId: String) = openGroupsForProducer synchronized {
     openGroupsForProducer.getOrElseUpdate(producerId, mutable.Set.empty[String]).add(groupId)
   }
