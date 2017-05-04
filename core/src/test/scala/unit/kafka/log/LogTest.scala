@@ -549,7 +549,9 @@ class LogTest {
 
     buffer.flip()
 
-    log.appendAsFollower(MemoryRecords.readableRecords(buffer))
+    val records = MemoryRecords.readableRecords(buffer)
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
+    log.appendAsFollower(records)
     // Should throw a duplicate seqeuence exception here.
     fail("should have thrown a DuplicateSequenceNumberException.")
   }

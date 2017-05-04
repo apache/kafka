@@ -48,10 +48,7 @@ import java.lang.{Long => JLong}
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
-    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false,
-    producerAppendInfos = Map.empty[Long, ProducerAppendInfo],
-    completedTransactions = Nil,
-    isDuplicate = false)
+    NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false, isDuplicate = false)
 }
 
 /**
@@ -67,10 +64,6 @@ object LogAppendInfo {
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
- * @param producerAppendInfos A map from PID to a ProducerAppendInfo, which is used to validate the producer
- *                            metadata (i.e. epoch and sequence number) for all produced or replicated data
- * @param completedTransactions A list of all transactions completed in this append. This list is sorted by the
- *                              last offset of the transactions and is used to keep the transaction index up to date.
  * @param isDuplicate Indicates whether the message set is a duplicate of a message at the tail of the log.
  */
 case class LogAppendInfo(var firstOffset: Long,
@@ -83,8 +76,6 @@ case class LogAppendInfo(var firstOffset: Long,
                          shallowCount: Int,
                          validBytes: Int,
                          offsetsMonotonic: Boolean,
-                         producerAppendInfos: Map[Long, ProducerAppendInfo],
-                         completedTransactions: List[CompletedTxn] = null,
                          isDuplicate: Boolean = false)
 
 /**
@@ -437,6 +428,7 @@ class Log(@volatile var dir: File,
       }
     }
   }
+
   private def buildAndRecoverPidMap(lastOffset: Long): Unit = {
     buildAndRecoverPidMap(producerStateManager, lastOffset)
     updateFirstUnstableOffset()
@@ -446,12 +438,21 @@ class Log(@volatile var dir: File,
     info(s"Recovering PID mapping from offset $lastOffset for partition $topicPartition")
     val currentTimeMs = time.milliseconds
     producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
-    logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
-      val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
-      val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
-      if (fetchDataInfo != null)
-        loadPidsFromLog(producerStateManager, fetchDataInfo.records)
+
+    // only do the potentially expensive reloading if the last snapshot offset is lower than the
+    // log end offset (which would be the case on first startup) and there are active producers.
+    // if there are no active producers, then truncating shouldn't change that fact (although it
+    // could cause a producerId to expire earlier than expected), so we can skip the loading.
+    // This is an optimization for users which are not yet using idempotent/transactional features yet.
+    if (lastOffset > producerStateManager.mapEndOffset || !producerStateManager.isEmpty) {
+      logSegments(producerStateManager.mapEndOffset, lastOffset).foreach { segment =>
+        val startOffset = math.max(segment.baseOffset, producerStateManager.mapEndOffset)
+        val fetchDataInfo = segment.read(startOffset, Some(lastOffset), Int.MaxValue)
+        if (fetchDataInfo != null)
+          loadPidsFromLog(producerStateManager, fetchDataInfo.records)
+      }
     }
+
     producerStateManager.updateMapEndOffset(lastOffset)
   }
 
@@ -461,7 +462,7 @@ class Log(@volatile var dir: File,
     records.batches.asScala.foreach { batch =>
       if (batch.hasProducerId) {
         val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducerState(batch, pidsToLoad, completedTxns, lastEntry, assignOffsets = false, loadingFromLog = true)
+        updateProducers(batch, pidsToLoad, completedTxns, lastEntry, loadingFromLog = true)
       }
     }
     pidsToLoad.values.foreach(producerStateManager.update)
@@ -529,7 +530,7 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
-    val appendInfo = analyzeAndValidateRecords(records, assignOffsets)
+    val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
     if (appendInfo.shallowCount == 0 || appendInfo.isDuplicate)
@@ -601,6 +602,10 @@ class Log(@volatile var dir: File,
             .format(validRecords.sizeInBytes, config.segmentSize))
         }
 
+        // now that we have valid records, offsets assigned, and timestamps updated, we need
+        // to validate the idempotent/transactional state of the producers
+        val (updatedProducers, completedTxns) = validateAppendProducerState(validRecords)
+
         // maybe roll the log if this segment is full
         val segment = maybeRoll(messagesSize = validRecords.sizeInBytes,
           maxTimestampInMessages = appendInfo.maxTimestamp,
@@ -613,10 +618,7 @@ class Log(@volatile var dir: File,
           records = validRecords)
 
         // update the producer state
-        for ((producerId, producerAppendInfo) <- appendInfo.producerAppendInfos) {
-          if (assignOffsets)
-            // the timestamp may have been overwritten with the log append time, so update the value here
-            producerAppendInfo.assignTimestamp(appendInfo.maxTimestamp)
+        for ((producerId, producerAppendInfo) <- updatedProducers) {
           trace(s"Updating pid with sequence: $producerId -> ${producerAppendInfo.lastEntry}")
           producerStateManager.update(producerAppendInfo)
         }
@@ -624,7 +626,7 @@ class Log(@volatile var dir: File,
         // update the transaction index and last stable offset. The ordering is important.
         // The index must be updated before we can advance the LSO, but the LSO value must take
         // into account the completed transaction.
-        for (completedTxn <- appendInfo.completedTransactions) {
+        for (completedTxn <- completedTxns) {
           val firstUnstableOffset = producerStateManager.firstUndecidedOffsetExcluding(completedTxn)
           val lastStableOffset = firstUnstableOffset.getOrElse(completedTxn.lastOffset + 1)
           segment.updateTxnIndex(completedTxn, lastStableOffset)
@@ -687,6 +689,16 @@ class Log(@volatile var dir: File,
     }
   }
 
+  private def validateAppendProducerState(records: MemoryRecords): (Map[Long, ProducerAppendInfo], List[CompletedTxn]) = {
+    val updatedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
+    val completedTxns = ListBuffer.empty[CompletedTxn]
+    for (batch <- records.batches.asScala if batch.hasProducerId) {
+      val lastEntry = producerStateManager.lastEntry(batch.producerId)
+      updateProducers(batch, updatedProducers, completedTxns, lastEntry, loadingFromLog = false)
+    }
+    (updatedProducers.toMap, completedTxns.toList)
+  }
+
   /**
    * Validate the following:
    * <ol>
@@ -705,7 +717,7 @@ class Log(@volatile var dir: File,
    * <li> Whether any compression codec is used (if many are used, then the last one is given)
    * </ol>
    */
-  private def analyzeAndValidateRecords(records: MemoryRecords, assignOffsets: Boolean): LogAppendInfo = {
+  private def analyzeAndValidateRecords(records: MemoryRecords, isFromClient: Boolean): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
     var firstOffset = -1L
@@ -714,12 +726,10 @@ class Log(@volatile var dir: File,
     var monotonic = true
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var offsetOfMaxTimestamp = -1L
-    val producerAppendInfos = mutable.Map.empty[Long, ProducerAppendInfo]
-    val completedTxns = ListBuffer.empty[CompletedTxn]
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
-      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && assignOffsets && batch.baseOffset != 0)
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.baseOffset != 0)
         throw new InvalidRecordException(s"The baseOffset of the record batch should be 0, but it is ${batch.baseOffset}")
 
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
@@ -759,33 +769,16 @@ class Log(@volatile var dir: File,
       if (messageCodec != NoCompressionCodec)
         sourceCodec = messageCodec
 
-      if (batch.hasProducerId) {
-        if (assignOffsets) {
-          val pid = batch.producerId
-          val isDuplicate = producerStateManager.lastEntry(pid) match {
-            case Some(lastEntry) if lastEntry.isDuplicate(batch) =>
-              // This request is a duplicate so return the information about the existing entry. Note that for requests
-              // coming from the client, there will only be one RecordBatch per request, so there will be only one iteration
-              // of the loop and the values below will not be updated more than once.
-              firstOffset = lastEntry.firstOffset
-              lastOffset = lastEntry.lastOffset
-              maxTimestamp = lastEntry.timestamp
-              true
-
-            case maybeLastEntry =>
-              updateProducerState(batch, producerAppendInfos, completedTxns, maybeLastEntry, assignOffsets = true,
-                loadingFromLog = false)
-              false
+      if (batch.hasProducerId && isFromClient) {
+        val pid = batch.producerId
+        val maybeLastEntry = producerStateManager.lastEntry(pid)
+        maybeLastEntry.foreach { lastEntry =>
+          if (lastEntry.isDuplicate(batch)) {
+            val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
+            return LogAppendInfo(lastEntry.firstOffset, lastEntry.lastOffset, lastEntry.timestamp,
+              offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec, targetCodec, shallowMessageCount,
+              validBytesCount, monotonic, isDuplicate = true)
           }
-
-          val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
-          return LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP,
-            sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap,
-            completedTxns.toList, isDuplicate = isDuplicate)
-        } else {
-          val lastEntry = producerStateManager.lastEntry(batch.producerId)
-          updateProducerState(batch, producerAppendInfos, completedTxns, lastEntry, assignOffsets = false,
-            loadingFromLog = false)
         }
       }
     }
@@ -793,29 +786,17 @@ class Log(@volatile var dir: File,
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
     LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
-      targetCodec, shallowMessageCount, validBytesCount, monotonic, producerAppendInfos.toMap, completedTxns.toList,
-      isDuplicate = false)
+      targetCodec, shallowMessageCount, validBytesCount, monotonic, isDuplicate = false)
   }
 
-  private def updateProducerState(batch: RecordBatch,
+  private def updateProducers(batch: RecordBatch,
                                   producers: mutable.Map[Long, ProducerAppendInfo],
                                   completedTxns: ListBuffer[CompletedTxn],
                                   lastEntry: Option[ProducerIdEntry],
-                                  assignOffsets: Boolean,
                                   loadingFromLog: Boolean): Unit = {
     val pid = batch.producerId
-    val (firstOffset, lastOffset) = if (assignOffsets)
-      (nextOffsetMetadata.messageOffset, nextOffsetMetadata.messageOffset + batch.countOrNull - 1)
-    else
-      (batch.baseOffset, batch.lastOffset)
-
-    val appendInfo = producers.getOrElse(pid, {
-      val appendInfo = new ProducerAppendInfo(pid, lastEntry, loadingFromLog)
-      producers.put(pid, appendInfo)
-      appendInfo
-    })
-
-    val maybeCompletedTxn = appendInfo.append(batch, firstOffset, lastOffset)
+    val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
+    val maybeCompletedTxn = appendInfo.append(batch)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 

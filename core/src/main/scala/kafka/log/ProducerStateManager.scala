@@ -88,18 +88,14 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     }
   }
 
-  def assignTimestamp(lastTimestamp: Long): Unit = {
-    this.maxTimestamp = lastTimestamp
-  }
-
-  def append(batch: RecordBatch, firstOffset: Long, lastOffset: Long): Option[CompletedTxn] = {
+  def append(batch: RecordBatch): Option[CompletedTxn] = {
     if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
       val record = batch.iterator.next()
       val controlRecordType = ControlRecordType.parse(record.key)
-      val completedTxn = appendControlRecord(controlRecordType, batch.producerEpoch, firstOffset, record.timestamp)
+      val completedTxn = appendControlRecord(controlRecordType, batch.producerEpoch, batch.baseOffset, record.timestamp)
       Some(completedTxn)
     } else {
-      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, lastOffset,
+      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
         batch.isTransactional)
       None
     }
@@ -355,6 +351,8 @@ class ProducerStateManager(val config: LogConfig,
    */
   def activeProducers: immutable.Map[Long, ProducerIdEntry] = producers.toMap
 
+  def isEmpty: Boolean = producers.isEmpty && unreplicatedTxns.isEmpty
+
   private def loadFromSnapshot(logStartOffset: Long, currentTime: Long) {
     while (true) {
       latestSnapshotFile match {
@@ -400,12 +398,16 @@ class ProducerStateManager(val config: LogConfig,
 
   /**
    * Truncate the PID mapping to the given offset range and reload the entries from the most recent
-   * snapshot in range (if there is one).
+   * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
+   * or equal to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
     if (logEndOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
+
+      // since we assume that the offset is less than or equal to the high watermark, it is
+      // safe to clear the unreplicated transactions
       unreplicatedTxns.clear()
       deleteSnapshotFiles { file =>
         val offset = Log.offsetFromFilename(file.getName)
