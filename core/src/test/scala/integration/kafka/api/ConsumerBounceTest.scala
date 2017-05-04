@@ -49,6 +49,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
+  this.serverConfig.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
   this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
@@ -100,12 +101,15 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     scheduler.start()
 
     while (scheduler.isRunning.get()) {
-      for (record <- consumer.poll(100).asScala) {
+      val records = consumer.poll(100).asScala
+      assertEquals(Set(tp), consumer.assignment.asScala)
+
+      for (record <- records) {
         assertEquals(consumed, record.offset())
         consumed += 1
       }
 
-      try {
+      if (records.nonEmpty) {
         consumer.commitSync()
         assertEquals(consumer.position(tp), consumer.committed(tp).offset)
 
@@ -113,10 +117,6 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
           consumer.seekToBeginning(Collections.emptyList())
           consumed = 0
         }
-      } catch {
-        // TODO: should be no need to catch these exceptions once KAFKA-2017 is
-        // merged since coordinator fail-over will not cause a rebalance
-        case _: CommitFailedException =>
       }
     }
     scheduler.shutdown()

@@ -18,6 +18,8 @@ package org.apache.kafka.common.record;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.header.Header;
+
 /**
  * A log record is a tuple consisting of a unique offset in the log, a sequence number assigned by
  * the producer, a timestamp, a key and a value.

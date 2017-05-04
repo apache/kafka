@@ -274,39 +274,39 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager != null && transactionManager.hasInflightTransactionalRequest())
+        if (transactionManager != null && transactionManager.hasInflightRequest())
             return true;
 
         if (transactionManager == null || !transactionManager.hasPendingTransactionalRequests())
             return false;
 
-        TransactionManager.TransactionalRequest nextRequest = transactionManager.nextTransactionalRequest();
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
 
-        if (nextRequest.isEndTxnRequest() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
-            if (!accumulator.flushInProgress())
-                accumulator.beginFlush();
-            transactionManager.reenqueue(nextRequest);
-            return false;
-        }
-
-        if (nextRequest.isEndTxnRequest() && transactionManager.isInErrorState()) {
-            nextRequest.maybeTerminateWithError(new KafkaException("Cannot commit transaction when there are " +
-                    "request errors. Please check your logs for the details of the errors encountered."));
-            return false;
+        if (nextRequestHandler.isEndTxn()) {
+            if (transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
+                if (!accumulator.flushInProgress())
+                    accumulator.beginFlush();
+                transactionManager.reenqueue(nextRequestHandler);
+                return false;
+            } else if (transactionManager.isInErrorState()) {
+                nextRequestHandler.fatal(new KafkaException("Cannot commit transaction when there are " +
+                        "request errors. Please check your logs for the details of the errors encountered."));
+                return false;
+            }
         }
 
         Node targetNode = null;
 
         while (targetNode == null) {
             try {
-                if (nextRequest.needsCoordinator()) {
-                    targetNode = transactionManager.coordinator(nextRequest.coordinatorType());
+                if (nextRequestHandler.needsCoordinator()) {
+                    targetNode = transactionManager.coordinator(nextRequestHandler.coordinatorType());
                     if (targetNode == null) {
-                        transactionManager.needsCoordinator(nextRequest);
+                        transactionManager.lookupCoordinator(nextRequestHandler);
                         break;
                     }
                     if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
-                        transactionManager.needsCoordinator(nextRequest);
+                        transactionManager.lookupCoordinator(nextRequestHandler);
                         targetNode = null;
                         break;
                     }
@@ -314,11 +314,11 @@ public class Sender implements Runnable {
                     targetNode = awaitLeastLoadedNodeReady(requestTimeout);
                 }
                 if (targetNode != null) {
-                    if (nextRequest.isRetry()) {
+                    if (nextRequestHandler.isRetry()) {
                         time.sleep(retryBackoffMs);
                     }
-                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequest.requestBuilder(),
-                            now, true, nextRequest.responseHandler());
+                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequestHandler.requestBuilder(),
+                            now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
                     client.send(clientRequest, now);
                     return true;
@@ -331,7 +331,7 @@ public class Sender implements Runnable {
         }
 
         if (targetNode == null)
-            transactionManager.needsRetry(nextRequest);
+            transactionManager.retry(nextRequestHandler);
 
         return true;
     }
@@ -383,7 +383,9 @@ public class Sender implements Runnable {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
                     if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
                         InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        transactionManager.setPidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
+                        PidAndEpoch pidAndEpoch = new PidAndEpoch(
+                                initPidResponse.producerId(), initPidResponse.epoch());
+                        transactionManager.setPidAndEpoch(pidAndEpoch);
                     } else {
                         log.error("Received an unexpected response type for an InitPidRequest from {}. " +
                                 "We will back off and try again.", node);

@@ -30,20 +30,21 @@ import collection.JavaConversions._
 
 class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: TransactionMarkerChannel,
                                                 txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
-                                                epochAndMarkers: CoordinatorEpochAndMarkers,
+                                                txnTopicPartition: Int,
+                                                txnMarkerEntries: java.util.List[TxnMarkerEntry],
                                                 brokerId: Int) extends RequestCompletionHandler with Logging {
   override def onComplete(response: ClientResponse): Unit = {
     val correlationId = response.requestHeader.correlationId
     if (response.wasDisconnected) {
       trace(s"Cancelled request $response due to node ${response.destination} being disconnected")
       // re-enqueue the markers
-      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntries) {
+      for (txnMarker: TxnMarkerEntry <- txnMarkerEntries) {
         transactionMarkerChannel.addRequestToSend(
-          epochAndMarkers.metadataPartition,
+          txnTopicPartition,
           txnMarker.producerId(),
           txnMarker.producerEpoch(),
           txnMarker.transactionResult(),
-          epochAndMarkers.coordinatorEpoch,
+          txnMarker.coordinatorEpoch(),
           txnMarker.partitions().toSet)
       }
     } else {
@@ -51,7 +52,7 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
 
       val writeTxnMarkerResponse = response.responseBody.asInstanceOf[WriteTxnMarkersResponse]
 
-      for (txnMarker: TxnMarkerEntry <- epochAndMarkers.txnMarkerEntries) {
+      for (txnMarker: TxnMarkerEntry <- txnMarkerEntries) {
         val errors = writeTxnMarkerResponse.errors(txnMarker.producerId())
 
         if (errors == null)
@@ -61,10 +62,10 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
         for ((topicPartition: TopicPartition, error: Errors) <- errors) {
           error match {
             case Errors.NONE =>
-              transactionMarkerChannel.pendingTxnMetadata(epochAndMarkers.metadataPartition, txnMarker.producerId()) match {
+              transactionMarkerChannel.pendingTxnMetadata(txnTopicPartition, txnMarker.producerId()) match {
                 case None =>
                   // TODO: probably need to respond with Errors.NOT_COORDINATOR
-                  throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${epochAndMarkers.metadataPartition} has likely emigrated")
+                  throw new IllegalArgumentException(s"transaction metadata not found during write txn marker request. partition ${txnTopicPartition} has likely emigrated")
                 case Some(metadata) =>
                   // do not synchronize on this metadata since it will only be accessed by the sender thread
                   metadata.topicPartitions -= topicPartition
@@ -79,11 +80,11 @@ class TransactionMarkerRequestCompletionHandler(transactionMarkerChannel: Transa
           if (retryPartitions.nonEmpty) {
             // re-enqueue with possible new leaders of the partitions
             transactionMarkerChannel.addRequestToSend(
-              epochAndMarkers.metadataPartition,
+              txnTopicPartition,
               txnMarker.producerId(),
               txnMarker.producerEpoch(),
               txnMarker.transactionResult,
-              epochAndMarkers.coordinatorEpoch,
+              txnMarker.coordinatorEpoch(),
               retryPartitions.toSet)
           }
           val completed = txnMarkerPurgatory.checkAndComplete(txnMarker.producerId())

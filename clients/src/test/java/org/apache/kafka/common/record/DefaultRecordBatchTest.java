@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -90,8 +92,8 @@ public class DefaultRecordBatchTest {
     @Test
     public void testSizeInBytes() {
         Header[] headers = new Header[] {
-            new Header("foo", "value".getBytes()),
-            new Header("bar", Utils.wrapNullable(null))
+            new RecordHeader("foo", "value".getBytes()),
+            new RecordHeader("bar", (byte[]) null)
         };
 
         long timestamp = System.currentTimeMillis();

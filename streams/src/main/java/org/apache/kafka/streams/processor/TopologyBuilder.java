@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.internals.QuickUnion;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor.SubscriptionUpdates;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.WindowStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -460,7 +461,7 @@ public class TopologyBuilder {
      * receive all records forwarded from the {@link SourceNode}. This
      * {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      *
-     * @param store                 the instance of {@link StateStore}
+     * @param storeSupplier         user defined state store supplier
      * @param sourceName            name of the {@link SourceNode} that will be automatically added
      * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
      * @param valueDeserializer     the {@link Deserializer} to deserialize values with
@@ -469,14 +470,14 @@ public class TopologyBuilder {
      * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return this builder instance so methods can be chained together; never null
      */
-    public synchronized TopologyBuilder addGlobalStore(final StateStore store,
+    public synchronized TopologyBuilder addGlobalStore(final StateStoreSupplier<KeyValueStore> storeSupplier,
                                                        final String sourceName,
                                                        final Deserializer keyDeserializer,
                                                        final Deserializer valueDeserializer,
                                                        final String topic,
                                                        final String processorName,
                                                        final ProcessorSupplier stateUpdateSupplier) {
-        Objects.requireNonNull(store, "store must not be null");
+        Objects.requireNonNull(storeSupplier, "store supplier must not be null");
         Objects.requireNonNull(sourceName, "sourceName must not be null");
         Objects.requireNonNull(topic, "topic must not be null");
         Objects.requireNonNull(stateUpdateSupplier, "supplier must not be null");
@@ -487,8 +488,11 @@ public class TopologyBuilder {
         if (nodeFactories.containsKey(processorName)) {
             throw new TopologyBuilderException("Processor " + processorName + " is already added.");
         }
-        if (stateFactories.containsKey(store.name()) || globalStateStores.containsKey(store.name())) {
-            throw new TopologyBuilderException("StateStore " + store.name() + " is already added.");
+        if (stateFactories.containsKey(storeSupplier.name()) || globalStateStores.containsKey(storeSupplier.name())) {
+            throw new TopologyBuilderException("StateStore " + storeSupplier.name() + " is already added.");
+        }
+        if (storeSupplier.loggingEnabled()) {
+            throw new TopologyBuilderException("StateStore " + storeSupplier.name() + " for global table must not have logging enabled.");
         }
         if (sourceName.equals(processorName)) {
             throw new TopologyBuilderException("sourceName and processorName must be different.");
@@ -504,13 +508,13 @@ public class TopologyBuilder {
 
         final String[] parents = {sourceName};
         final ProcessorNodeFactory nodeFactory = new ProcessorNodeFactory(processorName, parents, stateUpdateSupplier);
-        nodeFactory.addStateStore(store.name());
+        nodeFactory.addStateStore(storeSupplier.name());
         nodeFactories.put(processorName, nodeFactory);
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, parents);
 
-        globalStateStores.put(store.name(), store);
-        connectSourceStoreAndTopic(store.name(), topic);
+        globalStateStores.put(storeSupplier.name(), storeSupplier.get());
+        connectSourceStoreAndTopic(storeSupplier.name(), topic);
         return this;
 
     }

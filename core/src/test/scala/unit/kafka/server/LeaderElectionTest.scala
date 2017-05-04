@@ -49,6 +49,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val configProps1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, enableControlledShutdown = false)
     val configProps2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, enableControlledShutdown = false)
 
+    configProps1.put("unclean.leader.election.enable", "true")
+    configProps2.put("unclean.leader.election.enable", "true")
+
     // start both servers
     val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
     val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
@@ -72,7 +75,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
     val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
-    debug("leader Epoc: " + leaderEpoch1)
+    debug("leader Epoch: " + leaderEpoch1)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     assertTrue("Leader should get elected", leader1.isDefined)
     // NOTE: this is to avoid transient test failures
@@ -86,7 +89,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
                                                     oldLeaderOpt = if(leader1.get == 0) None else leader1)
     val leaderEpoch2 = zkUtils.getEpochForPartition(topic, partitionId)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
-    debug("leader Epoc: " + leaderEpoch2)
+    debug("leader Epoch: " + leaderEpoch2)
     assertEquals("Leader must move to broker 0", 0, leader2.getOrElse(-1))
     if(leader1.get == leader2.get)
       assertEquals("Second epoch value should be " + leaderEpoch1+1, leaderEpoch1+1, leaderEpoch2)
@@ -99,7 +102,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val leader3 = waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partitionId,
                                                     oldLeaderOpt = if(leader2.get == 1) None else leader2)
     val leaderEpoch3 = zkUtils.getEpochForPartition(topic, partitionId)
-    debug("leader Epoc: " + leaderEpoch3)
+    debug("leader Epoch: " + leaderEpoch3)
     debug("Leader is elected to be: %s".format(leader3.getOrElse(-1)))
     assertEquals("Leader must return to 1", 1, leader3.getOrElse(-1))
     if(leader2.get == leader3.get)
@@ -118,7 +121,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val leader1 = createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(0, 1)), servers = servers)(0)
 
     val leaderEpoch1 = zkUtils.getEpochForPartition(topic, partitionId)
-    debug("leader Epoc: " + leaderEpoch1)
+    debug("leader Epoch: " + leaderEpoch1)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     assertTrue("Leader should get elected", leader1.isDefined)
     // NOTE: this is to avoid transient test failures

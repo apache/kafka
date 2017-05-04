@@ -30,6 +30,10 @@ public class ApiVersionsRequest extends AbstractRequest {
             super(ApiKeys.API_VERSIONS);
         }
 
+        public Builder(short version) {
+            super(ApiKeys.API_VERSIONS, version);
+        }
+
         @Override
         public ApiVersionsRequest build(short version) {
             return new ApiVersionsRequest(version);
@@ -55,11 +59,13 @@ public class ApiVersionsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:
                 return new ApiVersionsResponse(Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
+            case 1:
+                return new ApiVersionsResponse(throttleTimeMs, Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.API_VERSIONS.latestVersion()));

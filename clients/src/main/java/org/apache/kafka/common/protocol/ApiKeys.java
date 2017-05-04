@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -25,35 +26,43 @@ import java.nio.ByteBuffer;
  * Identifiers for all the Kafka APIs
  */
 public enum ApiKeys {
-    PRODUCE(0, "Produce"),
-    FETCH(1, "Fetch"),
-    LIST_OFFSETS(2, "Offsets"),
-    METADATA(3, "Metadata"),
-    LEADER_AND_ISR(4, "LeaderAndIsr"),
-    STOP_REPLICA(5, "StopReplica"),
-    UPDATE_METADATA_KEY(6, "UpdateMetadata"),
-    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
-    OFFSET_COMMIT(8, "OffsetCommit"),
-    OFFSET_FETCH(9, "OffsetFetch"),
-    FIND_COORDINATOR(10, "FindCoordinator"),
-    JOIN_GROUP(11, "JoinGroup"),
-    HEARTBEAT(12, "Heartbeat"),
-    LEAVE_GROUP(13, "LeaveGroup"),
-    SYNC_GROUP(14, "SyncGroup"),
-    DESCRIBE_GROUPS(15, "DescribeGroups"),
-    LIST_GROUPS(16, "ListGroups"),
-    SASL_HANDSHAKE(17, "SaslHandshake"),
-    API_VERSIONS(18, "ApiVersions"),
-    CREATE_TOPICS(19, "CreateTopics"),
-    DELETE_TOPICS(20, "DeleteTopics"),
-    DELETE_RECORDS(21, "DeleteRecords"),
-    INIT_PRODUCER_ID(22, "InitProducerId"),
-    OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch"),
-    ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn"),
-    ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn"),
-    END_TXN(26, "EndTxn"),
-    WRITE_TXN_MARKERS(27, "WriteTxnMarkers"),
-    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit");
+    PRODUCE(0, "Produce", false),
+    FETCH(1, "Fetch", false),
+    LIST_OFFSETS(2, "Offsets", false),
+    METADATA(3, "Metadata", false),
+    LEADER_AND_ISR(4, "LeaderAndIsr", true),
+    STOP_REPLICA(5, "StopReplica", true),
+    UPDATE_METADATA_KEY(6, "UpdateMetadata", true),
+    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown", true),
+    OFFSET_COMMIT(8, "OffsetCommit", false),
+    OFFSET_FETCH(9, "OffsetFetch", false),
+    FIND_COORDINATOR(10, "FindCoordinator", false),
+    JOIN_GROUP(11, "JoinGroup", false),
+    HEARTBEAT(12, "Heartbeat", false),
+    LEAVE_GROUP(13, "LeaveGroup", false),
+    SYNC_GROUP(14, "SyncGroup", false),
+    DESCRIBE_GROUPS(15, "DescribeGroups", false),
+    LIST_GROUPS(16, "ListGroups", false),
+    SASL_HANDSHAKE(17, "SaslHandshake", false),
+    API_VERSIONS(18, "ApiVersions", false) {
+        @Override
+        public Struct parseResponse(short version, ByteBuffer buffer) {
+            // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
+            // using a version higher than that supported by the broker, a version 0 response is sent
+            // to the client indicating UNSUPPORTED_VERSION.
+            return parseResponse(version, buffer, (short) 0);
+        }
+    },
+    CREATE_TOPICS(19, "CreateTopics", false),
+    DELETE_TOPICS(20, "DeleteTopics", false),
+    DELETE_RECORDS(21, "DeleteRecords", false),
+    INIT_PRODUCER_ID(22, "InitProducerId", false),
+    OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", true),
+    ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn", false),
+    ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false),
+    END_TXN(26, "EndTxn", false),
+    WRITE_TXN_MARKERS(27, "WriteTxnMarkers", true),
+    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;
@@ -76,11 +85,15 @@ public enum ApiKeys {
     /** an english description of the api--this is for debugging and can change */
     public final String name;
 
-    ApiKeys(int id, String name) {
+    /** indicates if this is a ClusterAction request used only by brokers */
+    public final boolean clusterAction;
+
+    ApiKeys(int id, String name, boolean clusterAction) {
         if (id < 0)
             throw new IllegalArgumentException("id must not be negative, id: " + id);
         this.id = (short) id;
         this.name = name;
+        this.clusterAction = clusterAction;
     }
 
     public static ApiKeys forId(int id) {
@@ -120,6 +133,19 @@ public enum ApiKeys {
 
     public Struct parseResponse(short version, ByteBuffer buffer) {
         return responseSchema(version).read(buffer);
+    }
+
+    protected Struct parseResponse(short version, ByteBuffer buffer, short fallbackVersion) {
+        int bufferPosition = buffer.position();
+        try {
+            return responseSchema(version).read(buffer);
+        } catch (SchemaException e) {
+            if (version != fallbackVersion) {
+                buffer.position(bufferPosition);
+                return responseSchema(fallbackVersion).read(buffer);
+            } else
+                throw e;
+        }
     }
 
     private Schema schemaFor(Schema[][] schemas, short version) {

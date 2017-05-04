@@ -1200,7 +1200,7 @@ class Log(@volatile var dir: File,
       info("Deleting segment %d from log %s.".format(segment.baseOffset, name))
       segment.delete()
     }
-    scheduler.schedule("delete-file", deleteSeg, delay = config.fileDeleteDelayMs)
+    scheduler.schedule("delete-file", deleteSeg _, delay = config.fileDeleteDelayMs)
   }
 
   /**

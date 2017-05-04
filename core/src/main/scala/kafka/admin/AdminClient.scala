@@ -40,6 +40,11 @@ import org.apache.kafka.common.{Cluster, Node, TopicPartition}
 import scala.collection.JavaConverters._
 import scala.util.Try
 
+/**
+  * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
+  * and configurations.  This client is deprecated, and will be replaced by KafkaAdminClient.
+  * @see KafkaAdminClient
+  */
 class AdminClient(val time: Time,
                   val requestTimeoutMs: Int,
                   val retryBackoffMs: Long,

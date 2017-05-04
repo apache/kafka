@@ -36,12 +36,14 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -76,6 +78,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -336,6 +339,50 @@ public class FetcherTest {
     }
 
     @Test
+    public void testHeaders() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time));
+        
+        MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
+        builder.append(0L, "key".getBytes(), "value-1".getBytes());
+
+        Header[] headersArray = new Header[1];
+        headersArray[0] = new RecordHeader("headerKey", "headerValue".getBytes(StandardCharsets.UTF_8));
+        builder.append(0L, "key".getBytes(), "value-2".getBytes(), headersArray);
+
+        Header[] headersArray2 = new Header[2];
+        headersArray2[0] = new RecordHeader("headerKey", "headerValue".getBytes(StandardCharsets.UTF_8));
+        headersArray2[1] = new RecordHeader("headerKey", "headerValue2".getBytes(StandardCharsets.UTF_8));
+        builder.append(0L, "key".getBytes(), "value-3".getBytes(), headersArray2);
+
+        MemoryRecords memoryRecords = builder.build();
+
+        List<ConsumerRecord<byte[], byte[]>> records;
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 1);
+
+        client.prepareResponse(matchesOffset(tp1, 1), fetchResponse(memoryRecords, Errors.NONE, 100L, 0));
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        records = fetcher.fetchedRecords().get(tp1);
+        
+        assertEquals(3, records.size());
+
+        Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
+        
+        ConsumerRecord<byte[], byte[]> record = recordIterator.next();
+        assertNull(record.headers().lastHeader("headerKey"));
+        
+        record = recordIterator.next();
+        assertEquals("headerValue", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
+        assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
+
+        record = recordIterator.next();
+        assertEquals("headerValue2", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
+        assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
+    }
+
+    @Test
     public void testFetchMaxPollRecords() {
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), 2);
 
@@ -366,6 +413,45 @@ public class FetcherTest {
         records = fetcher.fetchedRecords().get(tp1);
         assertEquals(2, records.size());
         assertEquals(6L, subscriptions.position(tp1).longValue());
+        assertEquals(4, records.get(0).offset());
+        assertEquals(5, records.get(1).offset());
+    }
+
+    /**
+     * Test the scenario where a partition with fetched but not consumed records (i.e. max.poll.records is
+     * less than the number of fetched records) is unassigned and a different partition is assigned. This is a
+     * pattern used by Streams state restoration and KAFKA-5097 would have been caught by this test.
+     */
+    @Test
+    public void testFetchAfterPartitionWithFetchedRecordsIsUnassigned() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), 2);
+
+        List<ConsumerRecord<byte[], byte[]>> records;
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 1);
+
+        // Returns 3 records while `max.poll.records` is configured to 2
+        client.prepareResponse(matchesOffset(tp1, 1), fetchResponse(tp1, this.records, Errors.NONE, 100L, 0));
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(2, records.size());
+        assertEquals(3L, subscriptions.position(tp1).longValue());
+        assertEquals(1, records.get(0).offset());
+        assertEquals(2, records.get(1).offset());
+
+        subscriptions.assignFromUser(singleton(tp2));
+        client.prepareResponse(matchesOffset(tp2, 4), fetchResponse(tp2, this.nextRecords, Errors.NONE, 100L, 0));
+        subscriptions.seek(tp2, 4);
+
+        assertEquals(1, fetcher.sendFetches());
+        consumerClient.poll(0);
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertNull(fetchedRecords.get(tp1));
+        records = fetchedRecords.get(tp2);
+        assertEquals(2, records.size());
+        assertEquals(6L, subscriptions.position(tp2).longValue());
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
     }
@@ -1166,8 +1252,15 @@ public class FetcherTest {
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                FetchRequest request = (FetchRequest) body;
+                assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
+                return true;
+            }
+        }, fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
 
-        client.prepareResponse(fetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
         consumerClient.poll(0);
         assertTrue(fetcher.hasCompletedFetches());
 
@@ -1467,7 +1560,11 @@ public class FetcherTest {
     }
 
     private FetchResponse fetchResponse(MemoryRecords records, Errors error, long hw, int throttleTime) {
-        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp1,
+        return fetchResponse(tp1, records, error, hw, throttleTime);
+    }
+
+    private FetchResponse fetchResponse(TopicPartition tp, MemoryRecords records, Errors error, long hw, int throttleTime) {
+        Map<TopicPartition, FetchResponse.PartitionData> partitions = Collections.singletonMap(tp,
                 new FetchResponse.PartitionData(error, hw, FetchResponse.INVALID_LAST_STABLE_OFFSET, 0L, null, records));
         return new FetchResponse(new LinkedHashMap<>(partitions), throttleTime);
     }
