@@ -520,6 +520,11 @@ class Log(@volatile var dir: File,
           // we are taking the offsets we are given
           if (!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + records.records.asScala.map(_.offset))
+
+          if (!records.hasCompatibleMagic(config.messageFormatVersion.messageFormatVersion)) {
+            trace(s"Down converting messages on replica fetching for $topicPartition")
+            validRecords = records.downConvert(config.messageFormatVersion.messageFormatVersion)
+          }
         }
 
         // update the epoch cache with the epoch stamped onto the message by the leader
@@ -541,10 +546,10 @@ class Log(@volatile var dir: File,
 
         // now append to the log
         segment.append(firstOffset = appendInfo.firstOffset,
-          largestOffset = appendInfo.lastOffset,
-          largestTimestamp = appendInfo.maxTimestamp,
-          shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
-          records = validRecords)
+                       largestOffset = appendInfo.lastOffset,
+                       largestTimestamp = appendInfo.maxTimestamp,
+                       shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
+                       records = validRecords)
 
         // update the PID sequence mapping
         for ((pid, producerAppendInfo) <- appendInfo.producerAppendInfos) {

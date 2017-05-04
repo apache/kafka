@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
-import kafka.api.ApiVersion
+import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
@@ -1950,6 +1950,19 @@ class LogTest {
     // epoch entries should be recovered
     assertEquals(ListBuffer(EpochEntry(1, 0), EpochEntry(2, 1), EpochEntry(3, 3)), recoveredLeaderEpochCache.epochEntries)
     recoveredLog.close()
+  }
+
+  @Test
+  def testDownConversionForReplication(): Unit = {
+    val props = new Properties()
+    props.setProperty(LogConfig.MessageFormatVersionProp, KAFKA_0_10_0_IV1.version)
+    val log = new Log(logDir, LogConfig(props), recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    val recordBachV2 = singletonRecordsWithLeaderEpoch(value = "random".getBytes, leaderEpoch = 1, offset = 0)
+
+    log.append(records = recordBachV2, assignOffsets = false)
+
+    val fetchDataInfo = log.read(0, Int.MaxValue)
+    assertTrue(fetchDataInfo.records.hasCompatibleMagic(KAFKA_0_10_0_IV1.messageFormatVersion))
   }
 
   /**
