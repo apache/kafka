@@ -120,12 +120,25 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test(expected = classOf[IllegalStateException])
-  def testStableToStableIllegalTransition() {
+  def testEmptyToStableIllegalTransition() {
     group.transitionTo(Stable)
   }
 
+  @Test
+  def testStableToStableIllegalTransition() {
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(AwaitingSync)
+    group.transitionTo(Stable)
+    try {
+      group.transitionTo(Stable)
+      fail("should have failed due to illegal transition")
+    } catch {
+      case e: IllegalStateException => // ok
+    }
+  }
+
   @Test(expected = classOf[IllegalStateException])
-  def testStableToAwaitingSyncIllegalTransition() {
+  def testEmptyToAwaitingSyncIllegalTransition() {
     group.transitionTo(AwaitingSync)
   }
 

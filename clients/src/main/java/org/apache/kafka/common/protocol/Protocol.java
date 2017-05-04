@@ -785,7 +785,7 @@ public class Protocol {
                                                                                                  STRING),
                                                                                        new Field("state",
                                                                                                  STRING,
-                                                                                                 "The current state of the group (one of: Dead, Stable, AwaitingSync, or PreparingRebalance, or empty if there is no active group)"),
+                                                                                                 "The current state of the group (one of: Dead, Stable, AwaitingSync, PreparingRebalance, or empty if there is no active group)"),
                                                                                        new Field("protocol_type",
                                                                                                  STRING,
                                                                                                  "The current group protocol type (will be empty if there is no active group)"),
