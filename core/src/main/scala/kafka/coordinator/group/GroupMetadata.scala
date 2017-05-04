@@ -153,14 +153,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   var generationId = 0
   var leaderId: String = null
   var protocol: String = null
-  var initialRebalanceTimeout: Long = _
   var newMemberAdded: Boolean = false
 
   def is(groupState: GroupState) = state == groupState
   def not(groupState: GroupState) = state != groupState
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
-  def size() = members.size
 
   def add(member: MemberMetadata) {
     if (members.isEmpty)
@@ -197,10 +195,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
     timeout.max(member.rebalanceTimeoutMs)
-  }
-
-  def sessionTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
-    timeout.max(member.sessionTimeoutMs)
   }
 
   // TODO: decide if ids should be predictable or random

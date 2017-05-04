@@ -213,7 +213,7 @@ class GroupCoordinator(val brokerId: Int,
             }
         }
 
-        if (group.is(PreparingRebalance) && group.generationId != 0)
+        if (group.is(PreparingRebalance))
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
       }
     }
@@ -661,6 +661,7 @@ class GroupCoordinator(val brokerId: Int,
       new DelayedJoin(this, group, group.rebalanceTimeoutMs)
 
     group.transitionTo(PreparingRebalance)
+    info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
 
     val groupKey = GroupKey(group.groupId)
     // try complete when the group is in the non-empty state

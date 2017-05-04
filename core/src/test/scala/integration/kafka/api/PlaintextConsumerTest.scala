@@ -30,7 +30,6 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
-import org.scalactic.{CanEqual, Equality}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer

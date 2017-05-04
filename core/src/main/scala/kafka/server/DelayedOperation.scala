@@ -237,12 +237,6 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     false
   }
 
-  def watchOperation(operation: T, watchKeys: Seq[Any]): Unit = {
-    if (!addWatches(operation, watchKeys)) {
-      addToExpireQueue(operation)
-    }
-  }
-
   /**
    * Check if some delayed operations can be completed with the given watch key,
    * and if yes complete them.
