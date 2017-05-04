@@ -136,10 +136,10 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testGetAllBrokerVersions(): Unit = {
+  def testGetAllBrokerVersionsAndDescribeCluster(): Unit = {
     client = AdminClient.create(createConfig())
     val nodes = client.describeCluster().nodes().get()
-    val clusterId = client.describeCluster().clusterIdFuture().get()
+    val clusterId = client.describeCluster().clusterId().get()
     assertEquals(servers.head.apis.clusterId, clusterId)
     val controller = client.describeCluster().controller().get()
     assertEquals(servers.head.apis.metadataCache.getControllerId.
