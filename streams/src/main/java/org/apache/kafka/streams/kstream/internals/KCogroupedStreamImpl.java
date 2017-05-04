@@ -56,7 +56,7 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
     private final Windows<?> windows;
     private final StateStoreSupplier<?> storeSupplier;
     private final AggregationType aggregationType;
-    private final Map<KGroupedStream<K, ?>, KStreamAggProcessorSupplier<?, ?, ?, ?>> cogroups = new HashMap<>();
+    private final Map<KGroupedStream<K, ?>, KStreamAggProcessorSupplier> cogroups = new HashMap<>();
     private boolean aggregated = false;
 
     <T> KCogroupedStreamImpl(final KStreamBuilder topology,
@@ -140,7 +140,7 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
 
         final List<String> processorNames = new ArrayList<>();
         final Set<String> sourceNodes = new HashSet<>();
-        for (final Map.Entry<KGroupedStream<K, ?>, KStreamAggProcessorSupplier<?, ?, ?, ?>> cogroup : cogroups.entrySet()) {
+        for (final Map.Entry<KGroupedStream<K, ?>, KStreamAggProcessorSupplier> cogroup : cogroups.entrySet()) {
             final KGroupedStreamImpl<K, ?> groupedStream = (KGroupedStreamImpl<K, ?>) cogroup.getKey();
             final String sourceName = groupedStream.repartitionIfRequired(null);
             if (sourceName.equals(groupedStream.name)) {

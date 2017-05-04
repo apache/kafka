@@ -117,7 +117,6 @@ public class KStreamCogroupIntegrationTest {
     private static final Merger<Long, String> MERGER = new Merger<Long, String>() {
             @Override
             public String apply(Long aggKey, String aggOne, String aggTwo) {
-                LoggerFactory.getLogger(KStreamCogroupIntegrationTest.class).error("aggOne:" + aggOne + " aggTwo:" + aggTwo);
                 return aggOne + aggTwo;
             }
         };
@@ -253,21 +252,21 @@ public class KStreamCogroupIntegrationTest {
                 Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a")), // endMs = timestamp + 10L
                 Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a")), // endMs = timestamp + 10L
                 Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a")), // endMs = timestamp + 11L
-                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b")), // endMs = timestamp + 11L
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b")), // endMs = timestamp + 11L
                 Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b")), // endMs = timestamp + 12L
                 Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b")), // endMs = timestamp + 12L
                 Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c")), // endMs = timestamp + 20L
                 Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c")), // endMs = timestamp + 20L
                 Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c")), // endMs = timestamp + 21L
-                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a")), // endMs = timestamp + 21L
-                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c2a")), // endMs = timestamp + 22L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a")), // endMs = timestamp + 21L
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), "2c2a")), // endMs = timestamp + 22L
                 Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), "1c3c1a3a")), // endMs = timestamp + 22L
                 Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b")), // endMs = timestamp + 22L
-                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b")), // endMs = timestamp + 22L
-                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b3b")), // endMs = timestamp + 22L 
-                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b1c")), // endMs = timestamp + 22L 
-                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b3b2c")), // endMs = timestamp + 22L 
-                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b1c3c")) // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 20L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b")), // endMs = timestamp + 22L
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b3b")), // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b1c")), // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(2L, new UnlimitedWindow(timestamp + 10L)), "2a2b1c3c1a3a1b3b2c")), // endMs = timestamp + 22L 
+                Arrays.asList(KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), (String) null), KeyValue.pair(new Windowed<>(1L, new UnlimitedWindow(timestamp + 10L)), "1a3a1b3b2c2a2b1c3c")) // endMs = timestamp + 22L 
             );
 
         try {

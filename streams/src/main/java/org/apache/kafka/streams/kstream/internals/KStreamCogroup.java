@@ -25,11 +25,11 @@ import org.apache.kafka.streams.processor.Processor;
 
 class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V>, V> {
 
-    private final List<KStreamAggProcessorSupplier<?, ?, ?, ?>> parents;
+    private final List<KStreamAggProcessorSupplier> parents;
 
     private boolean sendOldValues = false;
 
-    KStreamCogroup(Collection<KStreamAggProcessorSupplier<?, ?, ?, ?>> parents) {
+    KStreamCogroup(Collection<KStreamAggProcessorSupplier> parents) {
         this.parents = new ArrayList<>(parents);
     }
 
@@ -58,7 +58,7 @@ class KStreamCogroup<K, V> implements KStreamAggProcessorSupplier<K, K, Change<V
     @Override
     public void enableSendingOldValues() {
         if (!sendOldValues) {
-            for (KStreamAggProcessorSupplier<?, ?, ?, ?> parent : parents) {
+            for (KStreamAggProcessorSupplier parent : parents) {
                 parent.enableSendingOldValues();
             }
         }
