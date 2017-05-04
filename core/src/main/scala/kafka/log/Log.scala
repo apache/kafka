@@ -321,14 +321,13 @@ class Log(@volatile var dir: File,
     stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
       val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
-      val fetchDataInfo = segment.read(startOffset, Some(segment.baseOffset), Int.MaxValue)
+      val fetchDataInfo = segment.read(startOffset, None, Int.MaxValue)
       if (fetchDataInfo != null)
         loadPidsFromLog(stateManager, fetchDataInfo.records)
     }
 
     // Once we have loaded the segment's data, we take a snapshot to ensure that we won't
     // need to reload the same segment a second time if we have to recover another segment.
-    stateManager.updateMapEndOffset(segment.baseOffset)
     stateManager.takeSnapshot()
 
     val activeProducers = stateManager.activeProducers.values
@@ -439,7 +438,7 @@ class Log(@volatile var dir: File,
     val currentTimeMs = time.milliseconds
     producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
 
-    // only do the potentially expensive reloading if the last snapshot offset is lower than the
+    // only do the potentially expensive reloading of the last snapshot offset is lower than the
     // log end offset (which would be the case on first startup) and there are active producers.
     // if there are no active producers, then truncating shouldn't change that fact (although it
     // could cause a producerId to expire earlier than expected), so we can skip the loading.

@@ -2081,118 +2081,135 @@ class LogTest {
 
   @Test
   def testTransactionIndexUpdated(): Unit = {
-    val epoch = 0.toShort
     val log = createLog(1024 * 1024)
-
-    def allAbortedTransactions = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
-
-    def appendTransactional(pid: Long): Int => Unit = {
-      var sequence = 0
-      numRecords: Int => {
-        val simpleRecords = (sequence until sequence + numRecords).map { seq =>
-          new SimpleRecord(s"$seq".getBytes)
-        }
-        val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, pid,
-          epoch, sequence, simpleRecords: _*)
-        log.appendAsLeader(records, leaderEpoch = 0)
-        sequence += numRecords
-      }
-    }
-
-    def appendControl(pid: Long, controlType: ControlRecordType): Unit =
-      log.appendAsLeader(MemoryRecords.withControlRecord(controlType, pid, epoch), isFromClient = false,
-        leaderEpoch = 0)
+    val epoch = 0.toShort
 
     val pid1 = 1L
     val pid2 = 2L
     val pid3 = 3L
     val pid4 = 4L
 
-    val appendPid1 = appendTransactional(pid1)
-    val appendPid2 = appendTransactional(pid2)
-    val appendPid3 = appendTransactional(pid3)
-    val appendPid4 = appendTransactional(pid4)
+    val appendPid1 = appendTransactionalAsLeader(log, pid1, epoch)
+    val appendPid2 = appendTransactionalAsLeader(log, pid2, epoch)
+    val appendPid3 = appendTransactionalAsLeader(log, pid3, epoch)
+    val appendPid4 = appendTransactionalAsLeader(log, pid4, epoch)
 
+    // mix transactional and non-transactional data
     appendPid1(5) // nextOffset: 5
-    appendPid2(2) // 7
-    appendPid1(4) // 11
-    appendPid3(3) // 14
-    appendPid1(10) // 24
-    appendControl(pid1, ControlRecordType.ABORT) // 25
-    appendPid2(6) // 31
-    appendPid4(3) // 34
-    appendPid3(9) // 43
-    appendControl(pid3, ControlRecordType.COMMIT) // 44
-    appendPid4(8) // 52
-    appendPid2(7) // 59
-    appendControl(pid2, ControlRecordType.ABORT) // 60
-    appendPid4(4) // 64
-    appendControl(pid4, ControlRecordType.COMMIT) // 65
+    appendNonTransactionalAsLeader(log, 3) // 8
+    appendPid2(2) // 10
+    appendPid1(4) // 14
+    appendPid3(3) // 17
+    appendNonTransactionalAsLeader(log, 2) // 19
+    appendPid1(10) // 29
+    appendControlAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
+    appendPid2(6) // 36
+    appendPid4(3) // 39
+    appendNonTransactionalAsLeader(log, 10) // 49
+    appendPid3(9) // 58
+    appendControlAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
+    appendPid4(8) // 67
+    appendPid2(7) // 74
+    appendControlAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
+    appendNonTransactionalAsLeader(log, 10) // 85
+    appendPid4(4) // 89
+    appendControlAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
 
-    assertEquals(List(new AbortedTxn(pid1, 0L, 24L, 5L), new AbortedTxn(pid2, 5L, 59L, 31L)), allAbortedTransactions)
+    val abortedTransactions = allAbortedTransactions(log)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+  }
+
+  @Test
+  def testRecoverTransactionIndex(): Unit = {
+    val log = createLog(128)
+    val epoch = 0.toShort
+
+    val pid1 = 1L
+    val pid2 = 2L
+    val pid3 = 3L
+    val pid4 = 4L
+
+    val appendPid1 = appendTransactionalAsLeader(log, pid1, epoch)
+    val appendPid2 = appendTransactionalAsLeader(log, pid2, epoch)
+    val appendPid3 = appendTransactionalAsLeader(log, pid3, epoch)
+    val appendPid4 = appendTransactionalAsLeader(log, pid4, epoch)
+
+    // mix transactional and non-transactional data
+    appendPid1(5) // nextOffset: 5
+    appendNonTransactionalAsLeader(log, 3) // 8
+    appendPid2(2) // 10
+    appendPid1(4) // 14
+    appendPid3(3) // 17
+    appendNonTransactionalAsLeader(log, 2) // 19
+    appendPid1(10) // 29
+    appendControlAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
+    appendPid2(6) // 36
+    appendPid4(3) // 39
+    appendNonTransactionalAsLeader(log, 10) // 49
+    appendPid3(9) // 58
+    appendControlAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
+    appendPid4(8) // 67
+    appendPid2(7) // 74
+    appendControlAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
+    appendNonTransactionalAsLeader(log, 10) // 85
+    appendPid4(4) // 89
+    appendControlAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
+
+    // delete all the offset and transaction index files to force recovery
+    log.logSegments.foreach { segment =>
+      segment.index.delete()
+      segment.txnIndex.delete()
+    }
+
+    log.close()
+
+    val reloadedLog = createLog(1024)
+    val abortedTransactions = allAbortedTransactions(reloadedLog)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
   }
 
   @Test
   def testTransactionIndexUpdatedThroughReplication(): Unit = {
     val epoch = 0.toShort
     val log = createLog(1024 * 1024)
-
     val buffer = ByteBuffer.allocate(2048)
-    def allAbortedTransactions = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
-
-    def appendTransactional(pid: Long): (Long, Int) => Unit = {
-      var sequence = 0
-      (offset: Long, numRecords: Int) => {
-        val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch, sequence, true)
-        for (seq <- sequence until sequence + numRecords) {
-          val record = new SimpleRecord(s"$seq".getBytes)
-          builder.append(record)
-        }
-
-        sequence += numRecords
-        builder.close()
-      }
-    }
-
-    def appendControl(pid: Long, offset: Long, controlType: ControlRecordType): Unit = {
-      val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch,
-        RecordBatch.CONTROL_SEQUENCE, true)
-      builder.appendControlRecord(RecordBatch.NO_TIMESTAMP, controlType, null)
-      builder.close()
-    }
 
     val pid1 = 1L
     val pid2 = 2L
     val pid3 = 3L
     val pid4 = 4L
 
-    val appendPid1 = appendTransactional(pid1)
-    val appendPid2 = appendTransactional(pid2)
-    val appendPid3 = appendTransactional(pid3)
-    val appendPid4 = appendTransactional(pid4)
+    val appendPid1 = appendTransactionalToBuffer(buffer, pid1, epoch)
+    val appendPid2 = appendTransactionalToBuffer(buffer, pid2, epoch)
+    val appendPid3 = appendTransactionalToBuffer(buffer, pid3, epoch)
+    val appendPid4 = appendTransactionalToBuffer(buffer, pid4, epoch)
 
     appendPid1(0L, 5)
-    appendPid2(5L, 2)
-    appendPid1(7L, 4)
-    appendPid3(11L, 3)
-    appendPid1(14L, 10)
-    appendControl(pid1, 24L, ControlRecordType.ABORT)
-    appendPid2(25L, 6)
-    appendPid4(31L, 3)
-    appendPid3(34L, 9)
-    appendControl(pid3, 43L, ControlRecordType.COMMIT)
-    appendPid4(44L, 8)
-    appendPid2(52L, 7)
-    appendControl(pid2, 59L, ControlRecordType.ABORT)
-    appendPid4(60L, 4)
-    appendControl(pid4, 64L, ControlRecordType.COMMIT)
+    appendNonTransactionalToBuffer(buffer, 5L, 3)
+    appendPid2(8L, 2)
+    appendPid1(10L, 4)
+    appendPid3(14L, 3)
+    appendNonTransactionalToBuffer(buffer, 17L, 2)
+    appendPid1(19L, 10)
+    appendControlToBuffer(buffer, pid1, epoch, 29L, ControlRecordType.ABORT)
+    appendPid2(30L, 6)
+    appendPid4(36L, 3)
+    appendNonTransactionalToBuffer(buffer, 39L, 10)
+    appendPid3(49L, 9)
+    appendControlToBuffer(buffer, pid3, epoch, 58L, ControlRecordType.COMMIT)
+    appendPid4(59L, 8)
+    appendPid2(67L, 7)
+    appendControlToBuffer(buffer, pid2, epoch, 74L, ControlRecordType.ABORT)
+    appendNonTransactionalToBuffer(buffer, 75L, 10)
+    appendPid4(85L, 4)
+    appendControlToBuffer(buffer, pid4, epoch, 89L, ControlRecordType.COMMIT)
 
     buffer.flip()
 
-    val records = MemoryRecords.readableRecords(buffer)
-    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
-    log.appendAsFollower(records)
-    assertEquals(List(new AbortedTxn(pid1, 0L, 24L, 5L), new AbortedTxn(pid2, 5L, 59L, 31L)), allAbortedTransactions)
+    appendAsFollower(log, MemoryRecords.readableRecords(buffer))
+
+    val abortedTransactions = allAbortedTransactions(log)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
   }
 
   @Test
@@ -2308,4 +2325,68 @@ class LogTest {
       pidExpirationCheckIntervalMs = pidExpirationCheckIntervalMs)
     log
   }
+
+  private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
+
+  private def appendTransactionalAsLeader(log: Log, pid: Long, producerEpoch: Short): Int => Unit = {
+    var sequence = 0
+    numRecords: Int => {
+      val simpleRecords = (sequence until sequence + numRecords).map { seq =>
+        new SimpleRecord(s"$seq".getBytes)
+      }
+      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, pid,
+        producerEpoch, sequence, simpleRecords: _*)
+      log.appendAsLeader(records, leaderEpoch = 0)
+      sequence += numRecords
+    }
+  }
+
+  private def appendControlAsLeader(log: Log, pid: Long, producerEpoch: Short, controlType: ControlRecordType): Unit = {
+    val records = MemoryRecords.withControlRecord(controlType, pid, producerEpoch)
+    log.appendAsLeader(records, isFromClient = false, leaderEpoch = 0)
+  }
+
+  private def appendNonTransactionalAsLeader(log: Log, numRecords: Int): Unit = {
+    val simpleRecords = (0 until numRecords).map { seq =>
+      new SimpleRecord(s"$seq".getBytes)
+    }
+    val records = MemoryRecords.withRecords(CompressionType.NONE, simpleRecords: _*)
+    log.appendAsLeader(records, leaderEpoch = 0)
+  }
+
+  private def appendTransactionalToBuffer(buffer: ByteBuffer, pid: Long, epoch: Short): (Long, Int) => Unit = {
+    var sequence = 0
+    (offset: Long, numRecords: Int) => {
+      val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch, sequence, true)
+      for (seq <- sequence until sequence + numRecords) {
+        val record = new SimpleRecord(s"$seq".getBytes)
+        builder.append(record)
+      }
+
+      sequence += numRecords
+      builder.close()
+    }
+  }
+
+  private def appendControlToBuffer(buffer: ByteBuffer, pid: Long, epoch: Short, offset: Long,
+                                    controlType: ControlRecordType): Unit = {
+    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch,
+      RecordBatch.CONTROL_SEQUENCE, true)
+    builder.appendControlRecord(RecordBatch.NO_TIMESTAMP, controlType, null)
+    builder.close()
+  }
+
+  private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {
+    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, offset)
+    (0 until numRecords).foreach { seq =>
+      builder.append(new SimpleRecord(s"$seq".getBytes))
+    }
+    builder.close()
+  }
+
+  private def appendAsFollower(log: Log, records: MemoryRecords, leaderEpoch: Int = 0): Unit = {
+    records.batches.asScala.foreach(_.setPartitionLeaderEpoch(leaderEpoch))
+    log.appendAsFollower(records)
+  }
+
 }
