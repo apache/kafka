@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.{After, Rule, Test}
+import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
@@ -46,6 +46,11 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   def globalTimeout = Timeout.millis(120000)
 
   var client: AdminClient = null
+
+  @Before
+  def waitUntilMetadataIsPropagated(): Unit = {
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers, brokerList.split(","),  20000)
+  }
 
   @After
   def closeClient(): Unit = {
