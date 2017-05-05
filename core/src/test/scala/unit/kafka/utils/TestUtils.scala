@@ -37,7 +37,7 @@ import kafka.producer._
 import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.serializer.{DefaultEncoder, Encoder, StringEncoder}
 import kafka.server._
-import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
@@ -827,6 +827,19 @@ object TestUtils extends Logging {
     byteBuffer
   }
 
+  /**
+    * Wait until all brokers know about each other.
+    *
+    * @param servers The Kafka broker servers.
+    * @param timeout The amount of time waiting on this condition before assert to fail
+    */
+  def waitUntilBrokerMetadataIsPropagated(servers: Seq[KafkaServer],
+                                          timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    val expectedBrokerIds = servers.map(_.config.brokerId).toSet
+    TestUtils.waitUntilTrue(() => servers.forall(server =>
+      expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet
+    ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
+  }
 
   /**
    * Wait until a valid leader is propagated to the metadata cache in each broker.
