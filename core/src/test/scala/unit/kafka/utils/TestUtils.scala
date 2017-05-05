@@ -55,7 +55,8 @@ import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.immutable.HashSet
+import scala.collection.{Map, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.Try
 
@@ -827,6 +828,19 @@ object TestUtils extends Logging {
     byteBuffer
   }
 
+  /**
+    * Wait until all brokers know about each other.
+    *
+    * @param servers The Kafka broker servers.
+    * @param timeout The amount of time waiting on this condition before assert to fail
+    */
+  def waitUntilBrokerMetadataIsPropagated(servers: Seq[KafkaServer],
+                                          timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    var expectedBrokerIds = servers.map(server => server.apis.brokerId)
+    TestUtils.waitUntilTrue(() => false == servers.exists(server => {
+        expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(broker => broker.id)
+      }), "Timed out waiting for all servers to learn about the broker list.", timeout, 50)
+  }
 
   /**
    * Wait until a valid leader is propagated to the metadata cache in each broker.
