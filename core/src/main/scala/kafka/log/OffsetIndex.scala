@@ -48,8 +48,8 @@ import kafka.common.InvalidOffsetException
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal 
  * storage format.
  */
-class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1)
-    extends AbstractIndex[Long, Int](file, baseOffset, maxIndexSize) {
+class OffsetIndex(file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
+    extends AbstractIndex[Long, Int](file, baseOffset, maxIndexSize, writable) {
 
   override def entrySize = 8
   
