@@ -21,6 +21,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -122,6 +124,11 @@ public class WorkerConfig extends AbstractConfig {
         + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
+    public static final String MODULE_PATH_CONFIG = "module.path";
+    protected static final String MODULE_PATH_DOC = "List of locations that contain "
+        + "Connect modules (Connectors, Transformations, Converters). Two or more locations "
+        + "should be separated by commas";
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -155,7 +162,23 @@ public class WorkerConfig extends AbstractConfig {
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
                 .define(ACCESS_CONTROL_ALLOW_METHODS_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_METHODS_DEFAULT, Importance.LOW,
-                        ACCESS_CONTROL_ALLOW_METHODS_DOC);
+                        ACCESS_CONTROL_ALLOW_METHODS_DOC)
+                .define(
+                        MODULE_PATH_CONFIG,
+                        Type.LIST,
+                        null,
+                        Importance.LOW,
+                        MODULE_PATH_DOC
+                );
+    }
+
+    public List<String> moduleLocations() {
+        List<String> moduleLocations = getList(MODULE_PATH_CONFIG);
+        if (moduleLocations == null || moduleLocations.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        return moduleLocations;
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
