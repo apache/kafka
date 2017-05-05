@@ -19,7 +19,6 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier;
 
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -446,28 +445,26 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public static DataInputStream wrapForInput(ByteBuffer buffer, CompressionType type, byte messageVersion) {
+    public static InputStream wrapForInput(ByteBuffer buffer, CompressionType type, byte messageVersion) {
         try {
             switch (type) {
                 case NONE:
                     return new ByteBufferInputStream(buffer);
                 case GZIP:
-                    return new DataInputStream(new GZIPInputStream(new ByteBufferInputStream(buffer)));
+                    return new GZIPInputStream(new ByteBufferInputStream(buffer));
                 case SNAPPY:
                     try {
-                        InputStream stream = (InputStream) snappyInputStreamSupplier.get().newInstance(new ByteBufferInputStream(buffer));
-                        return new DataInputStream(stream);
+                        return (InputStream) snappyInputStreamSupplier.get().newInstance(new ByteBufferInputStream(buffer));
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
                 case LZ4:
                     try {
-                        InputStream stream = (InputStream) lz4InputStreamSupplier.get().newInstance(
+                        return (InputStream) lz4InputStreamSupplier.get().newInstance(
                             buffer,
                             LZ4_DECOMPRESSION_BUFFER_SUPPLIER.get(),
                             messageVersion == Record.MAGIC_VALUE_V0
                         );
-                        return new DataInputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
                     }
