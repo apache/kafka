@@ -18,6 +18,7 @@
 package other.kafka
 
 import java.io.{File, FileOutputStream, PrintWriter}
+import java.nio.file.{Files, Paths}
 import javax.imageio.ImageIO
 
 import kafka.admin.ReassignPartitionsCommand
@@ -46,9 +47,9 @@ import scala.collection.{Map, Seq, mutable}
   * & #partitions and throttle to adjust this.
   */
 object ReplicationQuotasTestRig {
-  new File("Experiments").mkdir()
+  Files.createDirectory(Paths.get("Experiments"))
   private val dir = "Experiments/Run" + System.currentTimeMillis().toString.substring(8)
-  new File(dir).mkdir()
+  Files.createDirectory(Paths.get(dir))
   val k = 1000 * 1000
 
 

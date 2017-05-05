@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io._
+import java.io.{File, IOException}
 import java.nio.file.Files
 import java.util.concurrent._
 
@@ -92,9 +92,12 @@ class LogManager(val logDirs: Array[File],
     for(dir <- dirs) {
       if(!dir.exists) {
         info("Log directory '" + dir.getAbsolutePath + "' not found, creating it.")
-        val created = dir.mkdirs()
-        if(!created)
-          throw new KafkaException("Failed to create data directory " + dir.getAbsolutePath)
+        try {
+          Files.createDirectories(dir.toPath)
+        } catch {
+          case ioe: IOException =>
+            throw new KafkaException("Failed to create log directory " + dir.getAbsolutePath, ioe)
+        }
       }
       if(!dir.isDirectory || !dir.canRead)
         throw new KafkaException(dir.getAbsolutePath + " is not a readable log directory.")
@@ -196,7 +199,7 @@ class LogManager(val logDirs: Array[File],
     try {
       for ((cleanShutdownFile, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
-        cleanShutdownFile.delete()
+        Files.deleteIfExists(cleanShutdownFile.toPath)
       }
     } catch {
       case e: ExecutionException => {

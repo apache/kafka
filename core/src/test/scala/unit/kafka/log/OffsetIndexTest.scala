@@ -26,6 +26,7 @@ import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
 import kafka.common.InvalidOffsetException
+import org.apache.kafka.common.utils.Utils
 
 class OffsetIndexTest extends JUnitSuite {
   
@@ -40,7 +41,7 @@ class OffsetIndexTest extends JUnitSuite {
   @After
   def teardown() {
     if(this.idx != null)
-      this.idx.file.delete()
+      Utils.delete(this.idx.file)
   }
   
   @Test
@@ -166,7 +167,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   def nonExistantTempFile(): File = {
     val file = TestUtils.tempFile()
-    file.delete()
+    Utils.delete(file)
     file
   }
 }

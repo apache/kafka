@@ -24,6 +24,7 @@ import kafka.utils.TestUtils
 import org.junit.{Test, After, Before}
 import org.junit.Assert.{assertEquals}
 import org.scalatest.junit.JUnitSuite
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Unit test for time index.
@@ -41,7 +42,7 @@ class TimeIndexTest extends JUnitSuite {
   @After
   def teardown() {
     if(this.idx != null)
-      this.idx.file.delete()
+      Utils.delete(this.idx.file)
   }
 
   @Test
@@ -90,7 +91,7 @@ class TimeIndexTest extends JUnitSuite {
 
   def nonExistantTempFile(): File = {
     val file = TestUtils.tempFile()
-    file.delete()
+    Utils.delete(file)
     file
   }
 }

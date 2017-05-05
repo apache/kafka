@@ -235,7 +235,7 @@ class Log(@volatile var dir: File,
         } else if(baseName.getPath.endsWith(LogFileSuffix)){
           // delete the index
           val index = new File(CoreUtils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
-          Files.deleteIfExists(index.toPath())
+          Files.deleteIfExists(index.toPath)
           swapFiles += file
         }
       }
@@ -994,7 +994,7 @@ class Log(@volatile var dir: File,
       val timeIndexFile = timeIndexFilename(dir, newOffset)
       for(file <- List(logFile, indexFile, timeIndexFile); if file.exists) {
         warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
-        file.delete()
+        Files.deleteIfExists(file.toPath)
       }
 
       segments.lastEntry() match {

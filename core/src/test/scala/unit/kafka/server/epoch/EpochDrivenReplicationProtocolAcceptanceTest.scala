@@ -34,6 +34,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.serialization.Deserializer
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 
@@ -154,7 +155,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
+    Utils.delete(new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile))
 
     //Delete 5 messages from the leader's log on 100
     deleteMessagesFromLogFile(5 * msg.length, brokers(0), 0)
@@ -204,7 +205,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     brokers.foreach { b => b.shutdown() }
 
     //Delete the clean shutdown file to simulate crash
-    new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile).delete()
+    Utils.delete(new File(brokers(0).config.logDirs(0), Log.CleanShutdownFile))
 
     //Delete half the messages from the log file
     deleteMessagesFromLogFile(getLogFile(brokers(0), 0).length() / 2, brokers(0), 0)

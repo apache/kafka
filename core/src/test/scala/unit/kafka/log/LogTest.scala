@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io._
 import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
@@ -833,7 +834,7 @@ class LogTest {
   @Test
   def testThatGarbageCollectingSegmentsDoesntChangeOffset() {
     for(messagesToAppend <- List(0, 1, 25)) {
-      logDir.mkdirs()
+      Files.createDirectories(logDir.toPath)
       // first test a log segment starting at 0
       val logProps = new Properties()
       logProps.put(LogConfig.SegmentBytesProp, 100: java.lang.Integer)
@@ -1048,8 +1049,8 @@ class LogTest {
     log.close()
 
     // delete all the index files
-    indexFiles.foreach(_.delete())
-    timeIndexFiles.foreach(_.delete())
+    indexFiles.foreach(Utils.delete)
+    timeIndexFiles.foreach(Utils.delete)
 
     // reopen the log
     log = new Log(logDir, config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
@@ -1086,7 +1087,7 @@ class LogTest {
     log.close()
 
     // Delete the time index.
-    timeIndexFiles.foreach(_.delete())
+    timeIndexFiles.foreach(Utils.delete)
 
     // The rebuilt time index should be empty
     log = new Log(logDir, config, logStartOffset = 0L, recoveryPoint = numMessages + 1, scheduler = time.scheduler, time = time)
@@ -1441,7 +1442,7 @@ class LogTest {
     val recoveryPoint = 50L
     for (_ <- 0 until 10) {
       // create a log and write some messages to it
-      logDir.mkdirs()
+      Files.createDirectories(logDir.toPath)
       var log = new Log(logDir,
                         config,
                         logStartOffset = 0L,
@@ -1549,7 +1550,7 @@ class LogTest {
     recoveryPoint = log.logEndOffset
     log = new Log(logDir, config, 0L, 0L, time.scheduler, time)
     assertEquals(recoveryPoint, log.logEndOffset)
-    cleanShutdownFile.delete()
+    Utils.delete(cleanShutdownFile)
   }
 
   @Test

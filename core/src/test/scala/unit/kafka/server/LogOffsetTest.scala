@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicLong
 import java.util.{Properties, Random}
 import java.lang.{Long => JLong}
@@ -154,7 +155,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     val topicPartition = "kafka-" + random.nextInt(10)
     val topicPartitionPath = TestUtils.tempDir().getAbsolutePath + "/" + topicPartition
     topicLogDir = new File(topicPartitionPath)
-    topicLogDir.mkdir()
+    Files.createDirectory(topicLogDir.toPath)
 
     val topic = topicPartition.split("-").head
 

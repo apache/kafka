@@ -20,6 +20,7 @@ package kafka.log
 import java.io.{File, IOException, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
+import java.nio.file.Files
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
@@ -155,7 +156,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
       mmap = null
     }
-    file.delete()
+    try {
+      Files.delete(file.toPath)
+      true
+    } catch {
+      case ioe: IOException => false
+    }
   }
 
   /**
