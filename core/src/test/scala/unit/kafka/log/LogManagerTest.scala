@@ -21,7 +21,7 @@ import java.io._
 import java.util.Properties
 
 import kafka.common._
-import kafka.server.OffsetCheckpoint
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
@@ -69,7 +69,7 @@ class LogManagerTest {
     val log = logManager.createLog(new TopicPartition(name, 0), logConfig)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    log.append(TestUtils.singletonRecords("test".getBytes()))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
   /**
@@ -92,7 +92,7 @@ class LogManagerTest {
     var offset = 0L
     for(_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
-      val info = log.append(set)
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
@@ -102,7 +102,9 @@ class LogManagerTest {
     time.sleep(maxLogAgeMs + 1)
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3, log.dir.list.length)
+
+    // there should be a log file, two indexes, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 1, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).records.sizeInBytes)
 
     try {
@@ -112,7 +114,7 @@ class LogManagerTest {
       case _: OffsetOutOfRangeException => // This is good.
     }
     // log should still be appendable
-    log.append(TestUtils.singletonRecords("test".getBytes()))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
   /**
@@ -138,7 +140,7 @@ class LogManagerTest {
     val numMessages = 200
     for (_ <- 0 until numMessages) {
       val set = TestUtils.singletonRecords("test".getBytes())
-      val info = log.append(set)
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.firstOffset
     }
 
@@ -148,7 +150,9 @@ class LogManagerTest {
     time.sleep(logManager.InitialTaskDelayMs)
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 3, log.dir.list.length)
+
+    //There should be a log file, two indexes, the leader epoch checkpoint and the pid snapshot dir
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 2, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).records.sizeInBytes)
     try {
       log.read(0, 1024)
@@ -157,7 +161,7 @@ class LogManagerTest {
       case _: OffsetOutOfRangeException => // This is good.
     }
     // log should still be appendable
-    log.append(TestUtils.singletonRecords("test".getBytes()))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
   /**
@@ -172,7 +176,7 @@ class LogManagerTest {
     var offset = 0L
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
-      val info = log.append(set)
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
     }
 
@@ -201,7 +205,7 @@ class LogManagerTest {
     val lastFlush = log.lastFlushTime
     for (_ <- 0 until 200) {
       val set = TestUtils.singletonRecords("test".getBytes())
-      log.append(set)
+      log.appendAsLeader(set, leaderEpoch = 0)
     }
     time.sleep(logManager.InitialTaskDelayMs)
     assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
@@ -282,13 +286,13 @@ class LogManagerTest {
     val logs = topicPartitions.map(this.logManager.createLog(_, logConfig))
     logs.foreach(log => {
       for (_ <- 0 until 50)
-        log.append(TestUtils.singletonRecords("test".getBytes()))
+        log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
 
       log.flush()
     })
 
     logManager.checkpointRecoveryPointOffsets()
-    val checkpoints = new OffsetCheckpoint(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
 
     topicPartitions.zip(logs).foreach {
       case(tp, log) => {

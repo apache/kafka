@@ -18,15 +18,20 @@
 package kafka.zk
 
 import javax.security.auth.login.Configuration
-import kafka.utils.{ZkUtils, Logging, CoreUtils}
+
+import kafka.utils.{CoreUtils, Logging, ZkUtils}
 import org.junit.{After, Before}
 import org.scalatest.junit.JUnitSuite
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.test.IntegrationTest
+import org.junit.experimental.categories.Category
 
-trait ZooKeeperTestHarness extends JUnitSuite with Logging {
+@Category(Array(classOf[IntegrationTest]))
+abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 
   val zkConnectionTimeout = 10000
   val zkSessionTimeout = 6000
+  protected val zkAclsEnabled: Option[Boolean] = None
 
   var zkUtils: ZkUtils = null
   var zookeeper: EmbeddedZookeeper = null
@@ -37,7 +42,7 @@ trait ZooKeeperTestHarness extends JUnitSuite with Logging {
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, JaasUtils.isZkSecurityEnabled())
+    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
   }
 
   @After

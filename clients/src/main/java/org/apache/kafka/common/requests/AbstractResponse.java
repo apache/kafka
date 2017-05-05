@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
+    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     public Send toSend(String destination, RequestHeader requestHeader) {
         return toSend(destination, requestHeader.apiVersion(), requestHeader.toResponseHeader());
@@ -61,8 +62,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new OffsetCommitResponse(struct);
             case OFFSET_FETCH:
                 return new OffsetFetchResponse(struct);
-            case GROUP_COORDINATOR:
-                return new GroupCoordinatorResponse(struct);
+            case FIND_COORDINATOR:
+                return new FindCoordinatorResponse(struct);
             case JOIN_GROUP:
                 return new JoinGroupResponse(struct);
             case HEARTBEAT:
@@ -91,6 +92,22 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new CreateTopicsResponse(struct);
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct);
+            case DELETE_RECORDS:
+                return new DeleteRecordsResponse(struct);
+            case INIT_PRODUCER_ID:
+                return new InitPidResponse(struct);
+            case OFFSET_FOR_LEADER_EPOCH:
+                return new OffsetsForLeaderEpochResponse(struct);
+            case ADD_PARTITIONS_TO_TXN:
+                return new AddPartitionsToTxnResponse(struct);
+            case ADD_OFFSETS_TO_TXN:
+                return new AddOffsetsToTxnResponse(struct);
+            case END_TXN:
+                return new EndTxnResponse(struct);
+            case WRITE_TXN_MARKERS:
+                return new WriteTxnMarkersResponse(struct);
+            case TXN_OFFSET_COMMIT:
+                return new TxnOffsetCommitResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
                         "code should be updated to do so.", apiKey));

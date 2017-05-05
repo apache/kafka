@@ -419,6 +419,7 @@ private[kafka] class Processor(val id: Int,
     "socket-server",
     metricTags,
     false,
+    true,
     ChannelBuilders.serverChannelBuilder(listenerName, securityProtocol, config, credentialProvider.credentialCache))
 
   override def run() {
@@ -457,7 +458,7 @@ private[kafka] class Processor(val id: Int,
           case RequestChannel.NoOpAction =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
-            curr.request.updateRequestMetrics
+            updateRequestMetrics(curr.request)
             trace("Socket server received empty response to send, registering for read: " + curr)
             val channelId = curr.request.connectionId
             if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
@@ -465,7 +466,7 @@ private[kafka] class Processor(val id: Int,
           case RequestChannel.SendAction =>
             sendResponse(curr)
           case RequestChannel.CloseConnectionAction =>
-            curr.request.updateRequestMetrics
+            updateRequestMetrics(curr.request)
             trace("Closing socket connection actively according to the response code.")
             close(selector, curr.request.connectionId)
         }
@@ -482,7 +483,7 @@ private[kafka] class Processor(val id: Int,
     // `channel` can be null if the selector closed the connection because it was idle for too long
     if (channel == null) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
-      response.request.updateRequestMetrics()
+      response.request.updateRequestMetrics(0L)
     }
     else {
       selector.send(response.responseSend)
@@ -505,14 +506,13 @@ private[kafka] class Processor(val id: Int,
     selector.completedReceives.asScala.foreach { receive =>
       try {
         val openChannel = selector.channel(receive.source)
-        val session = {
-          // Only methods that are safe to call on a disconnected channel should be invoked on 'channel'.
-          val channel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
-          RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, channel.principal.getName), channel.socketAddress)
-        }
+        // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
+        val openOrClosingChannel = if (openChannel != null) openChannel else selector.closingChannel(receive.source)
+        val session = RequestChannel.Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, openOrClosingChannel.principal.getName), openOrClosingChannel.socketAddress)
+
         val req = RequestChannel.Request(processor = id, connectionId = receive.source, session = session,
-          buffer = receive.payload, startTimeMs = time.milliseconds, listenerName = listenerName,
-          securityProtocol = securityProtocol)
+          buffer = receive.payload, startTimeNanos = time.nanoseconds,
+          listenerName = listenerName, securityProtocol = securityProtocol)
         requestChannel.sendRequest(req)
         selector.mute(receive.source)
       } catch {
@@ -529,9 +529,16 @@ private[kafka] class Processor(val id: Int,
       val resp = inflightResponses.remove(send.destination).getOrElse {
         throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
       }
-      resp.request.updateRequestMetrics()
+      updateRequestMetrics(resp.request)
       selector.unmute(send.destination)
     }
+  }
+
+  private def updateRequestMetrics(request: RequestChannel.Request) {
+    val channel = selector.channel(request.connectionId)
+    val openOrClosingChannel = if (channel != null) channel else selector.closingChannel(request.connectionId)
+    val networkThreadTimeNanos = if (openOrClosingChannel != null) openOrClosingChannel.getAndResetNetworkThreadTimeNanos() else 0L
+    request.updateRequestMetrics(networkThreadTimeNanos)
   }
 
   private def processDisconnected() {
@@ -539,7 +546,7 @@ private[kafka] class Processor(val id: Int,
       val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
         throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
       }.remoteHost
-      inflightResponses.remove(connectionId).foreach(_.request.updateRequestMetrics())
+      inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response.request))
       // the channel has been closed by the selector but the quotas still need to be updated
       connectionQuotas.dec(InetAddress.getByName(remoteHost))
     }

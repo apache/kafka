@@ -48,6 +48,7 @@ object BrokerApiVersionsCommand {
         case Failure(v) => out.print(s"${broker} -> ERROR: ${v}\n")
       }
     }
+    adminClient.close()
   }
 
   private def createAdminClient(opts: BrokerVersionCommandOptions): AdminClient = {

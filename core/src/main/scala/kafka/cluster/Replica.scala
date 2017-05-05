@@ -21,8 +21,9 @@ import kafka.log.Log
 import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
 import kafka.common.KafkaException
-import java.util.concurrent.atomic.AtomicLong
-
+import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
+import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
@@ -35,6 +36,9 @@ class Replica(val brokerId: Int,
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
   @volatile private[this] var logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
+  // the log start offset value, kept in all replicas;
+  // for local replica it is the log's start offset, for remote replicas its value is only updated by follower fetch
+  @volatile private[this] var _logStartOffset = Log.UnknownLogStartOffset
 
   // The log end offset value at the time the leader received the last FetchRequest from this follower
   // This is used to determine the lastCaughtUpTimeMs of the follower
@@ -54,6 +58,8 @@ class Replica(val brokerId: Int,
 
   def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
 
+  val epochs = log.map(_.leaderEpochCache)
+
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
@@ -72,6 +78,7 @@ class Replica(val brokerId: Int,
     else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, lastFetchTimeMs)
 
+    logStartOffset = logReadResult.followerLogStartOffset
     logEndOffset = logReadResult.info.fetchOffsetMetadata
     lastFetchLeaderLogEndOffset = logReadResult.leaderLogEndOffset
     lastFetchTimeMs = logReadResult.fetchTimeMs
@@ -97,6 +104,33 @@ class Replica(val brokerId: Int,
       log.get.logEndOffsetMetadata
     else
       logEndOffsetMetadata
+
+  def maybeIncrementLogStartOffset(offset: Long) {
+    if (isLocal) {
+      if (highWatermark.messageOffset < offset)
+        throw new OffsetOutOfRangeException(s"The specified offset $offset is higher than the high watermark" +
+                                            s" ${highWatermark.messageOffset} of the partition $topicPartition")
+      log.get.maybeIncrementLogStartOffset(offset)
+    } else {
+      throw new KafkaException(s"Should not try to delete records on partition $topicPartition's non-local replica $brokerId")
+    }
+  }
+
+  private def logStartOffset_=(newLogStartOffset: Long) {
+    if (isLocal) {
+      throw new KafkaException(s"Should not set log start offset on partition $topicPartition's local replica $brokerId " +
+                               s"without attempting to delete records of the log")
+    } else {
+      _logStartOffset = newLogStartOffset
+      trace(s"Setting log start offset for remote replica $brokerId for partition $topicPartition to [$newLogStartOffset]")
+    }
+  }
+
+  def logStartOffset =
+    if (isLocal)
+      log.get.logStartOffset
+    else
+      _logStartOffset
 
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {

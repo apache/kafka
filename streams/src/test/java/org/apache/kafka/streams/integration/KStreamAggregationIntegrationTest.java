@@ -45,12 +45,14 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -69,6 +71,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertFalse;
 
+@Category({IntegrationTest.class})
 public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
@@ -103,7 +106,8 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
@@ -351,13 +355,7 @@ public class KStreamAggregationIntegrationTest {
             )));
     }
 
-    @Test
-    public void shouldCount() throws Exception {
-        produceMessages(mockTime.milliseconds());
-
-        groupedStream.count("count-by-key")
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
-
+    private void shouldCountHelper() throws Exception {
         startStreams();
 
         produceMessages(mockTime.milliseconds());
@@ -385,6 +383,26 @@ public class KStreamAggregationIntegrationTest {
             KeyValue.pair("E", 1L),
             KeyValue.pair("E", 2L)
         )));
+    }
+
+    @Test
+    public void shouldCount() throws Exception {
+        produceMessages(mockTime.milliseconds());
+
+        groupedStream.count("count-by-key")
+            .to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        shouldCountHelper();
+    }
+
+    @Test
+    public void shouldCountWithInternalStore() throws Exception {
+        produceMessages(mockTime.milliseconds());
+
+        groupedStream.count()
+            .to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        shouldCountHelper();
     }
 
     @Test

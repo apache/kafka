@@ -27,10 +27,8 @@ import org.apache.kafka.connect.runtime.SourceConnectorConfig;
 import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
-import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
-import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryConfigBackingStore;
 import org.apache.kafka.connect.storage.MemoryStatusBackingStore;
@@ -44,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+
 
 /**
  * Single process, in-memory "herder". Useful for a standalone Kafka Connect process.
@@ -155,10 +154,7 @@ public class StandaloneHerder extends AbstractHerder {
                                                 boolean allowReplace,
                                                 final Callback<Created<ConnectorInfo>> callback) {
         try {
-            ConfigInfos validatedConfig = validateConnectorConfig(config);
-            if (validatedConfig.errorCount() > 0) {
-                callback.onCompletion(new BadRequestException("Connector configuration is invalid " +
-                        "(use the endpoint `/{connectorType}/config/validate` to get a full list of errors)"), null);
+            if (maybeAddConfigErrors(validateConnectorConfig(config), callback)) {
                 return;
             }
 

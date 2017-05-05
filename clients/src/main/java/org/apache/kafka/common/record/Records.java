@@ -20,13 +20,22 @@ import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
 
 /**
- * Interface for accessing the records contained in a log. The log itself is represented as a sequence of log entries.
- * Each log entry consists of an 8 byte offset, a 4 byte record size, and a "shallow" {@link Record record}.
- * If the entry is not compressed, then each entry will have only the shallow record contained inside it. If it is
- * compressed, the entry contains "deep" records, which are packed into the value field of the shallow record. To iterate
- * over the shallow records, use {@link #shallowEntries()}; for the deep records, use {@link #deepEntries()}. Note
- * that the deep iterator handles both compressed and non-compressed entries: if the entry is not compressed, the
- * shallow record is returned; otherwise, the shallow record is decompressed and the deep entries are returned.
+ * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
+ * batches (see {@link RecordBatch}).
+ *
+ * For magic versions 1 and below, each batch consists of an 8 byte offset, a 4 byte record size, and a "shallow"
+ * {@link Record record}. If the batch is not compressed, then each batch will have only the shallow record contained
+ * inside it. If it is compressed, the batch contains "deep" records, which are packed into the value field of the
+ * shallow record. To iterate over the shallow batches, use {@link #batches()}; for the deep records, use
+ * {@link #records()}. Note that the deep iterator handles both compressed and non-compressed batches: if the batch is
+ * not compressed, the shallow record is returned; otherwise, the shallow batch is decompressed and the deep records
+ * are returned.
+ *
+ * For magic version 2, every batch contains 1 or more log record, regardless of compression. You can iterate
+ * over the batches directly using {@link #batches()}. Records can be iterated either directly from an individual
+ * batch or through {@link #records()}. Just as in previous versions, iterating over the records typically involves
+ * decompression and should therefore be used with caution.
+ *
  * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
  */
 public interface Records {
@@ -36,6 +45,10 @@ public interface Records {
     int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
     int SIZE_LENGTH = 4;
     int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
+
+    // the magic offset is at the same offset for all current message formats, but the 4 bytes
+    // between the size and the magic is dependent on the version.
+    int MAGIC_OFFSET = 16;
 
     /**
      * The size of these records in bytes.
@@ -54,38 +67,41 @@ public interface Records {
     long writeTo(GatheringByteChannel channel, long position, int length) throws IOException;
 
     /**
-     * Get the shallow log entries in this log buffer. Note that the signature allows subclasses
-     * to return a more specific log entry type. This enables optimizations such as in-place offset
-     * assignment (see {@link ByteBufferLogInputStream.ByteBufferLogEntry}), and partial reading of
-     * record data (see {@link FileLogInputStream.FileChannelLogEntry#magic()}.
-     * @return An iterator over the shallow entries of the log
+     * Get the record batches. Note that the signature allows subclasses
+     * to return a more specific batch type. This enables optimizations such as in-place offset
+     * assignment (see for example {@link DefaultRecordBatch}), and partial reading of
+     * record data (see {@link FileLogInputStream.FileChannelRecordBatch#magic()}.
+     * @return An iterator over the record batches of the log
      */
-    Iterable<? extends LogEntry> shallowEntries();
+    Iterable<? extends RecordBatch> batches();
 
     /**
-     * Get the deep log entries (i.e. descend into compressed message sets). For the deep records,
-     * there are fewer options for optimization since the data must be decompressed before it can be
-     * returned. Hence there is little advantage in allowing subclasses to return a more specific type
-     * as we do for {@link #shallowEntries()}.
-     * @return An iterator over the deep entries of the log
-     */
-    Iterable<LogEntry> deepEntries();
-
-    /**
-     * Check whether all shallow entries in this buffer have a certain magic value.
+     * Check whether all batches in this buffer have a certain magic value.
      * @param magic The magic value to check
-     * @return true if all shallow entries have a matching magic value, false otherwise
+     * @return true if all record batches have a matching magic value, false otherwise
      */
-    boolean hasMatchingShallowMagic(byte magic);
-
+    boolean hasMatchingMagic(byte magic);
 
     /**
-     * Convert all entries in this buffer to the format passed as a parameter. Note that this requires
+     * Check whether this log buffer has a magic value compatible with a particular value
+     * (i.e. whether all message sets contained in the buffer have a matching or lower magic).
+     * @param magic The magic version to ensure compatibility with
+     * @return true if all batches have compatible magic, false otherwise
+     */
+    boolean hasCompatibleMagic(byte magic);
+
+    /**
+     * Convert all batches in this buffer to the format passed as a parameter. Note that this requires
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
-     * @param upconvertTimestampType The timestamp type to use if up-converting from magic 0
-     * @return A Records (which may or may not be the same instance)
+     * @return A Records instance (which may or may not be the same instance)
      */
-    Records toMessageFormat(byte toMagic, TimestampType upconvertTimestampType);
+    Records downConvert(byte toMagic);
 
+    /**
+     * Get an iterator over the records in this log. Note that this generally requires decompression,
+     * and should therefore be used with care.
+     * @return The record iterator
+     */
+    Iterable<Record> records();
 }

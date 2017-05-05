@@ -47,6 +47,7 @@ public abstract class AbstractStream<K> {
         this.sourceNodes = sourceNodes;
     }
 
+
     Set<String> ensureJoinableWith(final AbstractStream<K> other) {
         Set<String> allSourceNodes = new HashSet<>();
         allSourceNodes.addAll(sourceNodes);
@@ -55,6 +56,12 @@ public abstract class AbstractStream<K> {
         topology.copartitionSources(allSourceNodes);
 
         return allSourceNodes;
+    }
+
+    String getOrCreateName(final String queryableStoreName, final String prefix) {
+        final String returnName = queryableStoreName != null ? queryableStoreName : topology.newStoreName(prefix);
+        Topic.validate(returnName);
+        return returnName;
     }
 
     static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {

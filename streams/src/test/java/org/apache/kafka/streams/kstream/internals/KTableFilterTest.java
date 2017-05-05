@@ -57,6 +57,28 @@ public class KTableFilterTest {
         stateDir = TestUtils.tempDirectory("kafka-test");
     }
 
+    private void doTestKTable(final KStreamBuilder builder, final KTable<String, Integer> table2,
+                              final KTable<String, Integer> table3, final String topic1) {
+        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
+        table2.toStream().process(proc2);
+        table3.toStream().process(proc3);
+
+        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
+
+        driver.process(topic1, "A", 1);
+        driver.process(topic1, "B", 2);
+        driver.process(topic1, "C", 3);
+        driver.process(topic1, "D", 4);
+        driver.flushState();
+        driver.process(topic1, "A", null);
+        driver.process(topic1, "B", null);
+        driver.flushState();
+
+        proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
+        proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+    }
+
     @Test
     public void testKTable() {
         final KStreamBuilder builder = new KStreamBuilder();
@@ -78,53 +100,41 @@ public class KTableFilterTest {
             }
         });
 
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
-        table3.toStream().process(proc3);
-
-        driver = new KStreamTestDriver(builder, stateDir);
-
-        driver.process(topic1, "A", 1);
-        driver.process(topic1, "B", 2);
-        driver.process(topic1, "C", 3);
-        driver.process(topic1, "D", 4);
-        driver.flushState();
-        driver.process(topic1, "A", null);
-        driver.process(topic1, "B", null);
-        driver.flushState();
-
-        proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
-        proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+        doTestKTable(builder, table2, table3, topic1);
     }
 
     @Test
-    public void testValueGetter() throws IOException {
-        KStreamBuilder builder = new KStreamBuilder();
+    public void testQueryableKTable() {
+        final KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1, "anyStoreName");
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
+        KTable<String, Integer> table1 = builder.table(stringSerde, intSerde, topic1, "anyStoreName");
 
+        KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
+            @Override
+            public boolean test(String key, Integer value) {
+                return (value % 2) == 0;
+            }
+        }, "anyStoreNameFilter");
+        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
+            @Override
+            public boolean test(String key, Integer value) {
+                return (value % 2) == 0;
+            }
+        });
+
+        doTestKTable(builder, table2, table3, topic1);
+    }
+
+    private void doTestValueGetter(final KStreamBuilder builder,
+                                   final KTableImpl<String, Integer, Integer> table2,
+                                   final KTableImpl<String, Integer, Integer> table3,
+                                   final String topic1) throws IOException {
         KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
         KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
         KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
@@ -178,7 +188,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testNotSendingOldValue() throws IOException {
+    public void testValueGetter() throws IOException {
         KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -192,14 +202,54 @@ public class KTableFilterTest {
                         return (value % 2) == 0;
                     }
                 });
+        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
+                new Predicate<String, Integer>() {
+                    @Override
+                    public boolean test(String key, Integer value) {
+                        return (value % 2) == 0;
+                    }
+                });
 
+        doTestValueGetter(builder, table2, table3, topic1);
+    }
+
+    @Test
+    public void testQueryableValueGetter() throws IOException {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        String topic1 = "topic1";
+
+        KTableImpl<String, Integer, Integer> table1 =
+            (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1, "anyStoreName");
+        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean test(String key, Integer value) {
+                    return (value % 2) == 0;
+                }
+            }, "anyStoreNameFilter");
+        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean test(String key, Integer value) {
+                    return (value % 2) == 0;
+                }
+            });
+
+        doTestValueGetter(builder, table2, table3, topic1);
+    }
+
+    private void doTestNotSendingOldValue(final KStreamBuilder builder,
+                                          final KTableImpl<String, Integer, Integer> table1,
+                                          final KTableImpl<String, Integer, Integer> table2,
+                                          final String topic1) throws IOException {
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
         MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
 
         builder.addProcessor("proc1", proc1, table1.name);
         builder.addProcessor("proc2", proc2, table2.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 1);
@@ -227,8 +277,9 @@ public class KTableFilterTest {
         proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
     }
 
+
     @Test
-    public void testSendingOldValue() throws IOException {
+    public void testNotSendingOldValue() throws IOException {
         KStreamBuilder builder = new KStreamBuilder();
 
         String topic1 = "topic1";
@@ -243,6 +294,32 @@ public class KTableFilterTest {
                     }
                 });
 
+        doTestNotSendingOldValue(builder, table1, table2, topic1);
+    }
+
+    @Test
+    public void testQueryableNotSendingOldValue() throws IOException {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        String topic1 = "topic1";
+
+        KTableImpl<String, Integer, Integer> table1 =
+            (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1, "anyStoreName");
+        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean test(String key, Integer value) {
+                    return (value % 2) == 0;
+                }
+            }, "anyStoreNameFilter");
+
+        doTestNotSendingOldValue(builder, table1, table2, topic1);
+    }
+
+    private void doTestSendingOldValue(final KStreamBuilder builder,
+                                       final KTableImpl<String, Integer, Integer> table1,
+                                       final KTableImpl<String, Integer, Integer> table2,
+                                       final String topic1) throws IOException {
         table2.enableSendingOldValues();
 
         MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
@@ -251,7 +328,7 @@ public class KTableFilterTest {
         builder.addProcessor("proc1", proc1, table1.name);
         builder.addProcessor("proc2", proc2, table2.name);
 
-        driver = new KStreamTestDriver(builder, stateDir, null, null);
+        driver = new KStreamTestDriver(builder, stateDir, Serdes.String(), Serdes.Integer());
 
         driver.process(topic1, "A", 1);
         driver.process(topic1, "B", 1);
@@ -280,6 +357,64 @@ public class KTableFilterTest {
     }
 
     @Test
+    public void testSendingOldValue() throws IOException {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        String topic1 = "topic1";
+
+        KTableImpl<String, Integer, Integer> table1 =
+                (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1, "anyStoreName");
+        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+                new Predicate<String, Integer>() {
+                    @Override
+                    public boolean test(String key, Integer value) {
+                        return (value % 2) == 0;
+                    }
+                });
+
+        doTestSendingOldValue(builder, table1, table2, topic1);
+    }
+
+    @Test
+    public void testQueryableSendingOldValue() throws IOException {
+        KStreamBuilder builder = new KStreamBuilder();
+
+        String topic1 = "topic1";
+
+        KTableImpl<String, Integer, Integer> table1 =
+            (KTableImpl<String, Integer, Integer>) builder.table(stringSerde, intSerde, topic1, "anyStoreName");
+        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+            new Predicate<String, Integer>() {
+                @Override
+                public boolean test(String key, Integer value) {
+                    return (value % 2) == 0;
+                }
+            }, "anyStoreNameFilter");
+
+        doTestSendingOldValue(builder, table1, table2, topic1);
+    }
+
+    private void doTestSkipNullOnMaterialization(final KStreamBuilder builder,
+                                                 final KTableImpl<String, String, String> table1,
+                                                 final KTableImpl<String, String, String> table2,
+                                                 final String topic1) throws IOException {
+        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
+        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+
+        builder.addProcessor("proc1", proc1, table1.name);
+        builder.addProcessor("proc2", proc2, table2.name);
+
+        driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+
+        driver.process(topic1, "A", "reject");
+        driver.process(topic1, "B", "reject");
+        driver.process(topic1, "C", "reject");
+        driver.flushState();
+        proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
+        proc2.checkEmptyAndClearProcessResult();
+    }
+
+    @Test
     public void testSkipNullOnMaterialization() throws IOException {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         KStreamBuilder builder = new KStreamBuilder();
@@ -297,20 +432,28 @@ public class KTableFilterTest {
             }).groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
 
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+        doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
+    }
 
-        builder.addProcessor("proc1", proc1, table1.name);
-        builder.addProcessor("proc2", proc2, table2.name);
+    @Test
+    public void testQueryableSkipNullOnMaterialization() throws IOException {
+        // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
+        KStreamBuilder builder = new KStreamBuilder();
 
-        driver = new KStreamTestDriver(builder, stateDir, stringSerde, stringSerde);
+        String topic1 = "topic1";
 
-        driver.process(topic1, "A", "reject");
-        driver.process(topic1, "B", "reject");
-        driver.process(topic1, "C", "reject");
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+        KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
+            new Predicate<String, String>() {
+                @Override
+                public boolean test(String key, String value) {
+                    return value.equalsIgnoreCase("accept");
+                }
+            }, "anyStoreNameFilter").groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper())
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
+
+        doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
     }
 
     @Test

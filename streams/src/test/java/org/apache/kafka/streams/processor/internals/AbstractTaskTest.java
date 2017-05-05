@@ -42,21 +42,21 @@ public class AbstractTaskTest {
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() throws Exception {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() throws Exception {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() throws Exception {
         final Consumer consumer = mockConsumer(new WakeupException());
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     private AbstractTask createTask(final Consumer consumer) {
@@ -76,29 +76,16 @@ public class AbstractTaskTest {
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
                                 new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
             @Override
-            public void commit() {
-                // do nothing
-            }
+            public void resume() {}
 
             @Override
-            public void close() {
-
-            }
+            public void commit() {}
 
             @Override
-            public void initTopology() {
-
-            }
+            public void suspend() {}
 
             @Override
-            public void closeTopology() {
-
-            }
-
-            @Override
-            public void commitOffsets() {
-                // do nothing
-            }
+            public void close() {}
         };
     }
 

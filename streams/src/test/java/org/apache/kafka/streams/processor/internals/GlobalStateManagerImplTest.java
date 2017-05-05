@@ -228,7 +228,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 1, t2);
         stateManager.register(store2, false, stateRestoreCallback);
 
-        stateManager.flush(context);
+        stateManager.flush();
         assertTrue(store1.flushed);
         assertTrue(store2.flushed);
     }
@@ -246,7 +246,7 @@ public class GlobalStateManagerImplTest {
             }
         }, false, stateRestoreCallback);
 
-        stateManager.flush(context);
+        stateManager.flush();
     }
 
     @Test
@@ -403,6 +403,29 @@ public class GlobalStateManagerImplTest {
         assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
         assertThat(updatedCheckpoint.get(t1), equalTo(101L));
     }
+
+    @Test
+    public void shouldSkipNullKeysWhenRestoring() throws Exception {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t1, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t1, 2L);
+        consumer.updatePartitions(t1.topic(), Collections.singletonList(new PartitionInfo(t1.topic(), t1.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t1));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 1, (byte[]) null, "null".getBytes()));
+        final byte[] expectedKey = "key".getBytes();
+        final byte[] expectedValue = "value".getBytes();
+        consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 2, expectedKey, expectedValue));
+
+        stateManager.initialize(context);
+        final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+        stateManager.register(store1, false, stateRestoreCallback);
+        final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
+        assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
+    }
+
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),

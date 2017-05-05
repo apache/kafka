@@ -655,7 +655,8 @@ public class JsonConverter implements Converter {
 
             throw new DataException("Couldn't convert " + value + " to JSON.");
         } catch (ClassCastException e) {
-            throw new DataException("Invalid type for " + schema.type() + ": " + value.getClass());
+            String schemaTypeStr = (schema != null) ? schema.type().toString() : "unknown schema";
+            throw new DataException("Invalid type for " + schemaTypeStr + ": " + value.getClass());
         }
     }
 

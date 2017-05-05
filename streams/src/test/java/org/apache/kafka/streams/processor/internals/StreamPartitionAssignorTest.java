@@ -999,7 +999,7 @@ public class StreamPartitionAssignorTest {
 
     private AssignmentInfo checkAssignment(Set<String> expectedTopics, PartitionAssignor.Assignment assignment) {
 
-        // This assumed 1) DefaultPartitionGrouper is used, and 2) there is a only one topic group.
+        // This assumed 1) DefaultPartitionGrouper is used, and 2) there is an only one topic group.
 
         AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
 

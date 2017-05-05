@@ -27,16 +27,19 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -295,8 +298,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
         boolean required = false;
         String defaultValue;
-        if (configKey.defaultValue == ConfigDef.NO_DEFAULT_VALUE) {
-            defaultValue = (String) configKey.defaultValue;
+        if (ConfigDef.NO_DEFAULT_VALUE.equals(configKey.defaultValue)) {
+            defaultValue = null;
             required = true;
         } else {
             defaultValue = ConfigDef.convertToString(configKey.defaultValue, type);
@@ -337,10 +340,44 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         }
     }
 
+    /**
+     * Checks a given {@link ConfigInfos} for validation error messages and adds an exception
+     * to the given {@link Callback} if any were found.
+     *
+     * @param configInfos configInfos to read Errors from
+     * @param callback callback to add config error exception to
+     * @return true if errors were found in the config
+     */
+    protected final boolean maybeAddConfigErrors(
+        ConfigInfos configInfos,
+        Callback<Created<ConnectorInfo>> callback
+    ) {
+        int errors = configInfos.errorCount();
+        boolean hasErrors = errors > 0;
+        if (hasErrors) {
+            StringBuilder messages = new StringBuilder();
+            messages.append("Connector configuration is invalid and contains the following ")
+                .append(errors).append(" error(s):");
+            for (ConfigInfo configInfo : configInfos.values()) {
+                for (String msg : configInfo.configValue().errors()) {
+                    messages.append('\n').append(msg);
+                }
+            }
+            callback.onCompletion(
+                new BadRequestException(
+                    messages.append(
+                        "\nYou can also find the above list of errors at the endpoint `/{connectorType}/config/validate`"
+                    ).toString()
+                ), null
+            );
+        }
+        return hasErrors;
+    }
+
     private String trace(Throwable t) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        t.printStackTrace(new PrintStream(output));
         try {
+            t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
             return output.toString("UTF-8");
         } catch (UnsupportedEncodingException e) {
             return null;

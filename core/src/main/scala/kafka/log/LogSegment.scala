@@ -17,10 +17,13 @@
 package kafka.log
 
 import java.io.{File, IOException}
+import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
 import kafka.common._
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
@@ -213,36 +216,43 @@ class LogSegment(val log: FileRecords,
    *
    * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
    * is corrupt.
+    * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int): Int = {
+  def recover(maxMessageSize: Int, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
     timeIndex.truncate()
     timeIndex.resize(timeIndex.maxIndexSize)
     var validBytes = 0
     var lastIndexEntry = 0
-    maxTimestampSoFar = Record.NO_TIMESTAMP
+    maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
     try {
-      for (entry <- log.shallowEntries(maxMessageSize).asScala) {
-        val record = entry.record
-        record.ensureValid()
+      for (batch <- log.batches(maxMessageSize).asScala) {
+        batch.ensureValid()
 
-        // The max timestamp should have been put in the outer message, so we don't need to iterate over the inner messages.
-        if (record.timestamp > maxTimestampSoFar) {
-          maxTimestampSoFar = record.timestamp
-          offsetOfMaxTimestamp = entry.offset
+        // The max timestamp is exposed at the batch level, so no need to iterate the records
+        if (batch.maxTimestamp > maxTimestampSoFar) {
+          maxTimestampSoFar = batch.maxTimestamp
+          offsetOfMaxTimestamp = batch.lastOffset
         }
 
         // Build offset index
         if(validBytes - lastIndexEntry > indexIntervalBytes) {
-          val startOffset = entry.firstOffset
+          val startOffset = batch.baseOffset
           index.append(startOffset, validBytes)
           timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
           lastIndexEntry = validBytes
         }
-        validBytes += entry.sizeInBytes()
+        validBytes += batch.sizeInBytes()
+
+        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
+          leaderEpochCache.foreach { cache =>
+            if (batch.partitionLeaderEpoch > cache.latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
+              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+          }
+        }
       }
     } catch {
       case e: CorruptRecordException =>
@@ -294,7 +304,7 @@ class LogSegment(val log: FileRecords,
     // after truncation, reset and allocate more space for the (new currently  active) index
     index.resize(index.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
-    val bytesTruncated = log.truncateTo(mapping.position.toInt)
+    val bytesTruncated = log.truncateTo(mapping.position)
     if(log.sizeInBytes == 0) {
       created = time.milliseconds
       rollingBasedTimestamp = None
@@ -316,7 +326,7 @@ class LogSegment(val log: FileRecords,
     if (ms == null) {
       baseOffset
     } else {
-      ms.records.shallowEntries.asScala.lastOption match {
+      ms.records.batches.asScala.lastOption match {
         case None => baseOffset
         case Some(last) => last.nextOffset
       }
@@ -367,19 +377,19 @@ class LogSegment(val log: FileRecords,
 
   /**
    * The time this segment has waited to be rolled.
-   * If the first message has a timestamp we use the message timestamp to determine when to roll a segment. A segment
-   * is rolled if the difference between the new message's timestamp and the first message's timestamp exceeds the
+   * If the first message batch has a timestamp we use its timestamp to determine when to roll a segment. A segment
+   * is rolled if the difference between the new batch's timestamp and the first batch's timestamp exceeds the
    * segment rolling time.
-   * If the first message does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
+   * If the first batch does not have a timestamp, we use the wall clock time to determine when to roll a segment. A
    * segment is rolled if the difference between the current wall clock time and the segment create time exceeds the
    * segment rolling time.
    */
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
     if (rollingBasedTimestamp.isEmpty) {
-      val iter = log.shallowEntries.iterator()
+      val iter = log.batches.iterator()
       if (iter.hasNext)
-        rollingBasedTimestamp = Some(iter.next().record.timestamp)
+        rollingBasedTimestamp = Some(iter.next().maxTimestamp)
     }
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t
@@ -388,32 +398,33 @@ class LogSegment(val log: FileRecords,
   }
 
   /**
-   * Search the message offset based on timestamp.
-   * This method returns an option of TimestampOffset. The offset is the offset of the first message whose timestamp is
-   * greater than or equals to the target timestamp.
+   * Search the message offset based on timestamp and offset.
    *
-   * If all the message in the segment have smaller timestamps, the returned offset will be last offset + 1 and the
-   * timestamp will be max timestamp in the segment.
+   * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
    *
-   * If all the messages in the segment have larger timestamps, or no message in the segment has a timestamp,
-   * the returned the offset will be the base offset of the segment and the timestamp will be Message.NoTimestamp.
+   * - If all the messages in the segment have smaller offsets, return None
+   * - If all the messages in the segment have smaller timestamps, return None
+   * - If all the messages in the segment have larger timestamps, or no message in the segment has a timestamp
+   *   the returned the offset will be max(the base offset of the segment, startingOffset) and the timestamp will be Message.NoTimestamp.
+   * - Otherwise, return an option of TimestampOffset. The offset is the offset of the first message whose timestamp
+   *   is greater than or equals to the target timestamp and whose offset is greater than or equals to the startingOffset.
    *
-   * This methods only returns None when the log is not empty but we did not see any messages when scanning the log
-   * from the indexed position. This could happen if the log is truncated after we get the indexed position but
-   * before we scan the log from there. In this case we simply return None and the caller will need to check on
-   * the truncated log and maybe retry or even do the search on another log segment.
+   * This methods only returns None when 1) all messages' offset < startOffing or 2) the log is not empty but we did not
+   * see any message when scanning the log from the indexed position. The latter could happen if the log is truncated
+   * after we get the indexed position but before we scan the log from there. In this case we simply return None and the
+   * caller will need to check on the truncated log and maybe retry or even do the search on another log segment.
    *
    * @param timestamp The timestamp to search for.
-   * @return the timestamp and offset of the first message whose timestamp is larger than or equal to the
-   *         target timestamp. None will be returned if there is no such message.
+   * @param startingOffset The starting offset to search.
+   * @return the timestamp and offset of the first message that meets the requirements. None will be returned if there is no such message.
    */
-  def findOffsetByTimestamp(timestamp: Long): Option[TimestampOffset] = {
+  def findOffsetByTimestamp(timestamp: Long, startingOffset: Long = baseOffset): Option[TimestampOffset] = {
     // Get the index entry with a timestamp less than or equal to the target timestamp
     val timestampOffset = timeIndex.lookup(timestamp)
-    val position = index.lookup(timestampOffset.offset).position
+    val position = index.lookup(math.max(timestampOffset.offset, startingOffset)).position
 
     // Search the timestamp
-    Option(log.searchForTimestamp(timestamp, position)).map { timestampAndOffset =>
+    Option(log.searchForTimestamp(timestamp, position, startingOffset)).map { timestampAndOffset =>
       TimestampOffset(timestampAndOffset.timestamp, timestampAndOffset.offset)
     }
   }
@@ -459,9 +470,10 @@ class LogSegment(val log: FileRecords,
    * Change the last modified time for this log segment
    */
   def lastModified_=(ms: Long) = {
-    log.file.setLastModified(ms)
-    index.file.setLastModified(ms)
-    timeIndex.file.setLastModified(ms)
+    val fileTime = FileTime.fromMillis(ms)
+    Files.setLastModifiedTime(log.file.toPath, fileTime)
+    Files.setLastModifiedTime(index.file.toPath, fileTime)
+    Files.setLastModifiedTime(timeIndex.file.toPath, fileTime)
   }
 }
 

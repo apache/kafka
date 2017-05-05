@@ -16,13 +16,11 @@
 */
 package kafka.controller
 
-import collection._
-import java.util.concurrent.atomic.AtomicBoolean
-
 import kafka.common.{StateChangeFailedException, TopicAndPartition}
 import kafka.controller.Callbacks.CallbackBuilder
-import kafka.utils.{Logging, ReplicationUtils, ZkUtils}
-import kafka.utils.CoreUtils._
+import kafka.utils.{Logging, ReplicationUtils}
+
+import scala.collection._
 
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and
@@ -47,9 +45,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerId = controller.config.brokerId
   private val zkUtils = controllerContext.zkUtils
   private val replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
-  private val brokerChangeListener = new BrokerChangeListener(controller)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
-  private val hasStarted = new AtomicBoolean(false)
   private val stateChangeLogger = KafkaController.stateChangeLogger
 
   this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
@@ -61,38 +57,17 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * Then triggers the OnlineReplica state change for all replicas.
    */
   def startup() {
-    // initialize replica state
     initializeReplicaState()
-    // set started flag
-    hasStarted.set(true)
-    // move all Online replicas to Online
     handleStateChanges(controllerContext.allLiveReplicas(), OnlineReplica)
 
     info("Started replica state machine with initial state -> " + replicaState.toString())
-  }
-
-  // register ZK listeners of the replica state machine
-  def registerListeners() {
-    // register broker change listener
-    registerBrokerChangeListener()
-  }
-
-  // de-register ZK listeners of the replica state machine
-  def deregisterListeners() {
-    // de-register broker change listener
-    deregisterBrokerChangeListener()
   }
 
   /**
    * Invoked on controller shutdown.
    */
   def shutdown() {
-    // reset started flag
-    hasStarted.set(false)
-    // reset replica state
     replicaState.clear()
-    // de-register all ZK listeners
-    deregisterListeners()
 
     info("Stopped replica state machine")
   }
@@ -158,10 +133,6 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     val partition = partitionAndReplica.partition
     val replicaId = partitionAndReplica.replica
     val topicAndPartition = TopicAndPartition(topic, partition)
-    if (!hasStarted.get)
-      throw new StateChangeFailedException(("Controller %d epoch %d initiated state change of replica %d for partition %s " +
-                                            "to %s failed because replica state machine has not started")
-                                              .format(controllerId, controller.epoch, replicaId, topicAndPartition, targetState))
     val currState = replicaState.getOrElseUpdate(partitionAndReplica, NonExistentReplica)
     try {
       val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
@@ -249,7 +220,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   case Some(updatedLeaderIsrAndControllerEpoch) =>
                     // send the shrunk ISR state change request to all the remaining alive replicas of the partition.
                     val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
-                    if (!controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition)) {
+                    if (!controller.topicDeletionManager.isPartitionToBeDeleted(topicAndPartition)) {
                       brokerRequestBatch.addLeaderAndIsrRequestForBrokers(currentAssignedReplicas.filterNot(_ == replicaId),
                         topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
                     }
@@ -263,7 +234,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               case None =>
                 true
             }
-          if (leaderAndIsrIsEmpty && !controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition))
+          if (leaderAndIsrIsEmpty && !controller.topicDeletionManager.isPartitionToBeDeleted(topicAndPartition))
             throw new StateChangeFailedException(
               "Failed to change state of replica %d for partition %s since the leader and isr path in zookeeper is empty"
               .format(replicaId, topicAndPartition))
@@ -310,14 +281,6 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         ". Instead it is in %s state".format(replicaState(partitionAndReplica)))
   }
 
-  private def registerBrokerChangeListener() = {
-    zkUtils.zkClient.subscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
-  }
-
-  private def deregisterBrokerChangeListener() = {
-    zkUtils.zkClient.unsubscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
-  }
-
   /**
    * Invoked on startup of the replica's state machine to set the initial state for replicas of all existing partitions
    * in zookeeper
@@ -341,46 +304,6 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
 
   def partitionsAssignedToBroker(topics: Seq[String], brokerId: Int):Seq[TopicAndPartition] = {
     controllerContext.partitionReplicaAssignment.filter(_._2.contains(brokerId)).keySet.toSeq
-  }
-
-  /**
-   * This is the zookeeper listener that triggers all the state transitions for a replica
-   */
-  class BrokerChangeListener(protected val controller: KafkaController) extends ControllerZkChildListener {
-
-    protected def logName = "BrokerChangeListener"
-
-    def doHandleChildChange(parentPath: String, currentBrokerList: Seq[String]) {
-      info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.sorted.mkString(",")))
-      inLock(controllerContext.controllerLock) {
-        if (hasStarted.get) {
-          ControllerStats.leaderElectionTimer.time {
-            try {
-              val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
-              val curBrokerIds = curBrokers.map(_.id)
-              val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
-              val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
-              val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
-              val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
-              controllerContext.liveBrokers = curBrokers
-              val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
-              val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
-              val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
-              info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-                .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
-              newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
-              deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-              if(newBrokerIds.nonEmpty)
-                controller.onBrokerStartup(newBrokerIdsSorted)
-              if(deadBrokerIds.nonEmpty)
-                controller.onBrokerFailure(deadBrokerIdsSorted)
-            } catch {
-              case e: Throwable => error("Error while handling broker changes", e)
-            }
-          }
-        }
-      }
-    }
   }
 }
 

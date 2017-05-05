@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -134,6 +133,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                             DEFAULT_RETENTION_TIME, offsetData, version);
                 case 1:
                 case 2:
+                case 3:
                     long retentionTime = version == 1 ? DEFAULT_RETENTION_TIME : this.retentionTime;
                     return new OffsetCommitRequest(groupId, generationId, memberId, retentionTime, offsetData, version);
                 default:
@@ -149,7 +149,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 append(", memberId=").append(memberId).
                 append(", generationId=").append(generationId).
                 append(", retentionTime=").append(retentionTime).
-                append(", offsetData=").append(Utils.mkString(offsetData)).
+                append(", offsetData=").append(offsetData).
                 append(")");
             return bld.toString();
         }
@@ -246,7 +246,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Map<TopicPartition, Errors> responseData = new HashMap<>();
         for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
             responseData.put(entry.getKey(), Errors.forException(e));
@@ -258,6 +258,8 @@ public class OffsetCommitRequest extends AbstractRequest {
             case 1:
             case 2:
                 return new OffsetCommitResponse(responseData);
+            case 3:
+                return new OffsetCommitResponse(throttleTimeMs, responseData);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_COMMIT.latestVersion()));

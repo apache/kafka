@@ -50,7 +50,10 @@ class KafkaRequestHandler(id: Int,
           // time should be discounted by # threads.
           val startSelectTime = time.nanoseconds
           req = requestChannel.receiveRequest(300)
-          val idleTime = time.nanoseconds - startSelectTime
+          val endTime = time.nanoseconds
+          if (req != null)
+            req.requestDequeueTimeNanos = endTime
+          val idleTime = endTime - startSelectTime
           aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
         }
 
@@ -59,7 +62,6 @@ class KafkaRequestHandler(id: Int,
           latch.countDown()
           return
         }
-        req.requestDequeueTimeMs = time.milliseconds
         trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {

@@ -258,7 +258,7 @@ public final class KafkaLZ4BlockOutputStream extends FilterOutputStream {
     @Override
     public void close() throws IOException {
         if (!finished) {
-            // basicallly flush the buffer writing the last block
+            // basically flush the buffer writing the last block
             writeBlock();
             // write the end block and finish the stream
             writeEndMark();

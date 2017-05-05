@@ -17,13 +17,13 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 
 public final class ConnectUtils {
     public static Long checkAndConvertTimestamp(Long timestamp) {
         if (timestamp == null || timestamp >= 0)
             return timestamp;
-        else if (timestamp == Record.NO_TIMESTAMP)
+        else if (timestamp == RecordBatch.NO_TIMESTAMP)
             return null;
         else
             throw new InvalidRecordException(String.format("Invalid record timestamp %d", timestamp));

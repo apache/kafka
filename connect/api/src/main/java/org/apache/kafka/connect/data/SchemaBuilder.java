@@ -64,7 +64,7 @@ public class SchemaBuilder implements Schema {
     private Boolean optional = null;
     private Object defaultValue = null;
 
-    private List<Field> fields = null;
+    private Map<String, Field> fields = null;
     private Schema keySchema = null;
     private Schema valueSchema = null;
 
@@ -78,7 +78,7 @@ public class SchemaBuilder implements Schema {
     private SchemaBuilder(Type type) {
         this.type = type;
         if (type == Type.STRUCT) {
-            fields = new ArrayList<>();
+            fields = new LinkedHashMap<>();
         }
     }
 
@@ -94,7 +94,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder optional() {
-        checkNull(OPTIONAL_FIELD, optional);
+        checkCanSet(OPTIONAL_FIELD, optional, true);
         optional = true;
         return this;
     }
@@ -104,7 +104,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder required() {
-        checkNull(OPTIONAL_FIELD, optional);
+        checkCanSet(OPTIONAL_FIELD, optional, false);
         optional = false;
         return this;
     }
@@ -121,7 +121,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder defaultValue(Object value) {
-        checkNull(DEFAULT_FIELD, defaultValue);
+        checkCanSet(DEFAULT_FIELD, defaultValue, value);
         checkNotNull(TYPE_FIELD, type, DEFAULT_FIELD);
         try {
             ConnectSchema.validateValue(this, value);
@@ -143,7 +143,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder name(String name) {
-        checkNull(NAME_FIELD, this.name);
+        checkCanSet(NAME_FIELD, this.name, name);
         this.name = name;
         return this;
     }
@@ -160,7 +160,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder version(Integer version) {
-        checkNull(VERSION_FIELD, this.version);
+        checkCanSet(VERSION_FIELD, this.version, version);
         this.version = version;
         return this;
     }
@@ -176,7 +176,7 @@ public class SchemaBuilder implements Schema {
      * @return the SchemaBuilder
      */
     public SchemaBuilder doc(String doc) {
-        checkNull(DOC_FIELD, this.doc);
+        checkCanSet(DOC_FIELD, this.doc, doc);
         this.doc = doc;
         return this;
     }
@@ -320,7 +320,9 @@ public class SchemaBuilder implements Schema {
         if (type != Type.STRUCT)
             throw new SchemaBuilderException("Cannot create fields on type " + type);
         int fieldIndex = fields.size();
-        fields.add(new Field(fieldName, fieldIndex, fieldSchema));
+        if (fields.containsKey(fieldName))
+            throw new SchemaBuilderException("Cannot create field because of field name duplication " + fieldName);
+        fields.put(fieldName, new Field(fieldName, fieldIndex, fieldSchema));
         return this;
     }
 
@@ -331,16 +333,13 @@ public class SchemaBuilder implements Schema {
     public List<Field> fields() {
         if (type != Type.STRUCT)
             throw new DataException("Cannot list fields on non-struct type");
-        return fields;
+        return new ArrayList<>(fields.values());
     }
 
     public Field field(String fieldName) {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");
-        for (Field field : fields)
-            if (field.name().equals(fieldName))
-                return field;
-        return null;
+        return fields.get(fieldName);
     }
 
 
@@ -387,7 +386,7 @@ public class SchemaBuilder implements Schema {
     public Schema build() {
         return new ConnectSchema(type, isOptional(), defaultValue, name, version, doc,
                 parameters == null ? null : Collections.unmodifiableMap(parameters),
-                fields == null ? null : Collections.unmodifiableList(fields), keySchema, valueSchema);
+                fields == null ? null : Collections.unmodifiableList(new ArrayList<Field>(fields.values())), keySchema, valueSchema);
     }
 
     /**
@@ -399,9 +398,8 @@ public class SchemaBuilder implements Schema {
         return build();
     }
 
-
-    private static void checkNull(String fieldName, Object val) {
-        if (val != null)
+    private static void checkCanSet(String fieldName, Object fieldVal, Object val) {
+        if (fieldVal != null && fieldVal != val)
             throw new SchemaBuilderException("Invalid SchemaBuilder call: " + fieldName + " has already been set.");
     }
 

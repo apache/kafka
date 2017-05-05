@@ -384,7 +384,7 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.setException(Errors.GROUP_COORDINATOR_NOT_AVAILABLE.exception());
+                        consumer.setException(Errors.COORDINATOR_NOT_AVAILABLE.exception());
                     }
                 });
 

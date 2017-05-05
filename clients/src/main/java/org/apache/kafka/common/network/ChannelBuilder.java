@@ -24,7 +24,7 @@ import org.apache.kafka.common.KafkaException;
 /**
  * A ChannelBuilder interface to build Channel based on configs
  */
-public interface ChannelBuilder {
+public interface ChannelBuilder extends AutoCloseable {
 
     /**
      * Configure this class with the given key-value pairs

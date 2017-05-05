@@ -16,7 +16,14 @@
 */
 package kafka.utils
 
+import java.util
+import java.util.Comparator
+
 import joptsimple.OptionParser
+import org.apache.kafka.common.{Metric, MetricName}
+
+import scala.collection.immutable.ListMap
+import scala.collection.mutable
 
 object ToolsUtils {
 
@@ -32,5 +39,30 @@ object ToolsUtils {
     val isValid = !validHostPort.isEmpty && validHostPort.size == hostPorts.length
     if(!isValid)
       CommandLineUtils.printUsageAndDie(parser, "Please provide valid host:port like host1:9091,host2:9092\n ")
+  }
+
+  /**
+    * print out the metrics in alphabetical order
+    * @param metrics  the metrics to be printed out
+    */
+  def printMetrics(metrics: mutable.Map[MetricName, _ <: Metric]): Unit = {
+    var maxLengthOfDisplayName = 0
+
+    val sortedMap = metrics.toSeq.sortWith( (s,t) =>
+      Array(s._1.group(), s._1.name(), s._1.tags()).mkString(":")
+        .compareTo(Array(t._1.group(), t._1.name(), t._1.tags()).mkString(":")) < 0
+    ).map {
+      case (key, value) =>
+        val mergedKeyName = Array(key.group(), key.name(), key.tags()).mkString(":")
+        if (maxLengthOfDisplayName < mergedKeyName.length) {
+          maxLengthOfDisplayName = mergedKeyName.length
+        }
+        (mergedKeyName, value.value())
+    }
+    println(s"\n%-${maxLengthOfDisplayName}s   %s".format("Metric Name", "Value"))
+    sortedMap.foreach {
+      case (metricName, value) =>
+        println(s"%-${maxLengthOfDisplayName}s : %.3f".format(metricName, value))
+    }
   }
 }

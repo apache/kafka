@@ -106,7 +106,7 @@ public class PluginDiscovery {
         Collections.sort(transformationPlugins, new Comparator<Class<? extends Transformation>>() {
             @Override
             public int compare(Class<? extends Transformation> a, Class<? extends Transformation> b) {
-                return a.getCanonicalName().compareTo(b.getCanonicalName());
+                return a.getName().compareTo(b.getName());
             }
         });
 

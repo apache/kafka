@@ -19,14 +19,14 @@
 
 <script id="upgrade-template" type="text/x-handlebars-template">
 
-<h4><a id="upgrade_10_3_0" href="#upgrade_10_3_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x or 0.10.2.x to 0.10.3.0</a></h4>
-<p>0.10.2.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.
-    However, please review the <a href="#upgrade_1030_notable">notable changes in 0.10.3.0</a> before upgrading.
+<h4><a id="upgrade_11_0_0" href="#upgrade_11_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x or 0.10.2.x to 0.11.0.0</a></h4>
+<p>0.11.0.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.
+    However, please review the <a href="#upgrade_1100_notable">notable changes in 0.11.0.0</a> before upgrading.
 </p>
 
-<p>Starting with version 0.10.2, Java clients (producer and consumer) have acquired the ability to communicate with older brokers. Version 0.10.3
+<p>Starting with version 0.10.2, Java clients (producer and consumer) have acquired the ability to communicate with older brokers. Version 0.11.0
     clients can talk to version 0.10.0 or newer brokers. However, if your brokers are older than 0.10.0, you must upgrade all the brokers in the
-    Kafka cluster before upgrading your clients. Version 0.10.3 brokers support 0.8.x and newer clients.
+    Kafka cluster before upgrading your clients. Version 0.11.0 brokers support 0.8.x and newer clients.
 </p>
 
 <p><b>For a rolling upgrade:</b></p>
@@ -39,22 +39,39 @@
         </ul>
     </li>
     <li> Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. </li>
-    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.10.3. </li>
-    <li> If your previous message format is 0.10.0, change log.message.format.version to 0.10.3 (this is a no-op as the message format is the same for 0.10.0, 0.10.1, 0.10.2 and 0.10.3).
+    <li> Once the entire cluster is upgraded, bump the protocol version by editing inter.broker.protocol.version and setting it to 0.11.0. </li>
+    <li> If your previous message format is 0.10.0, change log.message.format.version to 0.11.0 (this is a no-op as the message format is the same for 0.10.0, 0.10.1, 0.10.2 and 0.11.0).
         If your previous message format version is lower than 0.10.0, do not change log.message.format.version yet - this parameter should only change once all consumers have been upgraded to 0.10.0.0 or later.</li>
     <li> Restart the brokers one by one for the new protocol version to take effect. </li>
     <li> If log.message.format.version is still lower than 0.10.0 at this point, wait until all consumers have been upgraded to 0.10.0 or later,
-        then change log.message.format.version to 0.10.3 on each broker and restart them one by one. </li>
+        then change log.message.format.version to 0.11.0 on each broker and restart them one by one. </li>
 </ol>
 
 <p><b>Note:</b> If you are willing to accept downtime, you can simply take all the brokers down, update the code and start all of them. They will start with the new protocol by default.
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_1030_notable" href="#upgrade_1030_notable">Notable changes in 0.10.3.0</a></h5>
+<h5><a id="upgrade_1100_notable" href="#upgrade_1100_notable">Notable changes in 0.11.0.0</a></h5>
 <ul>
-    <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this replication factor requirement.</li>
-    <li>By default <code>message.timestamp.difference.max.ms</code> is the same as <code>retention.ms</code> instead of <code>Long.MAX_VALUE</code>.</li>
+    <li>Unclean leader election is now disabled by default. The new default favors durability over availability. Users who wish to
+        to retain the previous behavior should set the broker config <code>unclean.leader.election.enabled</code> to <code>false</code>.</li>
+    <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal
+        auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this
+        replication factor requirement.</li>
+    <li>By default <code>message.timestamp.difference.max.ms</code> is the same as <code>retention.ms</code> instead of
+        <code>Long.MAX_VALUE</code>.</li>
+    <li>The broker configuration <code>max.message.bytes</code> now applies to the total size of a batch of messages.
+        Previously the setting applied to batches of compressed messages, or to non-compressed messages individually. In practice,
+        the change is minor since a message batch may consist of only a single message, so the limitation on the size of
+        individual messages is only reduced by the overhead of the batch format. This similarly affects the
+        producer's <code>batch.size</code> configuration.</li>
+    <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
+</ul>
+
+<h5><a id="upgrade_1100_new_protocols" href="#upgrade_1100_new_protocols">New Protocol Versions</a></h5>
+<ul>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-107%3A+Add+purgeDataBefore()+API+in+AdminClient">KIP-107</a>: FetchRequest v5 introduces a partition-level <code>log_start_offset</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-107%3A+Add+purgeDataBefore()+API+in+AdminClient">KIP-107</a>: FetchResponse v5 introduces a partition-level <code>log_start_offset</code> field. </li>
 </ul>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
@@ -98,6 +115,14 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
     <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
     <li> See <a href="/{{version}}/documentation/streams#streams_api_changes_0102">Streams API changes in 0.10.2</a> for more details. </li>
 </ul>
+
+<h5><a id="upgrade_10201_notable" href="#upgrade_10201_notable">Notable changes in 0.10.2.1</a></h5>
+<ul>
+  <li> The default values for two configurations of the StreamsConfig class were changed to improve the resiliency of Kafka Streams applications. The internal Kafka Streams producer <code>retries</code> default value was changed from 0 to 10. The internal Kafka Streams consumer <code>max.poll.interval.ms</code>  default value was changed from 300000 to <code>Integer.MAX_VALUE</code>.
+  </li>
+</ul>
+
+
 
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>
 <ul>
