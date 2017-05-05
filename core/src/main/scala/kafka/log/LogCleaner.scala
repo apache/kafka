@@ -526,9 +526,10 @@ private[log] class Cleaner(val id: Int,
    * Restore the I/O buffer capacity to its original size
    */
   def restoreBuffers() {
-    info("Restoring cleaner I/O buffers from %s bytes to %s bytes".format(readBuffer.capacity,this.ioBufferSize))
-    if(this.readBuffer.capacity > this.ioBufferSize)
+    if(this.readBuffer.capacity > this.ioBufferSize) {
       this.readBuffer = ByteBuffer.allocate(this.ioBufferSize)
+      info("Restoring cleaner I/O buffers from %s bytes to %s bytes".format(readBuffer.capacity,this.ioBufferSize))
+    }
     if(this.writeBuffer.capacity > this.ioBufferSize)
       this.writeBuffer = ByteBuffer.allocate(this.ioBufferSize)
   }
