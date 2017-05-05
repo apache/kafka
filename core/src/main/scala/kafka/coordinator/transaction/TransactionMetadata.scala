@@ -134,6 +134,9 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
     topicPartitions ++= partitions
   }
 
+  def prepareNoTransit(): TransactionMetadataTransition =
+    prepareTransitionTo(state, producerEpoch.toShort, txnTimeoutMs, immutable.Set.empty[TopicPartition], txnStartTimestamp, txnLastUpdateTimestamp)
+
   def prepareIncrementEpoch(newTxnTimeoutMs: Int,
                             updateTimestamp: Long): TransactionMetadataTransition = {
 
