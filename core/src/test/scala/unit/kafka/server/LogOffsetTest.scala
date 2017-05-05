@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.{Properties, Random}
 import java.lang.{Long => JLong}
 
@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.easymock.{EasyMock, IAnswer}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
 
 class LogOffsetTest extends ZooKeeperTestHarness {
@@ -239,9 +240,9 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   def testFetchOffsetsBeforeWithChangingSegmentSize() {
     val log = EasyMock.niceMock(classOf[Log])
     val logSegment = EasyMock.niceMock(classOf[LogSegment])
-    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Long] {
-      private val value = new AtomicLong(0)
-      def answer: Long = value.getAndIncrement()
+    EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
+      private val value = new AtomicInteger(0)
+      def answer: Int = value.getAndIncrement()
     })
     EasyMock.replay(logSegment)
     val logSegments = Seq(logSegment)

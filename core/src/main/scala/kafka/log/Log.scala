@@ -598,16 +598,16 @@ class Log(@volatile var dir: File,
           maxTimestampInMessages = appendInfo.maxTimestamp,
           maxOffsetInMessages = appendInfo.lastOffset)
 
-        val segmentPosition = segment.append(firstOffset = appendInfo.firstOffset,
+        val logOffsetMetadata = LogOffsetMetadata(
+          messageOffset = appendInfo.firstOffset,
+          segmentBaseOffset = segment.baseOffset,
+          relativePositionInSegment = segment.size)
+
+        segment.append(firstOffset = appendInfo.firstOffset,
           largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
-
-        val logOffsetMetadata = LogOffsetMetadata(
-          messageOffset = appendInfo.firstOffset,
-          segmentBaseOffset = segment.baseOffset,
-          relativePositionInSegment = segmentPosition)
 
         // update the producer state
         for ((producerId, producerAppendInfo) <- updatedProducers) {

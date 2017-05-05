@@ -296,10 +296,10 @@ public class MemoryRecords extends AbstractRecords {
                                                          CompressionType compressionType,
                                                          long baseOffset,
                                                          long producerId,
-                                                         short epoch,
+                                                         short producerEpoch,
                                                          int baseSequence) {
         return builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
-                baseOffset, System.currentTimeMillis(), producerId, epoch, baseSequence);
+                baseOffset, System.currentTimeMillis(), producerId, producerEpoch, baseSequence);
     }
 
     public static MemoryRecordsBuilder builder(ByteBuffer buffer,
@@ -418,23 +418,23 @@ public class MemoryRecords extends AbstractRecords {
                 baseSequence, partitionLeaderEpoch, false, records);
     }
 
-    public static MemoryRecords withIdempotentRecords(long initialOffset, CompressionType compressionType, long pid,
-                                                      short epoch, int baseSequence, int partitionLeaderEpoch,
+    public static MemoryRecords withIdempotentRecords(long initialOffset, CompressionType compressionType, long producerId,
+                                                      short producerEpoch, int baseSequence, int partitionLeaderEpoch,
                                                       SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME,
-                pid, epoch, baseSequence, partitionLeaderEpoch, false, records);
+                producerId, producerEpoch, baseSequence, partitionLeaderEpoch, false, records);
     }
 
-    public static MemoryRecords withTransactionalRecords(CompressionType compressionType, long pid, short epoch,
-                                                         int baseSequence, SimpleRecord... records) {
+    public static MemoryRecords withTransactionalRecords(CompressionType compressionType, long producerId,
+                                                         short producerEpoch, int baseSequence, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, compressionType, TimestampType.CREATE_TIME,
-                pid, epoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
+                producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
     }
 
-    public static MemoryRecords withTransactionalRecords(long initialOffset, CompressionType compressionType, long pid,
-                                                         short epoch, int baseSequence, SimpleRecord... records) {
+    public static MemoryRecords withTransactionalRecords(long initialOffset, CompressionType compressionType, long producerId,
+                                                         short producerEpoch, int baseSequence, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME,
-                pid, epoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
+                producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,

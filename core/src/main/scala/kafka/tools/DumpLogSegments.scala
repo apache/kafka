@@ -361,12 +361,13 @@ object DumpLogSegments {
           }
 
           if (batch.isControlBatch) {
-            val controlType = ControlRecordType.parse(record.key)
-            print(s" controlType: $controlType")
-
-            if (controlType == ControlRecordType.ABORT || controlType == ControlRecordType.COMMIT) {
-              val endTxnMarker = EndTransactionMarker.deserialize(record)
-              print(s" coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+            val controlTypeId = ControlRecordType.parseTypeId(record.key)
+            ControlRecordType.fromTypeId(controlTypeId) match {
+              case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+                val endTxnMarker = EndTransactionMarker.deserialize(record)
+                print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+              case controlType =>
+                print(s" controlType: $controlType($controlTypeId)")
             }
           } else if (printContents) {
             val (key, payload) = parser.parse(record)
