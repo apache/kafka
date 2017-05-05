@@ -186,7 +186,7 @@ try:
 except ValueError:
     fail("Invalid release version, should be a dotted version number")
 
-rc = raw_input("Release candidate number (or blank to promote latest RC to final release): ")
+rc = raw_input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:3])
 docs_version = ''.join(release_version_parts[:3])
@@ -198,13 +198,14 @@ tags = cmd_output('git tag').split()
 if release_version in tags:
     fail("The specified version has already been tagged and released.")
 
+# TODO promotion
 if not rc:
+    fail("Automatic Promotion is not yet supported.")
+
     # Find the latest RC and make sure they want to promote that one
     rc_tag = sorted([t for t in tags if t.startswith(release_version + '-rc')])[-1]
     if not user_ok("Found %s as latest RC for this release. Is this correct? (y/n): "):
         fail("This script couldn't determine which RC tag to promote, you'll need to fix up the RC tags and re-run the script.")
-
-    # TODO promotion
 
     sys.exit(0)
 
