@@ -60,7 +60,7 @@ class LogTest {
   def createEmptyLogs(dir: File, offsets: Int*) {
     for(offset <- offsets) {
       Log.logFilename(dir, offset).createNewFile()
-      Log.indexFilename(dir, offset).createNewFile()
+      Log.offsetIndexFile(dir, offset).createNewFile()
     }
   }
 
@@ -71,13 +71,13 @@ class LogTest {
     val logFile = Log.logFilename(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFilename(logFile.getName))
 
-    val offsetIndexFile = Log.indexFilename(tmpDir, offset)
+    val offsetIndexFile = Log.offsetIndexFile(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFilename(offsetIndexFile.getName))
 
-    val timeIndexFile = Log.timeIndexFilename(tmpDir, offset)
+    val timeIndexFile = Log.timeIndexFile(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFilename(timeIndexFile.getName))
 
-    val snapshotFile = Log.pidSnapshotFilename(tmpDir, offset)
+    val snapshotFile = Log.producerSnapshotFile(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFilename(snapshotFile.getName))
   }
 
@@ -1294,10 +1294,10 @@ class LogTest {
    */
   @Test
   def testBogusIndexSegmentsAreRemoved() {
-    val bogusIndex1 = Log.indexFilename(logDir, 0)
-    val bogusTimeIndex1 = Log.timeIndexFilename(logDir, 0)
-    val bogusIndex2 = Log.indexFilename(logDir, 5)
-    val bogusTimeIndex2 = Log.timeIndexFilename(logDir, 5)
+    val bogusIndex1 = Log.offsetIndexFile(logDir, 0)
+    val bogusTimeIndex1 = Log.timeIndexFile(logDir, 0)
+    val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
+    val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
 
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = time.milliseconds)
     val logProps = new Properties()
@@ -1550,9 +1550,11 @@ class LogTest {
     //This write will roll the segment, yielding a new segment with base offset = max(2, 1) = 2
     log.appendAsFollower(set2)
     assertEquals(2L, log.activeSegment.baseOffset)
+    assertTrue(Log.producerSnapshotFile(logDir, 2L).exists)
     //This will also roll the segment, yielding a new segment with base offset = max(3, Integer.MAX_VALUE+3) = Integer.MAX_VALUE+3
     log.appendAsFollower(set3)
     assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)
+    assertTrue(Log.producerSnapshotFile(logDir, Integer.MAX_VALUE.toLong + 3).exists)
     //This will go into the existing log
     log.appendAsFollower(set4)
     assertEquals(Integer.MAX_VALUE.toLong + 3, log.activeSegment.baseOffset)

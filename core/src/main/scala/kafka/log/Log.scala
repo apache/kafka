@@ -248,9 +248,9 @@ class Log(@volatile var dir: File,
         } else if (isLogFile(baseFile)) {
           // delete the index files
           val offset = offsetFromFilename(baseFile.getName)
-          Files.deleteIfExists(Log.indexFilename(dir, offset).toPath)
-          Files.deleteIfExists(Log.timeIndexFilename(dir, offset).toPath)
-          Files.deleteIfExists(Log.txnIndexFilename(dir, offset).toPath)
+          Files.deleteIfExists(Log.offsetIndexFile(dir, offset).toPath)
+          Files.deleteIfExists(Log.timeIndexFile(dir, offset).toPath)
+          Files.deleteIfExists(Log.transactionIndexFile(dir, offset).toPath)
           swapFiles += file
         }
       }
@@ -274,8 +274,9 @@ class Log(@volatile var dir: File,
       } else if (isLogFile(file)) {
         // if it's a log file, load the corresponding log segment
         val startOffset = offsetFromFilename(filename)
-        val indexFile = Log.indexFilename(dir, startOffset)
-        val timeIndexFile = Log.timeIndexFilename(dir, startOffset)
+        val indexFile = Log.offsetIndexFile(dir, startOffset)
+        val timeIndexFile = Log.timeIndexFile(dir, startOffset)
+        val txnIndexFile = Log.transactionIndexFile(dir, startOffset)
 
         val indexFileExists = indexFile.exists()
         val timeIndexFileExists = timeIndexFile.exists()
@@ -298,14 +299,14 @@ class Log(@volatile var dir: File,
           } catch {
             case e: java.lang.IllegalArgumentException =>
               warn(s"Found a corrupted index file due to ${e.getMessage}}. deleting ${timeIndexFile.getAbsolutePath}, " +
-                s"${indexFile.getAbsolutePath} and rebuilding index...")
+                s"${indexFile.getAbsolutePath}, and ${txnIndexFile.getAbsolutePath} and rebuilding index...")
               Files.deleteIfExists(timeIndexFile.toPath)
               Files.delete(indexFile.toPath)
               segment.txnIndex.delete()
               recoverSegment(segment)
           }
         } else {
-          error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
+          error("Could not find offset index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           recoverSegment(segment)
         }
         segments.put(startOffset, segment)
@@ -812,12 +813,18 @@ class Log(@volatile var dir: File,
    * @param maxLength The maximum number of bytes to read
    * @param maxOffset The offset to read up to, exclusive. (i.e. this offset NOT included in the resulting message set)
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
+   * @param isolationLevel The isolation level of the fetcher. The READ_UNCOMMITTED isolation level has the traditional
+   *                       read semantics (e.g. consumers are limited to fetching up to the high watermark). In
+   *                       READ_COMMITTED, consumers are limited to fetching up the the last stable offset. Additionally,
+   *                       in READ_COMMITTED, the transaction index is consulted after fetching to collect the list
+   *                       of aborted transactions in the fetch range which the consumer uses to filter the fetched
+   *                       records before returning to the user. Note that fetches from followers always use
+   *                       READ_UNCOMMITTED.
    *
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset
    * @return The fetch data information including fetch starting offset metadata and messages read.
    */
-  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None,
-           minOneMessage: Boolean = false,
+  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None, minOneMessage: Boolean = false,
            isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
@@ -1123,10 +1130,10 @@ class Log(@volatile var dir: File,
     lock synchronized {
       val newOffset = math.max(expectedNextOffset, logEndOffset)
       val logFile = logFilename(dir, newOffset)
-      val indexFile = indexFilename(dir, newOffset)
-      val timeIndexFile = timeIndexFilename(dir, newOffset)
-      val txnIndexFile = txnIndexFilename(dir, newOffset)
-      for(file <- List(logFile, indexFile, timeIndexFile, txnIndexFile) if file.exists) {
+      val offsetIdxFile = offsetIndexFile(dir, newOffset)
+      val timeIdxFile = timeIndexFile(dir, newOffset)
+      val txnIdxFile = transactionIndexFile(dir, newOffset)
+      for(file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
         warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
         file.delete()
       }
@@ -1142,7 +1149,12 @@ class Log(@volatile var dir: File,
         }
       }
 
-      // take a snapshot of the producer states to facilitate recovery
+      // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
+      // offset align with the new segment offset since this ensures we can recover the segment by beginning
+      // with the corresponding snapshot file and scanning the segment data. Because the segment base offset
+      // may actually be ahead of the current producer state end offset (which corresponds to the log end offset),
+      // we manually override the state offset here prior to taking the snapshot.
+      producerStateManager.updateMapEndOffset(newOffset)
       producerStateManager.takeSnapshot()
 
       val segment = new LogSegment(dir,
@@ -1478,7 +1490,7 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def indexFilename(dir: File, offset: Long) =
+  def offsetIndexFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix)
 
   /**
@@ -1487,7 +1499,7 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def timeIndexFilename(dir: File, offset: Long) =
+  def timeIndexFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix)
 
   /**
@@ -1496,10 +1508,10 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The last offset (exclusive) included in the snapshot
    */
-  def pidSnapshotFilename(dir: File, offset: Long) =
+  def producerSnapshotFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + PidSnapshotFileSuffix)
 
-  def txnIndexFilename(dir: File, offset: Long) =
+  def transactionIndexFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + TxnIndexFileSuffix)
 
   def offsetFromFilename(filename: String): Long =

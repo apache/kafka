@@ -814,6 +814,29 @@ public class FetcherTest {
     }
 
     @Test
+    public void testListOffsetsSendsIsolationLevel() {
+        for (final IsolationLevel isolationLevel : IsolationLevel.values()) {
+            Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(), new ByteArrayDeserializer(),
+                    new ByteArrayDeserializer(), Integer.MAX_VALUE, isolationLevel);
+
+            subscriptions.assignFromUser(singleton(tp1));
+            subscriptions.needOffsetReset(tp1, OffsetResetStrategy.LATEST);
+
+            client.prepareResponse(new MockClient.RequestMatcher() {
+                                       @Override
+                                       public boolean matches(AbstractRequest body) {
+                                           ListOffsetRequest request = (ListOffsetRequest) body;
+                                           return request.isolationLevel() == isolationLevel;
+                                       }
+                                   }, listOffsetResponse(Errors.NONE, 1L, 5L));
+            fetcher.updateFetchPositions(singleton(tp1));
+            assertFalse(subscriptions.isOffsetResetNeeded(tp1));
+            assertTrue(subscriptions.isFetchable(tp1));
+            assertEquals(5, subscriptions.position(tp1).longValue());
+        }
+    }
+
+    @Test
     public void testUpdateFetchPositionResetToEarliestOffset() {
         subscriptions.assignFromUser(singleton(tp1));
         subscriptions.needOffsetReset(tp1, OffsetResetStrategy.EARLIEST);

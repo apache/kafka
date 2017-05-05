@@ -151,6 +151,14 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     iterator(() => ByteBuffer.allocate(AbortedTxn.TotalSize)).map(_._1).toList
   }
 
+  /**
+   * Collect all aborted transactions which overlap with a given fetch range.
+   *
+   * @param fetchOffset Inclusive first offset of the fetch range
+   * @param upperBoundOffset Exclusive last offset in the fetch range
+   * @return An object containing the aborted transactions and whether the search needs to continue
+   *         into the next log segment.
+   */
   def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = {
     val abortedTransactions = ListBuffer.empty[AbortedTransaction]
     val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)

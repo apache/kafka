@@ -669,7 +669,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                                                                  final Map<TopicPartition, Long> timestampsToSearch,
                                                                                  boolean requireTimestamp) {
         ListOffsetRequest.Builder builder = ListOffsetRequest.Builder
-                .forConsumer(requireTimestamp, IsolationLevel.READ_UNCOMMITTED)
+                .forConsumer(requireTimestamp, isolationLevel)
                 .setTargetTimes(timestampsToSearch);
 
         log.trace("Sending ListOffsetRequest {} to broker {}", builder, node);

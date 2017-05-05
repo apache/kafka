@@ -323,10 +323,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * marker written at a higher offset than the current high watermark).
    */
   def firstUnstableOffset: Option[Long] = {
-    val firstUnackedOffset = unreplicatedTxns.headOption.map(_.firstOffset)
+    val firstUnreplicatedOffset = unreplicatedTxns.headOption.map(_.firstOffset)
     firstUndecidedOffset.map { offset =>
-      math.min(offset, firstUnackedOffset.getOrElse(Long.MaxValue))
-    }.orElse(firstUnackedOffset)
+      math.min(offset, firstUnreplicatedOffset.getOrElse(Long.MaxValue))
+    }.orElse(firstUnreplicatedOffset)
   }
 
   /**
@@ -445,7 +445,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def takeSnapshot(): Unit = {
     // If not a new offset, then it is not worth taking another snapshot
     if (lastMapOffset > lastSnapOffset) {
-      val snapshotFile = Log.pidSnapshotFilename(logDir, lastMapOffset)
+      val snapshotFile = Log.producerSnapshotFile(logDir, lastMapOffset)
       debug(s"Writing producer snapshot for partition $topicPartition at offset $lastMapOffset")
       writeSnapshot(snapshotFile, producers)
 
