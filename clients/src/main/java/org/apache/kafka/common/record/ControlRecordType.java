@@ -49,6 +49,7 @@ public enum ControlRecordType {
     private static final Logger log = LoggerFactory.getLogger(ControlRecordType.class);
 
     static final short CURRENT_CONTROL_RECORD_KEY_VERSION = 0;
+    static final int CURRENT_CONTROL_RECORD_KEY_SIZE = 4;
     private static final Schema CONTROL_RECORD_KEY_SCHEMA_VERSION_V0 = new Schema(
             new Field("version", Type.INT16),
             new Field("type", Type.INT16));

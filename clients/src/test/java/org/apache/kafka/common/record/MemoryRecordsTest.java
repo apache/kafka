@@ -224,6 +224,8 @@ public class MemoryRecordsTest {
             int coordinatorEpoch = 347;
             EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
             MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, marker, producerId, producerEpoch);
+            // verify that buffer allocation was precise
+            assertEquals(records.buffer().remaining(), records.buffer().capacity());
 
             List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
             assertEquals(1, batches.size());

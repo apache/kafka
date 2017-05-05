@@ -475,7 +475,7 @@ public class MemoryRecordsBuilder {
      * @param value The control record value
      * @return crc of the record
      */
-    public long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
+    private long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
         Struct keyStruct = type.recordKey();
         ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
         keyStruct.writeTo(key);

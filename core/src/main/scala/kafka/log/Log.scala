@@ -819,10 +819,10 @@ class Log(@volatile var dir: File,
    * @param minOneMessage If this is true, the first message will be returned even if it exceeds `maxLength` (if one exists)
    * @param isolationLevel The isolation level of the fetcher. The READ_UNCOMMITTED isolation level has the traditional
    *                       read semantics (e.g. consumers are limited to fetching up to the high watermark). In
-   *                       READ_COMMITTED, consumers are limited to fetching up the the last stable offset. Additionally,
+   *                       READ_COMMITTED, consumers are limited to fetching up to the last stable offset. Additionally,
    *                       in READ_COMMITTED, the transaction index is consulted after fetching to collect the list
    *                       of aborted transactions in the fetch range which the consumer uses to filter the fetched
-   *                       records before returning to the user. Note that fetches from followers always use
+   *                       records before they are returned to the user. Note that fetches from followers always use
    *                       READ_UNCOMMITTED.
    *
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the log start offset

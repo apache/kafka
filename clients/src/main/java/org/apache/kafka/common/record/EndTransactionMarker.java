@@ -37,7 +37,12 @@ public class EndTransactionMarker {
     private static final Schema END_TXN_MARKER_SCHEMA_VERSION_V0 = new Schema(
             new Field("version", Type.INT16),
             new Field("coordinator_epoch", Type.INT32));
-    private static final int END_TXN_MARKER_SCHEMA_MIN_SIZE = 6;
+    static final int CURRENT_END_TXN_MARKER_VALUE_SIZE = 6;
+    static final int CURRENT_END_TXN_SCHEMA_RECORD_SIZE = DefaultRecord.sizeInBytes(0, 0L,
+            ControlRecordType.CURRENT_CONTROL_RECORD_KEY_SIZE,
+            EndTransactionMarker.CURRENT_END_TXN_MARKER_VALUE_SIZE,
+            Record.EMPTY_HEADERS);
+
 
     private final ControlRecordType type;
     private final int coordinatorEpoch;
@@ -87,9 +92,9 @@ public class EndTransactionMarker {
     static EndTransactionMarker deserializeValue(ControlRecordType type, ByteBuffer value) {
         ensureTransactionMarkerControlType(type);
 
-        if (value.remaining() < END_TXN_MARKER_SCHEMA_MIN_SIZE)
+        if (value.remaining() < CURRENT_END_TXN_MARKER_VALUE_SIZE)
             throw new InvalidRecordException("Invalid value size found for end transaction marker. Must have " +
-                    "at least " + END_TXN_MARKER_SCHEMA_MIN_SIZE + " bytes, but found only " + value.remaining());
+                    "at least " + CURRENT_END_TXN_MARKER_VALUE_SIZE + " bytes, but found only " + value.remaining());
 
         short version = value.getShort(0);
         if (version < 0)
