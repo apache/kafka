@@ -176,33 +176,31 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   private val preferredReplicaElectionListener = new PreferredReplicaElectionListener(this)
   private val isrChangeNotificationListener = new IsrChangeNotificationListener(this)
 
-  private val activeControllerId = new AtomicInteger(-1)
-  private val offlinePartitionCount = new AtomicInteger(0)
-  private val preferredReplicaImbalanceCount = new AtomicInteger(0)
+  @volatile private var activeControllerId = -1
+  @volatile private var offlinePartitionCount = 0
+  @volatile private var preferredReplicaImbalanceCount = 0
   @volatile private var state: ControllerState = ControllerState.Idle
 
   newGauge(
     "ActiveControllerCount",
     new Gauge[Int] {
-      def value() = if (isActive) 1 else 0
+      def value = if (isActive) 1 else 0
     }
   )
 
   newGauge(
     "OfflinePartitionsCount",
     new Gauge[Int] {
-      def value(): Int = {
-        offlinePartitionCount.get()
-      }
+      def value: Int = offlinePartitionCount
     }
   )
 
   newGauge(
     "PreferredReplicaImbalanceCount",
     new Gauge[Int] {
-      def value(): Int = {
-        preferredReplicaImbalanceCount.get()
-      }
+      def value: Int = preferredReplicaImbalanceCount
+    }
+  )
 
   newGauge(
     "ControllerState",
@@ -309,8 +307,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
       // shutdown leader rebalance scheduler
       kafkaScheduler.shutdown()
-      offlinePartitionCount.set(0)
-      preferredReplicaImbalanceCount.set(0)
+      offlinePartitionCount = 0
+      preferredReplicaImbalanceCount = 0
 
       // de-register partition ISR listener for on-going partition reassignment task
       deregisterPartitionReassignmentIsrChangeListeners()
@@ -340,7 +338,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   /**
    * Returns true if this broker is the current controller.
    */
-  def isActive: Boolean = activeControllerId.get() == config.brokerId
+  def isActive: Boolean = activeControllerId == config.brokerId
 
   /**
    * This callback is invoked by the replica state machine's broker change listener, with the list of newly started
@@ -1521,7 +1519,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   case class ControllerChange(newControllerId: Int) extends ControllerEvent {
     override def process(): Unit = {
       val wasActiveBeforeChange = isActive
-      activeControllerId.set(newControllerId)
+      activeControllerId = newControllerId
       if (wasActiveBeforeChange && !isActive) {
         onControllerResignation()
       }
@@ -1531,7 +1529,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   case object Reelect extends ControllerEvent {
     override def process(): Unit = {
       val wasActiveBeforeChange = isActive
-      activeControllerId.set(getControllerID())
+      activeControllerId = getControllerID()
       if (wasActiveBeforeChange && !isActive) {
         onControllerResignation()
       }
@@ -1540,29 +1538,31 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   private def updateMetrics(): Unit = {
-    val opc = if (!isActive)
-      0
-    else
-      controllerContext.partitionLeadershipInfo.count(p =>
-        !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader) &&
-          !topicDeletionManager.isTopicQueuedUpForDeletion(p._1.topic)
-      )
-    offlinePartitionCount.set(opc)
-
-    val pric = if (!isActive)
-      0
-    else
-      controllerContext.partitionReplicaAssignment.count { case (topicPartition, replicas) =>
-        controllerContext.partitionLeadershipInfo.contains(topicPartition) &&
-        controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head &&
-          !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
     state = ControllerState.Idle
+
+    offlinePartitionCount =
+      if (!isActive) 0
+      else {
+        controllerContext.partitionLeadershipInfo.count { case (tp, leadershipInfo) =>
+          !controllerContext.liveOrShuttingDownBrokerIds.contains(leadershipInfo.leaderAndIsr.leader) &&
+            !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)
+        }
       }
-    preferredReplicaImbalanceCount.set(pric)
+
+    preferredReplicaImbalanceCount =
+      if (!isActive) 0
+      else {
+        controllerContext.partitionReplicaAssignment.count { case (topicPartition, replicas) =>
+          val preferredReplica = replicas.head
+          val leadershipInfo = controllerContext.partitionLeadershipInfo.get(topicPartition)
+          leadershipInfo.map(_.leaderAndIsr.leader != preferredReplica).getOrElse(false) &&
+            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
+        }
+      }
   }
 
   private def triggerControllerMove(): Unit = {
-    activeControllerId.set(-1)
+    activeControllerId = -1
     controllerContext.zkUtils.deletePath(ZkUtils.ControllerPath)
   }
 
@@ -1570,14 +1570,14 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
     val timestamp = time.milliseconds
     val electString = ZkUtils.controllerZkData(config.brokerId, timestamp)
 
-    activeControllerId.set(getControllerID())
+    activeControllerId = getControllerID()
     /*
      * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition,
      * it's possible that the controller has already been elected when we get here. This check will prevent the following
      * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
      */
-    if(activeControllerId.get() != -1) {
-      debug("Broker %d has been elected as the controller, so stopping the election process.".format(activeControllerId.get()))
+    if (activeControllerId != -1) {
+      debug("Broker %d has been elected as the controller, so stopping the election process.".format(activeControllerId))
       return
     }
 
@@ -1588,15 +1588,15 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
                                                       controllerContext.zkUtils.isSecure)
       zkCheckedEphemeral.create()
       info(config.brokerId + " successfully elected as the controller")
-      activeControllerId.set(config.brokerId)
+      activeControllerId = config.brokerId
       onControllerFailover()
     } catch {
       case _: ZkNodeExistsException =>
         // If someone else has written the path, then
-        activeControllerId.set(getControllerID)
+        activeControllerId = getControllerID
 
-        if (activeControllerId.get() != -1)
-          debug("Broker %d was elected as controller instead of broker %d".format(activeControllerId.get(), config.brokerId))
+        if (activeControllerId != -1)
+          debug("Broker %d was elected as controller instead of broker %d".format(activeControllerId, config.brokerId))
         else
           warn("A controller has been elected but just resigned, this will result in another round of election")
 
