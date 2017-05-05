@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
@@ -141,7 +142,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KStreamPeek<>(keySerde, valSerde, streamName), this.name);
+        topology.addProcessor(name, new KStreamPeek<>(new PrintForeachAction(null, keySerde, valSerde, streamName), false), this.name);
     }
 
     @Override
@@ -172,7 +173,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         streamName = (streamName == null) ? this.name : streamName;
         try {
             PrintWriter printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KStreamPeek<>(printWriter, keySerde, valSerde, streamName), this.name);
+            topology.addProcessor(name, new KStreamPeek<>(new PrintForeachAction(printWriter, keySerde, valSerde, streamName), false), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);

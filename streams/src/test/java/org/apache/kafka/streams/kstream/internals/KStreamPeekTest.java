@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.test.KStreamTestDriver;
@@ -28,9 +29,9 @@ import org.junit.Before;
 import org.junit.After;
 import org.junit.Test;
 
+import java.io.PrintWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -94,7 +95,7 @@ public class KStreamPeekTest {
 
     @Test
     public void testPrintKeyValueWithName() {
-        KStreamPeek<Integer, String> kStreamPeek = new KStreamPeek<>(printWriter, intSerd, stringSerd, "test-stream");
+        KStreamPeek<Integer, String> kStreamPeek = new KStreamPeek<>(new PrintForeachAction(printWriter, intSerd, stringSerd, "test-stream"), false);
 
         List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, "zero"),
