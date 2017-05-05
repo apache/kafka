@@ -128,7 +128,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation increases the number of compaction threads
         // but not flush threads.
-        options.setIncreaseParallelism(Runtime.getRuntime().availableProcessors());
+        options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
