@@ -314,8 +314,7 @@ class LogSegmentTest {
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
     val stateManager = new ProducerStateManager(topicPartition, logDir)
-    val oldEntry = ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L))
-    stateManager.update(new ProducerAppendInfo(pid2, oldEntry, loadingFromLog = true))
+    stateManager.loadProducerEntry(ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L)))
     segment.recover(64 * 1024, stateManager)
 
     abortedTxns = segment.txnIndex.allAbortedTxns

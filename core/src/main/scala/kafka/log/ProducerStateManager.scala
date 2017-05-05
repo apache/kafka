@@ -230,7 +230,7 @@ object ProducerStateManager {
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
     new Field(PidEntriesField, new ArrayOf(PidSnapshotEntrySchema), "The entries in the PID table"))
 
-  def readSnapshot(file: File): Iterable[(Long, ProducerIdEntry)] = {
+  def readSnapshot(file: File): Iterable[ProducerIdEntry] = {
     val buffer = Files.readAllBytes(file.toPath)
     val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
 
@@ -256,7 +256,7 @@ object ProducerStateManager {
       val currentTxnFirstOffset = pidEntryStruct.getLong(CurrentTxnFirstOffsetField)
       val newEntry = ProducerIdEntry(pid, epoch, seq, offset, offsetDelta, timestamp,
         coordinatorEpoch, if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
-      pid -> newEntry
+      newEntry
     }
   }
 
@@ -382,15 +382,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
         case Some(file) =>
           try {
             info(s"Loading producer state from snapshot file ${file.getName} for partition $topicPartition")
-            readSnapshot(file).foreach { case (pid, entry) =>
-              if (!isExpired(currentTime, entry)) {
-                producers.put(pid, entry)
-                entry.currentTxnFirstOffset.foreach { offset =>
-                  ongoingTxns.put(pid, new TxnMetadata(pid, offset))
-                }
-              }
-            }
-
+            readSnapshot(file).filter(!isExpired(currentTime, _)).foreach(loadProducerEntry)
             lastSnapOffset = offsetFromFilename(file.getName)
             lastMapOffset = lastSnapOffset
             return
@@ -404,6 +396,15 @@ class ProducerStateManager(val topicPartition: TopicPartition,
           lastMapOffset = logStartOffset
           return
       }
+    }
+  }
+
+  // visible for testing
+  private[log] def loadProducerEntry(entry: ProducerIdEntry): Unit = {
+    val pid = entry.producerId
+    producers.put(pid, entry)
+    entry.currentTxnFirstOffset.foreach { offset =>
+      ongoingTxns.put(offset, new TxnMetadata(pid, offset))
     }
   }
 
