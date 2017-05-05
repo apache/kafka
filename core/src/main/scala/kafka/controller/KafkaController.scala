@@ -1109,38 +1109,36 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   private def checkAndTriggerPartitionRebalance(): Unit = {
-    trace("checking need to trigger partition rebalance")
-    var preferredReplicasForTopicsByBrokers: Map[Int, Map[TopicAndPartition, Seq[Int]]] = controllerContext.partitionReplicaAssignment
-      .filterNot(p => topicDeletionManager.isTopicQueuedUpForDeletion(p._1.topic)).groupBy {
-        case (_, assignedReplicas) => assignedReplicas.head
-      }
-    debug("preferred replicas by broker " + preferredReplicasForTopicsByBrokers)
+    trace("Checking need to trigger partition rebalance")
+    // get all the active brokers
+    val preferredReplicasForTopicsByBrokers: Map[Int, Map[TopicAndPartition, Seq[Int]]] =
+      controllerContext.partitionReplicaAssignment.filterNot { case (tp, _) =>
+        topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)
+      }.groupBy { case (_, assignedReplicas) => assignedReplicas.head }
+    debug(s"Preferred replicas by broker $preferredReplicasForTopicsByBrokers")
+
     // for each broker, check if a preferred replica election needs to be triggered
-    preferredReplicasForTopicsByBrokers.foreach {
-      case(leaderBroker, topicAndPartitionsForBroker) => {
-        var imbalanceRatio: Double = 0
-        var topicsNotInPreferredReplica: Map[TopicAndPartition, Seq[Int]] = topicAndPartitionsForBroker
-          .filter { case (topicPartition, _) =>
-          controllerContext.partitionLeadershipInfo.contains(topicPartition) &&
-            controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != leaderBroker
-        }
-        debug("topics not in preferred replica " + topicsNotInPreferredReplica)
-        val totalTopicPartitionsForBroker = topicAndPartitionsForBroker.size
-        val totalTopicPartitionsNotLedByBroker = topicsNotInPreferredReplica.size
-        imbalanceRatio = totalTopicPartitionsNotLedByBroker.toDouble / totalTopicPartitionsForBroker
-        trace("leader imbalance ratio for broker %d is %f".format(leaderBroker, imbalanceRatio))
-        // check ratio and if greater than desired ratio, trigger a rebalance for the topic partitions
-        // that need to be on this broker
-        if (imbalanceRatio > (config.leaderImbalancePerBrokerPercentage.toDouble / 100)) {
-          topicsNotInPreferredReplica.keys.foreach { topicPartition =>
-            // do this check only if the broker is live and there are no partitions being reassigned currently
-            // and preferred replica election is not in progress
-            if (controllerContext.liveBrokerIds.contains(leaderBroker) &&
-                controllerContext.partitionsBeingReassigned.isEmpty &&
-                !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
-                controllerContext.allTopics.contains(topicPartition.topic)) {
-              onPreferredReplicaElection(Set(topicPartition), true)
-            }
+    preferredReplicasForTopicsByBrokers.foreach { case (leaderBroker, topicAndPartitionsForBroker) =>
+      val topicsNotInPreferredReplica = topicAndPartitionsForBroker.filter { case (topicPartition, _) =>
+        val leadershipInfo = controllerContext.partitionLeadershipInfo.get(topicPartition)
+        leadershipInfo.map(_.leaderAndIsr.leader != leaderBroker).getOrElse(false)
+      }
+      debug(s"Topics not in preferred replica $topicsNotInPreferredReplica")
+
+      val imbalanceRatio = topicsNotInPreferredReplica.size.toDouble / topicAndPartitionsForBroker.size
+      trace(s"Leader imbalance ratio for broker $leaderBroker is $imbalanceRatio")
+
+      // check ratio and if greater than desired ratio, trigger a rebalance for the topic partitions
+      // that need to be on this broker
+      if (imbalanceRatio > (config.leaderImbalancePerBrokerPercentage.toDouble / 100)) {
+        topicsNotInPreferredReplica.keys.foreach { topicPartition =>
+          // do this check only if the broker is live and there are no partitions being reassigned currently
+          // and preferred replica election is not in progress
+          if (controllerContext.liveBrokerIds.contains(leaderBroker) &&
+            controllerContext.partitionsBeingReassigned.isEmpty &&
+            !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
+            controllerContext.allTopics.contains(topicPartition.topic)) {
+            onPreferredReplicaElection(Set(topicPartition), isTriggeredByAutoRebalance = true)
           }
         }
       }
