@@ -414,7 +414,7 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def loadProducerState(lastOffset: Long): Unit = {
+  private def loadProducerState(lastOffset: Long): Unit = lock synchronized {
     info(s"Loading producer state from offset $lastOffset for partition $topicPartition")
     val currentTimeMs = time.milliseconds
     producerStateManager.truncateAndReload(logStartOffset, lastOffset, currentTimeMs)
@@ -653,7 +653,7 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private def updateFirstUnstableOffset(): Unit = {
+  private def updateFirstUnstableOffset(): Unit = lock synchronized {
     this.firstUnstableOffset = producerStateManager.firstUnstableOffset match {
       case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly =>
         val offset = logOffsetMetadata.messageOffset
@@ -1203,9 +1203,10 @@ class Log(@volatile var dir: File,
     for(segment <- logSegments(this.recoveryPoint, offset))
       segment.flush()
 
-    // always retain a snapshot from the start of the active segment
-    val minSnapshotOffsetRetained = math.min(offset, activeSegment.baseOffset)
-    producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetRetained)
+    // now that we have flushed, we can cleanup old producer snapshots. However, it is useful to retain
+    // the snapshots from the recent segments in case we need to truncate and rebuild the producer state.
+    // Otherwise, we would always need to rebuild from the earliest segment.
+    producerStateManager.deleteSnapshotsBefore(minSnapshotOffsetToRetain(offset))
 
     lock synchronized {
       if(offset > this.recoveryPoint) {
@@ -1213,6 +1214,17 @@ class Log(@volatile var dir: File,
         lastflushedTime.set(time.milliseconds)
       }
     }
+  }
+
+  def minSnapshotOffsetToRetain(flushedOffset: Long) = {
+    // always retain the producer snapshot from the last two segments. This solves the common case
+    // of truncating to an offset within the active segment, and the rarer case of truncating to the
+    // previous segment just after rolling the new segment.
+    var minSnapshotOffset = activeSegment.baseOffset
+    val previousSegment = segments.lowerEntry(activeSegment.baseOffset)
+    if (previousSegment != null)
+      minSnapshotOffset = previousSegment.getValue.baseOffset
+    math.min(flushedOffset, minSnapshotOffset)
   }
 
   /**
@@ -1228,10 +1240,24 @@ class Log(@volatile var dir: File,
   }
 
   // visible for testing
-  private[log] def takeProducerSnapshot(): Unit = producerStateManager.takeSnapshot()
-  private[log] def latestProducerSnapshotOffset: Option[Long] = producerStateManager.latestSnapshotOffset
-  private[log] def oldestProducerSnapshotOffset: Option[Long] = producerStateManager.oldestSnapshotOffset
-  private[log] def latestProducerStateEndOffset: Long = producerStateManager.mapEndOffset
+  private[log] def takeProducerSnapshot(): Unit = lock synchronized {
+    producerStateManager.takeSnapshot()
+  }
+
+  // visible for testing
+  private[log] def latestProducerSnapshotOffset: Option[Long] = lock synchronized {
+    producerStateManager.latestSnapshotOffset
+  }
+
+  // visible for testing
+  private[log] def oldestProducerSnapshotOffset: Option[Long] = lock synchronized {
+    producerStateManager.oldestSnapshotOffset
+  }
+
+  // visible for testing
+  private[log] def latestProducerStateEndOffset: Long = lock synchronized {
+    producerStateManager.mapEndOffset
+  }
 
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.

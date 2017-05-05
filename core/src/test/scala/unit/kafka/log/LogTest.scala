@@ -315,24 +315,32 @@ class LogTest {
   }
 
   @Test
-  def testSnapshotWhenSegmentRolls() {
+  def testTakeSnapshotOnRollAndDeleteSnapshotOnFlush() {
     val log = createLog(2048)
-    log.appendAsLeader(TestUtils.singletonRecords("foo".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
     log.roll(1L)
     assertEquals(Some(1L), log.latestProducerSnapshotOffset)
+    assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
-    log.appendAsLeader(TestUtils.singletonRecords("bar".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("b".getBytes), leaderEpoch = 0)
     log.roll(2L)
     assertEquals(Some(2L), log.latestProducerSnapshotOffset)
+    assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
-    // roll triggers a flush at the starting offset of the new segment. this should
-    // cause the older snapshot to be removed
+    log.appendAsLeader(TestUtils.singletonRecords("c".getBytes), leaderEpoch = 0)
+    log.roll(3L)
+    assertEquals(Some(3L), log.latestProducerSnapshotOffset)
+
+    // roll triggers a flush at the starting offset of the new segment. we should
+    // retain the snapshots from the active segment and the previous segment, but
+    // the oldest one should be gone
     assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
 
     // even if we flush within the active segment, the snapshot should remain
     log.appendAsLeader(TestUtils.singletonRecords("baz".getBytes), leaderEpoch = 0)
-    log.flush(3L)
-    assertEquals(Some(2L), log.latestProducerSnapshotOffset)
+    log.flush(4L)
+    assertEquals(Some(3L), log.latestProducerSnapshotOffset)
+    assertEquals(Some(2L), log.oldestProducerSnapshotOffset)
   }
 
   @Test

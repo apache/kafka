@@ -23,7 +23,7 @@ import java.nio.file.Files
 import kafka.common.KafkaException
 import kafka.log.Log.offsetFromFilename
 import kafka.server.LogOffsetMetadata
-import kafka.utils.{Logging, nonthreadsafe}
+import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.types._
@@ -555,6 +555,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     lastStableOffset
   }
 
+  @threadsafe
   def deleteSnapshotsBefore(offset: Long): Unit = {
     deleteSnapshotFiles(file => offsetFromFilename(file.getName) < offset)
   }
