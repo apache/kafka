@@ -48,8 +48,9 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   var client: AdminClient = null
 
   @Before
-  def waitUntilMetadataIsPropagated(): Unit = {
-    TestUtils.waitUntilBrokerMetadataIsPropagated(servers, brokerList.split(","),  20000)
+  override def setUp(): Unit = {
+    super.setUp
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers, 20000)
   }
 
   @After
