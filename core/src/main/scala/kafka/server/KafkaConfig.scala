@@ -23,7 +23,7 @@ import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.group.OffsetConfig
-import kafka.coordinator.transaction.{TransactionLog, TransactionManager}
+import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -157,8 +157,8 @@ object Defaults {
   val OffsetCommitRequiredAcks = OffsetConfig.DefaultOffsetCommitRequiredAcks
 
   /** ********* Transaction management configuration ***********/
-  val TransactionalIdExpirationMs = TransactionManager.DefaultTransactionalIdExpirationMs
-  val TransactionsMaxTimeoutMs = TransactionManager.DefaultTransactionsMaxTimeoutMs
+  val TransactionalIdExpirationMs = TransactionStateManager.DefaultTransactionalIdExpirationMs
+  val TransactionsMaxTimeoutMs = TransactionStateManager.DefaultTransactionsMaxTimeoutMs
   val TransactionsTopicMinISR = TransactionLog.DefaultMinInSyncReplicas
   val TransactionsLoadBufferSize = TransactionLog.DefaultLoadBufferSize
   val TransactionsTopicReplicationFactor = TransactionLog.DefaultReplicationFactor

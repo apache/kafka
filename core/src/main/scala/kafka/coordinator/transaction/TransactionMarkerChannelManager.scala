@@ -116,12 +116,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   def addTxnMarkersToSend(transactionalId: String,
                           coordinatorEpoch: Int,
                           txnResult: TransactionResult,
-                          txnMetadata: TransactionMetadata): Unit = {
+                          txnMetadata: TransactionMetadata,
+                          newMetadata: TransactionMetadataTransition): Unit = {
 
     def appendToLogCallback(error: Errors): Unit = {
       error match {
         case Errors.NONE =>
-          trace(s"Competed sending transaction markers for $transactionalId as $txnResult")
+          trace(s"Completed sending transaction markers for $transactionalId as $txnResult")
 
           txnStateManager.getTransactionState(transactionalId) match {
             case Some(epochAndMetadata) =>
@@ -142,13 +143,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                         warn(s"Failed updating transaction state for $transactionalId when appending to transaction log due to ${error.exceptionName}. retrying")
 
                         // retry appending
-                        txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, txnMetadata, retryAppendCallback)
+                        txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, retryAppendCallback)
 
                       case errors: Errors =>
                         throw new IllegalStateException(s"Unexpected error ${errors.exceptionName} while appending to transaction log for $transactionalId")
                     }
 
-                  txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, txnMetadata, retryAppendCallback)
+                  txnStateManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, retryAppendCallback)
                 } else {
                   info(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction markers " +
                     s"has been sent to brokers. The cached metadata have been changed to $epochAndMetadata since preparing to send markers")
