@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.util;
 
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.TopicPartitionInfo;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -67,6 +69,19 @@ import java.util.concurrent.Future;
  * </p>
  */
 public class KafkaBasedLog<K, V> {
+
+    /**
+     * A functional interface to obtain the description of a topic with a given name, creating the topic if necessary.
+     */
+    public interface TopicSupplier {
+        /**
+         * Get the description of the topic with the given name, optionally creating the topic if it does not yet exist.
+         * @param topicName the name of the topic
+         * @return the description for the newly-created or existing topic; null if it could not be obtained
+         */
+        TopicDescription getOrCreateTopic(String topicName);
+    }
+
     private static final Logger log = LoggerFactory.getLogger(KafkaBasedLog.class);
     private static final long CREATE_TOPIC_TIMEOUT_MS = 30000;
 
@@ -75,6 +90,7 @@ public class KafkaBasedLog<K, V> {
     private final Map<String, Object> producerConfigs;
     private final Map<String, Object> consumerConfigs;
     private final Callback<ConsumerRecord<K, V>> consumedCallback;
+    private final TopicSupplier topicSupplier;
     private Consumer<K, V> consumer;
     private Producer<K, V> producer;
 
@@ -97,12 +113,14 @@ public class KafkaBasedLog<K, V> {
      *                        behavior of this class.
      * @param consumedCallback callback to invoke for each {@link ConsumerRecord} consumed when tailing the log
      * @param time Time interface
+     * @param topicSupplier the function to get the description of a topic that exists or should be created; may be null
      */
     public KafkaBasedLog(String topic,
                          Map<String, Object> producerConfigs,
                          Map<String, Object> consumerConfigs,
                          Callback<ConsumerRecord<K, V>> consumedCallback,
-                         Time time) {
+                         Time time,
+                         TopicSupplier topicSupplier) {
         this.topic = topic;
         this.producerConfigs = producerConfigs;
         this.consumerConfigs = consumerConfigs;
@@ -110,6 +128,12 @@ public class KafkaBasedLog<K, V> {
         this.stopRequested = false;
         this.readLogEndOffsetCallbacks = new ArrayDeque<>();
         this.time = time;
+        this.topicSupplier = topicSupplier != null ? topicSupplier : new TopicSupplier() {
+            @Override
+            public TopicDescription getOrCreateTopic(String topicName) {
+                return null;
+            }
+        };
     }
 
     public void start() {
@@ -119,22 +143,27 @@ public class KafkaBasedLog<K, V> {
         consumer = createConsumer();
 
         List<TopicPartition> partitions = new ArrayList<>();
+        TopicDescription topicDesc = topicSupplier.getOrCreateTopic(topic);
+        if (topicDesc != null) {
+            for (Map.Entry<Integer, TopicPartitionInfo> entry : topicDesc.partitions().entrySet()) {
+                partitions.add(new TopicPartition(topic, entry.getValue().partition()));
+            }
+        } else {
+            log.debug("Unable to find or create topic '{}', so falling back to auto-creation.", topic);
+            List<PartitionInfo> partitionInfos = null;
+            long started = time.milliseconds();
+            while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
+                partitionInfos = consumer.partitionsFor(topic);
+                Utils.sleep(Math.min(time.milliseconds() - started, 1000));
+                for (PartitionInfo partition : partitionInfos)
+                    partitions.add(new TopicPartition(partition.topic(), partition.partition()));
+            }
+            if (partitionInfos == null)
+                throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
+                        " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
+                        " this is your first use of the topic it may have taken too long to auto-create.");
 
-        // Until we have admin utilities we can use to check for the existence of this topic and create it if it is missing,
-        // we rely on topic auto-creation
-        List<PartitionInfo> partitionInfos = null;
-        long started = time.milliseconds();
-        while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
-            partitionInfos = consumer.partitionsFor(topic);
-            Utils.sleep(Math.min(time.milliseconds() - started, 1000));
         }
-        if (partitionInfos == null)
-            throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +
-                    " allotted period. This could indicate a connectivity issue, unavailable topic partitions, or if" +
-                    " this is your first use of the topic it may have taken too long to create.");
-
-        for (PartitionInfo partition : partitionInfos)
-            partitions.add(new TopicPartition(partition.topic(), partition.partition()));
         consumer.assign(partitions);
 
         readToLogEnd();

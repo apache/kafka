@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -39,6 +41,8 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.KafkaBasedLog.TopicSupplier;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -415,12 +419,28 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback());
+        final Map<String, Object> adminProps = new HashMap<>(config.originals());
+        final NewTopic topicDescription = TopicAdmin.defineTopic(topic).
+                compacted().
+                partitions(1).
+                replicationFactor(config.getInt(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                build();
+        TopicSupplier topicSupplier = new TopicSupplier() {
+            @Override
+            public TopicDescription getOrCreateTopic(String topicName) {
+                try (TopicAdmin topicMaker = new TopicAdmin(adminProps)) {
+                    return topicMaker.createTopicIfMissing(topicDescription);
+                }
+            }
+        };
+        return createKafkaBasedLog(topic, producerProps, consumerProps, new ConsumeCallback(), topicSupplier);
     }
 
     private KafkaBasedLog<String, byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps, Callback<ConsumerRecord<String, byte[]>> consumedCallback) {
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM);
+                                                              Map<String, Object> consumerProps,
+                                                              Callback<ConsumerRecord<String, byte[]>> consumedCallback,
+                                                              TopicSupplier topicSupplier) {
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, topicSupplier);
     }
 
     @SuppressWarnings("unchecked")

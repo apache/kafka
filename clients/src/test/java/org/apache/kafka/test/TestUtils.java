@@ -33,6 +33,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -69,12 +70,20 @@ public class TestUtils {
     public static final Random RANDOM = new Random();
     public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
+    public static Cluster singletonCluster() {
+        return clusterWith(1);
+    }
+
     public static Cluster singletonCluster(final Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
     }
 
     public static Cluster singletonCluster(final String topic, final int partitions) {
         return clusterWith(1, topic, partitions);
+    }
+
+    public static Cluster clusterWith(int nodes) {
+        return clusterWith(nodes, new HashMap<String, Integer>());
     }
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {

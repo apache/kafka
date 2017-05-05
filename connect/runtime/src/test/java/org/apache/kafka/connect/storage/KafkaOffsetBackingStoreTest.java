@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.KafkaBasedLog.TopicSupplier;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -101,6 +102,7 @@ public class KafkaOffsetBackingStoreTest {
     private Capture<Map<String, Object>> capturedProducerProps = EasyMock.newCapture();
     private Capture<Map<String, Object>> capturedConsumerProps = EasyMock.newCapture();
     private Capture<Callback<ConsumerRecord<byte[], byte[]>>> capturedConsumedCallback = EasyMock.newCapture();
+    private Capture<TopicSupplier> capturedTopicSupplier = EasyMock.newCapture();
 
     @Before
     public void setUp() throws Exception {
@@ -402,7 +404,7 @@ public class KafkaOffsetBackingStoreTest {
 
     private void expectConfigure() throws Exception {
         PowerMock.expectPrivate(store, "createKafkaBasedLog", EasyMock.capture(capturedTopic), EasyMock.capture(capturedProducerProps),
-                EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback))
+                EasyMock.capture(capturedConsumerProps), EasyMock.capture(capturedConsumedCallback), EasyMock.capture(capturedTopicSupplier))
                 .andReturn(storeLog);
     }
 

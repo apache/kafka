@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.connect.util.KafkaBasedLog.TopicSupplier;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.Before;
@@ -89,6 +90,7 @@ public class KafkaBasedLogTest {
 
     private static final Set<TopicPartition> CONSUMER_ASSIGNMENT = new HashSet<>(Arrays.asList(TP0, TP1));
     private static final Map<String, String> FIRST_SET = new HashMap<>();
+    private static final TopicSupplier TOPIC_SUPPLIER = null;
     static {
         FIRST_SET.put("key", "value");
         FIRST_SET.put(null, null);
@@ -131,7 +133,7 @@ public class KafkaBasedLogTest {
     @Before
     public void setUp() throws Exception {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, TOPIC_SUPPLIER);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();

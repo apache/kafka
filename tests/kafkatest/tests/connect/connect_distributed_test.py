@@ -45,8 +45,13 @@ class ConnectDistributedTest(Test):
 
     TOPIC = "test"
     OFFSETS_TOPIC = "connect-offsets"
+    OFFSETS_REPLICATION_FACTOR = "1"
+    OFFSETS_PARTITIONS = "1"
     CONFIG_TOPIC = "connect-configs"
+    CONFIG_REPLICATION_FACTOR = "1"
     STATUS_TOPIC = "connect-status"
+    STATUS_REPLICATION_FACTOR = "1"
+    STATUS_PARTITIONS = "1"
 
     # Since tasks can be assigned to any node and we're testing with files, we need to make sure the content is the same
     # across all nodes.
