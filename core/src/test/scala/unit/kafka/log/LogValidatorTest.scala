@@ -22,6 +22,7 @@ import kafka.common.LongRef
 import kafka.message.{DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
 import org.apache.kafka.common.errors.InvalidTimestampException
 import org.apache.kafka.common.record._
+import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
 
@@ -662,14 +663,36 @@ class LogValidatorTest {
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       now = System.currentTimeMillis(),
-      sourceCodec = SnappyCompressionCodec,
-      targetCodec = SnappyCompressionCodec,
+      sourceCodec = NoCompressionCodec,
+      targetCodec = NoCompressionCodec,
       compactedTopic = false,
       magic = RecordBatch.MAGIC_VALUE_V1,
       timestampType = TimestampType.CREATE_TIME,
       timestampDiffMaxMs = 5000L,
       partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
       isFromClient = true)
+  }
+
+  @Test
+  def testControlRecordsNotCompressed() {
+    val offset = 1234567
+    val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+    val records = MemoryRecords.withEndTransactionMarker(endTxnMarker, 23423L, 5)
+    val result = LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(offset),
+      now = System.currentTimeMillis(),
+      sourceCodec = NoCompressionCodec,
+      targetCodec = SnappyCompressionCodec,
+      compactedTopic = false,
+      magic = RecordBatch.MAGIC_VALUE_V1,
+      timestampType = TimestampType.CREATE_TIME,
+      timestampDiffMaxMs = 5000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = false)
+    val batches = TestUtils.toList(result.validatedRecords.batches)
+    assertEquals(1, batches.size)
+    val batch = batches.get(0)
+    assertFalse(batch.isCompressed)
   }
 
   @Test

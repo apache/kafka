@@ -245,6 +245,10 @@ private[kafka] object LogValidator extends Logging {
           if (!record.hasMagic(magic))
             inPlaceAssignment = false
 
+          // Do not compress control records unless they are written compressed
+          if (sourceCodec == NoCompressionCodec && record.isControlRecord)
+            inPlaceAssignment = true
+
           validatedRecords += record
         }
       }
