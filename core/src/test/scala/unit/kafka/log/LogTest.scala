@@ -369,7 +369,7 @@ class LogTest {
                             offset: Long = 0L,
                             coordinatorEpoch: Int = 0): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    MemoryRecords.withEndTransactionMarker(offset, marker, producerId, epoch)
+    MemoryRecords.withEndTransactionMarker(offset, producerId, epoch, marker)
   }
 
   @Test
@@ -2417,11 +2417,8 @@ class LogTest {
 
   private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
                                     controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, producerId, producerEpoch,
-      RecordBatch.CONTROL_SEQUENCE, true)
     val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    builder.appendEndTxnMarker(RecordBatch.NO_TIMESTAMP, marker)
-    builder.close()
+    MemoryRecords.writeEndTransactionalMarker(buffer, offset, producerId, producerEpoch, marker)
   }
 
   private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {

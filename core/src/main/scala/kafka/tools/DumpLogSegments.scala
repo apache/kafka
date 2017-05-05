@@ -360,9 +360,14 @@ object DumpLogSegments {
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           }
 
-          if (record.isControlRecord) {
+          if (batch.isControlBatch) {
             val controlType = ControlRecordType.parse(record.key)
             print(s" controlType: $controlType")
+
+            if (controlType == ControlRecordType.ABORT || controlType == ControlRecordType.COMMIT) {
+              val endTxnMarker = EndTransactionMarker.deserialize(record)
+              print(s" coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+            }
           } else if (printContents) {
             val (key, payload) = parser.parse(record)
             key.foreach(key => print(s" key: $key"))

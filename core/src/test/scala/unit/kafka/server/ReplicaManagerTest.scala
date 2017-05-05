@@ -286,7 +286,7 @@ class ReplicaManagerTest {
 
       // now commit the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-      val commitRecordBatch = MemoryRecords.withEndTransactionMarker(endTxnMarker, producerId, epoch)
+      val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
       rm.appendRecords(
         timeout = 1000,
         requiredAcks = -1,

@@ -1452,7 +1452,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case TransactionResult.ABORT => ControlRecordType.ABORT
         }
         val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
-        partition -> MemoryRecords.withEndTransactionMarker(endTxnMarker, producerId, marker.producerEpoch)
+        partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
       }.toMap
 
       replicaManager.appendRecords(

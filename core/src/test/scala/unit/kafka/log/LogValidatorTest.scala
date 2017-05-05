@@ -659,7 +659,7 @@ class LogValidatorTest {
   def testControlRecordsNotAllowedFromClients() {
     val offset = 1234567
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-    val records = MemoryRecords.withEndTransactionMarker(endTxnMarker, 23423L, 5)
+    val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       now = System.currentTimeMillis(),
@@ -677,7 +677,7 @@ class LogValidatorTest {
   def testControlRecordsNotCompressed() {
     val offset = 1234567
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
-    val records = MemoryRecords.withEndTransactionMarker(endTxnMarker, 23423L, 5)
+    val records = MemoryRecords.withEndTransactionMarker(23423L, 5, endTxnMarker)
     val result = LogValidator.validateMessagesAndAssignOffsets(records,
       offsetCounter = new LongRef(offset),
       now = System.currentTimeMillis(),

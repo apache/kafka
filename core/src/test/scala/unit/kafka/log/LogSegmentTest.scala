@@ -332,7 +332,7 @@ class LogSegmentTest {
                             offset: Long = 0L,
                             coordinatorEpoch: Int = 0): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    withEndTransactionMarker(offset, marker, producerId, epoch)
+    withEndTransactionMarker(offset, producerId, epoch, marker)
   }
 
   /**

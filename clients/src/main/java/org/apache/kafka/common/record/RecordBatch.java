@@ -55,13 +55,6 @@ public interface RecordBatch extends Iterable<Record> {
     int NO_SEQUENCE = -1;
 
     /**
-     * This is a sentinel sequence number used to identify record batches containing COMMIT or
-     * ABORT control records. This is used to avoid "deep" iteration to find the control records
-     * when updating the transaction index on followers. Clients are not allowed to use this.
-     */
-    int CONTROL_SEQUENCE = -2;
-
-    /**
      * Used to indicate an unknown leader epoch, which will be the case when the record set is
      * first created by the producer.
      */
@@ -223,4 +216,12 @@ public interface RecordBatch extends Iterable<Record> {
      * @return The closeable iterator
      */
     CloseableIterator<Record> streamingIterator();
+
+    /**
+     * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
+     * For magic versions prior to 2, this is always false.
+     *
+     * @return Whether this is a batch containing control records
+     */
+    boolean isControlBatch();
 }

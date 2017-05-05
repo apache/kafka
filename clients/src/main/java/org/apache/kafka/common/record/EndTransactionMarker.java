@@ -75,15 +75,28 @@ public class EndTransactionMarker {
         return value;
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        EndTransactionMarker that = (EndTransactionMarker) o;
+        return coordinatorEpoch == that.coordinatorEpoch && type == that.type;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = type != null ? type.hashCode() : 0;
+        result = 31 * result + coordinatorEpoch;
+        return result;
+    }
+
     private static void ensureTransactionMarkerControlType(ControlRecordType type) {
         if (type != ControlRecordType.COMMIT && type != ControlRecordType.ABORT)
             throw new IllegalArgumentException("Invalid control record type for end transaction marker" + type);
     }
 
     public static EndTransactionMarker deserialize(Record record) {
-        if (!record.isControlRecord())
-            throw new IllegalArgumentException("Record is not a control record");
-
         ControlRecordType type = ControlRecordType.parse(record.key());
         return deserializeValue(type, record.value());
     }

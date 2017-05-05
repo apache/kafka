@@ -182,16 +182,18 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
+        long producerId = 1;
+        short epoch = 0;
+        int baseSequence = 0;
+
         ByteBuffer buffer = ByteBuffer.allocate(1024);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        builder.append(0L, "key".getBytes(), null);
-        builder.appendEndTxnMarker(0L, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
+        MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, CompressionType.NONE, 0L, producerId,
+                epoch, baseSequence);
         builder.append(0L, "key".getBytes(), null);
         builder.close();
 
-        builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 3L);
-        builder.appendEndTxnMarker(0L, new EndTransactionMarker(ControlRecordType.ABORT, 0));
-        builder.close();
+        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, producerId, epoch, new EndTransactionMarker(ControlRecordType.ABORT, 0)
+        );
 
         buffer.flip();
 
@@ -203,10 +205,11 @@ public class FetcherTest {
         assertTrue(partitionRecords.containsKey(tp1));
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp1);
-        assertEquals(2, records.size());
-        assertEquals(4L, subscriptions.position(tp1).longValue());
-        for (ConsumerRecord<byte[], byte[]> record : records)
-            assertArrayEquals("key".getBytes(), record.key());
+        assertEquals(1, records.size());
+        assertEquals(2L, subscriptions.position(tp1).longValue());
+
+        ConsumerRecord<byte[], byte[]> record = records.get(0);
+        assertArrayEquals("key".getBytes(), record.key());
     }
 
     @Test
@@ -1230,7 +1233,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += abortTransaction(buffer, 1L, currentOffset);
 
         buffer.flip();
 
@@ -1264,7 +1267,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
-        currentOffset += commitTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += commitTransaction(buffer, 1L, currentOffset);
         buffer.flip();
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
@@ -1312,13 +1315,13 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "abort2-1".getBytes(), "value".getBytes()));
 
         // commit producer 1
-        currOffset += commitTransaction(buffer, 1L, currOffset, time.milliseconds());
+        currOffset += commitTransaction(buffer, 1L, currOffset);
         // append more for producer 2 (eventually aborted)
         currOffset += appendTransactionalRecords(buffer, 2L, currOffset,
                 new SimpleRecord(time.milliseconds(), "abort2-2".getBytes(), "value".getBytes()));
 
         // abort producer 2
-        currOffset += abortTransaction(buffer, 2L, currOffset, time.milliseconds());
+        currOffset += abortTransaction(buffer, 2L, currOffset);
         abortedTransactions.add(new FetchResponse.AbortedTransaction(2, 2));
 
         // New transaction for producer 1 (eventually aborted)
@@ -1334,11 +1337,11 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
 
         // abort producer 1
-        currOffset += abortTransaction(buffer, 1L, currOffset, time.milliseconds());
+        currOffset += abortTransaction(buffer, 1L, currOffset);
         abortedTransactions.add(new FetchResponse.AbortedTransaction(1, 6));
 
         // commit producer 2
-        currOffset += commitTransaction(buffer, 2L, currOffset, time.milliseconds());
+        currOffset += commitTransaction(buffer, 2L, currOffset);
 
         buffer.flip();
 
@@ -1377,14 +1380,14 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += abortTransaction(buffer, 1L, currentOffset);
         // Duplicate abort -- should be ignored.
-        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += abortTransaction(buffer, 1L, currentOffset);
         // Now commit a transaction.
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
                 new SimpleRecord(time.milliseconds(), "commit1-1".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "commit1-2".getBytes(), "value".getBytes()));
-        currentOffset += commitTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += commitTransaction(buffer, 1L, currentOffset);
         buffer.flip();
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
@@ -1425,7 +1428,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += abortTransaction(buffer, 1L, currentOffset);
 
         buffer.flip();
 
@@ -1459,7 +1462,7 @@ public class FetcherTest {
                 new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()),
                 new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
 
-        currentOffset += abortTransaction(buffer, 1L, currentOffset, time.milliseconds());
+        currentOffset += abortTransaction(buffer, 1L, currentOffset);
         buffer.flip();
 
         List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
@@ -1496,21 +1499,15 @@ public class FetcherTest {
         return records.length;
     }
 
-    private int commitTransaction(ByteBuffer buffer, long pid, int baseOffset, long timestamp) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0,
-                RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        builder.appendEndTxnMarker(timestamp, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
-        builder.build();
+    private int commitTransaction(ByteBuffer buffer, long producerId, int baseOffset) {
+        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, producerId, (short) 0,
+                new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         return 1;
     }
 
-    private int abortTransaction(ByteBuffer buffer, long pid, long baseOffset, long timestamp) {
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0,
-                RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        builder.appendEndTxnMarker(timestamp, new EndTransactionMarker(ControlRecordType.ABORT, 0));
-        builder.build();
+    private int abortTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
+        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, producerId, (short) 0,
+                new EndTransactionMarker(ControlRecordType.ABORT, 0));
         return 1;
     }
 

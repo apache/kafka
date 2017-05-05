@@ -65,7 +65,7 @@ public class MemoryRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
-                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false,
+                TimestampType.CREATE_TIME, firstOffset, logAppendTime, pid, epoch, firstSequence, false, false,
                 partitionLeaderEpoch, buffer.limit());
 
         SimpleRecord[] records = new SimpleRecord[] {
@@ -223,7 +223,7 @@ public class MemoryRecordsTest {
             long initialOffset = 983L;
             int coordinatorEpoch = 347;
             EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
-            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, marker, producerId, producerEpoch);
+            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, producerId, producerEpoch, marker);
             // verify that buffer allocation was precise
             assertEquals(records.buffer().remaining(), records.buffer().capacity());
 
@@ -231,7 +231,7 @@ public class MemoryRecordsTest {
             assertEquals(1, batches.size());
 
             RecordBatch batch = batches.get(0);
-            assertEquals(RecordBatch.CONTROL_SEQUENCE, batch.baseSequence());
+            assertTrue(batch.isControlBatch());
             assertEquals(producerId, batch.producerId());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(initialOffset, batch.baseOffset());
@@ -242,7 +242,6 @@ public class MemoryRecordsTest {
 
             Record record = createdRecords.get(0);
             assertTrue(record.isValid());
-            assertTrue(record.isControlRecord());
             EndTransactionMarker deserializedMarker = EndTransactionMarker.deserialize(record);
             assertEquals(ControlRecordType.COMMIT, deserializedMarker.controlType());
             assertEquals(coordinatorEpoch, deserializedMarker.coordinatorEpoch());

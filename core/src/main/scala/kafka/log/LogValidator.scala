@@ -71,14 +71,17 @@ private[kafka] object LogValidator extends Logging {
 
   private def validateBatch(batch: RecordBatch, isFromClient: Boolean): Unit = {
     if (isFromClient) {
-      if (batch.producerId() != RecordBatch.NO_PRODUCER_ID && batch.baseSequence() < 0)
+      if (batch.hasProducerId && batch.baseSequence < 0)
         throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
           s"with producerId ${batch.producerId}")
+
+      if (batch.isControlBatch)
+        throw new InvalidRecordException("Clients are not allowed to write control records")
     }
   }
 
   private def validateRecord(batch: RecordBatch, record: Record, now: Long, timestampType: TimestampType,
-                             timestampDiffMaxMs: Long, compactedTopic: Boolean, isFromClient: Boolean): Unit = {
+                             timestampDiffMaxMs: Long, compactedTopic: Boolean): Unit = {
     if (!record.hasMagic(batch.magic))
       throw new InvalidRecordException(s"Log record magic does not match outer magic ${batch.magic}")
 
@@ -88,9 +91,6 @@ private[kafka] object LogValidator extends Logging {
     // there is no record-level CRC to check.
     if (batch.magic <= RecordBatch.MAGIC_VALUE_V1 && batch.isCompressed)
       record.ensureValid()
-
-    if (isFromClient && record.isControlRecord)
-      throw new InvalidRecordException("Clients are not allowed to write control records")
 
     validateKey(record, compactedTopic)
     validateTimestamp(batch, record, now, timestampType, timestampDiffMaxMs)
@@ -121,7 +121,7 @@ private[kafka] object LogValidator extends Logging {
       validateBatch(batch, isFromClient)
 
       for (record <- batch.asScala) {
-        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic, isFromClient)
+        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
         builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
       }
     }
@@ -155,7 +155,7 @@ private[kafka] object LogValidator extends Logging {
       var offsetOfMaxBatchTimestamp = -1L
 
       for (record <- batch.asScala) {
-        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic, isFromClient)
+        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
         val offset = offsetCounter.getAndIncrement()
         if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && record.timestamp > maxBatchTimestamp) {
           maxBatchTimestamp = record.timestamp
@@ -227,8 +227,12 @@ private[kafka] object LogValidator extends Logging {
       for (batch <- records.batches.asScala) {
         validateBatch(batch, isFromClient)
 
+        // Do not compress control records unless they are written compressed
+        if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
+          inPlaceAssignment = true
+
         for (record <- batch.asScala) {
-          validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic, isFromClient)
+          validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
@@ -244,10 +248,6 @@ private[kafka] object LogValidator extends Logging {
           // No in place assignment situation 4
           if (!record.hasMagic(magic))
             inPlaceAssignment = false
-
-          // Do not compress control records unless they are written compressed
-          if (sourceCodec == NoCompressionCodec && record.isControlRecord)
-            inPlaceAssignment = true
 
           validatedRecords += record
         }

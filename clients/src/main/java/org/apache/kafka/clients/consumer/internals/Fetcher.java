@@ -1028,7 +1028,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     nextFetchOffset = record.offset() + 1;
 
                     // control records are not returned to the user
-                    if (!record.isControlRecord())
+                    if (!currentBatch.isControlBatch())
                          return record;
                 }
             }
@@ -1094,7 +1094,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         private boolean containsAbortMarker(RecordBatch batch) {
-            if (batch.baseSequence() != RecordBatch.CONTROL_SEQUENCE)
+            if (!batch.isControlBatch())
                 return false;
 
             Iterator<Record> batchIterator = batch.iterator();
@@ -1103,7 +1103,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         batch.baseOffset() + " with control sequence set, but no records");
 
             Record firstRecord = batchIterator.next();
-            return firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+            return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
         }
     }
 

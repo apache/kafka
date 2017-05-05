@@ -99,7 +99,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   }
 
   def append(batch: RecordBatch): Option[CompletedTxn] = {
-    if (batch.baseSequence == RecordBatch.CONTROL_SEQUENCE) {
+    if (batch.isControlBatch) {
       val record = batch.iterator.next()
       val endTxnMarker = EndTransactionMarker.deserialize(record)
       val completedTxn = appendEndTxnMarker(endTxnMarker, batch.producerEpoch, batch.baseOffset, record.timestamp)
