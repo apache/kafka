@@ -92,7 +92,7 @@ public class Selector implements Selectable, AutoCloseable {
     private final Map<KafkaChannel, Deque<NetworkReceive>> stagedReceives;
     private final Set<SelectionKey> immediatelyConnectedKeys;
     private final Map<String, KafkaChannel> closingChannels;
-    private final List<String> disconnected;
+    private final Map<String, ChannelState> disconnected;
     private final List<String> connected;
     private final List<String> failedSends;
     private final Time time;
@@ -137,7 +137,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.immediatelyConnectedKeys = new HashSet<>();
         this.closingChannels = new HashMap<>();
         this.connected = new ArrayList<>();
-        this.disconnected = new ArrayList<>();
+        this.disconnected = new HashMap<>();
         this.failedSends = new ArrayList<>();
         this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
@@ -413,7 +413,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     @Override
-    public List<String> disconnected() {
+    public Map<String, ChannelState> disconnected() {
         return this.disconnected;
     }
 
@@ -466,6 +466,7 @@ public class Selector implements Selectable, AutoCloseable {
                 if (log.isTraceEnabled())
                     log.trace("About to close the idle connection from {} due to being idle for {} millis",
                             connectionId, (currentTimeNanos - expiredConnection.getValue()) / 1000 / 1000);
+                channel.state(ChannelState.EXPIRED);
                 close(channel, true);
             }
         }
@@ -489,7 +490,8 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
-        this.disconnected.addAll(this.failedSends);
+        for (String channel : this.failedSends)
+            this.disconnected.put(channel, ChannelState.FAILED_SEND);
         this.failedSends.clear();
     }
 
@@ -516,8 +518,10 @@ public class Selector implements Selectable, AutoCloseable {
      */
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
-        if (channel != null)
+        if (channel != null) {
+            channel.state(ChannelState.LOCAL_CLOSE);
             close(channel, false);
+        }
     }
 
     /**
@@ -566,7 +570,7 @@ public class Selector implements Selectable, AutoCloseable {
         this.sensors.connectionClosed.record();
         this.stagedReceives.remove(channel);
         if (notifyDisconnect)
-            this.disconnected.add(channel.id());
+            this.disconnected.put(channel.id(), channel.state());
     }
 
     /**
