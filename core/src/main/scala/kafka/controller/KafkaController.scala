@@ -179,6 +179,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   private val activeControllerId = new AtomicInteger(-1)
   private val offlinePartitionCount = new AtomicInteger(0)
   private val preferredReplicaImbalanceCount = new AtomicInteger(0)
+  @volatile private var state: ControllerState = ControllerState.Idle
 
   newGauge(
     "ActiveControllerCount",
@@ -202,6 +203,11 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
       def value(): Int = {
         preferredReplicaImbalanceCount.get()
       }
+
+  newGauge(
+    "ControllerState",
+    new Gauge[Byte] {
+      def value: Byte = state.value
     }
   )
 
@@ -290,6 +296,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    * Note:We need to resign as a controller out of the controller lock to avoid potential deadlock issue
    */
   def onControllerResignation() {
+    state = ControllerState.Resigning
     controllerContext.stats.resignTimer.time {
       debug("Controller resigning, broker id %d".format(config.brokerId))
       // de-register listeners
@@ -434,6 +441,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    * 3. Send metadata request with the new topic to all brokers so they allow requests for that topic to be served
    */
   def onNewTopicCreation(topics: Set[String], newPartitions: Set[TopicAndPartition]) {
+    state = ControllerState.CreatingTopic
     controllerContext.stats.topicCreationTimer.time {
       info("New topic creation callback for %s".format(newPartitions.mkString(",")))
       // subscribe to partition changes
@@ -498,7 +506,8 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
    * This way, if the controller crashes before that step, we can still recover.
    */
   def onPartitionReassignment(topicAndPartition: TopicAndPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
-    controllerContext.stats.partitionReassigmentTimer.time {
+    state = ControllerState.ReassigningPartitions
+    controllerContext.stats.partitionReassignmentTimer.time {
       val reassignedReplicas = reassignedPartitionContext.newReplicas
       if (!areReplicasInIsr(topicAndPartition.topic, topicAndPartition.partition, reassignedReplicas)) {
         info("New replicas %s for partition %s being ".format(reassignedReplicas.mkString(","), topicAndPartition) +
@@ -585,9 +594,10 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   }
 
   def onPreferredReplicaElection(partitions: Set[TopicAndPartition], isTriggeredByAutoRebalance: Boolean = false) {
-    val timer =
-      if (isTriggeredByAutoRebalance) controllerContext.stats.autoLeaderBalancingTimer
-      else controllerContext.stats.manualLeaderBalancingTimer
+    val (timer, state) =
+      if (isTriggeredByAutoRebalance) (controllerContext.stats.autoLeaderBalancingTimer, ControllerState.AutoLeaderBalancing)
+      else (controllerContext.stats.manualLeaderBalancingTimer, ControllerState.ManualLeaderBalancing)
+    this.state = state
     timer.time {
       info("Starting preferred replica leader election for partitions %s".format(partitions.mkString(",")))
       try {
@@ -1171,6 +1181,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   case class BrokerChange(currentBrokerList: Seq[String]) extends ControllerEvent {
     override def process(): Unit = {
       if (!isActive) return
+      state = ControllerState.ElectingLeader
       controllerContext.stats.leaderElectionTimer.time {
         try {
           val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
@@ -1246,6 +1257,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   case class TopicDeletion(var topicsToBeDeleted: Set[String]) extends ControllerEvent {
     override def process(): Unit = {
       if (!isActive) return
+      state = ControllerState.DeletingTopic
       controllerContext.stats.topicDeletionTimer.time {
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
         val nonExistentTopics = topicsToBeDeleted -- controllerContext.allTopics
@@ -1497,6 +1509,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case object Startup extends ControllerEvent {
     override def process(): Unit = {
+      state = ControllerState.Starting
       controllerContext.stats.startTimer.time {
         registerSessionExpirationListener()
         registerControllerChangeListener()
@@ -1543,6 +1556,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
         controllerContext.partitionLeadershipInfo.contains(topicPartition) &&
         controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader != replicas.head &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
+    state = ControllerState.Idle
       }
     preferredReplicaImbalanceCount.set(pric)
   }
@@ -1740,9 +1754,24 @@ private[controller] class ControllerStats extends KafkaMetricsGroup {
   val resignTimer = new KafkaTimer(newTimer("ControllerResignRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
   val topicCreationTimer = new KafkaTimer(newTimer("TopicCreationRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
   val topicDeletionTimer = new KafkaTimer(newTimer("TopicDeletionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val partitionReassigmentTimer = new KafkaTimer(newTimer("PartitionReassignmentRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val partitionReassignmentTimer = new KafkaTimer(newTimer("PartitionReassignmentRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
   val autoLeaderBalancingTimer = new KafkaTimer(newTimer("AutoLeaderBalancingRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
   val manualLeaderBalancingTimer = new KafkaTimer(newTimer("ManualLeaderBalancingRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+}
+
+sealed abstract class ControllerState(val value: Byte)
+
+object ControllerState {
+  case object Idle extends ControllerState(0)
+  case object Starting extends ControllerState(1)
+  case object Resigning extends ControllerState(2)
+  case object ElectingLeader extends ControllerState(3)
+  case object CreatingTopic extends ControllerState(4)
+  case object DeletingTopic extends ControllerState(5)
+  case object ReassigningPartitions extends ControllerState(6)
+  case object AutoLeaderBalancing extends ControllerState(7)
+  case object ManualLeaderBalancing extends ControllerState(8)
+  case object ControlledShutdown extends ControllerState(9)
 }
 
 sealed trait ControllerEvent {
