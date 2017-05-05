@@ -24,7 +24,7 @@ import javax.security.auth.login.Configuration
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils.JaasSection
-import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.utils.{JaasTestUtils, Logging, TestUtils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.config.SaslConfigs
@@ -42,7 +42,7 @@ case object CustomKafkaServerSasl extends SaslSetupMode
 /*
  * Trait used in SaslTestHarness and EndToEndAuthorizationTest to setup keytab and jaas files.
  */
-trait SaslSetup {
+trait SaslSetup extends Logging {
   private val workDir = TestUtils.tempDir()
   private val kdcConf = MiniKdc.createConfig
   private var kdc: MiniKdc = null
@@ -91,6 +91,7 @@ trait SaslSetup {
   }
 
   protected def writeJaasConfigurationToFile() {
+    info(s"Dumping JaasContext before writing to file: $jaasContext")
     // This will cause a reload of the Configuration singleton when `getConfiguration` is called
     Configuration.setConfiguration(null)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, JaasTestUtils.writeJaasContextsToFile(jaasContext))
