@@ -690,7 +690,11 @@ class Log(@volatile var dir: File,
     val completedTxns = ListBuffer.empty[CompletedTxn]
     for (batch <- records.batches.asScala if batch.hasProducerId) {
       val maybeLastEntry = producerStateManager.lastEntry(batch.producerId)
-      if (maybeLastEntry.exists(_.isDuplicate(batch)))
+
+      // if this is a client produce request, there will be only one batch. If that batch matches
+      // the last appended entry for that producer, then this request is a duplicate and we return
+      // the last appended entry to the client.
+      if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
         return (updatedProducers, completedTxns.toList, maybeLastEntry)
       updateProducers(batch, updatedProducers, completedTxns, maybeLastEntry, loadingFromLog = false)
     }

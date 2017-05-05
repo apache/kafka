@@ -229,8 +229,8 @@ public class DefaultRecordBatchTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
                 TimestampType.CREATE_TIME, 0L);
 
-        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.COMMIT, null);
-        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.ABORT, null);
+        builder.appendEndTxnMarker(System.currentTimeMillis(), new EndTransactionMarker(ControlRecordType.COMMIT, 0));
+        builder.appendEndTxnMarker(System.currentTimeMillis(), new EndTransactionMarker(ControlRecordType.ABORT, 0));
         MemoryRecords records = builder.build();
 
         List<Record> logRecords = TestUtils.toList(records.records());

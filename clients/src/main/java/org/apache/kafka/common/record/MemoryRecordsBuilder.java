@@ -483,6 +483,11 @@ public class MemoryRecordsBuilder {
         return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
+    public long appendEndTxnMarker(long timestamp, EndTransactionMarker marker) {
+        ByteBuffer value = marker.serializeValue();
+        return appendControlRecord(timestamp, marker.controlType(), value);
+    }
+
     /**
      * Add a legacy record without doing offset/magic validation (this should only be used in testing).
      * @param offset The offset of the record

@@ -349,7 +349,7 @@ public class MemoryRecordsBuilderTest {
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
                 TimestampType.CREATE_TIME, 1L);
         builder.append(11L, "2".getBytes(), "b".getBytes());
-        builder.appendControlRecord(12L, ControlRecordType.COMMIT, null);
+        builder.appendEndTxnMarker(12L, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
 

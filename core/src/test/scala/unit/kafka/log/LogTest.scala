@@ -520,39 +520,57 @@ class LogTest {
   }
 
   @Test(expected = classOf[DuplicateSequenceNumberException])
-  def testMultiplePidsWithDuplicates() : Unit = {
-    val logProps = new Properties()
+  def testDuplicateAppendToFollower() : Unit = {
+    val log = createLog(1024*1024)
+    val epoch: Short = 0
+    val pid = 1L
+    val baseSequence = 0
+    val partitionLeaderEpoch = 0
+    // this is a bit contrived. to trigger the duplicate case for a follower append, we have to append
+    // a batch with matching sequence numbers, but valid increasing offsets
+    log.appendAsFollower(MemoryRecords.withIdempotentRecords(0L, CompressionType.NONE, pid, epoch, baseSequence,
+      partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+    log.appendAsFollower(MemoryRecords.withIdempotentRecords(2L, CompressionType.NONE, pid, epoch, baseSequence,
+      partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+  }
 
-    // create a log
-    val log = new Log(logDir,
-      LogConfig(logProps),
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      time = time)
+  @Test(expected = classOf[DuplicateSequenceNumberException])
+  def testMultipleProducersWithDuplicatesInSingleAppend() : Unit = {
+    val log = createLog(1024*1024)
 
+    val pid1 = 1L
+    val pid2 = 2L
     val epoch: Short = 0
 
     val buffer = ByteBuffer.allocate(512)
 
-    var builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 0L, time.milliseconds(), 1L, epoch, 0)
+    // pid1 seq = 0
+    var builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      TimestampType.LOG_APPEND_TIME, 0L, time.milliseconds(), pid1, epoch, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    // Append a record with other pids.
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 1L, time.milliseconds(), 2L, epoch, 0)
+    // pid2 seq = 0
+    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      TimestampType.LOG_APPEND_TIME, 1L, time.milliseconds(), pid2, epoch, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    // Append a record with other pids.
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 2L, time.milliseconds(), 1L, epoch, 1)
+    // pid1 seq = 1
+    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      TimestampType.LOG_APPEND_TIME, 2L, time.milliseconds(), pid1, epoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 3L, time.milliseconds(), 2L, epoch, 1)
+    // pid2 seq = 1
+    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      TimestampType.LOG_APPEND_TIME, 3L, time.milliseconds(), pid2, epoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
-    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, 4L, time.milliseconds(), 1L, epoch, 1)
+    // // pid1 seq = 1 (duplicate)
+    builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+      TimestampType.LOG_APPEND_TIME, 4L, time.milliseconds(), pid1, epoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
@@ -561,7 +579,7 @@ class LogTest {
     val records = MemoryRecords.readableRecords(buffer)
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
     log.appendAsFollower(records)
-    // Should throw a duplicate seqeuence exception here.
+    // Should throw a duplicate sequence exception here.
     fail("should have thrown a DuplicateSequenceNumberException.")
   }
 
@@ -2402,7 +2420,7 @@ class LogTest {
     val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, producerId, producerEpoch,
       RecordBatch.CONTROL_SEQUENCE, true)
     val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    builder.appendControlRecord(RecordBatch.NO_TIMESTAMP, controlType, marker.serializeValue())
+    builder.appendEndTxnMarker(RecordBatch.NO_TIMESTAMP, marker)
     builder.close()
   }
 

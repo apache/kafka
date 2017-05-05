@@ -401,11 +401,18 @@ public class MemoryRecords extends AbstractRecords {
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch, false, records);
     }
 
-    public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
-                                            long producerId, short producerEpoch, int baseSequence,
-                                            int partitionLeaderEpoch, SimpleRecord... records) {
+    public static MemoryRecords withIdempotentRecords(byte magic, long initialOffset, CompressionType compressionType,
+                                                      long producerId, short producerEpoch, int baseSequence,
+                                                      int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(magic, initialOffset, compressionType, TimestampType.CREATE_TIME, producerId, producerEpoch,
                 baseSequence, partitionLeaderEpoch, false, records);
+    }
+
+    public static MemoryRecords withIdempotentRecords(long initialOffset, CompressionType compressionType, long pid,
+                                                      short epoch, int baseSequence, int partitionLeaderEpoch,
+                                                      SimpleRecord... records) {
+        return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME,
+                pid, epoch, baseSequence, partitionLeaderEpoch, false, records);
     }
 
     public static MemoryRecords withTransactionalRecords(CompressionType compressionType, long pid, short epoch,
@@ -456,10 +463,8 @@ public class MemoryRecords extends AbstractRecords {
         MemoryRecordsBuilder builder = builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
                 TimestampType.CREATE_TIME, initialOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch,
                 RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        ByteBuffer value = marker.serializeValue();
-        builder.appendControlRecord(System.currentTimeMillis(), marker.controlType(), value);
+        builder.appendEndTxnMarker(System.currentTimeMillis(), marker);
         return builder.build();
-
     }
 
 }

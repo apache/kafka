@@ -44,6 +44,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
@@ -184,12 +185,12 @@ public class FetcherTest {
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(0L, "key".getBytes(), null);
-        builder.appendControlRecord(0L, ControlRecordType.COMMIT, null);
+        builder.appendEndTxnMarker(0L, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         builder.append(0L, "key".getBytes(), null);
         builder.close();
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 3L);
-        builder.appendControlRecord(0L, ControlRecordType.ABORT, null);
+        builder.appendEndTxnMarker(0L, new EndTransactionMarker(ControlRecordType.ABORT, 0));
         builder.close();
 
         buffer.flip();
@@ -823,12 +824,12 @@ public class FetcherTest {
             subscriptions.needOffsetReset(tp1, OffsetResetStrategy.LATEST);
 
             client.prepareResponse(new MockClient.RequestMatcher() {
-                                       @Override
-                                       public boolean matches(AbstractRequest body) {
-                                           ListOffsetRequest request = (ListOffsetRequest) body;
-                                           return request.isolationLevel() == isolationLevel;
-                                       }
-                                   }, listOffsetResponse(Errors.NONE, 1L, 5L));
+                @Override
+                public boolean matches(AbstractRequest body) {
+                    ListOffsetRequest request = (ListOffsetRequest) body;
+                    return request.isolationLevel() == isolationLevel;
+                }
+            }, listOffsetResponse(Errors.NONE, 1L, 5L));
             fetcher.updateFetchPositions(singleton(tp1));
             assertFalse(subscriptions.isOffsetResetNeeded(tp1));
             assertTrue(subscriptions.isFetchable(tp1));
@@ -1499,7 +1500,7 @@ public class FetcherTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
                 TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0,
                 RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        builder.appendControlRecord(timestamp, ControlRecordType.COMMIT, null);
+        builder.appendEndTxnMarker(timestamp, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         builder.build();
         return 1;
     }
@@ -1508,7 +1509,7 @@ public class FetcherTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
                 TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), pid, (short) 0,
                 RecordBatch.CONTROL_SEQUENCE, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
-        builder.appendControlRecord(timestamp, ControlRecordType.ABORT, null);
+        builder.appendEndTxnMarker(timestamp, new EndTransactionMarker(ControlRecordType.ABORT, 0));
         builder.build();
         return 1;
     }
