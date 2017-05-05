@@ -262,11 +262,11 @@ class LogTest {
 
     log.truncateTo(2)
     assertEquals(Some(2), log.latestProducerSnapshotOffset)
-    assertEquals(2, log.latestPidMapOffset)
+    assertEquals(2, log.latestProducerStateEndOffset)
 
     log.truncateTo(1)
     assertEquals(None, log.latestProducerSnapshotOffset)
-    assertEquals(1, log.latestPidMapOffset)
+    assertEquals(1, log.latestProducerStateEndOffset)
   }
 
   @Test
@@ -281,13 +281,13 @@ class LogTest {
     log.takeProducerSnapshot()
 
     assertEquals(3, log.logSegments.size)
-    assertEquals(3, log.latestPidMapOffset)
+    assertEquals(3, log.latestProducerStateEndOffset)
     assertEquals(Some(3), log.latestProducerSnapshotOffset)
 
     log.truncateFullyAndStartAt(29)
     assertEquals(1, log.logSegments.size)
     assertEquals(None, log.latestProducerSnapshotOffset)
-    assertEquals(29, log.latestPidMapOffset)
+    assertEquals(29, log.latestProducerStateEndOffset)
   }
 
   @Test

@@ -43,7 +43,6 @@ public class EndTransactionMarker {
             EndTransactionMarker.CURRENT_END_TXN_MARKER_VALUE_SIZE,
             Record.EMPTY_HEADERS);
 
-
     private final ControlRecordType type;
     private final int coordinatorEpoch;
 

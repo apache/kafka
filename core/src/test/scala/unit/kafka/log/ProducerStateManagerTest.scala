@@ -18,8 +18,8 @@
 package kafka.log
 
 import java.io.File
-import java.util.Properties
 
+import kafka.server.LogOffsetMetadata
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
@@ -123,6 +123,40 @@ class ProducerStateManagerTest extends JUnitSuite {
   }
 
   @Test
+  def testTxnFirstOffsetMetadataCached(): Unit = {
+    val producerEpoch = 0.toShort
+    val offset = 992342L
+    val seq = 0
+    val producerAppendInfo = new ProducerAppendInfo(pid, None, false)
+    producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(), offset, isTransactional = true)
+
+    val logOffsetMetadata = new LogOffsetMetadata(messageOffset = offset, segmentBaseOffset = 990000L,
+      relativePositionInSegment = 234224)
+    producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
+    idMapping.update(producerAppendInfo)
+
+    assertEquals(Some(logOffsetMetadata), idMapping.firstUnstableOffset)
+  }
+
+  @Test
+  def testNonMatchingTxnFirstOffsetMetadataNotCached(): Unit = {
+    val producerEpoch = 0.toShort
+    val offset = 992342L
+    val seq = 0
+    val producerAppendInfo = new ProducerAppendInfo(pid, None, false)
+    producerAppendInfo.append(producerEpoch, seq, seq, time.milliseconds(), offset, isTransactional = true)
+
+    // use some other offset to simulate a follower append where the log offset metadata won't typically
+    // match any of the transaction first offsets
+    val logOffsetMetadata = new LogOffsetMetadata(messageOffset = offset - 23429, segmentBaseOffset = 990000L,
+      relativePositionInSegment = 234224)
+    producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
+    idMapping.update(producerAppendInfo)
+
+    assertEquals(Some(LogOffsetMetadata(offset)), idMapping.firstUnstableOffset)
+  }
+
+  @Test
   def updateProducerTransactionState(): Unit = {
     val producerEpoch = 0.toShort
     val coordinatorEpoch = 15
@@ -138,7 +172,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(16L, lastEntry.firstOffset)
     assertEquals(20L, lastEntry.lastOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
+    assertEquals(List(new TxnMetadata(pid, 16L)), appendInfo.startedTransactions)
 
     appendInfo.append(producerEpoch, 6, 10, time.milliseconds(), 30L, isTransactional = true)
     lastEntry = appendInfo.lastEntry
@@ -148,7 +182,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(26L, lastEntry.firstOffset)
     assertEquals(30L, lastEntry.lastOffset)
     assertEquals(Some(16L), lastEntry.currentTxnFirstOffset)
-    assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
+    assertEquals(List(new TxnMetadata(pid, 16L)), appendInfo.startedTransactions)
 
     val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch)
     val completedTxn = appendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, 40L, time.milliseconds())
@@ -165,7 +199,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(40L, lastEntry.lastOffset)
     assertEquals(coordinatorEpoch, lastEntry.coordinatorEpoch)
     assertEquals(None, lastEntry.currentTxnFirstOffset)
-    assertEquals(List(StartedTxn(pid, 16L)), appendInfo.startedTransactions)
+    assertEquals(List(new TxnMetadata(pid, 16L)), appendInfo.startedTransactions)
   }
 
   @Test(expected = classOf[OutOfOrderSequenceException])
@@ -286,20 +320,20 @@ class ProducerStateManagerTest extends JUnitSuite {
     val sequence = 0
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
-    assertEquals(Some(99), idMapping.firstUnstableOffset)
+    assertEquals(Some(99), idMapping.firstUnstableOffset.map(_.messageOffset))
     idMapping.takeSnapshot()
 
     appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 105)
     idMapping.onHighWatermarkUpdated(106)
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUnstableOffset.map(_.messageOffset))
     idMapping.takeSnapshot()
 
     append(idMapping, pid, sequence + 1, epoch, offset = 106)
     idMapping.truncateAndReload(0L, 106, time.milliseconds())
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUnstableOffset.map(_.messageOffset))
 
     idMapping.truncateAndReload(0L, 100L, time.milliseconds())
-    assertEquals(Some(99), idMapping.firstUnstableOffset)
+    assertEquals(Some(99), idMapping.firstUnstableOffset.map(_.messageOffset))
   }
 
   @Test
@@ -307,10 +341,10 @@ class ProducerStateManagerTest extends JUnitSuite {
     val epoch = 0.toShort
     val sequence = 0
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
-    assertEquals(Some(99), idMapping.firstUnstableOffset)
-    append(idMapping, 2L, 0, epoch, offset = 106)
+    assertEquals(Some(99), idMapping.firstUnstableOffset.map(_.messageOffset))
+    append(idMapping, 2L, 0, epoch, offset = 106, isTransactional = true)
     idMapping.evictUnretainedProducers(100)
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(Some(106), idMapping.firstUnstableOffset.map(_.messageOffset))
   }
 
   @Test
@@ -398,29 +432,29 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     append(idMapping, pid, sequence, epoch, offset = 99, isTransactional = true)
     assertEquals(Some(99L), idMapping.firstUndecidedOffset)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset.map(_.messageOffset))
 
     val anotherPid = 2L
     append(idMapping, anotherPid, sequence, epoch, offset = 105, isTransactional = true)
     assertEquals(Some(99L), idMapping.firstUndecidedOffset)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset.map(_.messageOffset))
 
     appendEndTxnMarker(idMapping, pid, epoch, ControlRecordType.COMMIT, offset = 109)
     assertEquals(Some(105L), idMapping.firstUndecidedOffset)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset.map(_.messageOffset))
 
     idMapping.onHighWatermarkUpdated(100L)
-    assertEquals(Some(99L), idMapping.firstUnstableOffset)
+    assertEquals(Some(99L), idMapping.firstUnstableOffset.map(_.messageOffset))
 
     idMapping.onHighWatermarkUpdated(110L)
-    assertEquals(Some(105L), idMapping.firstUnstableOffset)
+    assertEquals(Some(105L), idMapping.firstUnstableOffset.map(_.messageOffset))
 
     appendEndTxnMarker(idMapping, anotherPid, epoch, ControlRecordType.ABORT, offset = 112)
     assertEquals(None, idMapping.firstUndecidedOffset)
-    assertEquals(Some(105L), idMapping.firstUnstableOffset)
+    assertEquals(Some(105L), idMapping.firstUnstableOffset.map(_.messageOffset))
 
     idMapping.onHighWatermarkUpdated(113L)
-    assertEquals(None, idMapping.firstUnstableOffset)
+    assertEquals(None, idMapping.firstUnstableOffset.map(_.messageOffset))
   }
 
   @Test
@@ -477,7 +511,6 @@ class ProducerStateManagerTest extends JUnitSuite {
       case e: TransactionCoordinatorFencedException =>
     }
   }
-
 
   @Test(expected = classOf[TransactionCoordinatorFencedException])
   def testCoordinatorFencedAfterReload(): Unit = {

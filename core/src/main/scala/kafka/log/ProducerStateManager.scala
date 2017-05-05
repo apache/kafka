@@ -21,6 +21,8 @@ import java.nio.ByteBuffer
 import java.nio.file.Files
 
 import kafka.common.KafkaException
+import kafka.log.Log.offsetFromFilename
+import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
@@ -30,6 +32,12 @@ import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
+
+class CorruptSnapshotException(msg: String) extends KafkaException(msg)
+
+private[log] case class TxnMetadata(producerId: Long, var firstOffset: LogOffsetMetadata, var lastOffset: Option[Long] = None) {
+  def this(producerId: Long, firstOffset: Long) = this(producerId, LogOffsetMetadata(firstOffset))
+}
 
 private[log] object ProducerIdEntry {
   val Empty = ProducerIdEntry(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
@@ -63,7 +71,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   private var maxTimestamp = initialEntry.timestamp
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
   private var coordinatorEpoch = initialEntry.coordinatorEpoch
-  private val transactions = ListBuffer.empty[StartedTxn]
+  private val transactions = ListBuffer.empty[TxnMetadata]
 
   def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
     this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
@@ -126,7 +134,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     if (isTransactional && currentTxnFirstOffset.isEmpty) {
       val firstOffset = lastOffset - (lastSeq - firstSeq)
       currentTxnFirstOffset = Some(firstOffset)
-      transactions += StartedTxn(producerId, firstOffset)
+      transactions += new TxnMetadata(producerId, firstOffset)
     }
   }
 
@@ -156,7 +164,13 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
       this.firstSeq = this.lastSeq
     }
 
-    val firstOffset = currentTxnFirstOffset.getOrElse(offset)
+    val firstOffset = currentTxnFirstOffset match {
+      case Some(firstOffset) => firstOffset
+      case None =>
+        transactions += new TxnMetadata(producerId, offset)
+        offset
+    }
+
     this.lastOffset = offset
     this.currentTxnFirstOffset = None
     this.maxTimestamp = timestamp
@@ -168,20 +182,20 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     ProducerIdEntry(producerId, producerEpoch, lastSeq, lastOffset, lastSeq - firstSeq, maxTimestamp,
       coordinatorEpoch, currentTxnFirstOffset)
 
-  def startedTransactions: List[StartedTxn] = transactions.toList
+  def startedTransactions: List[TxnMetadata] = transactions.toList
 
-}
-
-class CorruptSnapshotException(msg: String) extends KafkaException(msg)
-
-private[log] case class StartedTxn(producerId: Long, firstOffset: Long) extends Ordered[StartedTxn] {
-  override def compare(that: StartedTxn): Int = {
-    val res = this.firstOffset compare that.firstOffset
-    if (res == 0)
-      this.producerId compare that.producerId
-    else
-      res
+  def maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata: LogOffsetMetadata): Unit = {
+    // we will cache the log offset metadata if it corresponds to the starting offset of
+    // the last transaction that was started. This is optimized for leader appends where it
+    // is only possible to have one transaction started for each log append, and the log
+    // offset metadata will always match in that case since no data from other producers
+    // is mixed into the append
+    transactions.headOption.foreach { txn =>
+      if (txn.firstOffset.messageOffset == logOffsetMetadata.messageOffset)
+        txn.firstOffset = logOffsetMetadata
+    }
   }
+
 }
 
 object ProducerStateManager {
@@ -306,40 +320,49 @@ class ProducerStateManager(val topicPartition: TopicPartition,
                            val logDir: File,
                            val maxPidExpirationMs: Int = 60 * 60 * 1000) extends Logging {
   import ProducerStateManager._
+  import java.util
 
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
 
   // ongoing transactions sorted by the first offset of the transaction
-  private val ongoingTxns = mutable.TreeSet.empty[StartedTxn]
+  private val ongoingTxns = new util.TreeMap[Long, TxnMetadata]
 
   // completed transactions whose markers are at offsets above the high watermark
-  private val unreplicatedTxns = mutable.TreeSet.empty[CompletedTxn]
+  private val unreplicatedTxns = new util.TreeMap[Long, TxnMetadata]
 
   /**
    * An unstable offset is one which is either undecided (i.e. its ultimate outcome is not yet known),
    * or one that is decided, but may not have been replicated (i.e. any transaction which has a COMMIT/ABORT
    * marker written at a higher offset than the current high watermark).
    */
-  def firstUnstableOffset: Option[Long] = {
-    val firstUnreplicatedOffset = unreplicatedTxns.headOption.map(_.firstOffset)
-    firstUndecidedOffset.map { offset =>
-      math.min(offset, firstUnreplicatedOffset.getOrElse(Long.MaxValue))
-    }.orElse(firstUnreplicatedOffset)
+  def firstUnstableOffset: Option[LogOffsetMetadata] = {
+    val unreplicatedFirstOffset = Option(unreplicatedTxns.firstEntry).map(_.getValue.firstOffset)
+    val undecidedFirstOffset = Option(ongoingTxns.firstEntry).map(_.getValue.firstOffset)
+    if (unreplicatedFirstOffset.isEmpty)
+      undecidedFirstOffset
+    else if (undecidedFirstOffset.isEmpty)
+      unreplicatedFirstOffset
+    else if (undecidedFirstOffset.get.messageOffset < unreplicatedFirstOffset.get.messageOffset)
+      undecidedFirstOffset
+    else
+      unreplicatedFirstOffset
   }
 
   /**
    * Acknowledge all transactions which have been completed before a given offset. This allows the LSO
    * to advance to the next unstable offset.
    */
-  def onHighWatermarkUpdated(highWatermark: Long): Unit = unreplicatedTxns.retain(_.lastOffset >= highWatermark)
+  def onHighWatermarkUpdated(highWatermark: Long): Unit = {
+    removeUnreplicatedTransactions(highWatermark)
+  }
 
   /**
    * The first undecided offset is the earliest transactional message which has not yet been committed
    * or aborted.
    */
-  def firstUndecidedOffset: Option[Long] = ongoingTxns.headOption.map(_.firstOffset)
+  def firstUndecidedOffset: Option[Long] = Option(ongoingTxns.firstEntry).map(_.getValue.firstOffset.messageOffset)
 
   /**
    * Returns the last offset of this map
@@ -358,17 +381,17 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       latestSnapshotFile match {
         case Some(file) =>
           try {
-            info(s"Loading PID mapping from snapshot file ${file.getName} for partition $topicPartition")
+            info(s"Loading producer state from snapshot file ${file.getName} for partition $topicPartition")
             readSnapshot(file).foreach { case (pid, entry) =>
               if (!isExpired(currentTime, entry)) {
                 producers.put(pid, entry)
                 entry.currentTxnFirstOffset.foreach { offset =>
-                  ongoingTxns += StartedTxn(pid, offset)
+                  ongoingTxns.put(pid, new TxnMetadata(pid, offset))
                 }
               }
             }
 
-            lastSnapOffset = Log.offsetFromFilename(file.getName)
+            lastSnapOffset = offsetFromFilename(file.getName)
             lastMapOffset = lastSnapOffset
             return
           } catch {
@@ -410,7 +433,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // safe to clear the unreplicated transactions
       unreplicatedTxns.clear()
       deleteSnapshotFiles { file =>
-        val offset = Log.offsetFromFilename(file.getName)
+        val offset = offsetFromFilename(file.getName)
         offset > logEndOffset || offset <= logStartOffset
       }
       loadFromSnapshot(logStartOffset, currentTimeMs)
@@ -425,9 +448,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   def update(appendInfo: ProducerAppendInfo): Unit = {
     if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
       throw new IllegalArgumentException("Invalid PID passed to update")
+
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)
-    appendInfo.startedTransactions.foreach(ongoingTxns += _)
+    appendInfo.startedTransactions.foreach { txn =>
+      ongoingTxns.put(txn.firstOffset.messageOffset, txn)
+    }
   }
 
   def updateMapEndOffset(lastOffset: Long): Unit = {
@@ -457,12 +483,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   /**
    * Get the last offset (exclusive) of the latest snapshot file.
    */
-  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
+  def latestSnapshotOffset: Option[Long] = latestSnapshotFile.map(file => offsetFromFilename(file.getName))
 
   /**
    * Get the last offset (exclusive) of the oldest snapshot file.
    */
-  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => Log.offsetFromFilename(file.getName))
+  def oldestSnapshotOffset: Option[Long] = oldestSnapshotFile.map(file => offsetFromFilename(file.getName))
 
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
@@ -470,16 +496,35 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def evictUnretainedProducers(logStartOffset: Long) {
     val evictedProducerEntries = producers.filter(_._2.lastOffset < logStartOffset)
-    val evictedProducers = evictedProducerEntries.keySet
+    val evictedProducerIds = evictedProducerEntries.keySet
 
-    ongoingTxns.retain(txn => !evictedProducers.contains(txn.producerId))
-    unreplicatedTxns.retain(txn => !evictedProducers.contains(txn.producerId))
-    producers --= evictedProducers
+    producers --= evictedProducerIds
+    removeEvictedOngoingTransactions(evictedProducerIds)
+    removeUnreplicatedTransactions(logStartOffset)
 
-    deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) <= logStartOffset)
+    deleteSnapshotFiles(file => offsetFromFilename(file.getName) <= logStartOffset)
     if (lastMapOffset < logStartOffset)
       lastMapOffset = logStartOffset
     lastSnapOffset = latestSnapshotOffset.getOrElse(logStartOffset)
+  }
+
+  private def removeEvictedOngoingTransactions(expiredProducerIds: collection.Set[Long]): Unit = {
+    val iterator = ongoingTxns.entrySet.iterator
+    while (iterator.hasNext) {
+      val txnEntry = iterator.next()
+      if (expiredProducerIds.contains(txnEntry.getValue.producerId))
+        iterator.remove()
+    }
+  }
+
+  private def removeUnreplicatedTransactions(offset: Long): Unit = {
+    val iterator = unreplicatedTxns.entrySet.iterator
+    while (iterator.hasNext) {
+      val txnEntry = iterator.next()
+      val lastOffset = txnEntry.getValue.lastOffset
+      if (lastOffset.exists(_ < offset))
+        iterator.remove()
+    }
   }
 
   /**
@@ -498,14 +543,19 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * Complete the transaction and return the last stable offset.
    */
   def completeTxn(completedTxn: CompletedTxn): Long = {
-    ongoingTxns -= StartedTxn(completedTxn.producerId, completedTxn.firstOffset)
-    unreplicatedTxns += completedTxn
+    val txnMetdata = ongoingTxns.remove(completedTxn.firstOffset)
+    if (txnMetdata == null)
+      throw new IllegalArgumentException("Attempted to complete a transaction which was not started")
+
+    txnMetdata.lastOffset = Some(completedTxn.lastOffset)
+    unreplicatedTxns.put(completedTxn.firstOffset, txnMetdata)
+
     val lastStableOffset = firstUndecidedOffset.getOrElse(completedTxn.lastOffset + 1)
     lastStableOffset
   }
 
   def deleteSnapshotsBefore(offset: Long): Unit = {
-    deleteSnapshotFiles(file => Log.offsetFromFilename(file.getName) < offset)
+    deleteSnapshotFiles(file => offsetFromFilename(file.getName) < offset)
   }
 
   private def listSnapshotFiles: List[File] = {
@@ -518,7 +568,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private def oldestSnapshotFile: Option[File] = {
     val files = listSnapshotFiles
     if (files.nonEmpty)
-      Some(files.minBy(file => Log.offsetFromFilename(file.getName)))
+      Some(files.minBy(file => offsetFromFilename(file.getName)))
     else
       None
   }
@@ -526,7 +576,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   private def latestSnapshotFile: Option[File] = {
     val files = listSnapshotFiles
     if (files.nonEmpty)
-      Some(files.maxBy(file => Log.offsetFromFilename(file.getName)))
+      Some(files.maxBy(file => offsetFromFilename(file.getName)))
     else
       None
   }

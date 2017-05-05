@@ -85,18 +85,7 @@ case class LogAppendInfo(var firstOffset: Long,
  *                   COMMIT/ABORT control record which indicates the transaction's completion.
  * @param isAborted Whether or not the transaction was aborted
  */
-case class CompletedTxn(producerId: Long,
-                        firstOffset: Long,
-                        lastOffset: Long,
-                        isAborted: Boolean) extends Ordered[CompletedTxn] {
-  override def compare(that: CompletedTxn): Int = {
-    val res = this.firstOffset compare that.firstOffset
-    if (res == 0)
-      this.producerId compare that.producerId
-    else
-      res
-  }
-}
+case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, isAborted: Boolean)
 
 /**
  * An append-only log for storing messages.
@@ -609,15 +598,21 @@ class Log(@volatile var dir: File,
           maxTimestampInMessages = appendInfo.maxTimestamp,
           maxOffsetInMessages = appendInfo.lastOffset)
 
-        segment.append(firstOffset = appendInfo.firstOffset,
+        val segmentPosition = segment.append(firstOffset = appendInfo.firstOffset,
           largestOffset = appendInfo.lastOffset,
           largestTimestamp = appendInfo.maxTimestamp,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
 
+        val logOffsetMetadata = LogOffsetMetadata(
+          messageOffset = appendInfo.firstOffset,
+          segmentBaseOffset = segment.baseOffset,
+          relativePositionInSegment = segmentPosition)
+
         // update the producer state
         for ((producerId, producerAppendInfo) <- updatedProducers) {
-          trace(s"Updating pid with sequence: $producerId -> ${producerAppendInfo.lastEntry}")
+          trace(s"Updating producer $producerId state: ${producerAppendInfo.lastEntry}")
+          producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
           producerStateManager.update(producerAppendInfo)
         }
 
@@ -659,14 +654,13 @@ class Log(@volatile var dir: File,
   }
 
   private def updateFirstUnstableOffset(): Unit = {
-    this.firstUnstableOffset = producerStateManager.firstUnstableOffset.flatMap { offset =>
-      if (firstUnstableOffset.exists(_.messageOffset == offset)) {
-        firstUnstableOffset
-      } else {
+    this.firstUnstableOffset = producerStateManager.firstUnstableOffset match {
+      case Some(logOffsetMetadata) if logOffsetMetadata.messageOffsetOnly =>
+        val offset = logOffsetMetadata.messageOffset
         val segment = segments.floorEntry(offset).getValue
         val position  = segment.translateOffset(offset)
         Some(LogOffsetMetadata(offset, segment.baseOffset, position.position))
-      }
+      case other => other
     }
   }
 
@@ -1005,6 +999,7 @@ class Log(@volatile var dir: File,
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
         leaderEpochCache.clearEarliest(logStartOffset)
         producerStateManager.evictUnretainedProducers(logStartOffset)
+        updateFirstUnstableOffset()
       }
     }
     numToDelete
@@ -1236,7 +1231,7 @@ class Log(@volatile var dir: File,
   private[log] def takeProducerSnapshot(): Unit = producerStateManager.takeSnapshot()
   private[log] def latestProducerSnapshotOffset: Option[Long] = producerStateManager.latestSnapshotOffset
   private[log] def oldestProducerSnapshotOffset: Option[Long] = producerStateManager.oldestSnapshotOffset
-  private[log] def latestPidMapOffset: Long = producerStateManager.mapEndOffset
+  private[log] def latestProducerStateEndOffset: Long = producerStateManager.mapEndOffset
 
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.
