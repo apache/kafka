@@ -54,7 +54,9 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   newGauge(
     "TotalQueueSize",
     new Gauge[Int] {
-      def value: Int = brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
+      def value: Int = brokerLock synchronized {
+        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
+      }
     }
   )
 
