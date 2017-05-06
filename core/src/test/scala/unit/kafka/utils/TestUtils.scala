@@ -735,7 +735,7 @@ object TestUtils extends Logging {
    * @return The new leader or assertion failure if timeout is reached.
    */
   def waitUntilLeaderIsElectedOrChanged(zkUtils: ZkUtils, topic: String, partition: Int,
-                                        timeoutMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
+                                        timeoutMs: Long = 30000,
                                         oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
     require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
     val startTime = System.currentTimeMillis()
