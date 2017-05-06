@@ -44,7 +44,8 @@ object TransactionCoordinator {
       config.transactionTopicReplicationFactor,
       config.transactionTopicSegmentBytes,
       config.transactionsLoadBufferSize,
-      config.transactionTopicMinISR)
+      config.transactionTopicMinISR,
+      config.transactionTransactionsExpiredTransactionCleanupIntervalMs)
 
     val pidManager = new ProducerIdManager(config.brokerId, zkUtils)
     val logManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)

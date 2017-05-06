@@ -166,9 +166,10 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     pendingTxnMap.get(PendingTxnKey(metadataPartition, pid))
   }
 
-  def clear(): Unit = {
+  def close(): Unit = {
     brokerStateMap.clear()
     pendingTxnMap.clear()
+    networkClient.close()
   }
 
   def removeStateForPartition(partition: Int): mutable.Iterable[Long] = {

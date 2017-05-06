@@ -56,7 +56,6 @@ class TransactionMarkerChannelManagerTest {
     metadataCache,
     purgatory,
     interBrokerSendThread,
-    networkClient,
     channel)
 
   @Test

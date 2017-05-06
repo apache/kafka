@@ -82,7 +82,6 @@ object TransactionMarkerChannelManager {
       metadataCache,
       txnMarkerPurgatory,
       sendThread,
-      networkClient,
       channel)
   }
 
@@ -101,7 +100,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                                       metadataCache: MetadataCache,
                                       txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                                       interBrokerSendThread: InterBrokerSendThread,
-                                      networkClient: NetworkClient,
                                       transactionMarkerChannel: TransactionMarkerChannel) extends Logging {
 
   type WriteTxnMarkerCallback = Errors => Unit
@@ -111,11 +109,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   def shutdown(): Unit = {
-    val now = System.currentTimeMillis()
-    networkClient.close()
     interBrokerSendThread.shutdown()
-    val end = System.currentTimeMillis()
-    transactionMarkerChannel.clear()
+    transactionMarkerChannel.close()
   }
 
 
