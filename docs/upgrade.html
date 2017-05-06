@@ -55,6 +55,8 @@
 <ul>
     <li>Unclean leader election is now disabled by default. The new default favors durability over availability. Users who wish to
         to retain the previous behavior should set the broker config <code>unclean.leader.election.enabled</code> to <code>false</code>.</li>
+    <li>Producer configs <code>block.on.buffer.full</code>, <code>metadata.fetch.timeout.ms</code> and <code>timeout.ms</code> have been
+        removed. They were initially deprecated in Kafka 0.9.0.0.</li>
     <li>The <code>offsets.topic.replication.factor</code> broker config is now enforced upon auto topic creation. Internal
         auto topic creation will fail with a GROUP_COORDINATOR_NOT_AVAILABLE error until the cluster size meets this
         replication factor requirement.</li>
