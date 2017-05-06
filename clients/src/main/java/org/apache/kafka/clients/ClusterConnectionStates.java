@@ -25,14 +25,14 @@ import java.util.Map;
  * 
  */
 final class ClusterConnectionStates {
-    private final long reconnectBackoffMs;
+    private final long reconnectBackoffInit;
     private final long reconnectBackoffMax;
     private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
 
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMax) {
-        this.reconnectBackoffMs = reconnectBackoffMs;
+        this.reconnectBackoffInit = reconnectBackoffMs;
         this.reconnectBackoffMax = reconnectBackoffMax;
         this.reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<String, NodeConnectionState>();
@@ -101,7 +101,7 @@ final class ClusterConnectionStates {
      * @param now the current time
      */
     public void connecting(String id, long now) {
-        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now, this.reconnectBackoffMs));
+        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now, this.reconnectBackoffInit));
     }
 
     /**
@@ -161,7 +161,7 @@ final class ClusterConnectionStates {
      */
     public void resetReconnectBackoff(NodeConnectionState nodeState) {
         nodeState.failedAttempts = 0;
-        nodeState.reconnectBackoffMs = this.reconnectBackoffMs;
+        nodeState.reconnectBackoffMs = this.reconnectBackoffInit;
     }
 
     /**
@@ -172,14 +172,14 @@ final class ClusterConnectionStates {
      * @param nodeState The node state object to update
      */
     public void updateReconnectBackoff(NodeConnectionState nodeState) {
-        if (this.reconnectBackoffMax > this.reconnectBackoffMs) {
+        if (this.reconnectBackoffMax > this.reconnectBackoffInit) {
             nodeState.failedAttempts += 1;
             double backoffExp = (double) Math.min(nodeState.failedAttempts - 1, this.reconnectBackoffMaxExp);
             double backoffFactor = (double) Math.pow(RECONNECT_BACKOFF_EXP_BASE, backoffExp);
-            long reconnectBackoffMs = (long) (Math.max(this.reconnectBackoffMs, 1) * backoffFactor);
+            long reconnectBackoffMs = (long) (Math.max(this.reconnectBackoffInit, 1) * backoffFactor);
             // Actual backoff is chosen randomly in the exponentially-increasing range, which should make
             // connection attempts during broker failure more uniformly distributed.
-            reconnectBackoffMs = ThreadLocalRandom.current().nextLong(this.reconnectBackoffMs, nodeState.reconnectBackoffMs);
+            reconnectBackoffMs = ThreadLocalRandom.current().nextLong(this.reconnectBackoffInit, nodeState.reconnectBackoffMs);
         }
     }
 
