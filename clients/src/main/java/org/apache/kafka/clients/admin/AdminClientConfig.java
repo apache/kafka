@@ -49,7 +49,7 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
 
     /**
-     * <code>reconnect.backoff.max</code>
+     * <code>reconnect.backoff.max.ms</code>
      */
     public static final String RECONNECT_BACKOFF_MAX_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_CONFIG;
     private static final String RECONNECT_BACKOFF_MAX_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MAX_DOC;

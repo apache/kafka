@@ -167,7 +167,7 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
 
     /**
-     * <code>reconnect.backoff.max</code>
+     * <code>reconnect.backoff.max.ms</code>
      */
     public static final String RECONNECT_BACKOFF_MAX_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_CONFIG;
 
