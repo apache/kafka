@@ -27,15 +27,14 @@ import java.util.Map;
 final class ClusterConnectionStates {
     private final long reconnectBackoffMs;
     private final long reconnectBackoffMax;
-    private final int reconnectBackoffExpBase;
+    private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
 
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMax) {
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.reconnectBackoffMax = reconnectBackoffMax;
-        this.reconnectBackoffExpBase = 2;
-        this.reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / Math.max(reconnectBackoffMs, 1)) / Math.log(this.reconnectBackoffExpBase);
+        this.reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<String, NodeConnectionState>();
     }
 
@@ -176,7 +175,7 @@ final class ClusterConnectionStates {
         if (this.reconnectBackoffMax > this.reconnectBackoffMs) {
             nodeState.failedAttempts += 1;
             double backoffExp = (double) Math.min(nodeState.failedAttempts - 1, this.reconnectBackoffMaxExp);
-            double backoffFactor = (double) Math.pow(this.reconnectBackoffExpBase, backoffExp);
+            double backoffFactor = (double) Math.pow(RECONNECT_BACKOFF_EXP_BASE, backoffExp);
             long reconnectBackoffMs = (long) (Math.max(this.reconnectBackoffMs, 1) * backoffFactor);
             // Actual backoff is chosen randomly in the exponentially-increasing range, which should make
             // connection attempts during broker failure more uniformly distributed.
