@@ -179,7 +179,8 @@ final class ClusterConnectionStates {
             long reconnectBackoffMs = (long) (this.reconnectBackoffInit * backoffFactor);
             // Actual backoff is chosen randomly in the exponentially-increasing range, which should make
             // connection attempts during broker failure more uniformly distributed.
-            reconnectBackoffMs = ThreadLocalRandom.current().nextLong(this.reconnectBackoffInit, nodeState.reconnectBackoffMs);
+            nodeState.reconnectBackoffMs = ThreadLocalRandom.current().nextLong(
+                this.reconnectBackoffInit, reconnectBackoffMs);
         }
     }
 
