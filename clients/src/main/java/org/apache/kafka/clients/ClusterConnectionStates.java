@@ -34,7 +34,7 @@ final class ClusterConnectionStates {
     public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMax) {
         this.reconnectBackoffMs = reconnectBackoffMs;
         this.reconnectBackoffMax = reconnectBackoffMax;
-        this.reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
+        this.reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<String, NodeConnectionState>();
     }
 
