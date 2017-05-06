@@ -167,7 +167,7 @@ final class ClusterConnectionStates {
     /**
      * Update the node reconnect backoff exponentially, but with a randomly selected value
      * in the range [base, min(max, base * 2**failures)], where base is configured via
-     * reconnect.backoff.ms and max is configured via reconnect.backof.max
+     * reconnect.backoff.ms and max is configured via reconnect.backoff.max
      *
      * @param nodeState The node state object to update
      */
