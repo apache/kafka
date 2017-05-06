@@ -176,7 +176,7 @@ final class ClusterConnectionStates {
             nodeState.failedAttempts += 1;
             double backoffExp = Math.min(nodeState.failedAttempts - 1, this.reconnectBackoffMaxExp);
             double backoffFactor = Math.pow(RECONNECT_BACKOFF_EXP_BASE, backoffExp);
-            long reconnectBackoffMs = (long) (Math.max(this.reconnectBackoffInit, 1) * backoffFactor);
+            long reconnectBackoffMs = (long) (this.reconnectBackoffInit * backoffFactor);
             // Actual backoff is chosen randomly in the exponentially-increasing range, which should make
             // connection attempts during broker failure more uniformly distributed.
             reconnectBackoffMs = ThreadLocalRandom.current().nextLong(this.reconnectBackoffInit, nodeState.reconnectBackoffMs);
