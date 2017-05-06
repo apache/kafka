@@ -40,6 +40,7 @@ public class ListOffsetRequest extends AbstractRequest {
     public static final int DEBUGGING_REPLICA_ID = -2;
 
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
+    private static final String ISOLATION_LEVEL_KEY_NAME = "isolation_level";
     private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level field names
@@ -52,6 +53,7 @@ public class ListOffsetRequest extends AbstractRequest {
     private static final String MAX_NUM_OFFSETS_KEY_NAME = "max_num_offsets";
 
     private final int replicaId;
+    private final IsolationLevel isolationLevel;
     private final Map<TopicPartition, PartitionData> offsetData;
     private final Map<TopicPartition, Long> partitionTimestamps;
     private final Set<TopicPartition> duplicatePartitions;
@@ -59,23 +61,29 @@ public class ListOffsetRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ListOffsetRequest> {
         private final int replicaId;
         private final short minVersion;
+        private final IsolationLevel isolationLevel;
         private Map<TopicPartition, PartitionData> offsetData = null;
         private Map<TopicPartition, Long> partitionTimestamps = null;
 
         public static Builder forReplica(short desiredVersion, int replicaId) {
-            return new Builder((short) 0, desiredVersion, replicaId);
+            return new Builder((short) 0, desiredVersion, replicaId, IsolationLevel.READ_UNCOMMITTED);
         }
 
-        public static Builder forConsumer(boolean requireTimestamp) {
+        public static Builder forConsumer(boolean requireTimestamp, IsolationLevel isolationLevel) {
             // If we need a timestamp in the response, the minimum RPC version we can send is v1. Otherwise, v0 is OK.
-            short minVersion = requireTimestamp ? (short) 1 : (short) 0;
-            return new Builder(minVersion, null, CONSUMER_REPLICA_ID);
+            short minVersion = 0;
+            if (isolationLevel == IsolationLevel.READ_COMMITTED)
+                minVersion = 2;
+            else if (requireTimestamp)
+                minVersion = 1;
+            return new Builder(minVersion, null, CONSUMER_REPLICA_ID, isolationLevel);
         }
 
-        private Builder(short minVersion, Short desiredVersion, int replicaId) {
+        private Builder(short minVersion, Short desiredVersion, int replicaId, IsolationLevel isolationLevel) {
             super(ApiKeys.LIST_OFFSETS, desiredVersion);
             this.minVersion = minVersion;
             this.replicaId = replicaId;
+            this.isolationLevel = isolationLevel;
         }
 
         public Builder setOffsetData(Map<TopicPartition, PartitionData> offsetData) {
@@ -118,7 +126,7 @@ public class ListOffsetRequest extends AbstractRequest {
                 }
             }
             Map<TopicPartition, ?> m = (version == 0) ?  offsetData : partitionTimestamps;
-            return new ListOffsetRequest(replicaId, m, version);
+            return new ListOffsetRequest(replicaId, m, isolationLevel, version);
         }
 
         @Override
@@ -165,9 +173,10 @@ public class ListOffsetRequest extends AbstractRequest {
      * Private constructor with a specified version.
      */
     @SuppressWarnings("unchecked")
-    private ListOffsetRequest(int replicaId, Map<TopicPartition, ?> targetTimes, short version) {
+    private ListOffsetRequest(int replicaId, Map<TopicPartition, ?> targetTimes, IsolationLevel isolationLevel, short version) {
         super(version);
         this.replicaId = replicaId;
+        this.isolationLevel = isolationLevel;
         this.offsetData = version == 0 ? (Map<TopicPartition, PartitionData>) targetTimes : null;
         this.partitionTimestamps = version >= 1 ? (Map<TopicPartition, Long>) targetTimes : null;
         this.duplicatePartitions = Collections.emptySet();
@@ -177,6 +186,9 @@ public class ListOffsetRequest extends AbstractRequest {
         super(version);
         Set<TopicPartition> duplicatePartitions = new HashSet<>();
         replicaId = struct.getInt(REPLICA_ID_KEY_NAME);
+        isolationLevel = struct.hasField(ISOLATION_LEVEL_KEY_NAME) ?
+                IsolationLevel.forId(struct.getByte(ISOLATION_LEVEL_KEY_NAME)) :
+                IsolationLevel.READ_UNCOMMITTED;
         offsetData = new HashMap<>();
         partitionTimestamps = new HashMap<>();
         for (Object topicResponseObj : struct.getArray(TOPICS_KEY_NAME)) {
@@ -223,7 +235,6 @@ public class ListOffsetRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-                return new ListOffsetResponse(responseData);
             case 2:
                 return new ListOffsetResponse(throttleTimeMs, responseData);
             default:
@@ -234,6 +245,10 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public int replicaId() {
         return replicaId;
+    }
+
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
     }
 
     @Deprecated
@@ -262,6 +277,9 @@ public class ListOffsetRequest extends AbstractRequest {
         Map<String, Map<Integer, Object>> topicsData = CollectionUtils.groupDataByTopic(targetTimes);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);
+
+        if (struct.hasField(ISOLATION_LEVEL_KEY_NAME))
+            struct.set(ISOLATION_LEVEL_KEY_NAME, isolationLevel.id());
         List<Struct> topicArray = new ArrayList<>();
         for (Map.Entry<String, Map<Integer, Object>> topicEntry: topicsData.entrySet()) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);

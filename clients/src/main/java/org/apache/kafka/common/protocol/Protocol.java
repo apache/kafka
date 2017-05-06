@@ -467,8 +467,21 @@ public class Protocol {
                                                                              new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1),
                                                                              "Topics to list offsets."));
 
-    /* v2 request is the same as v1. Throttle time has been added to response */
-    public static final Schema LIST_OFFSET_REQUEST_V2 = LIST_OFFSET_REQUEST_V1;
+    public static final Schema LIST_OFFSET_REQUEST_V2 = new Schema(
+            new Field("replica_id",
+                    INT32,
+                    "Broker id of the follower. For normal consumers, use -1."),
+            new Field("isolation_level",
+                    INT8,
+                    "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED " +
+                            "(isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), " +
+                            "non-transactional and COMMITTED transactional records are visible. To be more concrete, " +
+                            "READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), " +
+                            "and enables the inclusion of the list of aborted transactions in the result, which allows " +
+                            "consumers to discard ABORTED transactional records"),
+            new Field("topics",
+                    new ArrayOf(LIST_OFFSET_REQUEST_TOPIC_V1),
+                    "Topics to list offsets."));;
 
     public static final Schema LIST_OFFSET_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                         INT32,
