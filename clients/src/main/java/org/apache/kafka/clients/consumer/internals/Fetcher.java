@@ -382,16 +382,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return client.send(node, request);
     }
 
-    private long offsetResetStrategyTimestamp(final TopicPartition partition) {
+    private void offsetResetStrategyTimestamp(
+            final TopicPartition partition,
+            final Map<TopicPartition, Long> output,
+            final Set<TopicPartition> partitionsWithNoOffsets) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        final long timestamp;
         if (strategy == OffsetResetStrategy.EARLIEST)
-            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
+            output.put(partition, ListOffsetRequest.EARLIEST_TIMESTAMP);
         else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = endTimestamp();
+            output.put(partition, endTimestamp());
         else
-            throw new NoOffsetForPartitionException(partition);
-        return timestamp;
+            partitionsWithNoOffsets.add(partition);
     }
 
     /**
@@ -402,20 +403,25 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private void resetOffsets(final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> offsetResets = new HashMap<>();
+        final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         for (final TopicPartition partition : partitions) {
-            offsetResets.put(partition, offsetResetStrategyTimestamp(partition));
+            offsetResetStrategyTimestamp(partition, offsetResets, partitionsWithNoOffsets);
         }
         final Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(offsetResets, Long.MAX_VALUE, false);
         for (final TopicPartition partition : partitions) {
             final OffsetData offsetData = offsetsByTimes.get(partition);
             if (offsetData == null) {
-                throw new NoOffsetForPartitionException(partition);
+                partitionsWithNoOffsets.add(partition);
+                continue;
             }
             // we might lose the assignment while fetching the offset, so check it is still active
             if (subscriptions.isAssigned(partition)) {
                 log.debug("Resetting offset for partition {} to {} offset.", partition, offsetData.offset);
                 this.subscriptions.seek(partition, offsetData.offset);
             }
+        }
+        if (!partitionsWithNoOffsets.isEmpty()) {
+            throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
         }
     }
 
