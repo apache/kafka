@@ -29,7 +29,7 @@ import java.util.Map;
  * @param <V> The value type
  *
  */
-public class InMemoryLRUCacheStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
+public class InMemoryLRUCacheStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore<K, V>> {
 
     private final int capacity;
 

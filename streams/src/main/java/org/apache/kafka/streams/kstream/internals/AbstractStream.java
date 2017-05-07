@@ -22,9 +22,9 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TypedStores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.HashSet;
@@ -73,8 +73,7 @@ public abstract class AbstractStream<K> {
         };
     }
 
-    @SuppressWarnings("unchecked")
-    static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,
+    static <T, K> TypedStateStoreSupplier<KeyValueStore<K, T>> keyValueStore(final Serde<K> keySerde,
                                                                    final Serde<T> aggValueSerde,
                                                                    final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
@@ -82,8 +81,7 @@ public abstract class AbstractStream<K> {
         return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
-    @SuppressWarnings("unchecked")
-    static  <W extends Window, T, K> StateStoreSupplier<WindowStore> windowedStore(final Serde<K> keySerde,
+    static <W extends Window, T, K> TypedStateStoreSupplier<WindowStore<K, T>> windowedStore(final Serde<K> keySerde,
                                                                                    final Serde<T> aggValSerde,
                                                                                    final Windows<W> windows,
                                                                                    final String storeName) {
@@ -94,10 +92,10 @@ public abstract class AbstractStream<K> {
                 .build();
     }
 
-    static  <T, K> Stores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                       final Serde<T> aggValueSerde,
-                                                                       final String storeName) {
-        return Stores.create(storeName)
+    static <T, K> TypedStores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
+                                                                      final Serde<T> aggValueSerde,
+                                                                      final String storeName) {
+        return TypedStores.create(storeName)
                 .withKeys(keySerde)
                 .withValues(aggValueSerde)
                 .persistent()

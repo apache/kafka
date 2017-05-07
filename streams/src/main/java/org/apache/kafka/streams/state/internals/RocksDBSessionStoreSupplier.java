@@ -29,9 +29,9 @@ import java.util.Map;
  * @param <K> the type of keys
  * @param <V> the type of values
  *
- * @see org.apache.kafka.streams.state.Stores#create(String)
+ * @see org.apache.kafka.streams.state.TypedStores#create(String)
  */
-public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore> implements WindowStoreSupplier<SessionStore> {
+public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, SessionStore<K, V>> implements WindowStoreSupplier<SessionStore<K, V>> {
 
     private static final String METRIC_SCOPE = "rocksdb-session";
     private static final int NUM_SEGMENTS = 3;

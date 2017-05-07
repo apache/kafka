@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
@@ -93,9 +94,15 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnReduceUntypedStore() throws Exception {
+        groupedStream.reduce(MockReducer.STRING_ADDER, (StateStoreSupplier<KeyValueStore>) null);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnReduce() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, (StateStoreSupplier<KeyValueStore>) null);
+        groupedStream.reduce(MockReducer.STRING_ADDER, (TypedStateStoreSupplier<KeyValueStore<String, String>>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -174,9 +181,15 @@ public class KGroupedStreamImplTest {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), Serdes.String(), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
+    @Test(expected = NullPointerException.class)
+    public void shouldNotHaveNullStoreSupplierOnWindowedAggregateUntypedStore() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), (StateStoreSupplier<WindowStore>) null);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullStoreSupplierOnWindowedAggregate() throws Exception {
-        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), (StateStoreSupplier<WindowStore>) null);
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, TimeWindows.of(10), (TypedStateStoreSupplier<WindowStore<String, String>>) null);
     }
 
     private void doAggregateSessionWindows(final Map<Windowed<String>, Integer> results) throws Exception {
@@ -389,9 +402,15 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindowsUntypedStore() throws Exception {
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindows() throws Exception {
-        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (StateStoreSupplier<SessionStore>) null);
+        groupedStream.reduce(MockReducer.STRING_ADDER, SessionWindows.with(10), (TypedStateStoreSupplier<SessionStore<String, String>>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -454,6 +473,18 @@ public class KGroupedStreamImplTest {
         }, SessionWindows.with(10), Serdes.String(), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindowsUntypedStore() throws Exception {
+        groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
+            @Override
+            public String apply(final String aggKey, final String aggOne, final String aggTwo) {
+                return null;
+            }
+        }, SessionWindows.with(10), Serdes.String(), (StateStoreSupplier<SessionStore>) null);
+    }
+
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierNameWhenAggregatingSessionWindows() throws Exception {
         groupedStream.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
@@ -461,7 +492,7 @@ public class KGroupedStreamImplTest {
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
             }
-        }, SessionWindows.with(10), Serdes.String(), (StateStoreSupplier<SessionStore>) null);
+        }, SessionWindows.with(10), Serdes.String(), (TypedStateStoreSupplier<SessionStore<String, String>>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -479,9 +510,15 @@ public class KGroupedStreamImplTest {
         groupedStream.count(SessionWindows.with(90), INVALID_STORE_NAME);
     }
 
+    @SuppressWarnings("deprecation")
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAcceptNullStateStoreSupplierWhenCountingSessionWindowsUntypedStore() throws Exception {
+        groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenCountingSessionWindows() throws Exception {
-        groupedStream.count(SessionWindows.with(90), (StateStoreSupplier<SessionStore>) null);
+        groupedStream.count(SessionWindows.with(90), (TypedStateStoreSupplier<SessionStore<String, Long>>) null);
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) throws Exception {

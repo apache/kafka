@@ -22,6 +22,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.SessionStore;
@@ -143,6 +144,12 @@ public interface KGroupedStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
+    KTable<K, Long> count(final TypedStateStoreSupplier<KeyValueStore<K, Long>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#count(TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -265,6 +272,13 @@ public interface KGroupedStream<K, V> {
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
     <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
+                                                       final TypedStateStoreSupplier<WindowStore<K, Long>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#count(Windows, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
                                                        final StateStoreSupplier<WindowStore> storeSupplier);
 
 
@@ -361,6 +375,13 @@ public interface KGroupedStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys and {@link Long} values
      * that represent the latest (rolling) count (i.e., number of records) for each key within a window
      */
+    KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
+                                    final TypedStateStoreSupplier<SessionStore<K, Long>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#count(SessionWindows, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
                                     final StateStoreSupplier<SessionStore> storeSupplier);
 
@@ -492,6 +513,13 @@ public interface KGroupedStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
+    KTable<K, V> reduce(final Reducer<V> reducer,
+                        final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#reduce(Reducer, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, V> reduce(final Reducer<V> reducer,
                         final StateStoreSupplier<KeyValueStore> storeSupplier);
 
@@ -646,6 +674,14 @@ public interface KGroupedStream<K, V> {
      */
     <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                      final Windows<W> windows,
+                                                     final TypedStateStoreSupplier<WindowStore<K, V>> storeSupplier);
+
+    /**
+     * Please see {@link KGroupedStream#reduce(Reducer, Windows, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                                     final Windows<W> windows,
                                                      final StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
@@ -789,6 +825,14 @@ public interface KGroupedStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
+    KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                  final SessionWindows sessionWindows,
+                                  final TypedStateStoreSupplier<SessionStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#reduce(Reducer, SessionWindows, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                   final SessionWindows sessionWindows,
                                   final StateStoreSupplier<SessionStore> storeSupplier);
@@ -942,6 +986,14 @@ public interface KGroupedStream<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
+    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                 final Aggregator<? super K, ? super V, VR> aggregator,
+                                 final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#aggregate(Initializer, Aggregator, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
                                  final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -1119,6 +1171,15 @@ public interface KGroupedStream<K, V> {
     <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
                                                              final Aggregator<? super K, ? super V, VR> aggregator,
                                                              final Windows<W> windows,
+                                                             final TypedStateStoreSupplier<WindowStore<K, VR>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#aggregate(Initializer, Aggregator, Windows, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    <W extends Window, VR> KTable<Windowed<K>, VR> aggregate(final Initializer<VR> initializer,
+                                                             final Aggregator<? super K, ? super V, VR> aggregator,
+                                                             final Windows<W> windows,
                                                              final StateStoreSupplier<WindowStore> storeSupplier);
 
     /**
@@ -1272,6 +1333,17 @@ public interface KGroupedStream<K, V> {
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent
      * the latest (rolling) aggregate for each key within a window
      */
+    <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                         final Aggregator<? super K, ? super V, T> aggregator,
+                                         final Merger<? super K, T> sessionMerger,
+                                         final SessionWindows sessionWindows,
+                                         final Serde<T> aggValueSerde,
+                                         final TypedStateStoreSupplier<SessionStore<K, T>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, Serde, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                          final Aggregator<? super K, ? super V, T> aggregator,
                                          final Merger<? super K, T> sessionMerger,
