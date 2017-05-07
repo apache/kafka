@@ -87,6 +87,26 @@ public abstract class SourceTask implements Task {
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
      * automatically. This hook is provided for systems that also need to store offsets internally
      * in their own system.
+     * 
+     * </p>
+     *
+     * @param record {@link SourceRecord} that was successfully sent via the producer.
+     * @param recordMetaData {@link RecordMetaData} record metadata returned from the producer after it has been sent successfully. If a transformation, this will return null
+     * @throws InterruptedException
+     */
+    @Deprecated
+    public void commitRecord(SourceRecord record) throws InterruptedException {
+        // This space intentionally left blank.
+    }
+    
+    /**
+     * <p>
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received, or if a record is filtered by a transformation.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
      * </p>
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer.

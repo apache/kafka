@@ -255,6 +255,7 @@ class WorkerSourceTask extends WorkerTask {
     private void commitTaskRecord(SourceRecord record, RecordMetadata recordMetadata) {
         try {
             task.commitRecord(record, recordMetadata);
+            task.commitRecord(record); //marked as depreciated and left for backwards compatibility
         } catch (InterruptedException e) {
             log.error("Exception thrown", e);
         } catch (Throwable t) {
