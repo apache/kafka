@@ -93,7 +93,7 @@ public abstract class SourceTask implements Task {
      * @param recordMetaData {@link RecordMetaData} record metadata returned from the producer after it has been sent successfully. If a transformation, this will return null
      * @throws InterruptedException
      */
-    public void commitRecord(SourceRecord record,RecordMetataData recordMetadata) throws InterruptedException {
+    public void commitRecord(SourceRecord record,RecordMetaData recordMetadata) throws InterruptedException {
         // This space intentionally left blank.
     }
 }
