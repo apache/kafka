@@ -69,12 +69,23 @@
         producer's <code>batch.size</code> configuration.</li>
     <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
     <li>Deprecated constructors of MetricName and Cluster classes have been removed.</li>
+    <li>Message protocol introduces support for headers as an array of Header with uftf8 <code>key</code> and byte[] <code>value</code>. 
+        Header's will be available once the broker is upgraded to the latest protocol. Older clients will not be able to access the headers as they don't exist in previous protocols as such the broker removes the header on protocol downgrade.</li>
+    <li>ProducerRecord and ConsumerRecord client API's expose the new Headers API via <code>Headers headers()</code> method call. 
+        Methods <code>Headers add(String key, byte[] value)</code> and <code>Headers remove(String key)</code> allow you mutate the headers, 
+        whilst methods <code>Header lastHeader(String key)</code> and <code>Iterable&lt;Header&gt; headers(String key)</code> allow access by <code>key</code>, 
+        along with the Headers API itself extending <code>Iterable&lt;Header&gt;</code> to access to all the headers.
+        Headers can be mutated by Interceptors. It should be noted, on the Produce flow, a Header becomes readonly and cannot be modified once sent, it is made read only after the interceptors.
+        For those needing access to the headers during serialization and deserialization new interfaces ExtendedSerializer and ExtendedDeserializer are introduce exposing new methods to that allow access to the headers. Implementations of existing Deserializers and Serializers continue to work as is.
+    </li>
 </ul>
 
 <h5><a id="upgrade_1100_new_protocols" href="#upgrade_1100_new_protocols">New Protocol Versions</a></h5>
 <ul>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-107%3A+Add+purgeDataBefore()+API+in+AdminClient">KIP-107</a>: FetchRequest v5 introduces a partition-level <code>log_start_offset</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-107%3A+Add+purgeDataBefore()+API+in+AdminClient">KIP-107</a>: FetchResponse v5 introduces a partition-level <code>log_start_offset</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-82+-+Add+Record+Headers">KIP-82</a>: ProduceRequest introduces an array of <code>header</code> in the message protocol, containing <code>key</code> field and <code>value</code> field.</li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-82+-+Add+Record+Headers">KIP-82</a>: FetchResponse introduces an array of <code>header</code> in the message protocol, containing <code>key</code> field and <code>value</code> field.</li>
 </ul>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
