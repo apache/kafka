@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplie
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.TopologyBuilder;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreSupplier;
@@ -747,7 +748,7 @@ public class KStreamBuilder extends TopologyBuilder {
                                                  final String topic,
                                                  final String queryableStoreName) {
         final String internalStoreName = queryableStoreName != null ? queryableStoreName : newStoreName(KTableImpl.SOURCE_NAME);
-        return doGlobalTable(keySerde, valSerde, topic, new RocksDBKeyValueStoreSupplier<>(internalStoreName,
+        return doGlobalTable(keySerde, valSerde, topic, (StateStoreSupplier) new RocksDBKeyValueStoreSupplier<>(internalStoreName,
                             keySerde,
                             valSerde,
                     false,
@@ -785,6 +786,17 @@ public class KStreamBuilder extends TopologyBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     @SuppressWarnings("unchecked")
+    public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
+                                                 final Serde<V> valSerde,
+                                                 final String topic,
+                                                 final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return globalTable(keySerde, valSerde, topic, (StateStoreSupplier) storeSupplier);
+    }
+
+    /**
+     * Please use {@link KStreamBuilder#globalTable(Serde, Serde, String, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     public <K, V> GlobalKTable<K, V> globalTable(final Serde<K> keySerde,
                                                  final Serde<V> valSerde,
                                                  final String topic,

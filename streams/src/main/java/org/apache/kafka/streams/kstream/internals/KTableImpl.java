@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.io.FileNotFoundException;
@@ -144,13 +145,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return filter(predicate, (String) null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String queryableStoreName) {
-        StateStoreSupplier<KeyValueStore> storeSupplier = null;
+        TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier = null;
         if (queryableStoreName != null) {
             storeSupplier = keyValueStore(this.keySerde, this.valSerde, queryableStoreName);
         }
-        return doFilter(predicate, storeSupplier, false);
+        return doFilter(predicate, (StateStoreSupplier) storeSupplier, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return filter(predicate, (StateStoreSupplier) storeSupplier);
     }
 
     @Override
@@ -164,13 +172,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return filterNot(predicate, (String) null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final String queryableStoreName) {
-        StateStoreSupplier<KeyValueStore> storeSupplier = null;
+        TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier = null;
         if (queryableStoreName != null) {
             storeSupplier = keyValueStore(this.keySerde, this.valSerde, queryableStoreName);
         }
-        return doFilter(predicate, storeSupplier, true);
+        return doFilter(predicate, (StateStoreSupplier) storeSupplier, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return filterNot(predicate, (StateStoreSupplier) storeSupplier);
     }
 
     @Override
@@ -203,15 +218,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return mapValues(mapper, null, (String) null);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
                                         final Serde<V1> valueSerde,
                                         final String queryableStoreName) {
-        StateStoreSupplier<KeyValueStore> storeSupplier = null;
+        TypedStateStoreSupplier<KeyValueStore<K, V1>> storeSupplier = null;
         if (queryableStoreName != null) {
             storeSupplier = keyValueStore(this.keySerde, valueSerde, queryableStoreName);
         }
-        return doMapValues(mapper, valueSerde, storeSupplier);
+        return doMapValues(mapper, valueSerde, (StateStoreSupplier) storeSupplier);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public  <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
+                                         final Serde<V1> valueSerde,
+                                         final TypedStateStoreSupplier<KeyValueStore<K, V1>> storeSupplier) {
+        return mapValues(mapper, valueSerde, (StateStoreSupplier) storeSupplier);
     }
 
     @Override
@@ -306,6 +330,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return topology.table(keySerde, valSerde, topic, internalStoreName);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic,
+                                final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return through(keySerde, valSerde, partitioner, topic, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<K, V> through(final Serde<K> keySerde,
                                 final Serde<V> valSerde,
@@ -333,6 +367,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return through(keySerde, valSerde, null, topic, queryableStoreName);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final String topic,
+                                final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return through(keySerde, valSerde, topic, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<K, V> through(final Serde<K> keySerde,
                                 final Serde<V> valSerde,
@@ -356,6 +399,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return through(null, null, partitioner, topic, queryableStoreName);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic,
+                                final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return through(partitioner, topic, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                                 final String topic,
@@ -374,6 +425,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KTable<K, V> through(final String topic,
                                 final String queryableStoreName) {
         return through(null, null, null, topic, queryableStoreName);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> through(final String topic,
+                                final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return through(topic, (StateStoreSupplier) storeSupplier);
     }
 
     @Override
@@ -441,6 +499,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doJoin(other, joiner, false, false, joinSerde, queryableStoreName);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
+                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                     final TypedStateStoreSupplier<KeyValueStore<K, R>> storeSupplier) {
+        return join(other, joiner, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
                                      final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -463,6 +529,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         return doJoin(other, joiner, true, true, joinSerde, queryableStoreName);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
+                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                          final TypedStateStoreSupplier<KeyValueStore<K, R>> storeSupplier) {
+        return outerJoin(other, joiner, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
                                           final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
@@ -483,6 +557,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
                                          final Serde<R> joinSerde,
                                          final String queryableStoreName) {
         return doJoin(other, joiner, true, false, joinSerde, queryableStoreName);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                         final TypedStateStoreSupplier<KeyValueStore<K, R>> storeSupplier) {
+        return leftJoin(other, joiner, (StateStoreSupplier) storeSupplier);
     }
 
     @Override

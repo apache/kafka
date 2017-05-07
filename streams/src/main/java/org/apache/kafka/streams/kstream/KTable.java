@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -160,6 +161,12 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#filter(Predicate, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -216,6 +223,12 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate)
      */
+    KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#filterNot(Predicate, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -379,8 +392,15 @@ public interface KTable<K, V> {
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
                                  final Serde<VR> valueSerde,
-                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                 final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
+    /**
+     * Please use {@link KTable#mapValues(ValueMapper, Serde, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
+                                 final Serde<VR> valueSerde,
+                                 final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Print the update records of this {@code KTable} to {@code System.out}.
@@ -662,6 +682,13 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
     KTable<K, V> through(final String topic,
+                         final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#through(String, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    KTable<K, V> through(final String topic,
                          final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -747,6 +774,14 @@ public interface KTable<K, V> {
      */
     KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
                          final String topic,
+                         final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#through(StreamPartitioner, String, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
+                         final String topic,
                          final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -798,6 +833,14 @@ public interface KTable<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
+    KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
+                         final String topic,
+                         final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#through(Serde, Serde, String, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, V> through(final Serde<K> keySerde, Serde<V> valSerde,
                          final String topic,
                          final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -883,6 +926,16 @@ public interface KTable<K, V> {
      * @param storeSupplier user defined state store supplier. Cannot be {@code null}.
      * @return a {@code KTable} that contains the exact same (and potentially repartitioned) records as this {@code KTable}
      */
+    KTable<K, V> through(final Serde<K> keySerde,
+                         final Serde<V> valSerde,
+                         final StreamPartitioner<? super K, ? super V> partitioner,
+                         final String topic,
+                         final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#through(Serde, Serde, StreamPartitioner, String, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, V> through(final Serde<K> keySerde,
                          final Serde<V> valSerde,
                          final StreamPartitioner<? super K, ? super V> partitioner,
@@ -1272,8 +1325,15 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
+    /**
+     * Please use {@link KTable#join(KTable, ValueJoiner, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
+                                final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1528,8 +1588,15 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final StateStoreSupplier<KeyValueStore> storeSupplier);
+                                    final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
 
+    /**
+     * Please use {@link KTable#leftJoin(KTable, ValueJoiner, TypedStateStoreSupplier)}
+     */
+    @Deprecated
+    <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
+                                    final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                    final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
@@ -1779,6 +1846,14 @@ public interface KTable<K, V> {
      * @see #join(KTable, ValueJoiner)
      * @see #leftJoin(KTable, ValueJoiner)
      */
+    <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
+                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                     final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
+
+    /**
+     * Please use {@link KTable#outerJoin(KTable, ValueJoiner, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final StateStoreSupplier<KeyValueStore> storeSupplier);

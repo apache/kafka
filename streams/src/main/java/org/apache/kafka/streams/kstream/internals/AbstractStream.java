@@ -74,17 +74,17 @@ public abstract class AbstractStream<K> {
     }
 
     static <T, K> TypedStateStoreSupplier<KeyValueStore<K, T>> keyValueStore(final Serde<K> keySerde,
-                                                                   final Serde<T> aggValueSerde,
-                                                                   final String storeName) {
+                                                                             final Serde<T> aggValueSerde,
+                                                                             final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Topic.validate(storeName);
         return storeFactory(keySerde, aggValueSerde, storeName).build();
     }
 
     static <W extends Window, T, K> TypedStateStoreSupplier<WindowStore<K, T>> windowedStore(final Serde<K> keySerde,
-                                                                                   final Serde<T> aggValSerde,
-                                                                                   final Windows<W> windows,
-                                                                                   final String storeName) {
+                                                                                             final Serde<T> aggValSerde,
+                                                                                             final Windows<W> windows,
+                                                                                             final String storeName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
         Topic.validate(storeName);
         return storeFactory(keySerde, aggValSerde, storeName)
@@ -93,8 +93,8 @@ public abstract class AbstractStream<K> {
     }
 
     static <T, K> TypedStores.PersistentKeyValueFactory<K, T> storeFactory(final Serde<K> keySerde,
-                                                                      final Serde<T> aggValueSerde,
-                                                                      final String storeName) {
+                                                                           final Serde<T> aggValueSerde,
+                                                                           final String storeName) {
         return TypedStores.create(storeName)
                 .withKeys(keySerde)
                 .withValues(aggValueSerde)
