@@ -115,7 +115,7 @@ public class AdminClientConfig extends AbstractConfig {
                                         RECONNECT_BACKOFF_MS_DOC)
                                 .define(RECONNECT_BACKOFF_MAX_CONFIG,
                                         Type.LONG,
-                                        2000L,
+                                        1000L,
                                         atLeast(0L),
                                         Importance.LOW,
                                         RECONNECT_BACKOFF_MAX_DOC)

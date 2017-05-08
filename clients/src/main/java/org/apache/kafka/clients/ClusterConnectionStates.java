@@ -165,9 +165,9 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Update the node reconnect backoff exponentially, but with a randomly selected value
-     * in the range [base, min(max, base * 2**failures)], where base is configured via
-     * reconnect.backoff.ms and max is configured via reconnect.backoff.max.ms
+     * Update the node reconnect backoff exponentially.
+     * The delay is reconnect.backoff.ms * 2**(failures - 1) * (+/- 20% random jitter)
+     * Up to a (pre-jitter) maximum of reconnect.backoff.max.ms
      *
      * @param nodeState The node state object to update
      */
@@ -177,10 +177,9 @@ final class ClusterConnectionStates {
             double backoffExp = Math.min(nodeState.failedAttempts - 1, this.reconnectBackoffMaxExp);
             double backoffFactor = Math.pow(RECONNECT_BACKOFF_EXP_BASE, backoffExp);
             long reconnectBackoffMs = (long) (this.reconnectBackoffInit * backoffFactor);
-            // Actual backoff is chosen randomly in the exponentially-increasing range, which should make
-            // connection attempts during broker failure more uniformly distributed.
-            nodeState.reconnectBackoffMs = ThreadLocalRandom.current().nextLong(
-                this.reconnectBackoffInit, reconnectBackoffMs);
+            // Actual backoff is randomized to avoid connection storms.
+            double randomFactor = ThreadLocalRandom.current().nextDouble(0.8, 1.2);
+            nodeState.reconnectBackoffMs = (long) (randomFactor * reconnectBackoffMs);
         }
     }
 
