@@ -930,7 +930,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   def testFetchTxnOffsetsMultipleProducersOneGroup() {
     // One group, two producers
     // Different producers will commit offsets for different partitions.
-    // Each partition's offset's should be materialized when the corresponding producer's marker is received.
+    // Each partition's offsets should be materialized when the corresponding producer's marker is received.
 
     val partitions = List(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0))
     val offsets = List(OffsetAndMetadata(10), OffsetAndMetadata(15))
