@@ -68,22 +68,22 @@ class ProducerIdManagerTest {
     val manager1: ProducerIdManager = new ProducerIdManager(0, zkUtils)
     val manager2: ProducerIdManager = new ProducerIdManager(1, zkUtils)
 
-    val pid1 = manager1.nextPid()
-    val pid2 = manager2.nextPid()
+    val pid1 = manager1.nextProducerId()
+    val pid2 = manager2.nextProducerId()
 
     assertEquals(0, pid1)
     assertEquals(ProducerIdManager.PidBlockSize, pid2)
 
     for (i <- 1 until ProducerIdManager.PidBlockSize.asInstanceOf[Int]) {
-      assertEquals(pid1 + i, manager1.nextPid())
+      assertEquals(pid1 + i, manager1.nextProducerId())
     }
 
     for (i <- 1 until ProducerIdManager.PidBlockSize.asInstanceOf[Int]) {
-      assertEquals(pid2 + i, manager2.nextPid())
+      assertEquals(pid2 + i, manager2.nextProducerId())
     }
 
-    assertEquals(pid2 + ProducerIdManager.PidBlockSize, manager1.nextPid())
-    assertEquals(pid2 + ProducerIdManager.PidBlockSize * 2, manager2.nextPid())
+    assertEquals(pid2 + ProducerIdManager.PidBlockSize, manager1.nextProducerId())
+    assertEquals(pid2 + ProducerIdManager.PidBlockSize * 2, manager2.nextProducerId())
   }
 
   @Test(expected = classOf[KafkaException])

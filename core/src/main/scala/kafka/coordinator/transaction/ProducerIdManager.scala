@@ -133,7 +133,7 @@ class ProducerIdManager(val brokerId: Int, val zkUtils: ZkUtils) extends Logging
     }
   }
 
-  def nextPid(): Long = {
+  def nextProducerId(): Long = {
     this synchronized {
       // grab a new block of PIDs if this block has been exhausted
       if (nextPID > currentPIDBlock.blockEndPid) {

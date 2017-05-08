@@ -47,19 +47,19 @@ class TransactionCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
     val tc = servers.head.transactionCoordinator
 
-    var initPidResult: InitPidResult = null
-    def callback(result: InitPidResult): Unit = {
-      initPidResult = result
+    var initProducerIdResult: InitProducerIdResult = null
+    def callback(result: InitProducerIdResult): Unit = {
+      initProducerIdResult = result
     }
 
     val txnId = "txn"
-    tc.handleInitPid(txnId, 900000, callback)
+    tc.handleInitProducerId(txnId, 900000, callback)
 
-    while(initPidResult == null) {
+    while(initProducerIdResult == null) {
       Utils.sleep(1)
     }
 
-    Assert.assertEquals(Errors.NONE, initPidResult.error)
+    Assert.assertEquals(Errors.NONE, initProducerIdResult.error)
 
     @volatile var addPartitionErrors: Errors = null
     def addPartitionsCallback(errors: Errors): Unit = {
@@ -67,8 +67,8 @@ class TransactionCoordinatorIntegrationTest extends KafkaServerTestHarness {
     }
 
     tc.handleAddPartitionsToTransaction(txnId,
-      initPidResult.pid,
-      initPidResult.epoch,
+      initProducerIdResult.producerId,
+      initProducerIdResult.producerEpoch,
       Set[TopicPartition](new TopicPartition(topic, 0)),
       addPartitionsCallback
     )

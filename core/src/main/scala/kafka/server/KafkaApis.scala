@@ -32,7 +32,7 @@ import kafka.common.Topic.{GroupMetadataTopicName, TransactionStateTopicName, is
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
-import kafka.coordinator.transaction.{InitPidResult, TransactionCoordinator}
+import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.{Response, Session}
@@ -110,7 +110,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-        case ApiKeys.INIT_PRODUCER_ID => handleInitPidRequest(request)
+        case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
         case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
         case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
@@ -1386,20 +1386,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleInitPidRequest(request: RequestChannel.Request): Unit = {
-    val initPidRequest = request.body[InitProducerIdRequest]
-    val transactionalId = initPidRequest.transactionalId
+  def handleInitProducerIdRequest(request: RequestChannel.Request): Unit = {
+    val initProducerIdRequest = request.body[InitProducerIdRequest]
+    val transactionalId = initProducerIdRequest.transactionalId
 
     // Send response callback
-    def sendResponseCallback(result: InitPidResult): Unit = {
+    def sendResponseCallback(result: InitProducerIdResult): Unit = {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody: InitProducerIdResponse = new InitProducerIdResponse(throttleTimeMs, result.error, result.pid, result.epoch)
-        trace(s"InitProducerIdRequest: Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
+        val responseBody = new InitProducerIdResponse(throttleTimeMs, result.error, result.producerId, result.producerEpoch)
+        trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
-    txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+    txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.transactionTimeoutMs, sendResponseCallback)
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
@@ -1408,7 +1408,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(error: Errors) {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
         val responseBody = new EndTxnResponse(throttleTimeMs, error)
-        trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId}.")
+        trace(s"Completed ${endTxnRequest.transactionalId}'s EndTxnRequest with command: ${endTxnRequest.command}, errors: $error from client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
@@ -1433,22 +1433,21 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    def sendResponseCallback(pid: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
-      errors.put(pid, responseStatus.mapValues(_.error).asJava)
+    def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+      errors.put(producerId, responseStatus.mapValues(_.error).asJava)
 
       val successfulPartitions = responseStatus.filter { case (_, partitionResponse) =>
         partitionResponse.error == Errors.NONE
       }.keys.toSeq
 
       try {
-        groupCoordinator.handleTxnCompletion(producerId = pid, topicPartitions = successfulPartitions, transactionResult = result)
+        groupCoordinator.handleTxnCompletion(producerId = producerId, topicPartitions = successfulPartitions, transactionResult = result)
       } catch {
         case e: Exception =>
           error(s"Received an exception while trying to update the offsets cache on transaction completion: $e")
-          val producerIdErrors = errors.get(pid)
+          val producerIdErrors = errors.get(producerId)
           successfulPartitions.foreach(producerIdErrors.put(_, Errors.UNKNOWN))
       }
-
 
       if (numAppends.decrementAndGet() == 0)
         sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))
