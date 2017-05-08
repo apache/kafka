@@ -18,7 +18,7 @@
 package kafka.tools
 
 import kafka.consumer.BaseConsumerRecord
-import org.apache.kafka.common.record.{Record, TimestampType}
+import org.apache.kafka.common.record.{RecordBatch, TimestampType}
 import org.junit.Assert._
 import org.junit.Test
 
@@ -42,7 +42,7 @@ class MirrorMakerTest {
 
   @Test
   def testDefaultMirrorMakerMessageHandlerWithNoTimestampInSourceMessage() {
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, Record.NO_TIMESTAMP, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
+    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
 
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)

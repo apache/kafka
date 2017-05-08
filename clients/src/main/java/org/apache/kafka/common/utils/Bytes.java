@@ -75,6 +75,8 @@ public class Bytes implements Comparable<Bytes> {
     public boolean equals(Object other) {
         if (this == other)
             return true;
+        if (other == null)
+            return false;
 
         // we intentionally use the function to compute hashcode here
         if (this.hashCode() != other.hashCode())

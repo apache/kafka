@@ -24,20 +24,19 @@ import kafka.cluster.Broker
 import kafka.common.{KafkaException, TopicAndPartition}
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.clients.{ClientResponse, ManualMetadataUpdater, NetworkClient}
+import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.{ChannelBuilders, ListenerName, NetworkReceive, Selectable, Selector}
+import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
-import org.apache.kafka.common.requests
-import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.requests.UpdateMetadataRequest.EndPoint
+import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition, requests}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Set, mutable}
 import scala.collection.mutable.HashMap
+import scala.collection.{Set, mutable}
 
 class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
@@ -121,7 +120,8 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.requestTimeoutMs,
         time,
-        false
+        false,
+        new ApiVersions
       )
     }
     val threadName = threadNamePrefix match {
@@ -137,9 +137,13 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
     try {
+      // Shutdown the RequestSendThread before closing the NetworkClient to avoid the concurrent use of the
+      // non-threadsafe classes as described in KAFKA-4959.
+      // The call to shutdownLatch.await() in ShutdownableThread.shutdown() serves as a synchronization barrier that
+      // hands off the NetworkClient from the RequestSendThread to the ZkEventThread.
+      brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
-      brokerState.requestSendThread.shutdown()
       brokerStateInfo.remove(brokerState.brokerNode.id)
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
@@ -166,7 +170,6 @@ class RequestSendThread(val controllerId: Int,
                         name: String)
   extends ShutdownableThread(name = name) {
 
-  private val lock = new Object()
   private val stateChangeLogger = KafkaController.stateChangeLogger
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 
@@ -175,48 +178,45 @@ class RequestSendThread(val controllerId: Int,
     def backoff(): Unit = CoreUtils.swallowTrace(Thread.sleep(100))
 
     val QueueItem(apiKey, requestBuilder, callback) = queue.take()
-    import NetworkClientBlockingOps._
     var clientResponse: ClientResponse = null
     try {
-      lock synchronized {
-        var isSendSuccessful = false
-        while (isRunning.get() && !isSendSuccessful) {
-          // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
-          // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
-          try {
-            if (!brokerReady()) {
-              isSendSuccessful = false
-              backoff()
-            }
-            else {
-              val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
-                time.milliseconds(), true)
-              clientResponse = networkClient.blockingSendAndReceive(clientRequest)(time)
-              isSendSuccessful = true
-            }
-          } catch {
-            case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
-              warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
-                "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
-                  requestBuilder.toString, brokerNode.toString), e)
-              networkClient.close(brokerNode.idString)
-              isSendSuccessful = false
-              backoff()
+      var isSendSuccessful = false
+      while (isRunning.get() && !isSendSuccessful) {
+        // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
+        // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
+        try {
+          if (!brokerReady()) {
+            isSendSuccessful = false
+            backoff()
           }
+          else {
+            val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
+              time.milliseconds(), true)
+            clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
+            isSendSuccessful = true
+          }
+        } catch {
+          case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
+            warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
+              "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
+                requestBuilder.toString, brokerNode.toString), e)
+            networkClient.close(brokerNode.idString)
+            isSendSuccessful = false
+            backoff()
         }
-        if (clientResponse != null) {
-          val api = ApiKeys.forId(clientResponse.requestHeader.apiKey)
-          if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA_KEY)
-            throw new KafkaException(s"Unexpected apiKey received: $apiKey")
+      }
+      if (clientResponse != null) {
+        val api = ApiKeys.forId(clientResponse.requestHeader.apiKey)
+        if (api != ApiKeys.LEADER_AND_ISR && api != ApiKeys.STOP_REPLICA && api != ApiKeys.UPDATE_METADATA_KEY)
+          throw new KafkaException(s"Unexpected apiKey received: $apiKey")
 
-          val response = clientResponse.responseBody
+        val response = clientResponse.responseBody
 
-          stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-            .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
+        stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
+          .format(controllerId, controllerContext.epoch, response.toString, brokerNode.toString))
 
-          if (callback != null) {
-            callback(response)
-          }
+        if (callback != null) {
+          callback(response)
         }
       }
     } catch {
@@ -228,10 +228,9 @@ class RequestSendThread(val controllerId: Int,
   }
 
   private def brokerReady(): Boolean = {
-    import NetworkClientBlockingOps._
     try {
-      if (!networkClient.isReady(brokerNode)(time)) {
-        if (!networkClient.blockingReady(brokerNode, socketTimeoutMs)(time))
+      if (!NetworkClientUtils.isReady(networkClient, brokerNode, time.milliseconds())) {
+        if (!NetworkClientUtils.awaitReady(networkClient, brokerNode, time, socketTimeoutMs))
           throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 
         info("Controller %d connected to %s for sending state change requests".format(controllerId, brokerNode.toString))
@@ -308,20 +307,24 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
   /** Send UpdateMetadataRequest to the given brokers for the given partitions and partitions that are being deleted */
   def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
-                                         partitions: collection.Set[TopicAndPartition] = Set.empty[TopicAndPartition],
-                                         callback: AbstractResponse => Unit = null) {
+                                         partitions: collection.Set[TopicAndPartition] = Set.empty[TopicAndPartition]) {
+
     def updateMetadataRequestPartitionInfo(partition: TopicAndPartition, beingDeleted: Boolean) {
       val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
       leaderIsrAndControllerEpochOpt match {
-        case Some(leaderIsrAndControllerEpoch) =>
+        case Some(l @ LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)) =>
           val replicas = controllerContext.partitionReplicaAssignment(partition).toSet
-          val partitionStateInfo = if (beingDeleted) {
-            val leaderAndIsr = new LeaderAndIsr(LeaderAndIsr.LeaderDuringDelete, leaderIsrAndControllerEpoch.leaderAndIsr.isr)
-            PartitionStateInfo(LeaderIsrAndControllerEpoch(leaderAndIsr, leaderIsrAndControllerEpoch.controllerEpoch), replicas)
+
+          val leaderIsrAndControllerEpoch = if (beingDeleted) {
+            val leaderDuringDelete = LeaderAndIsr.duringDelete(leaderAndIsr.isr)
+            LeaderIsrAndControllerEpoch(leaderDuringDelete, controllerEpoch)
           } else {
-            PartitionStateInfo(leaderIsrAndControllerEpoch, replicas)
+            l
           }
+
+          val partitionStateInfo = PartitionStateInfo(leaderIsrAndControllerEpoch, replicas)
           updateMetadataRequestPartitionInfoMap.put(new TopicPartition(partition.topic, partition.partition), partitionStateInfo)
+
         case None =>
           info("Leader not yet assigned for partition %s. Skip sending UpdateMetadataRequest.".format(partition))
       }
@@ -332,15 +335,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
         controllerContext.partitionLeadershipInfo.keySet
       else
         partitions
-      if (controller.deleteTopicManager.partitionsToBeDeleted.isEmpty)
+      if (controller.topicDeletionManager.partitionsToBeDeleted.isEmpty)
         givenPartitions
       else
-        givenPartitions -- controller.deleteTopicManager.partitionsToBeDeleted
+        givenPartitions -- controller.topicDeletionManager.partitionsToBeDeleted
     }
 
     updateMetadataRequestBrokerSet ++= brokerIds.filter(_ >= 0)
     filteredPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = false))
-    controller.deleteTopicManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = true))
+    controller.topicDeletionManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestPartitionInfo(partition, beingDeleted = true))
   }
 
   def sendRequestsToBrokers(controllerEpoch: Int) {

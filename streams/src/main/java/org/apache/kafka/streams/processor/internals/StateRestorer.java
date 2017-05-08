@@ -21,12 +21,15 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 
 public class StateRestorer {
     static final int NO_CHECKPOINT = -1;
-    private final TopicPartition partition;
-    private final StateRestoreCallback stateRestoreCallback;
+
     private final Long checkpoint;
     private final long offsetLimit;
     private final boolean persistent;
+    private final TopicPartition partition;
+    private final StateRestoreCallback stateRestoreCallback;
+
     private long restoredOffset;
+    private long startingOffset;
 
     StateRestorer(final TopicPartition partition,
                   final StateRestoreCallback stateRestoreCallback,
@@ -44,20 +47,28 @@ public class StateRestorer {
         return partition;
     }
 
-    public long checkpoint() {
+    long checkpoint() {
         return checkpoint == null ? NO_CHECKPOINT : checkpoint;
     }
 
-    public void restore(final byte[] key, final byte[] value) {
+    void restore(final byte[] key, final byte[] value) {
         stateRestoreCallback.restore(key, value);
     }
 
-    public boolean isPersistent() {
+    boolean isPersistent() {
         return persistent;
     }
 
     void setRestoredOffset(final long restoredOffset) {
         this.restoredOffset = Math.min(offsetLimit, restoredOffset);
+    }
+
+    void setStartingOffset(final long startingOffset) {
+        this.startingOffset = Math.min(offsetLimit, startingOffset);
+    }
+
+    long startingOffset() {
+        return startingOffset;
     }
 
     boolean hasCompleted(final long recordOffset, final long endOffset) {
@@ -66,6 +77,10 @@ public class StateRestorer {
 
     Long restoredOffset() {
         return restoredOffset;
+    }
+
+    long restoredNumRecords() {
+        return restoredOffset - startingOffset;
     }
 
     long offsetLimit() {

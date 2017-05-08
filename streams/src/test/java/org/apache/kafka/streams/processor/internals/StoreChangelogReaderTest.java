@@ -24,8 +24,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.test.MockRestoreCallback;
+import org.hamcrest.CoreMatchers;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -139,7 +142,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, true));
 
         changelogReader.restore();
-        assertThat(callback.restoreCount, equalTo(messages));
+        assertThat(callback.restored.size(), equalTo(messages));
     }
 
     @Test
@@ -149,7 +152,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(topicPartition, callback, 5L, Long.MAX_VALUE, true));
 
         changelogReader.restore();
-        assertThat(callback.restoreCount, equalTo(5));
+        assertThat(callback.restored.size(), equalTo(5));
     }
 
     @Test
@@ -169,7 +172,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(restorer);
 
         changelogReader.restore();
-        assertThat(callback.restoreCount, equalTo(3));
+        assertThat(callback.restored.size(), equalTo(3));
         assertThat(restorer.restoredOffset(), equalTo(3L));
     }
 
@@ -189,9 +192,9 @@ public class StoreChangelogReaderTest {
 
         changelogReader.restore();
 
-        assertThat(callback.restoreCount, equalTo(10));
-        assertThat(callbackOne.restoreCount, equalTo(5));
-        assertThat(callbackTwo.restoreCount, equalTo(3));
+        assertThat(callback.restored.size(), equalTo(10));
+        assertThat(callbackOne.restored.size(), equalTo(5));
+        assertThat(callbackTwo.restored.size(), equalTo(3));
     }
 
     @Test
@@ -201,7 +204,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(restorer);
 
         changelogReader.restore();
-        assertThat(callback.restoreCount, equalTo(0));
+        assertThat(callback.restored.size(), equalTo(0));
         assertThat(restorer.restoredOffset(), equalTo(0L));
     }
 
@@ -214,7 +217,7 @@ public class StoreChangelogReaderTest {
         changelogReader.register(restorer);
 
         changelogReader.restore();
-        assertThat(callback.restoreCount, equalTo(0));
+        assertThat(callback.restored.size(), equalTo(0));
         assertThat(restorer.restoredOffset(), equalTo(endOffset));
     }
 
@@ -236,7 +239,30 @@ public class StoreChangelogReaderTest {
         assertThat(restoredOffsets, equalTo(Collections.<TopicPartition, Long>emptyMap()));
     }
 
+    @Test
+    public void shouldIgnoreNullKeysWhenRestoring() throws Exception {
+        assignPartition(3, topicPartition);
+        final byte[] bytes = new byte[0];
+        consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 0, bytes, bytes));
+        consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 1, (byte[]) null, bytes));
+        consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), 2, bytes, bytes));
+        consumer.assign(Collections.singletonList(topicPartition));
+        changelogReader.register(new StateRestorer(topicPartition, callback, null, Long.MAX_VALUE, false));
+        changelogReader.restore();
+
+        assertThat(callback.restored, CoreMatchers.equalTo(Utils.mkList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
+    }
+
     private void setupConsumer(final long messages, final TopicPartition topicPartition) {
+        assignPartition(messages, topicPartition);
+
+        for (int i = 0; i < messages; i++) {
+            consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), i, new byte[0], new byte[0]));
+        }
+        consumer.assign(Collections.<TopicPartition>emptyList());
+    }
+
+    private void assignPartition(final long messages, final TopicPartition topicPartition) {
         consumer.updatePartitions(topicPartition.topic(),
                                   Collections.singletonList(
                                           new PartitionInfo(topicPartition.topic(),
@@ -247,11 +273,6 @@ public class StoreChangelogReaderTest {
         consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, Math.max(0, messages)));
         consumer.assign(Collections.singletonList(topicPartition));
-
-        for (int i = 0; i < messages; i++) {
-            consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), i, new byte[0], new byte[0]));
-        }
-        consumer.assign(Collections.<TopicPartition>emptyList());
     }
 
 }

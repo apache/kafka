@@ -52,6 +52,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
+  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -255,7 +256,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
      */
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
       if (subscriptionChanged) {
-        throw new IllegalStateException("Do not call subscribe until the previous subsribe request is processed.")
+        throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
       }
       topicsSubscription = newTopicsToSubscribe
       subscriptionChanged = true

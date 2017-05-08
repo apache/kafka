@@ -29,7 +29,9 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -67,58 +69,157 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
+    public static final String STATE_STORE_NAME = "STATE-STORE-";
+
     private final ProcessorSupplier<?, ?> processorSupplier;
 
-    private final String storeName;
+    private final String queryableStoreName;
+    private final boolean isQueryable;
 
     private boolean sendOldValues = false;
-
+    private final Serde<K> keySerde;
+    private final Serde<V> valSerde;
 
     public KTableImpl(KStreamBuilder topology,
                       String name,
                       ProcessorSupplier<?, ?> processorSupplier,
                       Set<String> sourceNodes,
-                      final String storeName) {
+                      final String queryableStoreName,
+                      boolean isQueryable) {
         super(topology, name, sourceNodes);
         this.processorSupplier = processorSupplier;
-        this.storeName = storeName;
+        this.queryableStoreName = queryableStoreName;
+        this.keySerde = null;
+        this.valSerde = null;
+        this.isQueryable = isQueryable;
+    }
+
+    public KTableImpl(KStreamBuilder topology,
+                      String name,
+                      ProcessorSupplier<?, ?> processorSupplier,
+                      final Serde<K> keySerde,
+                      final Serde<V> valSerde,
+                      Set<String> sourceNodes,
+                      final String queryableStoreName,
+                      boolean isQueryable) {
+        super(topology, name, sourceNodes);
+        this.processorSupplier = processorSupplier;
+        this.queryableStoreName = queryableStoreName;
+        this.keySerde = keySerde;
+        this.valSerde = valSerde;
+        this.isQueryable = isQueryable;
     }
 
     @Override
-    public String getStoreName() {
-        return this.storeName;
+    public String queryableStoreName() {
+        if (!isQueryable) {
+            return null;
+        }
+        return this.queryableStoreName;
     }
 
-    @Override
-    public KTable<K, V> filter(Predicate<? super K, ? super V> predicate) {
+    String internalStoreName() {
+        return this.queryableStoreName;
+    }
+
+    private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
+                                  final StateStoreSupplier<KeyValueStore> storeSupplier,
+                                  boolean isFilterNot) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         String name = topology.newName(FILTER_NAME);
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, false);
+        String internalStoreName = null;
+        if (storeSupplier != null) {
+            internalStoreName = storeSupplier.name();
+        }
+        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, isFilterNot, internalStoreName);
         topology.addProcessor(name, processorSupplier, this.name);
+        if (storeSupplier != null) {
+            topology.addStateStore(storeSupplier, name);
+        }
+        return new KTableImpl<>(topology, name, processorSupplier, this.keySerde, this.valSerde, sourceNodes, internalStoreName, internalStoreName != null);
+    }
 
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate) {
+        return filter(predicate, (String) null);
+    }
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final String queryableStoreName) {
+        StateStoreSupplier<KeyValueStore> storeSupplier = null;
+        if (queryableStoreName != null) {
+            storeSupplier = keyValueStore(this.keySerde, this.valSerde, queryableStoreName);
+        }
+        return doFilter(predicate, storeSupplier, false);
+    }
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doFilter(predicate, storeSupplier, false);
     }
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate) {
-        Objects.requireNonNull(predicate, "predicate can't be null");
-        String name = topology.newName(FILTER_NAME);
-        KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, true);
-
-        topology.addProcessor(name, processorSupplier, this.name);
-
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+        return filterNot(predicate, (String) null);
     }
 
     @Override
-    public <V1> KTable<K, V1> mapValues(ValueMapper<? super V, ? extends V1> mapper) {
+    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final String queryableStoreName) {
+        StateStoreSupplier<KeyValueStore> storeSupplier = null;
+        if (queryableStoreName != null) {
+            storeSupplier = keyValueStore(this.keySerde, this.valSerde, queryableStoreName);
+        }
+        return doFilter(predicate, storeSupplier, true);
+    }
+
+    @Override
+    public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate, final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doFilter(predicate, storeSupplier, true);
+    }
+
+    private <V1> KTable<K, V1> doMapValues(final ValueMapper<? super V, ? extends V1> mapper,
+                                           final Serde<V1> valueSerde,
+                                           final StateStoreSupplier<KeyValueStore> storeSupplier) {
         Objects.requireNonNull(mapper);
         String name = topology.newName(MAPVALUES_NAME);
-        KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper);
-
+        String internalStoreName = null;
+        if (storeSupplier != null) {
+            internalStoreName = storeSupplier.name();
+        }
+        KTableProcessorSupplier<K, V, V1> processorSupplier = new KTableMapValues<>(this, mapper, internalStoreName);
         topology.addProcessor(name, processorSupplier, this.name);
+        if (storeSupplier != null) {
+            topology.addStateStore(storeSupplier, name);
+            return new KTableImpl<>(topology, name, processorSupplier, this.keySerde, valueSerde, sourceNodes, internalStoreName, true);
+        } else {
+            return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.queryableStoreName, false);
+        }
+    }
 
-        return new KTableImpl<>(topology, name, processorSupplier, sourceNodes, this.storeName);
+    @Override
+    public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper) {
+        return mapValues(mapper, null, (String) null);
+    }
+
+    @Override
+    public <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
+                                        final Serde<V1> valueSerde,
+                                        final String queryableStoreName) {
+        StateStoreSupplier<KeyValueStore> storeSupplier = null;
+        if (queryableStoreName != null) {
+            storeSupplier = keyValueStore(this.keySerde, valueSerde, queryableStoreName);
+        }
+        return doMapValues(mapper, valueSerde, storeSupplier);
+    }
+
+    @Override
+    public  <V1> KTable<K, V1> mapValues(final ValueMapper<? super V, ? extends V1> mapper,
+                                         final Serde<V1> valueSerde,
+                                         final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doMapValues(mapper, valueSerde, storeSupplier);
     }
 
     @Override
@@ -193,30 +294,98 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public KTable<K, V> through(Serde<K> keySerde,
-                                Serde<V> valSerde,
-                                StreamPartitioner<? super K, ? super V> partitioner,
-                                String topic,
-                                final String storeName) {
-        Objects.requireNonNull(storeName, "storeName can't be null");
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic,
+                                final String queryableStoreName) {
+        final String internalStoreName = queryableStoreName != null ? queryableStoreName : topology.newStoreName(KTableImpl.TOSTREAM_NAME);
+
         to(keySerde, valSerde, partitioner, topic);
 
-        return topology.table(keySerde, valSerde, topic, storeName);
+        return topology.table(keySerde, valSerde, topic, internalStoreName);
     }
 
     @Override
-    public KTable<K, V> through(Serde<K> keySerde, Serde<V> valSerde, String topic, final String storeName) {
-        return through(keySerde, valSerde, null, topic, storeName);
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic,
+                                final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        to(keySerde, valSerde, partitioner, topic);
+
+        return topology.table(keySerde, valSerde, topic, storeSupplier);
     }
 
     @Override
-    public KTable<K, V> through(StreamPartitioner<? super K, ? super V> partitioner, String topic, final String storeName) {
-        return through(null, null, partitioner, topic, storeName);
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic) {
+        return through(keySerde, valSerde, partitioner, topic, (String) null);
+    }
+    @Override
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final String topic,
+                                final String queryableStoreName) {
+        return through(keySerde, valSerde, null, topic, queryableStoreName);
     }
 
     @Override
-    public KTable<K, V> through(String topic, final String storeName) {
-        return through(null, null, null, topic, storeName);
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final String topic,
+                                final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return through(keySerde, valSerde, null, topic, storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> through(final Serde<K> keySerde,
+                                final Serde<V> valSerde,
+                                final String topic) {
+        return through(keySerde, valSerde, null, topic, (String) null);
+    }
+
+    @Override
+    public KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic,
+                                final String queryableStoreName) {
+        return through(null, null, partitioner, topic, queryableStoreName);
+    }
+
+    @Override
+    public KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic,
+                                final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return through(null, null, partitioner, topic, storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> through(final StreamPartitioner<? super K, ? super V> partitioner,
+                                final String topic) {
+        return through(null, null, partitioner, topic, (String) null);
+    }
+
+    @Override
+    public KTable<K, V> through(final String topic,
+                                final String queryableStoreName) {
+        return through(null, null, null, topic, queryableStoreName);
+    }
+
+    @Override
+    public KTable<K, V> through(final String topic,
+                                final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return through(null, null, null, topic, storeSupplier);
+    }
+
+    @Override
+    public KTable<K, V> through(final String topic) {
+        return through(null, null, null, topic, (String) null);
     }
 
     @Override
@@ -259,27 +428,94 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     }
 
     @Override
-    public <V1, R> KTable<K, R> join(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return doJoin(other, joiner, false, false);
-    }
-
-
-
-    @Override
-    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return doJoin(other, joiner, true, true);
+    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
+                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return doJoin(other, joiner, false, false, null, (String) null);
     }
 
     @Override
-    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other, final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return doJoin(other, joiner, true, false);
+    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
+                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                     final Serde<R> joinSerde,
+                                     final String queryableStoreName) {
+        return doJoin(other, joiner, false, false, joinSerde, queryableStoreName);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
+                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                     final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doJoin(other, joiner, false, false, storeSupplier);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
+                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return doJoin(other, joiner, true, true, null, (String) null);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
+                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                          final Serde<R> joinSerde,
+                                          final String queryableStoreName) {
+        return doJoin(other, joiner, true, true, joinSerde, queryableStoreName);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
+                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                          final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doJoin(other, joiner, true, true, storeSupplier);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
+        return doJoin(other, joiner, true, false, null, (String) null);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                         final Serde<R> joinSerde,
+                                         final String queryableStoreName) {
+        return doJoin(other, joiner, true, false, joinSerde, queryableStoreName);
+    }
+
+    @Override
+    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
+                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                         final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+        return doJoin(other, joiner, true, false, storeSupplier);
     }
 
     @SuppressWarnings("unchecked")
-    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other, ValueJoiner<? super V, ? super V1, ? extends R> joiner, final boolean leftOuter, final boolean rightOuter) {
+    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other,
+                                        ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                        final boolean leftOuter,
+                                        final boolean rightOuter,
+                                        final Serde<R> joinSerde,
+                                        final String queryableStoreName) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
 
+        final StateStoreSupplier storeSupplier = queryableStoreName == null ? null : keyValueStore(this.keySerde, joinSerde, queryableStoreName);
+
+        return doJoin(other, joiner, leftOuter, rightOuter, storeSupplier);
+    }
+
+    private <V1, R> KTable<K, R> doJoin(final KTable<K, V1> other,
+                                        ValueJoiner<? super V, ? super V1, ? extends R> joiner,
+                                        final boolean leftOuter,
+                                        final boolean rightOuter,
+                                        final StateStoreSupplier<KeyValueStore> storeSupplier) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        final String internalQueryableName = storeSupplier == null ? null : storeSupplier.name();
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K>) other);
 
         if (leftOuter) {
@@ -308,8 +544,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(
-            new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, storeName),
-                new KTableImpl<K, V1, R>(topology, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes, other.getStoreName())
+                new KTableImpl<K, V, R>(topology, joinThisName, joinThis, sourceNodes, this.internalStoreName(), false),
+                new KTableImpl<K, V1, R>(topology, joinOtherName, joinOther, ((KTableImpl<K, ?, ?>) other).sourceNodes,
+                        ((KTableImpl<K, ?, ?>) other).internalStoreName(), false),
+                internalQueryableName
         );
 
         topology.addProcessor(joinThisName, joinThis, this.name);
@@ -318,7 +556,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         topology.connectProcessorAndStateStores(joinThisName, ((KTableImpl) other).valueGetterSupplier().storeNames());
         topology.connectProcessorAndStateStores(joinOtherName, valueGetterSupplier().storeNames());
 
-        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, null);
+        if (internalQueryableName != null) {
+            topology.addStateStore(storeSupplier, joinMergeName);
+        }
+
+        return new KTableImpl<>(topology, joinMergeName, joinMerge, allSourceNodes, internalQueryableName, internalQueryableName != null);
     }
 
     @Override

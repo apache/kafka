@@ -27,8 +27,8 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
     /**
-     * Fetch any sessions with the matching key and the sessions end is &le earliestEndTime and the sessions
-     * start is &ge latestStartTime
+     * Fetch any sessions with the matching key and the sessions end is &ge; earliestSessionEndTime and the sessions
+     * start is &le; latestSessionStartTime
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, long earliestSessionEndTime, final long latestSessionStartTime);
 

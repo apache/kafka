@@ -106,7 +106,8 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
 
         final KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
@@ -354,13 +355,7 @@ public class KStreamAggregationIntegrationTest {
             )));
     }
 
-    @Test
-    public void shouldCount() throws Exception {
-        produceMessages(mockTime.milliseconds());
-
-        groupedStream.count("count-by-key")
-            .to(Serdes.String(), Serdes.Long(), outputTopic);
-
+    private void shouldCountHelper() throws Exception {
         startStreams();
 
         produceMessages(mockTime.milliseconds());
@@ -388,6 +383,26 @@ public class KStreamAggregationIntegrationTest {
             KeyValue.pair("E", 1L),
             KeyValue.pair("E", 2L)
         )));
+    }
+
+    @Test
+    public void shouldCount() throws Exception {
+        produceMessages(mockTime.milliseconds());
+
+        groupedStream.count("count-by-key")
+            .to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        shouldCountHelper();
+    }
+
+    @Test
+    public void shouldCountWithInternalStore() throws Exception {
+        produceMessages(mockTime.milliseconds());
+
+        groupedStream.count()
+            .to(Serdes.String(), Serdes.Long(), outputTopic);
+
+        shouldCountHelper();
     }
 
     @Test

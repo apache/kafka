@@ -31,8 +31,8 @@ public abstract class ExtractField<R extends ConnectRecord<R>> implements Transf
 
     public static final String OVERVIEW_DOC =
             "Extract the specified field from a Struct when schema present, or a Map in the case of schemaless data."
-                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
-                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
+                    + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String FIELD_CONFIG = "field";
 

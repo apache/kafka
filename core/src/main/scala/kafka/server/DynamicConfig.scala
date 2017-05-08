@@ -63,19 +63,23 @@ object DynamicConfig {
     //Properties
     val ProducerByteRateOverrideProp = "producer_byte_rate"
     val ConsumerByteRateOverrideProp = "consumer_byte_rate"
+    val RequestPercentageOverrideProp = "request_percentage"
 
     //Defaults
     val DefaultProducerOverride = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
     val DefaultConsumerOverride = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
+    val DefaultRequestOverride = ClientQuotaManagerConfig.QuotaRequestPercentDefault
 
     //Documentation
     val ProducerOverrideDoc = "A rate representing the upper bound (bytes/sec) for producer traffic."
     val ConsumerOverrideDoc = "A rate representing the upper bound (bytes/sec) for consumer traffic."
+    val RequestOverrideDoc = "A percentage representing the upper bound of time spent for processing requests."
 
     //Definitions
     private val clientConfigs = new ConfigDef()
       .define(ProducerByteRateOverrideProp, LONG, DefaultProducerOverride, MEDIUM, ProducerOverrideDoc)
       .define(ConsumerByteRateOverrideProp, LONG, DefaultConsumerOverride, MEDIUM, ConsumerOverrideDoc)
+      .define(RequestPercentageOverrideProp, DOUBLE, DefaultRequestOverride, MEDIUM, RequestOverrideDoc)
 
     def names = clientConfigs.names
 
@@ -88,6 +92,7 @@ object DynamicConfig {
     private val userConfigs = CredentialProvider.userCredentialConfigs
       .define(Client.ProducerByteRateOverrideProp, LONG, Client.DefaultProducerOverride, MEDIUM, Client.ProducerOverrideDoc)
       .define(Client.ConsumerByteRateOverrideProp, LONG, Client.DefaultConsumerOverride, MEDIUM, Client.ConsumerOverrideDoc)
+      .define(Client.RequestPercentageOverrideProp, DOUBLE, Client.DefaultRequestOverride, MEDIUM, Client.RequestOverrideDoc)
 
     def names = userConfigs.names
 

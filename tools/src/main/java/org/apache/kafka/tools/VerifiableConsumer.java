@@ -215,6 +215,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
 
     public void run() {
         try {
+            printJson(new StartupComplete());
             consumer.subscribe(Collections.singletonList(topic), this);
 
             while (true) {
@@ -264,6 +265,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         @JsonProperty
         public long timestamp() {
             return timestamp;
+        }
+    }
+
+    private static class StartupComplete extends ConsumerEvent {
+
+        @Override
+        public String name() {
+            return "startup_complete";
         }
     }
 

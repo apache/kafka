@@ -47,11 +47,12 @@ public class SegmentIteratorTest {
         }
     };
 
+    private MockProcessorContext context;
     private SegmentIterator iterator = null;
 
     @Before
     public void before() {
-        final MockProcessorContext context = new MockProcessorContext(
+        context = new MockProcessorContext(
                 TestUtils.tempDirectory(),
                 Serdes.String(),
                 Serdes.String(),
@@ -74,6 +75,7 @@ public class SegmentIteratorTest {
         }
         segmentOne.close();
         segmentTwo.close();
+        context.close();
     }
 
     @Test

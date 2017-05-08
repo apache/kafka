@@ -28,6 +28,7 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.SegmentedBytesStoreStub;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -39,6 +40,7 @@ import java.util.Set;
 import static org.junit.Assert.assertTrue;
 
 public class MeteredSegmentedBytesStoreTest {
+    private MockProcessorContext context;
     private final SegmentedBytesStoreStub bytesStore = new SegmentedBytesStoreStub();
     private final MeteredSegmentedBytesStore store = new MeteredSegmentedBytesStore(bytesStore, "scope", new MockTime());
     private final Set<String> latencyRecorded = new HashSet<>();
@@ -92,17 +94,25 @@ public class MeteredSegmentedBytesStoreTest {
 
         };
 
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      new NoOpRecordCollector(),
-                                                                      new ThreadCache("testCache", 0, streamsMetrics)) {
+        context = new MockProcessorContext(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            new NoOpRecordCollector(),
+            new ThreadCache("testCache", 0, streamsMetrics)) {
+
             @Override
             public StreamsMetrics metrics() {
                 return streamsMetrics;
             }
         };
         store.init(context, store);
+    }
+
+    @After
+    public void after() {
+        context.close();
+        store.close();
     }
 
     @Test

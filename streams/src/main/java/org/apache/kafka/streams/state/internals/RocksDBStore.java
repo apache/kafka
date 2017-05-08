@@ -27,6 +27,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
@@ -125,9 +126,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         options.setErrorIfExists(false);
         options.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
         // this is the recommended way to increase parallelism in RocksDb
-        // note that the current implementation increases the number of compaction threads
-        // but not flush threads.
-        options.setIncreaseParallelism(Runtime.getRuntime().availableProcessors());
+        // note that the current implementation of setIncreaseParallelism affects the number
+        // of compaction threads but not flush threads (the latter remains one). Also
+        // the parallelism value needs to be at least two because of the code in
+        // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
+        // subtracts one from the value passed to determine the number of compaction threads
+        // (this could be a bug in the RocksDB code and their devs have been contacted).
+        options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
@@ -143,9 +148,10 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         }
         // we need to construct the serde while opening DB since
         // it is also triggered by windowed DB segments without initialization
-        this.serdes = new StateSerdes<>(name,
-                keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        this.serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         this.dbDir = new File(new File(context.stateDir(), parentDir), this.name);
         try {

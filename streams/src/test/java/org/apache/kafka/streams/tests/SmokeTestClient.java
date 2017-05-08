@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -39,6 +40,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     private final File stateDir;
     private KafkaStreams streams;
     private Thread thread;
+    private boolean uncaughtException = false;
 
     public SmokeTestClient(File stateDir, String kafka) {
         super();
@@ -51,9 +53,18 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
             public void uncaughtException(Thread t, Throwable e) {
+                System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
+                uncaughtException = true;
                 e.printStackTrace();
             }
         });
+
+        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                close();
+            }
+        }));
 
         thread = new Thread() {
             public void run() {
@@ -64,32 +75,38 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     public void close() {
-        streams.close();
+        streams.close(5, TimeUnit.SECONDS);
+        // do not remove these printouts since they are needed for health scripts
+        if (!uncaughtException) {
+            System.out.println("SMOKE-TEST-CLIENT-CLOSED");
+        }
         try {
             thread.join();
         } catch (Exception ex) {
+            // do not remove these printouts since they are needed for health scripts
+            System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
             // ignore
         }
     }
 
     private static KafkaStreams createKafkaStreams(File stateDir, String kafka) {
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
         props.put(StreamsConfig.STATE_DIR_CONFIG, stateDir.toString());
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 3);
         props.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 2);
         props.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
-        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 2);
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        props.put(StreamsConfig.REPLICATION_FACTOR_CONFIG, 3);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        props.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        props.put(ProducerConfig.ACKS_CONFIG, "all");
+
 
         KStreamBuilder builder = new KStreamBuilder();
-
         KStream<String, Integer> source = builder.stream(stringSerde, intSerde, "data");
-
         source.to(stringSerde, intSerde, "echo");
-
         KStream<String, Integer> data = source.filter(new Predicate<String, Integer>() {
             @Override
             public boolean test(String key, Integer value) {
