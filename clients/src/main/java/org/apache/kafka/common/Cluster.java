@@ -46,20 +46,6 @@ public final class Cluster {
     private final ClusterResource clusterResource;
 
     /**
-     * Create a new cluster with the given nodes and partitions
-     * @param nodes The nodes in the cluster
-     * @param partitions Information about a subset of the topic-partitions this cluster hosts
-     * @deprecated Use the Cluster constructor with 5 parameters
-     */
-    @Deprecated
-    public Cluster(Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics) {
-        this(null, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet(), null);
-    }
-
-
-    /**
      * Create a new cluster with the given id, nodes and partitions
      * @param nodes The nodes in the cluster
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
