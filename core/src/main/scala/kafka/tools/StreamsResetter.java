@@ -16,10 +16,18 @@
  */
 package kafka.tools;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 import joptsimple.OptionException;
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
 import kafka.admin.AdminClient;
 import kafka.admin.TopicCommand;
 import kafka.utils.ZkUtils;
@@ -30,13 +38,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
-
-import java.io.IOException;
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Properties;
-import java.util.Set;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
@@ -69,6 +70,7 @@ public class StreamsResetter {
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
+    private static OptionSpecBuilder dryRunOption;
 
     private OptionSet options = null;
     private final Properties consumerConfig = new Properties();
@@ -91,10 +93,7 @@ public class StreamsResetter {
 
             adminClient = AdminClient.createSimplePlaintext(options.valueOf(bootstrapServerOption));
             final String groupId = options.valueOf(applicationIdOption);
-            if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
-                throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
-                    "Make sure to stop all running application instances before running the reset tool.");
-            }
+
 
             zkUtils = ZkUtils.apply(options.valueOf(zookeeperOption),
                 30000,
@@ -104,8 +103,19 @@ public class StreamsResetter {
             allTopics.clear();
             allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
 
-            resetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
-            deleteInternalTopics(zkUtils);
+            Boolean dryRun = options.has(dryRunOption);
+
+            if (!dryRun) {
+                if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
+                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
+                            "Make sure to stop all running application instances before running the reset tool.");
+                }
+                resetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
+                deleteInternalTopics(zkUtils);
+            } else {
+                dryRun();
+            }
+
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
             System.err.println("ERROR: " + e.getMessage());
@@ -119,6 +129,73 @@ public class StreamsResetter {
         }
 
         return exitCode;
+    }
+
+    private void dryRun() {
+        final List<String> inputTopics = options.valuesOf(inputTopicsOption);
+        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+
+        System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
+
+        List<String> notfoundInputTopics  = new ArrayList<>();
+        List<String> notFoundIntermediateTopics = new ArrayList<>();
+        List<String> internalTopics = new ArrayList<>();
+
+        if (inputTopics.size() > 0) {
+            System.out.println("Following input topics offsets will be reset to beginning");
+            for (final String topic : inputTopics) {
+                if (allTopics.contains(topic)) {
+                    System.out.println("Topic - " + topic);
+                } else {
+                    notfoundInputTopics.add(topic);
+                }
+            }
+        }
+
+        if (intermediateTopics.size() > 0) {
+            System.out.println("Following intermediate topics offsets will be reset to end");
+            for (final String topic : intermediateTopics) {
+                if (!allTopics.contains(topic)) {
+                    System.err.println("Topic - " + topic);
+                } else {
+                    notFoundIntermediateTopics.add(topic);
+                }
+            }
+        }
+
+        for (final String topic : allTopics) {
+            if (isInternalTopic(topic)) {
+                internalTopics.add(topic);
+            }
+        }
+
+        if (internalTopics.size() > 0) {
+            System.out.println("Following internal topics offsets will be  reset to beginning");
+            for (String topic : internalTopics) {
+                System.out.println("Topic - " + topic);
+            }
+        }
+
+        if (internalTopics.size() > 0) {
+            System.out.println("Following internal topics  will be deleted");
+            for (String topic : internalTopics) {
+                System.out.println("Topic - " + topic);
+            }
+        }
+
+        if (notfoundInputTopics.size() > 0) {
+            System.out.println("Following input topics are not found, skipping them");
+            for (String topic : notfoundInputTopics) {
+                System.out.println("Topic - " + topic);
+            }
+        }
+
+        if (notFoundIntermediateTopics.size() > 0) {
+            System.out.println("Following intermediate topics are not found, skipping them");
+            for (String topic : notFoundIntermediateTopics) {
+                System.out.println("Topic - " + topic);
+            }
+        }
     }
 
     private void parseArguments(final String[] args) throws IOException {
@@ -148,6 +225,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
+        dryRunOption = optionParser.accepts("dry-run", "Option to indicate to run streams reset tool to display actions it will perform");
 
         try {
             options = optionParser.parse(args);
