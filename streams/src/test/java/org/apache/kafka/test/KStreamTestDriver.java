@@ -109,7 +109,7 @@ public class KStreamTestDriver {
 
     public void process(final String topicName, final Object key, final Object value) {
         final ProcessorNode prevNode = context.currentNode();
-        final ProcessorNode currNode = nodeByTopicName(topicName);
+        final ProcessorNode currNode = sourceNodeByTopicName(topicName);
 
         // if currNode is null, check if this topic is a changelog topic;
         // if yes, skip
@@ -125,17 +125,13 @@ public class KStreamTestDriver {
         }
     }
 
-    private ProcessorNode nodeByTopicName(final String topicName) {
+    private ProcessorNode sourceNodeByTopicName(final String topicName) {
         ProcessorNode topicNode = topology.source(topicName);
+
         if (topicNode == null && globalTopology != null) {
             topicNode = globalTopology.source(topicName);
         }
-        if (topicNode == null) {
-            topicNode = topology.sink(topicName);
-        }
-        if (topicNode == null && globalTopology != null) {
-            topicNode = globalTopology.sink(topicName);
-        }
+
         return topicNode;
     }
 
@@ -234,7 +230,9 @@ public class KStreamTestDriver {
                                 Serializer<V> valueSerializer,
                                 StreamPartitioner<? super K, ? super V> partitioner) {
             // The serialization is skipped.
-            process(topic, key, value);
+            if (sourceNodeByTopicName(topic) != null) {
+                process(topic, key, value);
+            }
         }
 
         @Override
@@ -246,7 +244,9 @@ public class KStreamTestDriver {
                                 Serializer<K> keySerializer,
                                 Serializer<V> valueSerializer) {
         // The serialization is skipped.
-            process(topic, key, value);
+            if (sourceNodeByTopicName(topic) != null) {
+                process(topic, key, value);
+            }
         }
 
         @Override
