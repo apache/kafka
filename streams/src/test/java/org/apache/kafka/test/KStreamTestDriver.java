@@ -135,7 +135,7 @@ public class KStreamTestDriver {
         return topicNode;
     }
 
-    public void punctuate(long timestamp) {
+    public void punctuate(final long timestamp) {
         final ProcessorNode prevNode = context.currentNode();
         for (ProcessorNode processor : topology.processors()) {
             if (processor.processor() != null) {
@@ -180,7 +180,7 @@ public class KStreamTestDriver {
         return names;
     }
 
-    public ProcessorNode processor(String name) {
+    public ProcessorNode processor(final String name) {
         final List<ProcessorNode> nodes = topology.processors();
 
         for (ProcessorNode node: nodes) {
