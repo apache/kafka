@@ -193,6 +193,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   def testDescribeTopicsMarkedForDeletion() {
     val brokers = List(0)
     val topic = "testtopic"
+    val markedForDeletion = "MarkedForDeletion"
     TestUtils.createBrokersInZk(zkUtils, brokers)
 
     val createOpts = new TopicCommandOptions(Array("--partitions", "1",
@@ -206,18 +207,26 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val deleteOpts = new TopicCommandOptions(Array("--topic", topic))
     TopicCommand.deleteTopic(zkUtils, deleteOpts)
 
-    def unit() {
+    def unitDescribeConfig() {
       val describeOpts = new TopicCommandOptions(Array("--describe"))
       TopicCommand.describeTopic(zkUtils, describeOpts)
     }
-    val output = TestUtils.grabConsoleOutput(unit)
-    assertTrue(output.contains(topic) && output.contains("marked for deletion"))
+    val outputConfig = TestUtils.grabConsoleOutput(unitDescribeConfig)
+    assertTrue(outputConfig.contains(topic) && outputConfig.contains(markedForDeletion))
+
+    def unitDescribeNoConfig() {
+      val describeOpts = new TopicCommandOptions(Array("--describe", "--unavailable-partitions"))
+      TopicCommand.describeTopic(zkUtils, describeOpts)
+    }
+    val outputNoConfig = TestUtils.grabConsoleOutput(unitDescribeNoConfig)
+    assertTrue(outputNoConfig.contains(topic) && outputNoConfig.contains(markedForDeletion))
   }
 
   @Test
   def testListTopicsMarkedForDeletion() {
     val brokers = List(0)
     val topic = "testtopic"
+    val markedForDeletion = "marked for deletion"
     TestUtils.createBrokersInZk(zkUtils, brokers)
 
     val createOpts = new TopicCommandOptions(Array("--partitions", "1",
@@ -236,7 +245,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       TopicCommand.listTopics(zkUtils, listOpts)
     }
     val output = TestUtils.grabConsoleOutput(unit)
-    assertTrue(output.contains(topic) && output.contains("marked for deletion"))
+    assertTrue(output.contains(topic) && output.contains(markedForDeletion))
   }
 
 }

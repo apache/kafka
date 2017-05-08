@@ -200,7 +200,7 @@ object TopicCommand extends Logging {
           val describeConfigs: Boolean = !reportUnavailablePartitions && !reportUnderReplicatedPartitions
           val describePartitions: Boolean = !reportOverriddenConfigs
           val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
-          val markedForDeletion = if (zkUtils.pathExists(getDeleteTopicPath(topic))) "- marked for deletion" else ""
+          val markedForDeletion = if (zkUtils.pathExists(getDeleteTopicPath(topic))) "MarkedForDeletion:true" else ""
           if (describeConfigs) {
             val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic).asScala
             if (!reportOverriddenConfigs || configs.nonEmpty) {
