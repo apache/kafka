@@ -95,26 +95,26 @@ public class KStreamPeekTest {
 
     @Test
     public void testPrintKeyValueWithName() {
-        KStreamPeek<Integer, String> kStreamPeek = new KStreamPeek<>(new PrintForeachAction(printWriter, intSerd, stringSerd, "test-stream"), false);
+        final KStreamPeek<Integer, String> kStreamPeek = new KStreamPeek<>(new PrintForeachAction(printWriter, intSerd, stringSerd, "test-stream"), false);
 
-        List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
+        final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
                 new KeyValue<>(0, "zero"),
                 new KeyValue<>(1, "one"),
                 new KeyValue<>(2, "two"),
                 new KeyValue<>(3, "three"));
         
-        String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
+        final String[] expectedResult = {"[test-stream]: 0, zero", "[test-stream]: 1, one", "[test-stream]: 2, two", "[test-stream]: 3, three"};
         
         final KStreamBuilder builder = new KStreamBuilder();
         final KStream<Integer, String> stream = builder.stream(intSerd, stringSerd, topicName);
         stream.process(kStreamPeek);
         
-        KStreamTestDriver driver = new KStreamTestDriver(builder);
+        driver = new KStreamTestDriver(builder);
         for (KeyValue<Integer, String> record: inputRecords) {
             driver.process(topicName, record.key, record.value);
         }
         printWriter.flush();
-        String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\n");
+        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\n");
         for (int i = 0; i < flushOutDatas.length; i++) {
             assertEquals(flushOutDatas[i], expectedResult[i]);
         }
