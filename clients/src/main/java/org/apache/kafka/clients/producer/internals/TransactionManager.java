@@ -35,8 +35,8 @@ import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.InitPidRequest;
-import org.apache.kafka.common.requests.InitPidResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -79,7 +79,7 @@ public class TransactionManager {
 
     private volatile State currentState = State.UNINITIALIZED;
     private volatile Exception lastError = null;
-    private volatile PidAndEpoch pidAndEpoch;
+    private volatile ProducerIdAndEpoch producerIdAndEpoch;
 
     private enum State {
         UNINITIALIZED,
@@ -130,7 +130,7 @@ public class TransactionManager {
     }
 
     public TransactionManager(String transactionalId, int transactionTimeoutMs) {
-        this.pidAndEpoch = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+        this.producerIdAndEpoch = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
         this.sequenceNumbers = new HashMap<>();
         this.transactionalId = transactionalId;
         this.transactionTimeoutMs = transactionTimeoutMs;
@@ -155,10 +155,10 @@ public class TransactionManager {
     public synchronized TransactionalRequestResult initializeTransactions() {
         ensureTransactional();
         transitionTo(State.INITIALIZING);
-        setPidAndEpoch(PidAndEpoch.NONE);
+        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         this.sequenceNumbers.clear();
-        InitPidRequest.Builder builder = new InitPidRequest.Builder(transactionalId, transactionTimeoutMs);
-        InitPidHandler handler = new InitPidHandler(builder);
+        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
+        InitProducerIdHandler handler = new InitProducerIdHandler(builder);
         pendingRequests.add(handler);
         return handler.result;
     }
@@ -190,8 +190,8 @@ public class TransactionManager {
         }
 
         TransactionResult transactionResult = isCommit ? TransactionResult.COMMIT : TransactionResult.ABORT;
-        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId, pidAndEpoch.producerId,
-                pidAndEpoch.epoch, transactionResult);
+        EndTxnRequest.Builder builder = new EndTxnRequest.Builder(transactionalId, producerIdAndEpoch.producerId,
+                producerIdAndEpoch.epoch, transactionResult);
         EndTxnHandler handler = new EndTxnHandler(builder);
         pendingRequests.add(handler);
         return handler.result;
@@ -206,7 +206,7 @@ public class TransactionManager {
                     "active transaction");
 
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, consumerGroupId);
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
         AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
         pendingRequests.add(handler);
         return handler.result;
@@ -226,8 +226,8 @@ public class TransactionManager {
         return transactionalId;
     }
 
-    public boolean hasPid() {
-        return pidAndEpoch.isValid();
+    public boolean hasProducerId() {
+        return producerIdAndEpoch.isValid();
     }
 
     public boolean isTransactional() {
@@ -262,20 +262,20 @@ public class TransactionManager {
     }
 
     /**
-     * Get the current pid and epoch without blocking. Callers must use {@link PidAndEpoch#isValid()} to
+     * Get the current pid and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
      * verify that the result is valid.
      *
-     * @return the current PidAndEpoch.
+     * @return the current ProducerIdAndEpoch.
      */
-    PidAndEpoch pidAndEpoch() {
-        return pidAndEpoch;
+    ProducerIdAndEpoch pidAndEpoch() {
+        return producerIdAndEpoch;
     }
 
     /**
      * Set the pid and epoch atomically.
      */
-    void setPidAndEpoch(PidAndEpoch pidAndEpoch) {
-        this.pidAndEpoch = pidAndEpoch;
+    void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
+        this.producerIdAndEpoch = producerIdAndEpoch;
     }
 
     /**
@@ -299,7 +299,7 @@ public class TransactionManager {
         if (isTransactional())
             throw new IllegalStateException("Cannot reset producer state for a transactional producer. " +
                     "You must either abort the ongoing transaction or reinitialize the transactional producer instead");
-        setPidAndEpoch(PidAndEpoch.NONE);
+        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
         this.sequenceNumbers.clear();
     }
 
@@ -448,7 +448,7 @@ public class TransactionManager {
         pendingPartitionsToBeAddedToTransaction.addAll(newPartitionsToBeAddedToTransaction);
         newPartitionsToBeAddedToTransaction.clear();
         AddPartitionsToTxnRequest.Builder builder = new AddPartitionsToTxnRequest.Builder(transactionalId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, new ArrayList<>(pendingPartitionsToBeAddedToTransaction));
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, new ArrayList<>(pendingPartitionsToBeAddedToTransaction));
         return new AddPartitionsToTxnHandler(builder);
     }
 
@@ -461,7 +461,7 @@ public class TransactionManager {
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(consumerGroupId,
-                pidAndEpoch.producerId, pidAndEpoch.epoch, OffsetCommitRequest.DEFAULT_RETENTION_TIME,
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 pendingTxnOffsetCommits);
         return new TxnOffsetCommitHandler(result, builder);
     }
@@ -487,7 +487,7 @@ public class TransactionManager {
         void fenced() {
             log.error("Producer has become invalid, which typically means another producer with the same " +
                             "transactional.id has been started: producerId: {}. epoch: {}.",
-                    pidAndEpoch.producerId, pidAndEpoch.epoch);
+                    producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
             result.setError(Errors.INVALID_PRODUCER_EPOCH.exception());
             transitionTo(State.FENCED, Errors.INVALID_PRODUCER_EPOCH.exception());
             result.done();
@@ -548,15 +548,15 @@ public class TransactionManager {
         abstract Priority priority();
     }
 
-    private class InitPidHandler extends TxnRequestHandler {
-        private final InitPidRequest.Builder builder;
+    private class InitProducerIdHandler extends TxnRequestHandler {
+        private final InitProducerIdRequest.Builder builder;
 
-        private InitPidHandler(InitPidRequest.Builder builder) {
+        private InitProducerIdHandler(InitProducerIdRequest.Builder builder) {
             this.builder = builder;
         }
 
         @Override
-        InitPidRequest.Builder requestBuilder() {
+        InitProducerIdRequest.Builder requestBuilder() {
             return builder;
         }
 
@@ -567,11 +567,11 @@ public class TransactionManager {
 
         @Override
         public void handleResponse(AbstractResponse response) {
-            InitPidResponse initPidResponse = (InitPidResponse) response;
-            Errors error = initPidResponse.error();
+            InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
+            Errors error = initProducerIdResponse.error();
             if (error == Errors.NONE) {
-                PidAndEpoch pidAndEpoch = new PidAndEpoch(initPidResponse.producerId(), initPidResponse.epoch());
-                setPidAndEpoch(pidAndEpoch);
+                ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                setProducerIdAndEpoch(producerIdAndEpoch);
                 transitionTo(State.READY);
                 lastError = null;
                 result.done();
@@ -581,7 +581,7 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
             } else {
-                fatal(new KafkaException("Unexpected error in InitPidResponse; " + error.message()));
+                fatal(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
             }
         }
     }

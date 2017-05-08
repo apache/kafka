@@ -1387,14 +1387,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleInitPidRequest(request: RequestChannel.Request): Unit = {
-    val initPidRequest = request.body[InitPidRequest]
+    val initPidRequest = request.body[InitProducerIdRequest]
     val transactionalId = initPidRequest.transactionalId
 
     // Send response callback
     def sendResponseCallback(result: InitPidResult): Unit = {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
-        trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
+        val responseBody: InitProducerIdResponse = new InitProducerIdResponse(throttleTimeMs, result.error, result.pid, result.epoch)
+        trace(s"InitProducerIdRequest: Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)

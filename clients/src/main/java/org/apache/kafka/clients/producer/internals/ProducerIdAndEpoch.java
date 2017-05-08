@@ -19,13 +19,13 @@ package org.apache.kafka.clients.producer.internals;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
 
-class PidAndEpoch {
-    static final PidAndEpoch NONE = new PidAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
+class ProducerIdAndEpoch {
+    static final ProducerIdAndEpoch NONE = new ProducerIdAndEpoch(NO_PRODUCER_ID, NO_PRODUCER_EPOCH);
 
     public final long producerId;
     public final short epoch;
 
-    PidAndEpoch(long producerId, short epoch) {
+    ProducerIdAndEpoch(long producerId, short epoch) {
         this.producerId = producerId;
         this.epoch = epoch;
     }
