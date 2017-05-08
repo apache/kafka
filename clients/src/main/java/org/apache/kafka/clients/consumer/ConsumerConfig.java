@@ -169,7 +169,7 @@ public class ConsumerConfig extends AbstractConfig {
     /**
      * <code>reconnect.backoff.max.ms</code>
      */
-    public static final String RECONNECT_BACKOFF_MAX_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_CONFIG;
+    public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
 
     /**
      * <code>retry.backoff.ms</code>
@@ -338,12 +338,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0L),
                                         Importance.LOW,
                                         CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-                                .define(RECONNECT_BACKOFF_MAX_CONFIG,
+                                .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
                                         Type.LONG,
                                         1000L,
                                         atLeast(0L),
                                         Importance.LOW,
-                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_DOC)
+                                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG,
                                         Type.LONG,
                                         100L,

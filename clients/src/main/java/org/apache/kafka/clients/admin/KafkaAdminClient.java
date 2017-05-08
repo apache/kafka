@@ -270,7 +270,7 @@ public class KafkaAdminClient extends AdminClient {
                 clientId,
                 100,
                 config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MAX_CONFIG),
+                config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
                 config.getInt(AdminClientConfig.SEND_BUFFER_CONFIG),
                 config.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG),
                 config.getInt(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG),
