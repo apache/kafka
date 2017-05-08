@@ -608,12 +608,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             final Map<TopicPartition, Long> timestampsToSearch) {
         // Group the partitions by node.
         final Map<Node, Map<TopicPartition, Long>> timestampsToSearchByNode = new HashMap<>();
+        Cluster cluster = metadata.fetch();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
-            PartitionInfo info = metadata.fetch().partition(tp);
+            PartitionInfo info = cluster.partition(tp);
             if (info == null) {
+                if (!cluster.topics().contains(tp.topic()))
+                    log.warn("Could not lookup offsets for partition {} since no metadata is available for topic {}. " +
+                            "Wait for metadata refresh and try again", tp, tp.topic());
+                else
+                    log.warn("Could not lookup offsets for partition {} since no metadata is available for it. " +
+                            "Wait for metadata refresh and try again", tp);
+
                 metadata.add(tp.topic());
-                log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", tp);
                 return RequestFuture.staleMetadata();
             } else if (info.leader() == null) {
                 log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", tp);
