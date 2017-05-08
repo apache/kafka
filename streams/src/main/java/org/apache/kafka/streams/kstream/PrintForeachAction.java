@@ -39,7 +39,7 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
         this.streamName = streamName;
     }
 
-    public void setContext(ProcessorContext context) {
+    public void setContext(final ProcessorContext context) {
         this.context = context;
     }
     
@@ -61,9 +61,9 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
 
     @Override
     public void apply(final K key, final V value) {
-        K deKey   = (K) deserialize(key, keySerde.deserializer());
-        V deValue = (V) deserialize(value, valueSerde.deserializer());
-        String data = String.format("[%s]: %s, %s", streamName, deKey, deValue);
+        final K deKey = (K) maybeDeserialize(key, keySerde.deserializer());
+        final V deValue = (V) maybeDeserialize(value, valueSerde.deserializer());
+        final String data = String.format("[%s]: %s, %s", streamName, deKey, deValue);
         if (printWriter == null) {
             System.out.println(data);
         } else {
@@ -71,11 +71,11 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
         }
     }
 
-    private Object deserialize(Object value, Deserializer<?> deserializer) {
-        if (value instanceof byte[]) {
-            return deserializer.deserialize(this.context.topic(), (byte[]) value);
+    private Object maybeDeserialize(final Object keyOrValue, final Deserializer<?> deserializer) {
+        if (keyOrValue instanceof byte[]) {
+            return deserializer.deserialize(this.context.topic(), (byte[]) keyOrValue);
         }
-        return value;
+        return keyOrValue;
     }
 
     public void close() {

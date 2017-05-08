@@ -25,21 +25,12 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
 
-    private final boolean print;
-    private final boolean downStream;
-    private ForeachAction<K, V> action;
-    private PrintForeachAction<K, V> printAction;
+    private final boolean forwardDownStream;
+    private final ForeachAction<K, V> action;
 
-    public KStreamPeek(final ForeachAction<K, V> action, final boolean downStream) {
+    public KStreamPeek(final ForeachAction<K, V> action, final boolean forwardDownStream) {
         this.action = action;
-        this.downStream = downStream;
-        this.print = false;
-    }
-
-    public KStreamPeek(final PrintForeachAction<K, V> printAction, final boolean downStream) {
-        this.printAction = printAction;
-        this.downStream = downStream;
-        this.print = true;
+        this.forwardDownStream = forwardDownStream;
     }
 
     @Override
@@ -52,33 +43,29 @@ class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
         @Override
         public void init(ProcessorContext context) {
             super.init(context);
-            if (print) {
-                printAction.setContext(context);
-                if (printAction.keySerde() == null) {
-                    printAction.useDefaultKeySerde();
+            if (action instanceof PrintForeachAction) {
+                ((PrintForeachAction) action).setContext(context);
+                if (((PrintForeachAction) action).keySerde() == null) {
+                    ((PrintForeachAction) action).useDefaultKeySerde();
                 }
-                if (printAction.valueSerde() == null) {
-                    printAction.useDefaultValueSerde();
+                if (((PrintForeachAction) action).valueSerde() == null) {
+                    ((PrintForeachAction) action).useDefaultValueSerde();
                 }
             }
         }
 
         @Override
         public void process(final K key, final V value) {
-            if (print) {
-                printAction.apply(key, value);
-            } else {
-                action.apply(key, value);
-            }
-            if (downStream) {
+            action.apply(key, value);
+            if (forwardDownStream) {
                 context().forward(key, value);
             }
         }
 
         @Override
         public void close() {
-            if (print) {
-                printAction.close();
+            if (action instanceof PrintForeachAction) {
+                ((PrintForeachAction) action).close();
             }
         }
     }
