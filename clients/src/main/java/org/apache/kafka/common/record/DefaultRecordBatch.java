@@ -443,6 +443,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
+    /**
+     * Get an upper bound on the size of a batch with only a single record using a given key and value.
+     */
+    static int batchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
+        return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
+    }
+
     private abstract class RecordIterator implements CloseableIterator<Record> {
         private final Long logAppendTime;
         private final long baseOffset;

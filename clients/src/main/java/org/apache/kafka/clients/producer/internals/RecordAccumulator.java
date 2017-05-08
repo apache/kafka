@@ -325,6 +325,22 @@ public final class RecordAccumulator {
     }
 
     /**
+     * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     */
+    public void splitAndReenqueue(ProducerBatch bigBatch) {
+        Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
+        Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
+        while (!dq.isEmpty()) {
+            ProducerBatch batch = dq.pollLast();
+            incomplete.add(batch);
+            // We treat the newly split batches as if they are not even tried.
+            synchronized (partitionDequeue) {
+                partitionDequeue.addFirst(batch);
+            }
+        }
+    }
+
+    /**
      * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.

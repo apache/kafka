@@ -42,6 +42,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -185,7 +186,7 @@ public class Sender implements Runnable {
 
     /**
      * Run a single iteration of sending
-     * 
+     *
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
@@ -478,7 +479,7 @@ public class Sender implements Runnable {
 
     /**
      * Complete or retry the given batch of records.
-     * 
+     *
      * @param batch The record batch
      * @param response The produce response
      * @param correlationId The correlation id for the request
@@ -487,7 +488,21 @@ public class Sender implements Runnable {
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, long correlationId,
                                long now) {
         Errors error = response.error;
-        if (error != Errors.NONE) {
+        if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1) {
+            // If the batch is too large, we split the batch and send the split batches again. We do not decrement
+            // the retry attempts in this case.
+            log.warn("Got RecordBatchTooLargeException in correlation id {} on topic-partition {}, spitting and retrying ({} attempts left). Error: {}",
+                     correlationId,
+                     batch.topicPartition,
+                     this.retries - batch.attempts(),
+                     error);
+            // Reset the estimated compression ratio to the initial value. There are several different ways to do the
+            // reset. We chose the most conservative one to ensure the split doesn't happen too often.
+            CompressionRatioEstimator.resetEstimation(batch.topicPartition.topic());
+            this.accumulator.splitAndReenqueue(batch);
+            this.accumulator.deallocate(batch);
+            this.sensors.recordBatchSplit();
+        } else if (error != Errors.NONE) {
             if (canRetry(batch, error)) {
                 log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
                         correlationId,
@@ -656,6 +671,7 @@ public class Sender implements Runnable {
         public final Sensor compressionRateSensor;
         public final Sensor maxRecordSizeSensor;
         public final Sensor produceThrottleTimeSensor;
+        public final Sensor batchSplitSensor;
 
         public SenderMetrics(Metrics metrics) {
             this.metrics = metrics;
@@ -721,6 +737,10 @@ public class Sender implements Runnable {
                     return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
                 }
             });
+
+            this.batchSplitSensor = metrics.sensor("batch-split-rate");
+            m = metrics.metricName("batch-split-rate", metricGrpName, "The rate of record batch split");
+            this.batchSplitSensor.add(m, new Rate());
         }
 
         private void maybeRegisterTopicMetrics(String topic) {
@@ -780,12 +800,12 @@ public class Sender implements Runnable {
                     // per-topic compression rate
                     String topicCompressionRateName = "topic." + topic + ".compression-rate";
                     Sensor topicCompressionRate = Utils.notNull(this.metrics.getSensor(topicCompressionRateName));
-                    topicCompressionRate.record(batch.compressionRate());
+                    topicCompressionRate.record(batch.compressionRatio());
 
                     // global metrics
                     this.batchSizeSensor.record(batch.sizeInBytes(), now);
                     this.queueTimeSensor.record(batch.queueTimeMs(), now);
-                    this.compressionRateSensor.record(batch.compressionRate());
+                    this.compressionRateSensor.record(batch.compressionRatio());
                     this.maxRecordSizeSensor.record(batch.maxRecordSize, now);
                     records += batch.recordCount;
                 }
@@ -826,6 +846,9 @@ public class Sender implements Runnable {
             this.produceThrottleTimeSensor.record(throttleTimeMs, time.milliseconds());
         }
 
+        void recordBatchSplit() {
+            this.batchSplitSensor.record();
+        }
     }
 
 }

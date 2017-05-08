@@ -171,6 +171,13 @@ public abstract class AbstractRecords implements Records {
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }
 
+    public static int sizeInBytesUpperBound(byte magic, ByteBuffer key, ByteBuffer value, Header[] headers) {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2)
+            return DefaultRecordBatch.batchSizeUpperBound(key, value, headers);
+        else
+            return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
+    }
+
     private static class RecordBatchAndRecords {
         private final RecordBatch batch;
         private final List<Record> records;
