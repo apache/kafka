@@ -21,6 +21,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
@@ -777,6 +778,20 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp1));
         assertTrue(subscriptions.isFetchable(tp1));
         assertEquals(0, subscriptions.position(tp1).longValue());
+    }
+
+    @Test
+    public void testUpdateFetchPositionsNoneCommittedNoResetStrategy() {
+        Set<TopicPartition> tps = new HashSet<>(Arrays.asList(tp1, tp2));
+        subscriptionsNoAutoReset.assignFromUser(tps);
+        try {
+            fetcherNoAutoReset.updateFetchPositions(tps);
+            fail("Should have thrown NoOffsetForPartitionException");
+        } catch (NoOffsetForPartitionException e) {
+            // we expect the exception to be thrown for both TPs at the same time
+            Set<TopicPartition> partitions = e.partitions();
+            assertEquals(tps, partitions);
+        }
     }
 
     @Test
