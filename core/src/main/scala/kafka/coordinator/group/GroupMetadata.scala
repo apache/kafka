@@ -151,6 +151,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   var generationId = 0
   var leaderId: String = null
   var protocol: String = null
+  var newMemberAdded: Boolean = false
 
   def is(groupState: GroupState) = state == groupState
   def not(groupState: GroupState) = state != groupState

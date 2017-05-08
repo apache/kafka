@@ -380,7 +380,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @SuppressWarnings("unchecked")
     public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        final int oldQueueSize = partitionGroup.numBuffered();
+        final int oldQueueSize = partitionGroup.numBuffered(partition);
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);

@@ -133,15 +133,6 @@ public interface Record {
     boolean hasTimestampType(TimestampType timestampType);
 
     /**
-     * Check whether this is a control record (i.e. whether the control bit is set in the record attributes).
-     * For magic versions prior to 2, this is always false.
-     *
-     * @return Whether this is a control record
-     */
-    boolean isControlRecord();
-
-
-    /**
      * Get the headers. For magic versions 1 and below, this always returns an empty array.
      *
      * @return the array of headers

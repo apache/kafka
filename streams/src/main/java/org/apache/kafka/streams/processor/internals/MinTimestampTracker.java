@@ -24,7 +24,8 @@ import java.util.LinkedList;
  */
 public class MinTimestampTracker<E> implements TimestampTracker<E> {
 
-    private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<>();
+    // first element has the lowest timestamp and last element the highest
+    private final LinkedList<Stamped<E>> ascendingSubsequence = new LinkedList<>();
 
     // in the case that incoming traffic is very small, the records maybe put and polled
     // within a single iteration, in this case we need to remember the last polled
@@ -37,12 +38,12 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     public void addElement(final Stamped<E> elem) {
         if (elem == null) throw new NullPointerException();
 
-        Stamped<E> minElem = descendingSubsequence.peekLast();
-        while (minElem != null && minElem.timestamp >= elem.timestamp) {
-            descendingSubsequence.removeLast();
-            minElem = descendingSubsequence.peekLast();
+        Stamped<E> maxElem = ascendingSubsequence.peekLast();
+        while (maxElem != null && maxElem.timestamp >= elem.timestamp) {
+            ascendingSubsequence.removeLast();
+            maxElem = ascendingSubsequence.peekLast();
         }
-        descendingSubsequence.offerLast(elem);
+        ascendingSubsequence.offerLast(elem); //lower timestamps have been retained and all greater/equal removed
     }
 
     public void removeElement(final Stamped<E> elem) {
@@ -50,22 +51,25 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
             return;
         }
 
-        if (descendingSubsequence.peekFirst() == elem) {
-            descendingSubsequence.removeFirst();
+        if (ascendingSubsequence.peekFirst() == elem) {
+            ascendingSubsequence.removeFirst();
         }
 
-        if (descendingSubsequence.isEmpty()) {
+        if (ascendingSubsequence.isEmpty()) {
             lastKnownTime = elem.timestamp;
         }
 
     }
 
     public int size() {
-        return descendingSubsequence.size();
+        return ascendingSubsequence.size();
     }
 
+    /**
+     * @return the lowest tracked timestamp
+     */
     public long get() {
-        Stamped<E> stamped = descendingSubsequence.peekFirst();
+        Stamped<E> stamped = ascendingSubsequence.peekFirst();
 
         if (stamped == null)
             return lastKnownTime;

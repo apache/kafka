@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
@@ -56,7 +57,6 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         this.keySchema = new SessionKeySchema();
     }
 
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name());
         bytesStore.init(context, root);
@@ -128,21 +128,23 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         context.setRecordContext(entry.recordContext());
         try {
             final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), keySerde.deserializer(), topic);
+            final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());
-                final AGG oldValue = fetchPrevious(binaryKey);
+                final AGG oldValue = fetchPrevious(rawKey, key.window());
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue, oldValue);
                 }
             }
-            bytesStore.put(new Windowed<>(Bytes.wrap(serdes.rawKey(key.key())), key.window()), entry.newValue());
+            bytesStore.put(new Windowed<>(rawKey, key.window()), entry.newValue());
         } finally {
             context.setRecordContext(current);
         }
     }
 
-    private AGG fetchPrevious(final Bytes key) {
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.fetch(key)) {
+    private AGG fetchPrevious(final Bytes rawKey, final Window window) {
+        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore
+                .findSessions(rawKey, window.start(), window.end())) {
             if (!iterator.hasNext()) {
                 return null;
             }

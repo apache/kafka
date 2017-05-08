@@ -95,7 +95,29 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(51, 0)
     idx.append(50, 1)
   }
-  
+
+  @Test
+  def testFetchUpperBoundOffset() {
+    val first = OffsetPosition(0, 0)
+    val second = OffsetPosition(1, 10)
+    val third = OffsetPosition(2, 23)
+    val fourth = OffsetPosition(3, 37)
+
+    assertEquals(None, idx.fetchUpperBoundOffset(first, 5))
+
+    for (offsetPosition <- Seq(first, second, third, fourth))
+      idx.append(offsetPosition.offset, offsetPosition.position)
+
+    assertEquals(Some(second), idx.fetchUpperBoundOffset(first, 5))
+    assertEquals(Some(second), idx.fetchUpperBoundOffset(first, 10))
+    assertEquals(Some(third), idx.fetchUpperBoundOffset(first, 23))
+    assertEquals(Some(third), idx.fetchUpperBoundOffset(first, 22))
+    assertEquals(Some(fourth), idx.fetchUpperBoundOffset(second, 24))
+    assertEquals(None, idx.fetchUpperBoundOffset(fourth, 1))
+    assertEquals(None, idx.fetchUpperBoundOffset(first, 200))
+    assertEquals(None, idx.fetchUpperBoundOffset(second, 200))
+  }
+
   @Test
   def testReopen() {
     val first = OffsetPosition(51, 0)

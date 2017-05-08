@@ -55,11 +55,9 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  *
  * The current record attributes are depicted below:
  *
- *  -----------------------------------
- *  | Unused (1-7) | Control Flag (0) |
- *  -----------------------------------
- *
- * The control flag is used to implement control records (see {@link ControlRecordType}).
+ *  ----------------
+ *  | Unused (0-7) |
+ *  ----------------
  *
  * The offset and timestamp deltas compute the difference relative to the base offset and
  * base timestamp of the log entry that this record is contained in.
@@ -69,7 +67,6 @@ public class DefaultRecord implements Record {
     // excluding key, value and headers: 5 bytes length + 10 bytes timestamp + 5 bytes offset + 1 byte attributes
     public static final int MAX_RECORD_OVERHEAD = 21;
 
-    private static final int CONTROL_FLAG_MASK = 0x01;
     private static final int NULL_VARINT_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
 
     private final int sizeInBytes;
@@ -180,7 +177,6 @@ public class DefaultRecord implements Record {
      * Write the record to `out` and return its crc.
      */
     public static long writeTo(DataOutputStream out,
-                               boolean isControlRecord,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
@@ -189,7 +185,7 @@ public class DefaultRecord implements Record {
         int sizeInBytes = sizeOfBodyInBytes(offsetDelta, timestampDelta, key, value, headers);
         ByteUtils.writeVarint(sizeInBytes, out);
 
-        byte attributes = computeAttributes(isControlRecord);
+        byte attributes = 0; // there are no used record attributes at the moment
         out.write(attributes);
 
         ByteUtils.writeVarlong(timestampDelta, out);
@@ -241,15 +237,14 @@ public class DefaultRecord implements Record {
      * Write the record to `out` and return its crc.
      */
     public static long writeTo(ByteBuffer out,
-                               boolean isControlRecord,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
                                ByteBuffer value,
                                Header[] headers) {
         try {
-            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), isControlRecord, offsetDelta,
-                    timestampDelta, key, value, headers);
+            return writeTo(new DataOutputStream(new ByteBufferOutputStream(out)), offsetDelta, timestampDelta,
+                    key, value, headers);
         } catch (IOException e) {
             // cannot actually be raised by ByteBufferOutputStream
             throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
@@ -287,11 +282,6 @@ public class DefaultRecord implements Record {
     @Override
     public boolean hasTimestampType(TimestampType timestampType) {
         return false;
-    }
-
-    @Override
-    public boolean isControlRecord() {
-        return (attributes & CONTROL_FLAG_MASK) != 0;
     }
 
     @Override
@@ -421,10 +411,6 @@ public class DefaultRecord implements Record {
         return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
     }
 
-    private static byte computeAttributes(boolean isControlRecord) {
-        return isControlRecord ? CONTROL_FLAG_MASK : (byte) 0;
-    }
-
     public static int sizeInBytes(int offsetDelta,
                                   long timestampDelta,
                                   byte[] key,
@@ -441,19 +427,35 @@ public class DefaultRecord implements Record {
         return bodySize + ByteUtils.sizeOfVarint(bodySize);
     }
 
+    public static int sizeInBytes(int offsetDelta,
+                                  long timestampDelta,
+                                  int keySize,
+                                  int valueSize,
+                                  Header[] headers) {
+        int bodySize = sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, headers);
+        return bodySize + ByteUtils.sizeOfVarint(bodySize);
+    }
+
     private static int sizeOfBodyInBytes(int offsetDelta,
                                          long timestampDelta,
                                          ByteBuffer key,
                                          ByteBuffer value,
                                          Header[] headers) {
-        int size = 1; // always one byte for attributes
-        size += ByteUtils.sizeOfVarint(offsetDelta);
-        size += ByteUtils.sizeOfVarlong(timestampDelta);
 
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
-        size += sizeOf(keySize, valueSize, headers);
+        return sizeOfBodyInBytes(offsetDelta, timestampDelta, keySize, valueSize, headers);
+    }
 
+    private static int sizeOfBodyInBytes(int offsetDelta,
+                                         long timestampDelta,
+                                         int keySize,
+                                         int valueSize,
+                                         Header[] headers) {
+        int size = 1; // always one byte for attributes
+        size += ByteUtils.sizeOfVarint(offsetDelta);
+        size += ByteUtils.sizeOfVarlong(timestampDelta);
+        size += sizeOf(keySize, valueSize, headers);
         return size;
     }
 

@@ -762,6 +762,11 @@ public class Utils {
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
     }
 
+    public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
+        while (sourceBuffer.hasRemaining())
+            channel.write(sourceBuffer);
+    }
+
     /**
      * Write the contents of a buffer to an output stream. The bytes are copied from the current position
      * in the buffer.

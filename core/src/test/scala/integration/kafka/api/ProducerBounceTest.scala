@@ -23,7 +23,7 @@ import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{Ignore, Test}
 
 import scala.collection.mutable.ArrayBuffer
 
@@ -58,23 +58,14 @@ class ProducerBounceTest extends KafkaServerTestHarness {
 
   private val topic1 = "topic-1"
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
-  @After
-  override def tearDown() {
-    super.tearDown()
-  }
-
   /**
    * With replication, producer should able able to find new leader after it detects broker failure
    */
+  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-2837)
   @Test
   def testBrokerFailure() {
     val numPartitions = 3
-    val topicConfig = new Properties();
+    val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     val leaders = TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
 
