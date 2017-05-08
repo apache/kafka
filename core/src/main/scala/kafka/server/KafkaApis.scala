@@ -516,8 +516,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchedPartitionData.put(topicPartition, data)
 
         // record the bytes out metrics only when the response is being sent
-        BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesOutRate.mark(data.records.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.records.sizeInBytes)
+        if (!fetchRequest.isFromFollower) {
+          BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesOutRate.mark(data.records.sizeInBytes)
+          BrokerTopicStats.getBrokerAllTopicsStats.bytesOutRate.mark(data.records.sizeInBytes)
+        } else {
+          BrokerTopicStats.getBrokerAllTopicsStats.replicationBytesOutRate.mark(data.records.sizeInBytes)
+        }
       }
 
       val response = new FetchResponse(fetchedPartitionData, 0)
