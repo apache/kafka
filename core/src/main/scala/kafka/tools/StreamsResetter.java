@@ -134,6 +134,7 @@ public class StreamsResetter {
     private void dryRun() {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+        String groupId = options.valueOf(applicationIdOption);
 
         System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
 
@@ -142,7 +143,7 @@ public class StreamsResetter {
         List<String> internalTopics = new ArrayList<>();
 
         if (inputTopics.size() > 0) {
-            System.out.println("Following input topics offsets will be reset to beginning");
+            System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
             for (final String topic : inputTopics) {
                 if (allTopics.contains(topic)) {
                     System.out.println("Topic - " + topic);
@@ -153,7 +154,7 @@ public class StreamsResetter {
         }
 
         if (intermediateTopics.size() > 0) {
-            System.out.println("Following intermediate topics offsets will be reset to end");
+            System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
             for (final String topic : intermediateTopics) {
                 if (!allTopics.contains(topic)) {
                     System.err.println("Topic - " + topic);
@@ -170,7 +171,7 @@ public class StreamsResetter {
         }
 
         if (internalTopics.size() > 0) {
-            System.out.println("Following internal topics offsets will be  reset to beginning");
+            System.out.println("Following internal topics offsets will be  reset to beginning (for consumer group " + groupId + ")");
             for (String topic : internalTopics) {
                 System.out.println("Topic - " + topic);
             }
