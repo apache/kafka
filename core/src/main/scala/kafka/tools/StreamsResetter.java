@@ -103,18 +103,14 @@ public class StreamsResetter {
             allTopics.clear();
             allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
 
-            Boolean dryRun = options.has(dryRunOption);
 
-            if (!dryRun) {
-                if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
-                    throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
+            if (!adminClient.describeConsumerGroup(groupId, 0).consumers().get().isEmpty()) {
+                throw new IllegalStateException("Consumer group '" + groupId + "' is still active. " +
                             "Make sure to stop all running application instances before running the reset tool.");
-                }
-                resetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
-                deleteInternalTopics(zkUtils);
-            } else {
-                dryRun();
             }
+
+            mayberesetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
+            maybedeleteInternalTopics(zkUtils);
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
@@ -129,74 +125,6 @@ public class StreamsResetter {
         }
 
         return exitCode;
-    }
-
-    private void dryRun() {
-        final List<String> inputTopics = options.valuesOf(inputTopicsOption);
-        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
-        String groupId = options.valueOf(applicationIdOption);
-
-        System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
-
-        List<String> notfoundInputTopics  = new ArrayList<>();
-        List<String> notFoundIntermediateTopics = new ArrayList<>();
-        List<String> internalTopics = new ArrayList<>();
-
-        if (inputTopics.size() > 0) {
-            System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
-            for (final String topic : inputTopics) {
-                if (allTopics.contains(topic)) {
-                    System.out.println("Topic - " + topic);
-                } else {
-                    notfoundInputTopics.add(topic);
-                }
-            }
-        }
-
-        if (intermediateTopics.size() > 0) {
-            System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
-            for (final String topic : intermediateTopics) {
-                if (!allTopics.contains(topic)) {
-                    System.err.println("Topic - " + topic);
-                } else {
-                    notFoundIntermediateTopics.add(topic);
-                }
-            }
-        }
-
-        for (final String topic : allTopics) {
-            if (isInternalTopic(topic)) {
-                internalTopics.add(topic);
-            }
-        }
-
-        if (internalTopics.size() > 0) {
-            System.out.println("Following internal topics offsets will be  reset to beginning (for consumer group " + groupId + ")");
-            for (String topic : internalTopics) {
-                System.out.println("Topic - " + topic);
-            }
-        }
-
-        if (internalTopics.size() > 0) {
-            System.out.println("Following internal topics  will be deleted");
-            for (String topic : internalTopics) {
-                System.out.println("Topic - " + topic);
-            }
-        }
-
-        if (notfoundInputTopics.size() > 0) {
-            System.out.println("Following input topics are not found, skipping them");
-            for (String topic : notfoundInputTopics) {
-                System.out.println("Topic - " + topic);
-            }
-        }
-
-        if (notFoundIntermediateTopics.size() > 0) {
-            System.out.println("Following intermediate topics are not found, skipping them");
-            for (String topic : notFoundIntermediateTopics) {
-                System.out.println("Topic - " + topic);
-            }
-        }
     }
 
     private void parseArguments(final String[] args) throws IOException {
@@ -236,39 +164,47 @@ public class StreamsResetter {
         }
     }
 
-    private void resetInputAndInternalAndSeekToEndIntermediateTopicOffsets() {
+    private void mayberesetInputAndInternalAndSeekToEndIntermediateTopicOffsets() {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
-        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
-            System.out.println("No input or intermediate topics specified. Skipping seek.");
-            return;
-        } else {
-            if (inputTopics.size() != 0) {
-                System.out.println("Resetting offsets to zero for input topics " + inputTopics + " and all internal topics.");
-            }
-            if (intermediateTopics.size() != 0) {
-                System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
+        final List<String> internalTopics = new ArrayList<>();
+
+        final List<String> notFoundInputTopics = new ArrayList<>();
+        final List<String> notFoundIntermediateTopics = new ArrayList<>();
+
+        Boolean dryRun = options.has(dryRunOption);
+        String groupId = options.valueOf(applicationIdOption);
+
+        if (!dryRun) {
+            if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
+                System.out.println("No input or intermediate topics specified. Skipping seek.");
+                return;
+            } else {
+                if (inputTopics.size() != 0) {
+                    System.out.println("Resetting offsets to zero for input topics " + inputTopics + " and all internal topics.");
+                }
+                if (intermediateTopics.size() != 0) {
+                    System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
+                }
             }
         }
-
-        final Properties config = new Properties();
-        config.putAll(consumerConfig);
-        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
-        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, options.valueOf(applicationIdOption));
-        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        else {
+            System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
+        }
 
         final Set<String> topicsToSubscribe = new HashSet<>(inputTopics.size() + intermediateTopics.size());
+
         for (final String topic : inputTopics) {
             if (!allTopics.contains(topic)) {
-                System.err.println("Input topic " + topic + " not found. Skipping.");
+                notFoundInputTopics.add(topic);
             } else {
                 topicsToSubscribe.add(topic);
             }
         }
         for (final String topic : intermediateTopics) {
             if (!allTopics.contains(topic)) {
-                System.err.println("Intermediate topic " + topic + " not found. Skipping.");
+                notFoundIntermediateTopics.add(topic);
             } else {
                 topicsToSubscribe.add(topic);
             }
@@ -276,8 +212,15 @@ public class StreamsResetter {
         for (final String topic : allTopics) {
             if (isInternalTopic(topic)) {
                 topicsToSubscribe.add(topic);
+                internalTopics.add(topic);
             }
         }
+
+        final Properties config = new Properties();
+        config.putAll(consumerConfig);
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+        config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
             client.subscribe(topicsToSubscribe);
@@ -298,23 +241,85 @@ public class StreamsResetter {
                 }
             }
 
-            if (inputAndInternalTopicPartitions.size() > 0) {
-                client.seekToBeginning(inputAndInternalTopicPartitions);
-            }
-            if (intermediateTopicPartitions.size() > 0) {
-                client.seekToEnd(intermediateTopicPartitions);
+            maybeSeekToBeginning(client, inputAndInternalTopicPartitions, internalTopics);
+
+            maybeSeekToEnd(client, intermediateTopicPartitions);
+
+            if (!dryRun) {
+                for (final TopicPartition p : partitions) {
+                    client.position(p);
+                }
+                client.commitSync();
             }
 
-            for (final TopicPartition p : partitions) {
-                client.position(p);
+            if (notFoundInputTopics.size() > 0) {
+                System.out.println("Following input topics are not found, skipping them");
+                for (String topic : notFoundInputTopics) {
+                    System.out.println("Topic - " + topic);
+                }
             }
-            client.commitSync();
+
+            if (notFoundIntermediateTopics.size() > 0) {
+                System.out.println("Following intermediate topics are not found, skipping them");
+                for (String topic : notFoundIntermediateTopics) {
+                    System.out.println("Topic - " + topic);
+                }
+            }
+            client.close();
+
         } catch (final RuntimeException e) {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
 
-        System.out.println("Done.");
+        if (!dryRun) {
+            System.out.println("Done.");
+        }
+    }
+
+    private void maybeSeekToEnd(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> intermediateTopicPartitions) {
+
+        final Boolean dryRun = options.has(dryRunOption);
+        final String groupId = options.valueOf(applicationIdOption);
+        final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
+
+        if (intermediateTopicPartitions.size() > 0) {
+            if (!dryRun) {
+                client.seekToEnd(intermediateTopicPartitions);
+            } else {
+                System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
+                for (String topic : intermediateTopics) {
+                    if (allTopics.contains(topic)) {
+                        System.out.println("Topic - " + topic);
+                    }
+                }
+            }
+        }
+
+    }
+
+    private void maybeSeekToBeginning(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputAndInternalTopicPartitions, List<String> internalTopics) {
+
+        final Boolean dryRun = options.has(dryRunOption);
+        final List<String> inputTopics = options.valuesOf(inputTopicsOption);
+        final String groupId = options.valueOf(applicationIdOption);
+
+        if (inputAndInternalTopicPartitions.size() > 0) {
+            if (!dryRun) {
+                client.seekToBeginning(inputAndInternalTopicPartitions);
+            } else {
+                System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
+                for (String topic : inputTopics) {
+                    if (allTopics.contains(topic)) {
+                        System.out.println("Topic - " + topic);
+                    }
+                }
+                System.out.println("Following internal topics offsets will be reset to beginning (for consumer group " + groupId + ")");
+                for (String topic : internalTopics) {
+                    System.out.println("Topic - " + topic);
+                }
+            }
+        }
     }
 
     private boolean isInputTopic(final String topic) {
@@ -325,16 +330,26 @@ public class StreamsResetter {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
     }
 
-    private void deleteInternalTopics(final ZkUtils zkUtils) {
-        System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
+    private void maybedeleteInternalTopics(final ZkUtils zkUtils) {
+        Boolean dryRun = options.has(dryRunOption);
+
+        if (!dryRun) {
+            System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
+        } else {
+            System.out.println("Following internal/auto-created topics will be Deleted for application " + options.valueOf(applicationIdOption));
+        }
 
         for (final String topic : allTopics) {
             if (isInternalTopic(topic)) {
-                final TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[]{
-                    "--zookeeper", options.valueOf(zookeeperOption),
-                    "--delete", "--topic", topic});
                 try {
-                    TopicCommand.deleteTopic(zkUtils, commandOptions);
+                    if (!dryRun) {
+                        final TopicCommand.TopicCommandOptions commandOptions = new TopicCommand.TopicCommandOptions(new String[]{
+                            "--zookeeper", options.valueOf(zookeeperOption),
+                            "--delete", "--topic", topic});
+                        TopicCommand.deleteTopic(zkUtils, commandOptions);
+                    } else {
+                        System.out.println("Topic - " + topic);
+                    }
                 } catch (final RuntimeException e) {
                     System.err.println("ERROR: Deleting topic " + topic + " failed.");
                     throw e;
@@ -342,7 +357,9 @@ public class StreamsResetter {
             }
         }
 
-        System.out.println("Done.");
+        if(!dryRun) {
+            System.out.println("Done.");
+        }
     }
 
     private boolean isInternalTopic(final String topicName) {
