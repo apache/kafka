@@ -110,7 +110,7 @@ public class KStreamTestDriver {
         final ProcessorNode prevNode = context.currentNode();
         final ProcessorNode currNode = sourceNodeByTopicName(topicName);
 
-        if (currNode != null){
+        if (currNode != null) {
             context.setRecordContext(createRecordContext(context.timestamp()));
             context.setCurrentNode(currNode);
             try {
