@@ -24,14 +24,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
-import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -44,8 +47,10 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
 public class ProducerPerformance {
+    private static final AtomicInteger ID = new AtomicInteger(0);
 
     public static void main(String[] args) throws Exception {
+
         ArgumentParser parser = argParser();
 
         try {
@@ -56,6 +61,10 @@ public class ProducerPerformance {
             long numRecords = res.getLong("numRecords");
             Integer recordSize = res.getInt("recordSize");
             int throughput = res.getInt("throughput");
+            int numThreads = res.getInt("numThreads");
+            if (numRecords < numThreads)
+                numThreads = (int) numRecords;
+            int valueBound = res.getInt("valueBound");
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
@@ -94,59 +103,39 @@ public class ProducerPerformance {
                     String[] pieces = prop.split("=");
                     if (pieces.length != 2)
                         throw new IllegalArgumentException("Invalid property: " + prop);
-                    props.put(pieces[0], pieces[1]);
+                    props.setProperty(pieces[0], pieces[1]);
                 }
+            if (valueBound <= 0)
+                throw new IllegalArgumentException("The value bound must be greater than 0");
 
             props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
             props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+            if (props.getProperty(ProducerConfig.CLIENT_ID_CONFIG) == null) {
+                props.setProperty(ProducerConfig.CLIENT_ID_CONFIG, "Producer-Performance-" + ID.getAndIncrement());
+            }
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(props);
 
             /* setup perf test */
-            byte[] payload = null;
-            Random random = new Random(0);
-            if (recordSize != null) {
-                payload = new byte[recordSize];
-                for (int i = 0; i < payload.length; ++i)
-                    payload[i] = (byte) (random.nextInt(26) + 65);
+            Stats stats = new Stats(numRecords, 5000, numThreads);
+            ProducerPerformanceThread[] producerPerformanceThreads = new ProducerPerformanceThread[numThreads];
+            long numRecordsPerThread = numRecords / numThreads;
+            for (int i = 0; i < numThreads; i++) {
+                // If number of records cannot be exactly divided by num threads, some threads need to send one more record.
+                int numRecordsAdjustment = i < numRecords % numThreads ? 1 : 0;
+                producerPerformanceThreads[i] = new ProducerPerformanceThread(producer, topicName,
+                        numRecordsPerThread + numRecordsAdjustment, recordSize, throughput, valueBound,
+                        payloadByteList, stats.threadStats(i));
             }
-            ProducerRecord<byte[], byte[]> record;
-            Stats stats = new Stats(numRecords, 5000);
-            long startMs = System.currentTimeMillis();
-
-            ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
-            for (int i = 0; i < numRecords; i++) {
-                if (payloadFilePath != null) {
-                    payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
-                }
-                record = new ProducerRecord<>(topicName, payload);
-
-                long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
-                producer.send(record, cb);
-
-                if (throttler.shouldThrottle(i, sendStartMs)) {
-                    throttler.throttle();
-                }
-            }
-
-            if (!shouldPrintMetrics) {
-                producer.close();
-
-                /* print final results */
-                stats.printTotal();
-            } else {
-                // Make sure all messages are sent before printing out the stats and the metrics
-                // We need to do this in a different branch for now since tests/kafkatest/sanity_checks/test_performance_services.py
-                // expects this class to work with older versions of the client jar that don't support flush().
-                producer.flush();
-
-                /* print final results */
-                stats.printTotal();
-
-                /* print out metrics */
+            for (ProducerPerformanceThread t : producerPerformanceThreads)
+                t.start();
+            for (ProducerPerformanceThread t : producerPerformanceThreads)
+                t.join();
+            producer.flush();
+            stats.printTotal();
+            if (shouldPrintMetrics)
                 ToolsUtils.printMetrics(producer.metrics());
-                producer.close();
-            }
+            /* print final results */
+            producer.close();
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
@@ -222,6 +211,24 @@ public class ProducerPerformance {
                 .metavar("THROUGHPUT")
                 .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
 
+        parser.addArgument("--num-threads")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .metavar("NUM-THREADS")
+                .dest("numThreads")
+                .setDefault(1)
+                .help("The number of producing threads.");
+
+        parser.addArgument("--value-bound")
+                .action(store())
+                .required(false)
+                .type(Integer.class)
+                .metavar("VALUE-BOUND")
+                .setDefault(26)
+                .dest("valueBound")
+                .help("The value bound of the random integers in message payload to simulate different compression ratio.");
+
         parser.addArgument("--producer-props")
                  .nargs("+")
                  .required(false)
@@ -250,7 +257,75 @@ public class ProducerPerformance {
     }
 
     private static class Stats {
-        private long start;
+        private static final long MAX_LATENCY_SAMPLES = 500000;
+        private final ThreadStats[] threadStatsArr;
+        private final long start;
+
+        public Stats(long numRecords, int reportingInterval, int numThreads) {
+            int numRecordsPerThread = (int) numRecords / numThreads;
+            int sampling = (int) (numRecordsPerThread / Math.min(numRecordsPerThread, MAX_LATENCY_SAMPLES / numThreads));
+            threadStatsArr = new ThreadStats[numThreads];
+            for (int i = 0; i < numThreads; i++) {
+                // If number of records cannot be exactly divided by num threads, some threads need to send one more
+                // record.
+                int numRecordsAdjustment = i < numRecords % numThreads ? 1 : 0;
+                threadStatsArr[i] = new ThreadStats(i, numRecordsPerThread + numRecordsAdjustment, reportingInterval, sampling);
+            }
+            this.start = System.currentTimeMillis();
+        }
+
+        public ThreadStats threadStats(int i) {
+            return threadStatsArr[i];
+        }
+
+        public void printTotal() {
+            long elapsed = System.currentTimeMillis() - start;
+            long totalCount = 0L;
+            long totalBytes = 0L;
+            long maxLatency = 0L;
+            long totalLatency = 0L;
+            int totalIndex = 0;
+            for (ThreadStats threadStats : threadStatsArr) {
+                totalCount += threadStats.count;
+                totalBytes += threadStats.bytes;
+                maxLatency = Math.max(maxLatency, threadStats.maxLatency);
+                totalLatency += threadStats.totalLatency;
+                totalIndex += threadStats.index;
+            }
+            int[] totalLatencies = new int[totalIndex];
+            int index = 0;
+            for (ThreadStats threadStats : threadStatsArr) {
+                for (int i = 0; i < threadStats.index; i++)
+                    totalLatencies[index++] = threadStats.latencies[i];
+            }
+            double recsPerSec = 1000.0 * totalCount / (double) elapsed;
+            double mbPerSec = 1000.0 * totalBytes / (double) elapsed / (1024.0 * 1024.0);
+            int[] percs = percentiles(totalLatencies, 0.5, 0.95, 0.99, 0.999);
+            System.out.printf("%d records sent, %2f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
+                              totalCount,
+                              recsPerSec,
+                              mbPerSec,
+                              totalLatency / (double) totalCount,
+                              (double) maxLatency,
+                              percs[0],
+                              percs[1],
+                              percs[2],
+                              percs[3]);
+        }
+
+        private static int[] percentiles(int[] latencies, double... percentiles) {
+            Arrays.sort(latencies, 0, latencies.length);
+            int[] values = new int[percentiles.length];
+            for (int i = 0; i < percentiles.length; i++) {
+                int index = (int) (percentiles[i] * latencies.length);
+                values[i] = latencies[index];
+            }
+            return values;
+        }
+    }
+
+    private static class ThreadStats {
+        private int threadId;
         private long windowStart;
         private int[] latencies;
         private int sampling;
@@ -266,14 +341,13 @@ public class ProducerPerformance {
         private long windowBytes;
         private long reportingInterval;
 
-        public Stats(long numRecords, int reportingInterval) {
-            this.start = System.currentTimeMillis();
+        public ThreadStats(int threadId, long numRecords, int reportingInterval, int sampling) {
+            this.threadId = threadId;
             this.windowStart = System.currentTimeMillis();
             this.index = 0;
             this.iteration = 0;
-            this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
+            this.sampling = sampling;
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
-            this.index = 0;
             this.maxLatency = 0;
             this.totalLatency = 0;
             this.windowCount = 0;
@@ -304,22 +378,23 @@ public class ProducerPerformance {
             }
         }
 
-        public Callback nextCompletion(long start, int bytes, Stats stats) {
-            Callback cb = new PerfCallback(this.iteration, start, bytes, stats);
+        public Callback nextCompletion(long start, int bytes, ThreadStats threadstats) {
+            Callback cb = new PerfCallback(this.iteration, start, bytes, threadstats);
             this.iteration++;
             return cb;
         }
 
         public void printWindow() {
-            long ellapsed = System.currentTimeMillis() - windowStart;
-            double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
-            double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
-            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
-                              windowCount,
-                              recsPerSec,
-                              mbPerSec,
-                              windowTotalLatency / (double) windowCount,
-                              (double) windowMaxLatency);
+            long elapsed = System.currentTimeMillis() - windowStart;
+            double recsPerSec = 1000.0 * windowCount / (double) elapsed;
+            double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
+            System.out.printf("[Thread-%d] %d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
+                    threadId,
+                    windowCount,
+                    recsPerSec,
+                    mbPerSec,
+                    windowTotalLatency / (double) windowCount,
+                    (double) windowMaxLatency);
         }
 
         public void newWindow() {
@@ -329,33 +404,67 @@ public class ProducerPerformance {
             this.windowTotalLatency = 0;
             this.windowBytes = 0;
         }
+    }
 
-        public void printTotal() {
-            long elapsed = System.currentTimeMillis() - start;
-            double recsPerSec = 1000.0 * count / (double) elapsed;
-            double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
-            int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
-                              count,
-                              recsPerSec,
-                              mbPerSec,
-                              totalLatency / (double) count,
-                              (double) maxLatency,
-                              percs[0],
-                              percs[1],
-                              percs[2],
-                              percs[3]);
+    private static final class ProducerPerformanceThread extends Thread {
+        private final Producer producer;
+        private final String topicName;
+        private final long numRecords;
+        private final int recordSize;
+        private final int throughput;
+        private final int valueBound;
+        private final List<byte[]> payloadByteList;
+        private final ThreadStats threadStats;
+        private final Random random = new Random();
+
+        ProducerPerformanceThread(Producer producer,
+                                  String topicName,
+                                  long numRecords,
+                                  int recordSize,
+                                  int throughput,
+                                  int valueBound,
+                                  List<byte[]> payloadByteList,
+                                  ThreadStats threadStats) {
+            this.producer = producer;
+            this.topicName = topicName;
+            this.numRecords = numRecords;
+            this.recordSize = recordSize;
+            this.throughput = throughput;
+            this.valueBound = valueBound;
+            this.payloadByteList = payloadByteList;
+            this.threadStats = threadStats;
         }
 
-        private static int[] percentiles(int[] latencies, int count, double... percentiles) {
-            int size = Math.min(count, latencies.length);
-            Arrays.sort(latencies, 0, size);
-            int[] values = new int[percentiles.length];
-            for (int i = 0; i < percentiles.length; i++) {
-                int index = (int) (percentiles[i] * size);
-                values[i] = latencies[index];
+        @Override
+        public void run() {
+
+            long startMs = System.currentTimeMillis();
+            ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
+
+            for (int i = 0; i < numRecords; i++) {
+                byte[] payload = payloadByteList == null || payloadByteList.isEmpty() ?
+                    newPayload() : payloadByteList.get(random.nextInt(payloadByteList.size()));
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(topicName, payload);
+                long sendStartMs = System.currentTimeMillis();
+                Callback cb = threadStats.nextCompletion(sendStartMs, payload.length, threadStats);
+                producer.send(record, cb);
+
+                if (throttler.shouldThrottle(i, sendStartMs))
+                    throttler.throttle();
             }
-            return values;
+        }
+
+        private byte[] newPayload() {
+            byte[] payload = new byte[recordSize];
+            if (valueBound > 0) {
+                ByteBuffer buffer = ByteBuffer.wrap(payload);
+                while (buffer.position() < buffer.limit() - 4) {
+                    buffer.putInt(random.nextInt(valueBound));
+                }
+            } else {
+                Arrays.fill(payload, (byte) 1);
+            }
+            return payload;
         }
     }
 
@@ -363,9 +472,9 @@ public class ProducerPerformance {
         private final long start;
         private final int iteration;
         private final int bytes;
-        private final Stats stats;
+        private final ThreadStats stats;
 
-        public PerfCallback(int iter, long start, int bytes, Stats stats) {
+        public PerfCallback(int iter, long start, int bytes, ThreadStats stats) {
             this.start = start;
             this.stats = stats;
             this.iteration = iter;
