@@ -23,7 +23,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.errors.{GroupCoordinatorNotAvailableException, WakeupException}
+import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.{Before, Test}
 
@@ -67,14 +67,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset == Map.empty
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset == Map.empty
     }, "Expected to have an empty assignations map.")
 
     consumerGroupCommand.close()
@@ -95,21 +89,15 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
-        assignmentsOption match {
-          case Some(assignments) =>
-            val sumOffset = assignments.filter(_.topic.exists(_ == topic1))
-              .filter(_.offset.isDefined)
-              .map(assignment => assignment.offset.get)
-              .foldLeft(0.toLong)(_ + _)
-            sumOffset == 100
-          case _ => false
-        }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
+      val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+      assignmentsOption match {
+        case Some(assignments) =>
+          val sumOffset = assignments.filter(_.topic.exists(_ == topic1))
+            .filter(_.offset.isDefined)
+            .map(assignment => assignment.offset.get)
+            .foldLeft(0.toLong)(_ + _)
+          sumOffset == 100
+        case _ => false
       }
     }, "Expected that consumer group has consumed all messages from topic/partition.")
 
@@ -120,14 +108,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand1.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand1.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
     }, "Expected the consumer group to reset to when offset was 50.")
 
     printConsumerGroup()
@@ -152,21 +134,14 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val executor = new ConsumerGroupExecutor(brokerList, 1, group, topic1)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
-        assignmentsOption match {
-          case Some(assignments) =>
-            val sumOffset = assignments.filter(_.topic.exists(_ == topic1))
-              .filter(_.offset.isDefined)
-              .map(assignment => assignment.offset.get)
-              .foldLeft(0.toLong)(_ + _)
-            sumOffset == 100
-          case _ => false
-        }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
+      val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+      assignmentsOption match {
+        case Some(assignments) =>
+          val sumOffset = (assignments.filter(_.topic.exists(_ == topic1))
+            .filter(_.offset.isDefined)
+            .map(assignment => assignment.offset.get) foldLeft 0.toLong)(_ + _)
+          sumOffset == 100
+        case _ => false
       }
     }, "Expected that consumer group has consumed all messages from topic/partition.")
 
@@ -177,14 +152,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand1.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 50 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false        
-      }
+      val assignmentsToReset = consumerGroupCommand1.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 50 }
     }, "Expected the consumer group to reset to when offset was 50.")
 
     printConsumerGroup()
@@ -204,14 +173,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
         val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+        assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
     }, "Expected the consumer group to reset to offset 0 (earliest by duration).")
 
     printConsumerGroup()
@@ -231,14 +194,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 100 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 100 }
     }, "Expected the consumer group to reset to offset 100 (latest by duration).")
 
     printConsumerGroup()
@@ -257,14 +214,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
     }, "Expected the consumer group to reset to offset 0 (earliest).")
 
     printConsumerGroup()
@@ -286,14 +237,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 200 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 200 })
     }, "Expected the consumer group to reset to offset 200 (latest).")
 
     printConsumerGroup()
@@ -315,14 +260,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 100 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 100 })
     }, "Expected the consumer group to reset to offset 100 (current).")
 
     printConsumerGroup()
@@ -336,21 +275,15 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
-        assignmentsOption match {
-          case Some(assignments) =>
-            val sumOffset = assignments.filter(_.topic.exists(_ == topic))
-              .filter(_.offset.isDefined)
-              .map(assignment => assignment.offset.get)
-              .foldLeft(0.toLong)(_ + _)
-            sumOffset == totalMessages
-          case _ => false
-        }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
+      val (_, assignmentsOption) = consumerGroupCommand.describeGroup()
+      assignmentsOption match {
+        case Some(assignments) =>
+          val sumOffset = assignments.filter(_.topic.exists(_ == topic))
+            .filter(_.offset.isDefined)
+            .map(assignment => assignment.offset.get)
+            .foldLeft(0.toLong)(_ + _)
+          sumOffset == totalMessages
+        case _ => false
       }
     }, "Expected the consumer group to consume all messages from topic.")
 
@@ -369,14 +302,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 1 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 1 })
     }, "Expected the consumer group to reset to offset 1 (specific offset).")
 
     printConsumerGroup()
@@ -397,14 +324,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 150 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 150 })
     }, "Expected the consumer group to reset to offset 150 (current + 50).")
 
     printConsumerGroup()
@@ -426,14 +347,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 50 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 50 })
     }, "Expected the consumer group to reset to offset 50 (current - 50).")
 
     printConsumerGroup()
@@ -454,14 +369,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 0 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 0 })
     }, "Expected the consumer group to reset to offset 0 (earliest by shift).")
 
     printConsumerGroup()
@@ -482,14 +391,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists({ assignment => assignment._2 == 200 })
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists({ assignment => assignment._2.offset() == 200 })
     }, "Expected the consumer group to reset to offset 200 (latest by shift).")
 
     printConsumerGroup()
@@ -508,14 +411,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 1, topic1, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
     }, "Expected the consumer group to reset to offset 0 (earliest).")
 
     printConsumerGroup()
@@ -534,14 +431,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 2, topic1, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 && assignment._1.partition.get == 1 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 && assignment._1.partition() == 1 }
     }, "Expected the consumer group to reset to offset 0 (earliest) in partition 1.")
 
     printConsumerGroup()
@@ -566,15 +457,9 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 1, topic2, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 && assignment._1.topic.get == topic1 } &&
-          assignmentsToReset.exists { assignment => assignment._2 == 0 && assignment._1.topic.get == topic2 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 && assignment._1.topic() == topic1 } &&
+        assignmentsToReset.exists { assignment => assignment._2.offset() == 0 && assignment._1.topic() == topic2 }
     }, "Expected the consumer group to reset to offset 0 (earliest).")
 
     printConsumerGroup()
@@ -600,15 +485,9 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     produceConsumeAndShutdown(consumerGroupCommand, 2, topic2, 100)
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 && assignment._1.partition.get == 1 && assignment._1.topic.get == topic1 }
-        assignmentsToReset.exists { assignment => assignment._2 == 0 && assignment._1.partition.get == 1 && assignment._1.topic.get == topic2 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 && assignment._1.partition() == 1 && assignment._1.topic() == topic1 }
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 && assignment._1.partition() == 1 && assignment._1.topic() == topic2 }
     }, "Expected the consumer group to reset to offset 0 (earliest) in partition 1.")
 
     printConsumerGroup()
@@ -630,17 +509,11 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     val file = File.createTempFile("reset", ".csv")
 
     TestUtils.waitUntilTrue(() => {
-      try {
-        val assignmentsToReset = consumerGroupCommand.resetOffsets()
-        val bw = new BufferedWriter(new FileWriter(file))
-        bw.write(consumerGroupCommand.exportAssignmentsToReset(assignmentsToReset))
-        bw.close()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 } && file.exists()
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+      val assignmentsToReset = consumerGroupCommand.resetOffsets()
+      val bw = new BufferedWriter(new FileWriter(file))
+      bw.write(consumerGroupCommand.exportAssignmentsToReset(assignmentsToReset))
+      bw.close()
+      assignmentsToReset.exists { assignment => assignment._2.offset() == 0 } && file.exists()
     }, "Expected the consume all messages and save reset offsets plan to file")
 
 
@@ -650,14 +523,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
 
     TestUtils.waitUntilTrue(() => {
-      try {
         val assignmentsToReset = consumerGroupCommandExec.resetOffsets()
-        assignmentsToReset.exists { assignment => assignment._2 == 0 }
-      } catch {
-        case _: GroupCoordinatorNotAvailableException | _: IllegalArgumentException =>
-          // Do nothing while the group initializes
-          false
-      }
+        assignmentsToReset.exists { assignment => assignment._2.offset() == 0 }
     }, "Expected the consumer group to reset to offset 0 (earliest) by file.")
 
     file.deleteOnExit()
