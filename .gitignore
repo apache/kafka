@@ -44,3 +44,6 @@ tests/venv
 .cache
 
 docs/generated/
+
+/core/.cache-main
+/core/.cache-tests
