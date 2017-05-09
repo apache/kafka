@@ -188,8 +188,7 @@ public class StreamsResetter {
                     System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
                 }
             }
-        }
-        else {
+        } else {
             System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
         }
 
@@ -357,7 +356,7 @@ public class StreamsResetter {
             }
         }
 
-        if(!dryRun) {
+        if (!dryRun) {
             System.out.println("Done.");
         }
     }
