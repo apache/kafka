@@ -30,9 +30,8 @@ import collection.JavaConversions._
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnTopicPartition: Int,
                                                 txnStateManager: TransactionStateManager,
-                                                txnMarkerChannel: TransactionMarkerChannel,
-                                                txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry],
-                                                txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]) extends RequestCompletionHandler with Logging {
+                                                txnMarkerChannelManager: TransactionMarkerChannelManager,
+                                                txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
   override def onComplete(response: ClientResponse): Unit = {
     val correlationId = response.requestHeader.correlationId
     if (response.wasDisconnected) {
@@ -40,7 +39,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
       // re-enqueue the markers
       for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
         val txnMarker = txnIdAndMarker.txnMarkerEntry
-        txnMarkerChannel.addTxnMarkersToSend(txnIdAndMarker.txnId,
+        txnMarkerChannelManager.addTxnMarkersToBrokerQueue(txnIdAndMarker.txnId,
           txnMarker.producerId(),
           txnMarker.producerEpoch(),
           txnMarker.transactionResult(),
@@ -59,7 +58,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         txnStateManager.getTransactionState(transactionalId) match {
           case None =>
             // txn topic partition has likely emigrated, just cancel it from the purgatory
-            txnMarkerPurgatory.cancelForKey(transactionalId)
+            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
           case Some(epochAndMetadata) =>
             val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
@@ -78,6 +77,8 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                        Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
                     retryPartitions += topicPartition
 
+                  // TODO: a few more error codes need to be handled: InvalidProducerEpoch
+
                   case other =>
                     throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
                 }
@@ -86,7 +87,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
             if (retryPartitions.nonEmpty) {
               // re-enqueue with possible new leaders of the partitions
-              txnMarkerChannel.addTxnMarkersToSend(
+              txnMarkerChannelManager.addTxnMarkersToBrokerQueue(
                 transactionalId,
                 txnMarker.producerId(),
                 txnMarker.producerEpoch(),
@@ -94,7 +95,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 txnMarker.coordinatorEpoch(),
                 retryPartitions.toSet)
             } else {
-              txnMarkerPurgatory.checkAndComplete(txnMarker.producerId)
+              txnMarkerChannelManager.completeSendMarkersForTxnId(transactionalId)
             }
         }
       }

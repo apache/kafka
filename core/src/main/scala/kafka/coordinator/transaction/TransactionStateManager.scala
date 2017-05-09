@@ -162,7 +162,7 @@ class TransactionStateManager(brokerId: Int,
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
-    def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
+    def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     val startMs = time.milliseconds()
     val loadedTransactions = new Pool[String, TransactionMetadata]
@@ -178,7 +178,7 @@ class TransactionStateManager(brokerId: Int,
         var currOffset = log.logStartOffset
 
         try {
-          while (currOffset < highWaterMark
+          while (currOffset < logEndOffset
             && loadingPartitions.contains(topicPartition.partition())
             && !shuttingDown.get()) {
             val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,

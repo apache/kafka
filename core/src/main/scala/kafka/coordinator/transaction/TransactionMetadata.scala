@@ -137,8 +137,8 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
   def prepareNoTransit(): TransactionMetadataTransition =
     prepareTransitionTo(state, producerEpoch.toShort, txnTimeoutMs, immutable.Set.empty[TopicPartition], txnStartTimestamp, txnLastUpdateTimestamp)
 
-  def prepareIncrementEpoch(newTxnTimeoutMs: Int,
-                            updateTimestamp: Long): TransactionMetadataTransition = {
+  def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
+                                    updateTimestamp: Long): TransactionMetadataTransition = {
 
     prepareTransitionTo(Empty, (producerEpoch + 1).toShort, newTxnTimeoutMs, immutable.Set.empty[TopicPartition], -1, updateTimestamp)
   }
@@ -190,6 +190,7 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
     }
   }
 
+  // TODO: instead of returning false, we could directly throw exception since it should never be expected
   def completeTransitionTo(newMetadata: TransactionMetadataTransition): Boolean = {
     // metadata transition is valid only if all the following conditions are met:
     //
@@ -287,6 +288,7 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
       producerEpoch == other.producerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
+      pendingState.equals(other.pendingState) &&
       topicPartitions.equals(other.topicPartitions) &&
       txnStartTimestamp.equals(other.txnStartTimestamp) &&
       txnLastUpdateTimestamp.equals(other.txnLastUpdateTimestamp)
@@ -294,7 +296,7 @@ private[coordinator] class TransactionMetadata(val producerId: Long,
   }
 
   override def hashCode(): Int = {
-    val state = Seq(producerId, txnTimeoutMs, topicPartitions, txnLastUpdateTimestamp)
+    val state = Seq(producerId, producerEpoch, txnTimeoutMs, state, pendingState, topicPartitions, txnStartTimestamp, txnLastUpdateTimestamp)
     state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

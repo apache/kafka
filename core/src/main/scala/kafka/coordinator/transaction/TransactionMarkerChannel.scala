@@ -38,7 +38,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
                                networkClient: NetworkClient,
                                time: Time) extends Logging {
 
-  class BrokerRequestQueue(private var destination: Node) {
+  class BrokerRequestQueue(@volatile private var destination: Node) {
 
     // keep track of the requests per txn topic partition so we can easily clear the queue
     // during partition emigration
@@ -89,13 +89,13 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     trace(s"Added marker ${txnIdAndMarker.txnMarkerEntry} for transactional id ${txnIdAndMarker.txnId} to destination broker $brokerId")
   }
 
-  private[transaction] def drainQueuedTransactionMarkers(txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): Iterable[RequestAndCompletionHandler] = {
+  private[transaction] def drainQueuedTransactionMarkers(): Iterable[RequestAndCompletionHandler] = {
     brokerStateMap.flatMap { case (brokerId: Int, brokerRequestQueue: BrokerRequestQueue) =>
       brokerRequestQueue.forEachTxnTopicPartition { case(partitionId, queue) =>
         val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
         queue.drainTo(txnIdAndMarkerEntries)
         val markersToSend: java.util.List[TxnMarkerEntry] = txnIdAndMarkerEntries.asScala.map(_.txnMarkerEntry).asJava
-        val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(brokerId, partitionId, txnStateManager, this, txnIdAndMarkerEntries, txnMarkerPurgatory)
+        val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(brokerId, partitionId, txnStateManager, this, txnIdAndMarkerEntries)
         RequestAndCompletionHandler(brokerRequestQueue.node, new WriteTxnMarkersRequest.Builder(markersToSend), requestCompletionHandler)
       }
     }
@@ -113,6 +113,7 @@ class TransactionMarkerChannel(interBrokerListenerName: ListenerName,
     val partitionsByDestination: immutable.Map[Node, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
       var brokerNode: Option[Node] = None
 
+      // TODO: instead of retry until succeed, we can first put it into an unknown broker queue and let the sender thread to look for its broker and migrate them
       while (brokerNode.isEmpty) {
         brokerNode = metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
 

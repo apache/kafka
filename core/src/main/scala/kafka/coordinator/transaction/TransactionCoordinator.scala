@@ -125,7 +125,7 @@ class TransactionCoordinator(brokerId: Int,
             // with the transactional id at the same time (hence reference equality will fail);
             // in this case we will treat it as the metadata has existed already
             txnMetadata synchronized {
-              if (txnMetadata != createdMetadata) {
+              if (!txnMetadata.eq(createdMetadata)) {
                 initPidWithExistingMetadata(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
               } else {
                 Right(coordinatorEpoch, txnMetadata.prepareNewPid(time.milliseconds()))
@@ -187,12 +187,12 @@ class TransactionCoordinator(brokerId: Int,
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
         case PrepareAbort | PrepareCommit =>
-          // reply to client and let it retry immediately
+          // reply to client and let client backoff and retry
           Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
 
         case CompleteAbort | CompleteCommit | Empty =>
           // try to append and then update
-          Right(coordinatorEpoch, txnMetadata.prepareIncrementEpoch(transactionTimeoutMs, time.milliseconds()))
+          Right(coordinatorEpoch, txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.milliseconds()))
 
         case _ =>
           // indicate to abort the current ongoing txn first

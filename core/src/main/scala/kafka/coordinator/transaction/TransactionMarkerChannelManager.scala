@@ -17,19 +17,24 @@
 package kafka.coordinator.transaction
 
 
+import java.util
+import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
+
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.Logging
 import org.apache.kafka.clients._
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
-import org.apache.kafka.common.requests.TransactionResult
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
-
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 
 import collection.JavaConverters._
+import scala.collection.{concurrent, immutable, mutable}
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
@@ -47,7 +52,6 @@ object TransactionMarkerChannelManager {
       config.saslMechanismInterBrokerProtocol,
       config.saslInterBrokerHandshakeRequestEnable
     )
-    val threadName = "TxnMarkerSenderThread-" + config.brokerId
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       config.connectionsMaxIdleMs,
@@ -61,7 +65,7 @@ object TransactionMarkerChannelManager {
     val networkClient = new NetworkClient(
       selector,
       new ManualMetadataUpdater(),
-      threadName,
+      s"broker-${config.brokerId}-txn-marker-sender",
       1,
       50,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
@@ -71,43 +75,105 @@ object TransactionMarkerChannelManager {
       false,
       new ApiVersions
     )
-    val txnMarkerChannel = new TransactionMarkerChannel(config.interBrokerListenerName, txnStateManager, metadataCache, networkClient, time)
-
-    val txnMarkerSendThread: InterBrokerSendThread = {
-      networkClient.wakeup()
-      new InterBrokerSendThread(threadName, networkClient, requestGenerator(txnMarkerChannel, txnMarkerPurgatory), time)
-    }
 
     new TransactionMarkerChannelManager(config,
       metadataCache,
+      networkClient,
       txnStateManager,
-      txnMarkerSendThread,
-      txnMarkerChannel,
-      txnMarkerPurgatory)
+      txnMarkerPurgatory,
+      time)
   }
 
-  private[transaction] def requestGenerator(transactionMarkerChannel: TransactionMarkerChannel,
-                                            txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]): () => Iterable[RequestAndCompletionHandler] = {
-    () => transactionMarkerChannel.drainQueuedTransactionMarkers(txnMarkerPurgatory)
+  private[transaction] def requestGenerator(transactionMarkerChannelManager: TransactionMarkerChannelManager): () => Iterable[RequestAndCompletionHandler] = {
+    () => transactionMarkerChannelManager.drainQueuedTransactionMarkers()
   }
 }
 
 
-
 class TransactionMarkerChannelManager(config: KafkaConfig,
                                       metadataCache: MetadataCache,
+                                      networkClient: NetworkClient,
                                       txnStateManager: TransactionStateManager,
-                                      txnMarkerSendThread: InterBrokerSendThread,
-                                      txnMarkerChannel: TransactionMarkerChannel,
-                                      txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker]) extends Logging {
+                                      txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
+                                      time: Time) extends Logging {
+
+  class BrokerRequestQueue(@volatile private var destination: Node) {
+
+    // keep track of the requests per txn topic partition so we can easily clear the queue
+    // during partition emigration
+    private val markersPerTxnTopicPartition: concurrent.Map[Int, BlockingQueue[TxnIdAndMarkerEntry]]
+    = concurrent.TrieMap.empty[Int, BlockingQueue[TxnIdAndMarkerEntry]]
+
+    def removeMarkersForTxnTopicPartition(partition: Int): Option[BlockingQueue[TxnIdAndMarkerEntry]] = {
+      markersPerTxnTopicPartition.remove(partition)
+    }
+
+    def maybeUpdateNode(node: Node): Unit = {
+      destination = node
+    }
+
+    def addMarkers(txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry): Unit = {
+      val queue = markersPerTxnTopicPartition.getOrElseUpdate(txnTopicPartition, new LinkedBlockingQueue[TxnIdAndMarkerEntry]())
+      queue.add(txnIdAndMarker)
+    }
+
+    def forEachTxnTopicPartition[B](f:(Int, BlockingQueue[TxnIdAndMarkerEntry]) => B): mutable.Iterable[B] =
+      markersPerTxnTopicPartition.filter { case(_, queue) => !queue.isEmpty }
+        .map { case(partition:Int, queue:BlockingQueue[TxnIdAndMarkerEntry]) => f(partition, queue) }
+
+    def node: Node = destination
+
+    def totalQueuedRequests(): Int = markersPerTxnTopicPartition.map { case(_, queue) => queue.size()}.sum
+  }
+
+  private val brokerStateMap: concurrent.Map[Int, BrokerRequestQueue] = concurrent.TrieMap.empty[Int, BrokerRequestQueue]
+
+  private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
+
+  // TODO: What is reasonable for this
+  private val brokerNotAliveBackoffMs = 10
+
+  private val txnMarkerSendThread: InterBrokerSendThread = {
+    new InterBrokerSendThread("TxnMarkerSenderThread-" + config.brokerId, networkClient, drainQueuedTransactionMarkers, time)
+  }
 
   def start(): Unit = {
     txnMarkerSendThread.start()
+    networkClient.wakeup()
   }
 
   def shutdown(): Unit = {
     txnMarkerSendThread.shutdown()
-    txnMarkerChannel.clear()
+    brokerStateMap.clear()
+  }
+
+  // visible for testing
+  private[transaction] def queueForBroker(brokerId: Int) = {
+    brokerStateMap.get(brokerId)
+  }
+
+  private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry) {
+    val brokerId = broker.id
+
+    // we do not synchronize on the update of the broker node with the enqueuing,
+    // since even if there is a race condition we will just retry
+    val brokerRequestQueue = brokerStateMap.getOrElseUpdate(brokerId, new BrokerRequestQueue(broker))
+    brokerRequestQueue.maybeUpdateNode(broker)
+    brokerRequestQueue.addMarkers(txnTopicPartition, txnIdAndMarker)
+
+    trace(s"Added marker ${txnIdAndMarker.txnMarkerEntry} for transactional id ${txnIdAndMarker.txnId} to destination broker $brokerId")
+  }
+
+  private[transaction] def drainQueuedTransactionMarkers(): Iterable[RequestAndCompletionHandler] = {
+    brokerStateMap.flatMap { case (brokerId: Int, brokerRequestQueue: BrokerRequestQueue) =>
+      brokerRequestQueue.forEachTxnTopicPartition { case(partitionId, queue) =>
+        val txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry] = new util.ArrayList[TxnIdAndMarkerEntry]()
+        queue.drainTo(txnIdAndMarkerEntries)
+        val markersToSend: java.util.List[TxnMarkerEntry] = txnIdAndMarkerEntries.asScala.map(_.txnMarkerEntry).asJava
+        val requestCompletionHandler = new TransactionMarkerRequestCompletionHandler(brokerId, partitionId, txnStateManager, this, txnIdAndMarkerEntries)
+        RequestAndCompletionHandler(brokerRequestQueue.node, new WriteTxnMarkersRequest.Builder(markersToSend), requestCompletionHandler)
+      }
+    }
   }
 
   def addTxnMarkersToSend(transactionalId: String,
@@ -168,20 +234,54 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     // watch for both the transactional id and the transaction topic partition id,
     // so we can cancel all the delayed operations for the same partition id;
     // NOTE this is only possible because the hashcode of Int / String never overlaps
+
+    // TODO: if the delayed txn marker will always have infinite timeout, we can replace it with a map
     val delayedTxnMarker = new DelayedTxnMarker(txnMetadata, appendToLogCallback)
     val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
     txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId, txnTopicPartition))
 
-    txnMarkerChannel.addTxnMarkersToSend(transactionalId,
-      txnMetadata.producerId,
-      txnMetadata.producerEpoch,
-      txnResult,
-      coordinatorEpoch,
-      txnMetadata.topicPartitions.toSet)
+    addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId, txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
+  }
+
+  def addTxnMarkersToBrokerQueue(transactionalId: String, pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
+    val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
+    val partitionsByDestination: immutable.Map[Node, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
+      var brokerNode: Option[Node] = None
+
+      // TODO: instead of retry until succeed, we can first put it into an unknown broker queue and let the sender thread to look for its broker and migrate them
+      while (brokerNode.isEmpty) {
+        brokerNode = metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
+
+        if (brokerNode.isEmpty) {
+          trace(s"Couldn't find leader endpoint for partition: $topicPartition, retrying.")
+          time.sleep(brokerNotAliveBackoffMs)
+        }
+      }
+      brokerNode.get
+    }
+
+    for ((broker: Node, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
+      val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, topicPartitions.toList.asJava))
+      addMarkersForBroker(broker, txnTopicPartition, txnIdAndMarker)
+    }
+
+    networkClient.wakeup()
   }
 
   def removeMarkersForTxnTopicPartition(txnTopicPartitionId: Int): Unit = {
     txnMarkerPurgatory.cancelForKey(txnTopicPartitionId)
-    txnMarkerChannel.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
+    brokerStateMap.foreach { case(_, brokerQueue) =>
+      brokerQueue.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
+    }
+  }
+
+  def removeMarkersForTxnId(transactionalId: String): Unit = {
+    // we do not need to clear the queue since it should have
+    // already been drained by the sender thread
+    txnMarkerPurgatory.cancelForKey(transactionalId)
+  }
+
+  def completeSendMarkersForTxnId(transactionalId: String): Unit = {
+    txnMarkerPurgatory.checkAndComplete(transactionalId)
   }
 }

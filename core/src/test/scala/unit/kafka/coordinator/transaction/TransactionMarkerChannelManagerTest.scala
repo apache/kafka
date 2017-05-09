@@ -38,10 +38,6 @@ class TransactionMarkerChannelManagerTest {
   private val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   private val interBrokerSendThread = EasyMock.createNiceMock(classOf[InterBrokerSendThread])
   private val networkClient = EasyMock.createNiceMock(classOf[NetworkClient])
-  private val channel = new TransactionMarkerChannel(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
-    metadataCache,
-    networkClient,
-    new MockTime())
   private val purgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("txn-purgatory-name",
     new MockTimer,
     reaperEnabled = false)
