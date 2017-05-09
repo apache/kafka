@@ -142,19 +142,16 @@ object ConsumerGroupCommand extends Logging {
     }
   }
 
-  def printAssignmentToReset(groupAssignmentsToReset: Map[PartitionAssignmentState, Long]): Unit = {
-    print("\n%-30s %-10s %-15s %-15s %-10s %-50s".format("TOPIC", "PARTITION", "NEW-OFFSET", "NEW-LAG", "LOG-END-OFFSET", "CONSUMER-ID"))
+  def printAssignmentToReset(groupAssignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): Unit = {
+    print("\n%-30s %-10s %-15s".format("TOPIC", "PARTITION", "NEW-OFFSET"))
     println()
 
     groupAssignmentsToReset.foreach {
-      case (consumerAssignment, newOffset) =>
-        print("%-30s %-10s %-15s %-15s %-15s %-10s".format(
-          consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE),
-          consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
-          newOffset,
-          consumerAssignment.logEndOffset.map{endOffset => endOffset - newOffset}.getOrElse(MISSING_COLUMN_VALUE),
-          consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
-          consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE)))
+      case (consumerAssignment, offsetAndMetadata) =>
+        print("%-30s %-10s %-15s".format(
+          consumerAssignment.topic(),
+          consumerAssignment.partition(),
+          offsetAndMetadata.offset()))
         println()
     }
   }
@@ -227,9 +224,9 @@ object ConsumerGroupCommand extends Logging {
     }
 
 
-    def resetOffsets(): Map[PartitionAssignmentState, Long] = throw new UnsupportedOperationException
+    def resetOffsets(): Map[TopicPartition, OffsetAndMetadata] = throw new UnsupportedOperationException
 
-    def exportAssignmentsToReset(assignmentsToReset: Map[PartitionAssignmentState, Long]): String = throw new UnsupportedOperationException
+    def exportAssignmentsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = throw new UnsupportedOperationException
   }
 
   class ZkConsumerGroupService(val opts: ConsumerGroupCommandOptions) extends ConsumerGroupService {
@@ -709,8 +706,8 @@ object ConsumerGroupCommand extends Logging {
       zonedDateTime.toInstant.toEpochMilli
     }
 
-    override def exportAssignmentsToReset(assignmentsToReset: Map[PartitionAssignmentState, Long]): String = {
-      val rows = assignmentsToReset.map { case (k,v) => s"${k.topic.get},${k.partition.get},$v" }(collection.breakOut): List[String]
+    override def exportAssignmentsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = {
+      val rows = assignmentsToReset.map { case (k,v) => s"${k.topic()},${k.partition()},${v.offset()}" }(collection.breakOut): List[String]
       rows.foldRight("")(_ + "\n" + _)
     }
 
