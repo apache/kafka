@@ -88,7 +88,7 @@ public class KStreamBuilderTest {
 
 
     @Test
-    public void shouldHaveSinkTopicForStreamTo() {
+    public void shouldNotTryProcessingFromSinkTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
         source.to("topic-sink");
 
@@ -101,24 +101,28 @@ public class KStreamBuilderTest {
 
         driver.process("topic-source", "A", "aa");
 
+        // no exception was thrown
         assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
     }
 
     @Test
-    public void shouldHaveSinkTopicForStreamThrough() {
+    public void shouldTryProcessingFromThoughTopic() {
         final KStream<String, String> source = builder.stream("topic-source");
-        source.through("topic-sink");
+        final KStream<String, String> through = source.through("topic-sink");
 
-        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
 
-        source.process(processorSupplier);
+        source.process(sourceProcessorSupplier);
+        through.process(throughProcessorSupplier);
 
         driver = new KStreamTestDriver(builder);
         driver.setTime(0L);
 
         driver.process("topic-source", "A", "aa");
 
-        assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
     }
 
     @Test

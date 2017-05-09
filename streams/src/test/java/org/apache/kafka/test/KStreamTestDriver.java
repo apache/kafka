@@ -22,12 +22,11 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -111,17 +110,14 @@ public class KStreamTestDriver {
         final ProcessorNode prevNode = context.currentNode();
         final ProcessorNode currNode = sourceNodeByTopicName(topicName);
 
-        // if currNode is null, check if this topic is a changelog topic;
-        // if yes, skip
-        if (topicName.endsWith(ProcessorStateManager.STATE_CHANGELOG_TOPIC_SUFFIX)) {
-            return;
-        }
-        context.setRecordContext(createRecordContext(context.timestamp()));
-        context.setCurrentNode(currNode);
-        try {
-            context.forward(key, value);
-        } finally {
-            context.setCurrentNode(prevNode);
+        if (currNode != null){
+            context.setRecordContext(createRecordContext(context.timestamp()));
+            context.setCurrentNode(currNode);
+            try {
+                context.forward(key, value);
+            } finally {
+                context.setCurrentNode(prevNode);
+            }
         }
     }
 
