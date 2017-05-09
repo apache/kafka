@@ -609,7 +609,7 @@ project(':core') {
 
   task genConsumerMetricsDocs(type: JavaExec) {
     classpath = sourceSets.test.runtimeClasspath
-    main = 'org.apache.kafka.clients.consumer.ConsumerMetrics'
+    main = 'org.apache.kafka.clients.consumer.internals.ConsumerMetrics'
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "consumer_metrics.html").newOutputStream()
   }
