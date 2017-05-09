@@ -37,21 +37,36 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
-    public static final int TOPIC_CREATION_TIMEOUT = 30000;
+    private static final int TOPIC_CREATION_TIMEOUT = 30000;
     private EmbeddedZookeeper zookeeper = null;
     private final KafkaEmbedded[] brokers;
     private final Properties brokerConfig;
+    public final MockTime time;
 
     public EmbeddedKafkaCluster(final int numBrokers) {
         this(numBrokers, new Properties());
     }
 
-    public EmbeddedKafkaCluster(final int numBrokers, final Properties brokerConfig) {
-        brokers = new KafkaEmbedded[numBrokers];
-        this.brokerConfig = brokerConfig;
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig) {
+        this(numBrokers, brokerConfig, System.currentTimeMillis());
     }
 
-    public final MockTime time = new MockTime();
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final long mockTimeMillisStart) {
+        this(numBrokers, brokerConfig, mockTimeMillisStart, System.nanoTime());
+    }
+
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final long mockTimeMillisStart,
+                                final long mockTimeNanoStart) {
+        brokers = new KafkaEmbedded[numBrokers];
+        this.brokerConfig = brokerConfig;
+        time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
+
+    }
 
     /**
      * Creates and starts a Kafka cluster.
@@ -82,8 +97,9 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     }
 
     private void putIfAbsent(final Properties props, final String propertyKey, final Object propertyValue) {
-        if (!props.containsKey(propertyKey))
+        if (!props.containsKey(propertyKey)) {
             brokerConfig.put(propertyKey, propertyValue);
+        }
     }
 
     /**
@@ -115,10 +131,12 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         return brokers[0].brokerList();
     }
 
+    @Override
     protected void before() throws Throwable {
         start();
     }
 
+    @Override
     protected void after() {
         stop();
     }

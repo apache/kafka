@@ -79,11 +79,50 @@ public class KStreamBuilderTest {
         assertEquals("Y-0000000001", builder.newName("Y-"));
         assertEquals("Z-0000000002", builder.newName("Z-"));
 
-        KStreamBuilder newBuilder = new KStreamBuilder();
+        final KStreamBuilder newBuilder = new KStreamBuilder();
 
         assertEquals("X-0000000000", newBuilder.newName("X-"));
         assertEquals("Y-0000000001", newBuilder.newName("Y-"));
         assertEquals("Z-0000000002", newBuilder.newName("Z-"));
+    }
+
+
+    @Test
+    public void shouldNotTryProcessingFromSinkTopic() {
+        final KStream<String, String> source = builder.stream("topic-source");
+        source.to("topic-sink");
+
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+
+        source.process(processorSupplier);
+
+        driver = new KStreamTestDriver(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-source", "A", "aa");
+
+        // no exception was thrown
+        assertEquals(Utils.mkList("A:aa"), processorSupplier.processed);
+    }
+
+    @Test
+    public void shouldTryProcessingFromThoughTopic() {
+        final KStream<String, String> source = builder.stream("topic-source");
+        final KStream<String, String> through = source.through("topic-sink");
+
+        final MockProcessorSupplier<String, String> sourceProcessorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
+
+        source.process(sourceProcessorSupplier);
+        through.process(throughProcessorSupplier);
+
+        driver = new KStreamTestDriver(builder);
+        driver.setTime(0L);
+
+        driver.process("topic-source", "A", "aa");
+
+        assertEquals(Utils.mkList("A:aa"), sourceProcessorSupplier.processed);
+        assertEquals(Utils.mkList("A:aa"), throughProcessorSupplier.processed);
     }
 
     @Test
@@ -101,14 +140,14 @@ public class KStreamBuilderTest {
 
     @Test
     public void testMerge() {
-        String topic1 = "topic-1";
-        String topic2 = "topic-2";
+        final String topic1 = "topic-1";
+        final String topic2 = "topic-2";
 
-        KStream<String, String> source1 = builder.stream(topic1);
-        KStream<String, String> source2 = builder.stream(topic2);
-        KStream<String, String> merged = builder.merge(source1, source2);
+        final KStream<String, String> source1 = builder.stream(topic1);
+        final KStream<String, String> source2 = builder.stream(topic2);
+        final KStream<String, String> merged = builder.merge(source1, source2);
 
-        MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
         driver = new KStreamTestDriver(builder);

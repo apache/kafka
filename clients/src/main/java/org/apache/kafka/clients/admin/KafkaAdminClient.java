@@ -1011,6 +1011,8 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeClusterResults describeCluster(DescribeClusterOptions options) {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<String> clusterIdFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -1024,14 +1026,19 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
                 describeClusterFuture.complete(response.brokers());
+                controllerFuture.complete(response.controller());
+                clusterIdFuture.complete(response.clusterId());
             }
 
             @Override
             void handleFailure(Throwable throwable) {
                 describeClusterFuture.completeExceptionally(throwable);
+                controllerFuture.completeExceptionally(throwable);
+                clusterIdFuture.completeExceptionally(throwable);
             }
         }, now);
-        return new DescribeClusterResults(describeClusterFuture);
+
+        return new DescribeClusterResults(describeClusterFuture, controllerFuture, clusterIdFuture);
     }
 
     @Override
