@@ -66,6 +66,7 @@ public class MemoryRecordsBuilder {
     private final long baseOffset;
     private final long logAppendTime;
     private final boolean isTransactional;
+    private final boolean isControlBatch;
     private final int partitionLeaderEpoch;
     private final int writeLimit;
     private final int initialCapacity;
@@ -112,16 +113,17 @@ public class MemoryRecordsBuilder {
                                 short producerEpoch,
                                 int baseSequence,
                                 boolean isTransactional,
+                                boolean isControlBatch,
                                 int partitionLeaderEpoch,
                                 int writeLimit) {
         if (magic > RecordBatch.MAGIC_VALUE_V0 && timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("TimestampType must be set for magic >= 0");
-
-        if (isTransactional) {
-            if (magic < RecordBatch.MAGIC_VALUE_V2)
-                throw new IllegalArgumentException("Transactional messages are not supported for magic " + magic);
+        if (magic < RecordBatch.MAGIC_VALUE_V2) {
+            if (isTransactional)
+                throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
+            if (isControlBatch)
+                throw new IllegalArgumentException("Control records are not supported for magic " + magic);
         }
-
 
         this.magic = magic;
         this.timestampType = timestampType;
@@ -137,6 +139,7 @@ public class MemoryRecordsBuilder {
         this.producerEpoch = producerEpoch;
         this.baseSequence = baseSequence;
         this.isTransactional = isTransactional;
+        this.isControlBatch = isControlBatch;
         this.partitionLeaderEpoch = partitionLeaderEpoch;
         this.writeLimit = writeLimit;
         this.initialCapacity = buffer.capacity();
@@ -254,7 +257,7 @@ public class MemoryRecordsBuilder {
             if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
                 throw new IllegalArgumentException("Invalid negative producer epoch");
 
-            if (baseSequence == RecordBatch.NO_SEQUENCE)
+            if (baseSequence < 0 && !isControlBatch)
                 throw new IllegalArgumentException("Invalid negative sequence number used");
 
             if (magic < RecordBatch.MAGIC_VALUE_V2)
@@ -298,7 +301,7 @@ public class MemoryRecordsBuilder {
         }
 
         DefaultRecordBatch.writeHeader(buffer, baseOffset, offsetDelta, size, magic, compressionType, timestampType,
-                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional,
+                baseTimestamp, maxTimestamp, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch,
                 partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
@@ -326,26 +329,26 @@ public class MemoryRecordsBuilder {
     }
 
     private long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
-                                 ByteBuffer value, Header[] headers) {
+                                  ByteBuffer value, Header[] headers) {
         try {
+            if (isControlRecord != isControlBatch)
+                throw new IllegalArgumentException("Control records can only be appended to control batches");
+
             if (lastOffset != null && offset <= lastOffset)
-                throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s (Offsets must increase monotonically).", offset, lastOffset));
+                throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
+                        "(Offsets must increase monotonically).", offset, lastOffset));
 
             if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
                 throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
 
-            if (magic < RecordBatch.MAGIC_VALUE_V2) {
-                if (isControlRecord)
-                    throw new IllegalArgumentException("Magic v" + magic + " does not support control records");
-                if (headers != null && headers.length > 0)
-                    throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
-            }
+            if (magic < RecordBatch.MAGIC_VALUE_V2 && headers != null && headers.length > 0)
+                throw new IllegalArgumentException("Magic v" + magic + " does not support record headers");
 
             if (baseTimestamp == null)
                 baseTimestamp = timestamp;
 
             if (magic > RecordBatch.MAGIC_VALUE_V1)
-                return appendDefaultRecord(offset, isControlRecord, timestamp, key, value, headers);
+                return appendDefaultRecord(offset, timestamp, key, value, headers);
             else
                 return appendLegacyRecord(offset, timestamp, key, value);
         } catch (IOException e) {
@@ -388,7 +391,7 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
-        return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
+        return appendWithOffset(offset, timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
     }
 
     /**
@@ -400,7 +403,7 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value) {
-        return appendWithOffset(offset, false, timestamp, key, value, Record.EMPTY_HEADERS);
+        return appendWithOffset(offset, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
     /**
@@ -410,7 +413,7 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long appendWithOffset(long offset, SimpleRecord record) {
-        return appendWithOffset(offset, false, record.timestamp(), record.key(), record.value(), record.headers());
+        return appendWithOffset(offset, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
 
@@ -434,7 +437,7 @@ public class MemoryRecordsBuilder {
      * @return crc of the record
      */
     public long append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
-        return appendWithOffset(nextSequentialOffset(), false, timestamp, key, value, headers);
+        return appendWithOffset(nextSequentialOffset(), timestamp, key, value, headers);
     }
 
     /**
@@ -476,12 +479,21 @@ public class MemoryRecordsBuilder {
      * @param value The control record value
      * @return crc of the record
      */
-    public long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
+    private long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
         Struct keyStruct = type.recordKey();
         ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
         keyStruct.writeTo(key);
         key.flip();
         return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, Record.EMPTY_HEADERS);
+    }
+
+    public long appendEndTxnMarker(long timestamp, EndTransactionMarker marker) {
+        if (producerId == RecordBatch.NO_PRODUCER_ID)
+            throw new IllegalArgumentException("End transaction marker requires a valid producerId");
+        if (!isTransactional)
+            throw new IllegalArgumentException("End transaction marker depends on batch transactional flag being enabled");
+        ByteBuffer value = marker.serializeValue();
+        return appendControlRecord(timestamp, marker.controlType(), value);
     }
 
     /**
@@ -509,8 +521,7 @@ public class MemoryRecordsBuilder {
      * @param record the record to add
      */
     public void append(Record record) {
-        appendWithOffset(record.offset(), record.isControlRecord(), record.timestamp(), record.key(), record.value(),
-                record.headers());
+        appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     /**
@@ -519,8 +530,7 @@ public class MemoryRecordsBuilder {
      * @param record The record to add
      */
     public void appendWithOffset(long offset, Record record) {
-        appendWithOffset(offset, record.isControlRecord(), record.timestamp(), record.key(), record.value(),
-                record.headers());
+        appendWithOffset(offset, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     /**
@@ -542,12 +552,12 @@ public class MemoryRecordsBuilder {
         appendWithOffset(nextSequentialOffset(), record);
     }
 
-    private long appendDefaultRecord(long offset, boolean isControlRecord, long timestamp,
-                                     ByteBuffer key, ByteBuffer value, Header[] headers) throws IOException {
+    private long appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
+                                     Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
-        long crc = DefaultRecord.writeTo(appendStream, isControlRecord, offsetDelta, timestampDelta, key, value, headers);
+        long crc = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
         // TODO: The crc is useless for the new message format. Maybe we should let writeTo return the written size?
         recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value, headers));
         return crc;

@@ -388,12 +388,18 @@ private[log] class Cleaner(val id: Int,
     logFile.delete()
     val indexFile = new File(segments.head.index.file.getPath + Log.CleanedFileSuffix)
     val timeIndexFile = new File(segments.head.timeIndex.file.getPath + Log.CleanedFileSuffix)
+    val txnIndexFile = new File(segments.head.txnIndex.file.getPath + Log.CleanedFileSuffix)
     indexFile.delete()
     timeIndexFile.delete()
+    txnIndexFile.delete()
+
+    val startOffset = segments.head.baseOffset
     val records = FileRecords.open(logFile, false, log.initFileSize(), log.config.preallocate)
-    val index = new OffsetIndex(indexFile, segments.head.baseOffset, segments.head.index.maxIndexSize)
-    val timeIndex = new TimeIndex(timeIndexFile, segments.head.baseOffset, segments.head.timeIndex.maxIndexSize)
-    val cleaned = new LogSegment(records, index, timeIndex, segments.head.baseOffset, segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
+    val index = new OffsetIndex(indexFile, startOffset, segments.head.index.maxIndexSize)
+    val timeIndex = new TimeIndex(timeIndexFile, startOffset, segments.head.timeIndex.maxIndexSize)
+    val txnIndex = new TransactionIndex(startOffset, txnIndexFile)
+    val cleaned = new LogSegment(records, index, timeIndex, txnIndex, startOffset,
+      segments.head.indexIntervalBytes, log.config.randomSegmentJitter, time)
 
     try {
       // clean segments into the new destination segment
@@ -451,7 +457,8 @@ private[log] class Cleaner(val id: Int,
                              activePids: Map[Long, ProducerIdEntry],
                              stats: CleanerStats) {
     val logCleanerFilter = new RecordFilter {
-      def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = shouldRetainMessage(source, map, retainDeletes, record, stats, activePids, recordBatch.producerId)
+      def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean =
+        shouldRetainMessage(source, map, retainDeletes, recordBatch, record, stats, activePids)
     }
 
     var position = 0
@@ -492,17 +499,20 @@ private[log] class Cleaner(val id: Int,
   private def shouldRetainMessage(source: kafka.log.LogSegment,
                                   map: kafka.log.OffsetMap,
                                   retainDeletes: Boolean,
+                                  batch: RecordBatch,
                                   record: Record,
                                   stats: CleanerStats,
-                                  activePids: Map[Long, ProducerIdEntry],
-                                  pid: Long): Boolean = {
-    if (record.isControlRecord)
+                                  activeProducers: Map[Long, ProducerIdEntry]): Boolean = {
+    if (batch.isControlBatch)
       return true
 
     // retain the record if it is the last one produced by an active idempotent producer to ensure that
-    // the PID is not removed from the log before it has been expired
-    if (RecordBatch.NO_PRODUCER_ID < pid && activePids.get(pid).exists(_.lastOffset == record.offset))
-      return true
+    // the producerId is not removed from the log before it has been expired
+    if (batch.hasProducerId) {
+      val producerId = batch.producerId
+      if (RecordBatch.NO_PRODUCER_ID < producerId && activeProducers.get(producerId).exists(_.lastOffset == record.offset))
+        return true
+    }
 
     val pastLatestOffset = record.offset > map.latestOffset
     if (pastLatestOffset)
@@ -638,8 +648,8 @@ private[log] class Cleaner(val id: Int,
       throttler.maybeThrottle(records.sizeInBytes)
 
       val startPosition = position
-      for (record <- records.records.asScala) {
-        if (!record.isControlRecord && record.hasKey && record.offset >= start) {
+      for (batch <- records.batches.asScala; record <- batch.asScala) {
+        if (!batch.isControlBatch && record.hasKey && record.offset >= start) {
           if (map.size < maxDesiredMapSize)
             map.put(record.key, record.offset)
           else

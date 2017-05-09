@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
 
@@ -82,6 +82,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   }
 
   @Test
+  @Ignore // To be re-enabled once we can make it less flaky (KAFKA-4801)
   def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
 
   /*

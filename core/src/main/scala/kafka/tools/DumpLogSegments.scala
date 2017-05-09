@@ -105,6 +105,8 @@ object DumpLogSegments {
           dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
         case Log.PidSnapshotFileSuffix =>
           dumpPidSnapshot(file)
+        case Log.TxnIndexFileSuffix =>
+          dumpTxnIndex(file)
         case _ =>
           System.err.println(s"Ignoring unknown file $file")
       }
@@ -131,11 +133,20 @@ object DumpLogSegments {
     }
   }
 
+  private def dumpTxnIndex(file: File): Unit = {
+    val index = new TransactionIndex(Log.offsetFromFilename(file.getName), file)
+    for (abortedTxn <- index.allAbortedTxns) {
+      println(s"version: ${abortedTxn.version} pid: ${abortedTxn.producerId} firstOffset: ${abortedTxn.firstOffset} " +
+        s"lastOffset: ${abortedTxn.lastOffset} lastStableOffset: ${abortedTxn.lastStableOffset}")
+    }
+  }
+
   private def dumpPidSnapshot(file: File): Unit = {
     try {
-      ProducerIdMapping.readSnapshot(file).foreach { case (pid, entry) =>
-        println(s"pid: $pid epoch: ${entry.epoch} lastSequence: ${entry.lastSeq} lastOffset: ${entry.lastOffset} " +
-          s"offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp}")
+      ProducerStateManager.readSnapshot(file).foreach { entry=>
+        println(s"producerId: ${entry.producerId} producerEpoch: ${entry.producerEpoch} lastSequence: ${entry.lastSeq} " +
+          s"lastOffset: ${entry.lastOffset} offsetDelta: ${entry.offsetDelta} lastTimestamp: ${entry.timestamp} " +
+          s"coordinatorEpoch: ${entry.coordinatorEpoch} currentTxnFirstOffset: ${entry.currentTxnFirstOffset}")
       }
     } catch {
       case e: CorruptSnapshotException =>
@@ -349,9 +360,15 @@ object DumpLogSegments {
               " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           }
 
-          if (record.isControlRecord) {
-            val controlType = ControlRecordType.parse(record.key)
-            print(s" controlType: $controlType")
+          if (batch.isControlBatch) {
+            val controlTypeId = ControlRecordType.parseTypeId(record.key)
+            ControlRecordType.fromTypeId(controlTypeId) match {
+              case ControlRecordType.ABORT | ControlRecordType.COMMIT =>
+                val endTxnMarker = EndTransactionMarker.deserialize(record)
+                print(s" endTxnMarker: ${endTxnMarker.controlType} coordinatorEpoch: ${endTxnMarker.coordinatorEpoch}")
+              case controlType =>
+                print(s" controlType: $controlType($controlTypeId)")
+            }
           } else if (printContents) {
             val (key, payload) = parser.parse(record)
             key.foreach(key => print(s" key: $key"))

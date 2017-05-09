@@ -23,6 +23,7 @@ import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{NotLeaderForPartitionException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.IsolationLevel
 
 import scala.collection._
 
@@ -45,9 +46,11 @@ case class FetchMetadata(fetchMinBytes: Int,
                          fetchPartitionStatus: Seq[(TopicPartition, FetchPartitionStatus)]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
-                          "onlyLeader:" + fetchOnlyLeader + ", "
-                          "onlyCommitted: " + fetchOnlyCommitted + ", "
-                          "partitionStatus: " + fetchPartitionStatus + "]"
+    "maxBytes:" + fetchMaxBytes + ", " +
+    "onlyLeader:" + fetchOnlyLeader + ", " +
+    "onlyCommitted: " + fetchOnlyCommitted + ", " +
+    "replicaId: " + replicaId + ", " +
+    "partitionStatus: " + fetchPartitionStatus + "]"
 }
 /**
  * A delayed fetch operation that can be created by the replica manager and watched
@@ -57,6 +60,7 @@ class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
+                   isolationLevel: IsolationLevel,
                    responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(delayMs) {
 
@@ -80,7 +84,9 @@ class DelayedFetch(delayMs: Long,
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val replica = replicaManager.getLeaderReplicaIfLocal(topicPartition)
             val endOffset =
-              if (fetchMetadata.fetchOnlyCommitted)
+              if (isolationLevel == IsolationLevel.READ_COMMITTED)
+                replica.lastStableOffset
+              else if (fetchMetadata.fetchOnlyCommitted)
                 replica.highWatermark
               else
                 replica.logEndOffset

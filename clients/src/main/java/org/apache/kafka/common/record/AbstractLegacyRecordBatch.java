@@ -206,7 +206,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public boolean isControlRecord() {
+    public boolean isControlBatch() {
         return false;
     }
 

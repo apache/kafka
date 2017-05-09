@@ -22,6 +22,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -159,6 +161,29 @@ public class CachingSessionStoreTest {
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
         assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void shouldForwardChangedValuesDuringFlush() throws Exception {
+        final Windowed<String> a = new Windowed<>("a", new SessionWindow(0, 0));
+        final List<KeyValue<Windowed<String>, Change<Long>>> flushed = new ArrayList<>();
+        cachingStore.setFlushListener(new CacheFlushListener<Windowed<String>, Long>() {
+                @Override
+                public void apply(final Windowed<String> key, final Long newValue, final Long oldValue) {
+                    flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue)));
+                }
+            });
+        
+        cachingStore.put(a, 1L);
+        cachingStore.flush();
+        
+        cachingStore.put(a, 2L);
+        cachingStore.flush();
+
+        cachingStore.remove(a);
+        cachingStore.flush();
+
+        assertEquals(flushed, Arrays.asList(KeyValue.pair(a, new Change<>(1L, null)), KeyValue.pair(a, new Change<>(2L, 1L)), KeyValue.pair(a, new Change<>(null, 2L))));
     }
 
     @Test

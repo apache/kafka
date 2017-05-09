@@ -144,7 +144,7 @@ class TimeIndex(file: File,
   def lookup(targetTimestamp: Long): TimestampOffset = {
     maybeLock(lock) {
       val idx = mmap.duplicate
-      val slot = indexSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
+      val slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
       if (slot == -1)
         TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
       else {
@@ -163,7 +163,7 @@ class TimeIndex(file: File,
   override def truncateTo(offset: Long) {
     inLock(lock) {
       val idx = mmap.duplicate
-      val slot = indexSlotFor(idx, offset, IndexSearchType.VALUE)
+      val slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.VALUE)
 
       /* There are 3 cases for choosing the new size
        * 1) if there is no entry in the index <= the offset, delete everything
@@ -206,4 +206,5 @@ class TimeIndex(file: File,
       "Time index file " + file.getAbsolutePath + " is corrupt, found " + len +
           " bytes which is not positive or not a multiple of 12.")
   }
+
 }

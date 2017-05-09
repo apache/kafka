@@ -56,6 +56,9 @@ public abstract class AbstractRecords implements Records {
         int totalSizeEstimate = 0;
 
         for (RecordBatch batch : batches) {
+            if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
+                continue;
+
             if (batch.magic() <= toMagic) {
                 totalSizeEstimate += batch.sizeInBytes();
                 recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
@@ -94,12 +97,8 @@ public abstract class AbstractRecords implements Records {
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
                 timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
-        for (Record record : recordBatchAndRecords.records) {
-            // control messages are only supported in v2 and above, so skip when down-converting
-            if (magic < RecordBatch.MAGIC_VALUE_V2 && record.isControlRecord())
-                continue;
+        for (Record record : recordBatchAndRecords.records)
             builder.append(record);
-        }
 
         builder.close();
         return builder.buffer();

@@ -21,6 +21,8 @@ import java.nio.ByteBuffer
 import java.lang.{Long => JLong}
 import java.util.{Collections, Properties}
 import java.util
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
@@ -41,7 +43,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, TimestampType}
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -436,6 +438,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceRequest.timeout.toLong,
         produceRequest.acks,
         internalTopicsAllowed,
+        isFromClient = true,
         authorizedRequestInfo,
         sendResponseCallback)
 
@@ -495,8 +498,9 @@ class KafkaApis(val requestChannel: RequestChannel,
             case _ => data
           }
 
+          val abortedTransactions = convertedData.abortedTransactions.map(_.asJava).orNull
           tp -> new FetchResponse.PartitionData(convertedData.error, convertedData.hw, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-            convertedData.logStartOffset, null, convertedData.records)
+            convertedData.logStartOffset, abortedTransactions, convertedData.records)
         }
       }
 
@@ -560,7 +564,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         versionId <= 2,
         authorizedRequestInfo,
         replicationQuota(fetchRequest),
-        sendResponseCallback)
+        sendResponseCallback,
+        fetchRequest.isolationLevel)
     }
   }
 
@@ -589,7 +594,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (version == 0)
         handleListOffsetRequestV0(request)
       else
-        handleListOffsetRequestV1(request)
+        handleListOffsetRequestV1AndAbove(request)
 
     def createResponse(throttleTimeMs: Int): AbstractResponse = new ListOffsetResponse(throttleTimeMs, mergedResponseMap.asJava)
     sendResponseMaybeThrottle(request, createResponse)
@@ -646,7 +651,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     responseMap ++ unauthorizedResponseStatus
   }
 
-  private def handleListOffsetRequestV1(request : RequestChannel.Request): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
+  private def handleListOffsetRequestV1AndAbove(request : RequestChannel.Request): Map[TopicPartition, ListOffsetResponse.PartitionData] = {
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
@@ -679,9 +684,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             replicaManager.getReplicaOrException(topicPartition)
 
           val found = {
-            if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-              TimestampOffset(RecordBatch.NO_TIMESTAMP, localReplica.highWatermark.messageOffset)
-            else {
+            if (fromConsumer && timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
+              val lastFetchableOffset = offsetRequest.isolationLevel match {
+                case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
+                case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
+              }
+              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
+            } else {
               def allowed(timestampOffset: TimestampOffset): Boolean =
                 !fromConsumer || timestampOffset.offset <= localReplica.highWatermark.messageOffset
 
@@ -1415,9 +1424,45 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
     authorizeClusterAction(request)
-    val emptyResponse = new java.util.HashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
-    val responseBody = new WriteTxnMarkersResponse(emptyResponse)
-    sendResponseExemptThrottle(request, new RequestChannel.Response(request, responseBody))
+    val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
+    val errors = new ConcurrentHashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
+    val markers = writeTxnMarkersRequest.markers
+    val numAppends = new AtomicInteger(markers.size)
+
+    if (numAppends.get == 0) {
+      sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))
+      return
+    }
+
+    def sendResponseCallback(pid: Long)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+      errors.put(pid, responseStatus.mapValues(_.error).asJava)
+      if (numAppends.decrementAndGet() == 0)
+        sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))
+    }
+
+    // TODO: The current append API makes doing separate writes per producerId a little easier, but it would
+    // be nice to have only one append to the log. This requires pushing the building of the control records
+    // into Log so that we only append those having a valid producer epoch, and exposing a new appendControlRecord
+    // API in ReplicaManager. For now, we've done the simpler approach
+    for (marker <- markers.asScala) {
+      val producerId = marker.producerId
+      val controlRecords = marker.partitions.asScala.map { partition =>
+        val controlRecordType = marker.transactionResult match {
+          case TransactionResult.COMMIT => ControlRecordType.COMMIT
+          case TransactionResult.ABORT => ControlRecordType.ABORT
+        }
+        val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+        partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
+      }.toMap
+
+      replicaManager.appendRecords(
+        timeout = config.requestTimeoutMs.toLong,
+        requiredAcks = -1,
+        internalTopicsAllowed = true,
+        isFromClient = false,
+        entriesPerPartition = controlRecords,
+        sendResponseCallback(producerId))
+    }
   }
 
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {

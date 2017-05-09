@@ -27,14 +27,14 @@ import kafka.server.epoch.LeaderEpochCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.record.FileRecords.LogEntryPosition
+import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
 
- /**
+/**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
  * the actual messages. The index is an OffsetIndex that maps from logical offsets to physical file positions. Each
  * segment has a base offset which is an offset <= the least offset of any message in this segment and > any offset in
@@ -53,6 +53,7 @@ import scala.math._
 class LogSegment(val log: FileRecords,
                  val index: OffsetIndex,
                  val timeIndex: TimeIndex,
+                 val txnIndex: TransactionIndex,
                  val baseOffset: Long,
                  val indexIntervalBytes: Int,
                  val rollJitterMs: Long,
@@ -67,45 +68,49 @@ class LogSegment(val log: FileRecords,
   private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp we see so far */
-  @volatile private var maxTimestampSoFar = timeIndex.lastEntry.timestamp
-  @volatile private var offsetOfMaxTimestamp = timeIndex.lastEntry.offset
+  @volatile private var maxTimestampSoFar: Long = timeIndex.lastEntry.timestamp
+  @volatile private var offsetOfMaxTimestamp: Long = timeIndex.lastEntry.offset
 
-  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
+  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time,
+           fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
     this(FileRecords.open(Log.logFilename(dir, startOffset), fileAlreadyExists, initFileSize, preallocate),
-         new OffsetIndex(Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
-         new TimeIndex(Log.timeIndexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
+         new OffsetIndex(Log.offsetIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
+         new TimeIndex(Log.timeIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
+         new TransactionIndex(startOffset, Log.transactionIndexFile(dir, startOffset)),
          startOffset,
          indexIntervalBytes,
          rollJitterMs,
          time)
 
   /* Return the size in bytes of this log segment */
-  def size: Long = log.sizeInBytes()
+  def size: Int = log.sizeInBytes()
 
-   /**
-     * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
-     */
-   def canConvertToRelativeOffset(offset: Long): Boolean = {
-     (offset - baseOffset) <= Integer.MAX_VALUE
-   }
+  /**
+   * checks that the argument offset can be represented as an integer offset relative to the baseOffset.
+   */
+  def canConvertToRelativeOffset(offset: Long): Boolean = {
+    (offset - baseOffset) <= Integer.MAX_VALUE
+  }
 
-   /**
+  /**
    * Append the given messages starting with the given offset. Add
    * an entry to the index if needed.
    *
    * It is assumed this method is being called from within a lock.
    *
    * @param firstOffset The first offset in the message set.
+   * @param largestOffset The last offset in the message set
    * @param largestTimestamp The largest timestamp in the message set.
    * @param shallowOffsetOfMaxTimestamp The offset of the message that has the largest timestamp in the messages to append.
    * @param records The log entries to append.
+   * @return the physical position in the file of the appended records
    */
   @nonthreadsafe
   def append(firstOffset: Long,
              largestOffset: Long,
              largestTimestamp: Long,
              shallowOffsetOfMaxTimestamp: Long,
-             records: MemoryRecords) {
+             records: MemoryRecords): Unit = {
     if (records.sizeInBytes > 0) {
       trace("Inserting %d bytes at offset %d at position %d with largest timestamp %d at shallow offset %d"
           .format(records.sizeInBytes, firstOffset, log.sizeInBytes(), largestTimestamp, shallowOffsetOfMaxTimestamp))
@@ -131,6 +136,28 @@ class LogSegment(val log: FileRecords,
     }
   }
 
+  @nonthreadsafe
+  def updateTxnIndex(completedTxn: CompletedTxn, lastStableOffset: Long) {
+    if (completedTxn.isAborted) {
+      trace(s"Writing aborted transaction $completedTxn to transaction index, last stable offset is $lastStableOffset")
+      txnIndex.append(new AbortedTxn(completedTxn, lastStableOffset))
+    }
+  }
+
+  private def updateProducerState(producerStateManager: ProducerStateManager, batch: RecordBatch): Unit = {
+    if (batch.hasProducerId) {
+      val producerId = batch.producerId
+      val lastEntry = producerStateManager.lastEntry(producerId)
+      val appendInfo = new ProducerAppendInfo(batch.producerId, lastEntry, loadingFromLog = true)
+      val maybeCompletedTxn = appendInfo.append(batch)
+      producerStateManager.update(appendInfo)
+      maybeCompletedTxn.foreach { completedTxn =>
+        val lastStableOffset = producerStateManager.completeTxn(completedTxn)
+        updateTxnIndex(completedTxn, lastStableOffset)
+      }
+    }
+  }
+
   /**
    * Find the physical file position for the first message with offset >= the requested offset.
    *
@@ -144,7 +171,7 @@ class LogSegment(val log: FileRecords,
     *        message or null if no message meets this criteria.
    */
   @threadsafe
-  private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): LogEntryPosition = {
+  private[log] def translateOffset(offset: Long, startingFilePosition: Int = 0): LogOffsetPosition = {
     val mapping = index.lookup(offset)
     log.searchForOffsetWithSize(offset, max(mapping.position, startingFilePosition))
   }
@@ -175,7 +202,7 @@ class LogSegment(val log: FileRecords,
     if (startOffsetAndSize == null)
       return null
 
-    val startPosition = startOffsetAndSize.position.toInt
+    val startPosition = startOffsetAndSize.position
     val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition)
 
     val adjustedMaxSize =
@@ -187,7 +214,7 @@ class LogSegment(val log: FileRecords,
       return FetchDataInfo(offsetMetadata, MemoryRecords.EMPTY)
 
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
-    val length = maxOffset match {
+    val fetchSize: Int = maxOffset match {
       case None =>
         // no max offset, just read until the max position
         min((maxPosition - startPosition).toInt, adjustedMaxSize)
@@ -207,24 +234,32 @@ class LogSegment(val log: FileRecords,
         min(min(maxPosition, endPosition) - startPosition, adjustedMaxSize).toInt
     }
 
-    FetchDataInfo(offsetMetadata, log.read(startPosition, length),
+    FetchDataInfo(offsetMetadata, log.read(startPosition, fetchSize),
       firstEntryIncomplete = adjustedMaxSize < startOffsetAndSize.size)
   }
+
+   def fetchUpperBoundOffset(startOffsetPosition: OffsetPosition, fetchSize: Int): Option[Long] =
+     index.fetchUpperBoundOffset(startOffsetPosition, fetchSize).map(_.offset)
 
   /**
    * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log and index.
    *
    * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
    * is corrupt.
-    * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
+   * @param producerStateManager Producer state corresponding to the segment's base offset. This is needed to recover
+   *                             the transaction index.
+   * @param leaderEpochCache Optionally a cache for updating the leader epoch during recovery.
    * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int, leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
+  def recover(maxMessageSize: Int,
+              producerStateManager: ProducerStateManager,
+              leaderEpochCache: Option[LeaderEpochCache] = None): Int = {
     index.truncate()
     index.resize(index.maxIndexSize)
     timeIndex.truncate()
     timeIndex.resize(timeIndex.maxIndexSize)
+    txnIndex.truncate()
     var validBytes = 0
     var lastIndexEntry = 0
     maxTimestampSoFar = RecordBatch.NO_TIMESTAMP
@@ -250,8 +285,9 @@ class LogSegment(val log: FileRecords,
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           leaderEpochCache.foreach { cache =>
             if (batch.partitionLeaderEpoch > cache.latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
-              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset())
+              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
           }
+          updateProducerState(producerStateManager, batch)
         }
       }
     } catch {
@@ -268,22 +304,23 @@ class LogSegment(val log: FileRecords,
     truncated
   }
 
-  def loadLargestTimestamp(readToLogEnd: Boolean = false) {
+  private def loadLargestTimestamp() {
     // Get the last time index entry. If the time index is empty, it will return (-1, baseOffset)
     val lastTimeIndexEntry = timeIndex.lastEntry
     maxTimestampSoFar = lastTimeIndexEntry.timestamp
     offsetOfMaxTimestamp = lastTimeIndexEntry.offset
-    if (readToLogEnd) {
-      val offsetPosition = index.lookup(lastTimeIndexEntry.offset)
-      // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
-      val maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position)
-      if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp) {
-        maxTimestampSoFar = maxTimestampOffsetAfterLastEntry.timestamp
-        offsetOfMaxTimestamp = maxTimestampOffsetAfterLastEntry.offset
-      }
+
+    val offsetPosition = index.lookup(lastTimeIndexEntry.offset)
+    // Scan the rest of the messages to see if there is a larger timestamp after the last time index entry.
+    val maxTimestampOffsetAfterLastEntry = log.largestTimestampAfter(offsetPosition.position)
+    if (maxTimestampOffsetAfterLastEntry.timestamp > lastTimeIndexEntry.timestamp) {
+      maxTimestampSoFar = maxTimestampOffsetAfterLastEntry.timestamp
+      offsetOfMaxTimestamp = maxTimestampOffsetAfterLastEntry.offset
     }
   }
 
+  def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult =
+    txnIndex.collectAbortedTxns(fetchOffset, upperBoundOffset)
 
   override def toString = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
 
@@ -301,6 +338,7 @@ class LogSegment(val log: FileRecords,
       return 0
     index.truncateTo(offset)
     timeIndex.truncateTo(offset)
+    txnIndex.truncateTo(offset)
     // after truncation, reset and allocate more space for the (new currently  active) index
     index.resize(index.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
@@ -310,9 +348,8 @@ class LogSegment(val log: FileRecords,
       rollingBasedTimestamp = None
     }
     bytesSinceLastIndexEntry = 0
-    // We may need to reload the max timestamp after truncation.
     if (maxTimestampSoFar >= 0)
-      loadLargestTimestamp(readToLogEnd = true)
+      loadLargestTimestamp()
     bytesTruncated
   }
 
@@ -323,14 +360,12 @@ class LogSegment(val log: FileRecords,
   @threadsafe
   def nextOffset(): Long = {
     val ms = read(index.lastOffset, None, log.sizeInBytes)
-    if (ms == null) {
+    if (ms == null)
       baseOffset
-    } else {
-      ms.records.batches.asScala.lastOption match {
-        case None => baseOffset
-        case Some(last) => last.nextOffset
-      }
-    }
+    else
+      ms.records.batches.asScala.lastOption
+        .map(_.nextOffset)
+        .getOrElse(baseOffset)
   }
 
   /**
@@ -342,6 +377,7 @@ class LogSegment(val log: FileRecords,
       log.flush()
       index.flush()
       timeIndex.flush()
+      txnIndex.flush()
     }
   }
 
@@ -364,6 +400,10 @@ class LogSegment(val log: FileRecords,
     try timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
     catch {
       case e: IOException => throw kafkaStorageException("timeindex", e)
+    }
+    try txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
+    catch {
+      case e: IOException => throw kafkaStorageException("txnindex", e)
     }
   }
 
@@ -437,6 +477,7 @@ class LogSegment(val log: FileRecords,
     CoreUtils.swallow(index.close())
     CoreUtils.swallow(timeIndex.close())
     CoreUtils.swallow(log.close())
+    CoreUtils.swallow(txnIndex.close())
   }
 
   /**
@@ -448,12 +489,15 @@ class LogSegment(val log: FileRecords,
     val deletedLog = log.delete()
     val deletedIndex = index.delete()
     val deletedTimeIndex = timeIndex.delete()
-    if(!deletedLog && log.file.exists)
+    val deletedTxnIndex = txnIndex.delete()
+    if (!deletedLog && log.file.exists)
       throw new KafkaStorageException("Delete of log " + log.file.getName + " failed.")
-    if(!deletedIndex && index.file.exists)
+    if (!deletedIndex && index.file.exists)
       throw new KafkaStorageException("Delete of index " + index.file.getName + " failed.")
-    if(!deletedTimeIndex && timeIndex.file.exists)
+    if (!deletedTimeIndex && timeIndex.file.exists)
       throw new KafkaStorageException("Delete of time index " + timeIndex.file.getName + " failed.")
+    if (!deletedTxnIndex && txnIndex.file.exists)
+      throw new KafkaStorageException("Delete of transaction index " + txnIndex.file.getName + " failed.")
   }
 
   /**

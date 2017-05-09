@@ -266,13 +266,6 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
 
     <Match>
         <!-- TODO: fix this (see KAFKA-4996) -->
-        <Class name="org.apache.kafka.streams.state.internals.Segments"/>
-        <Method name="getOrCreateSegment"/>
-        <Bug pattern="AT_OPERATION_SEQUENCE_ON_CONCURRENT_ABSTRACTION"/>
-    </Match>
-
-    <Match>
-        <!-- TODO: fix this (see KAFKA-4996) -->
         <Or>
             <Package name="org.apache.kafka.streams.state.internals"/>
             <Package name="org.apache.kafka.streams.processor.internals"/>
