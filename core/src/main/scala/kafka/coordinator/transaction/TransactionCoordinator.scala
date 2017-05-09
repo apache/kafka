@@ -195,7 +195,7 @@ class TransactionCoordinator(brokerId: Int,
           // try to append and then update
           Right(coordinatorEpoch, txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.milliseconds()))
 
-        case _ =>
+        case Ongoing =>
           // indicate to abort the current ongoing txn first
           Right(coordinatorEpoch, txnMetadata.prepareNoTransit())
       }
@@ -263,7 +263,7 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleTxnImmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
-      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, sendTxnMarkers)
+      txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
   }
 
   def handleTxnEmigration(txnTopicPartitionId: Int) {
@@ -280,7 +280,7 @@ class TransactionCoordinator(brokerId: Int,
     if (error != Errors.NONE)
       responseCallback(error)
     else {
-      val result: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
+      val preAppendResult: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
         case None =>
           Left(Errors.INVALID_PID_MAPPING)
 
@@ -328,52 +328,81 @@ class TransactionCoordinator(brokerId: Int,
           }
       }
 
-      result match {
+      preAppendResult match {
         case Left(err) =>
           responseCallback(err)
 
         case Right((coordinatorEpoch, newMetadata)) =>
           def sendTxnMarkersCallback(error: Errors): Unit = {
-            // we can respond to the client immediately and continue to write the txn markers if
-            // the log append was successful
-            responseCallback(error)
-
             if (error == Errors.NONE) {
-              txnManager.getTransactionState(transactionalId) match {
+              val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
                 case Some(epochAndMetadata) =>
-                  val metadata = epochAndMetadata.transactionMetadata
+                  if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
 
-                  sendTxnMarkers(transactionalId, coordinatorEpoch, metadata, txnMarkerResult)
+                    val txnMetadata = epochAndMetadata.transactionMetadata
+                    txnMetadata synchronized {
+                      if (txnMetadata.producerId != pid)
+                        Left(Errors.INVALID_PID_MAPPING)
+                      else if (txnMetadata.producerEpoch != epoch)
+                        Left(Errors.INVALID_PRODUCER_EPOCH)
+                      else if (txnMetadata.pendingTransitionInProgress)
+                        Left(Errors.CONCURRENT_TRANSACTIONS)
+                      else txnMetadata.state match {
+                        case Empty| Ongoing | CompleteCommit | CompleteAbort =>
+                          Left(Errors.INVALID_TXN_STATE)
+                        case PrepareCommit =>
+                          if (txnMarkerResult != TransactionResult.COMMIT)
+                            Left(Errors.INVALID_TXN_STATE)
+                          else
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                        case PrepareAbort =>
+                          if (txnMarkerResult != TransactionResult.ABORT)
+                            Left(Errors.INVALID_TXN_STATE)
+                          else
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                      }
+                    }
+                  } else {
+                    info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed since the transaction coordinator epoch " +
+                      s"has been changed to ${epochAndMetadata.coordinatorEpoch} after the transaction metadata has been successfully appended to the log")
+
+                    Left(Errors.NOT_COORDINATOR)
+                  }
 
                 case None =>
-                  if (txnManager.isCoordinatorFor(transactionalId))
+                  if (txnManager.isCoordinatorFor(transactionalId)) {
                     throw new IllegalStateException("Cannot find the metadata in coordinator's cache while it is still the leader of the txn topic partition")
-                  else
+                  } else {
                     // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
                     info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
                       s"has been appended to the log. The partition ${partitionFor(transactionalId)} may have migrated as the metadata is no longer in the cache")
+
+                    Left(Errors.NOT_COORDINATOR)
+                  }
+              }
+
+              preSendResult match {
+                case Left(err) =>
+                  responseCallback(err)
+
+                case Right((txnMetadata, newPreSendMetadata)) =>
+                  // we can respond to the client immediately and continue to write the txn markers if
+                  // the log append was successful
+                  responseCallback(Errors.NONE)
+
+                  txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)
               }
             } else {
               info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed since the transaction message " +
                 s"cannot be appended to the log. Returning error code $error to the client")
+
+              responseCallback(error)
             }
           }
 
           txnManager.appendTransactionToLog(transactionalId, coordinatorEpoch, newMetadata, sendTxnMarkersCallback)
       }
     }
-  }
-
-  private def sendTxnMarkers(transactionalId: String,
-                             coordinatorEpoch: Int,
-                             txnMetadata: TransactionMetadata,
-                             txnMarkerResult: TransactionResult): Unit = {
-
-    val newMetadata = txnMetadata synchronized {
-      txnMetadata.prepareComplete(time.milliseconds())
-    }
-
-    txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, txnMarkerResult, txnMetadata, newMetadata)
   }
 
   def transactionTopicConfigs: Properties = txnManager.transactionTopicConfigs

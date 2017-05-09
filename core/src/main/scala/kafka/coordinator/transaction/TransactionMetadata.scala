@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{immutable, mutable}
 
-private[coordinator] sealed trait TransactionState { def byte: Byte }
+private[transaction] sealed trait TransactionState { def byte: Byte }
 
 /**
  * Transaction has not existed yet
@@ -29,7 +29,7 @@ private[coordinator] sealed trait TransactionState { def byte: Byte }
  * transition: received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[coordinator] case object Empty extends TransactionState { val byte: Byte = 0 }
+private[transaction] case object Empty extends TransactionState { val byte: Byte = 0 }
 
 /**
  * Transaction has started and ongoing
@@ -39,37 +39,37 @@ private[coordinator] case object Empty extends TransactionState { val byte: Byte
  *             received AddPartitionsToTxnRequest => Ongoing
  *             received AddOffsetsToTxnRequest => Ongoing
  */
-private[coordinator] case object Ongoing extends TransactionState { val byte: Byte = 1 }
+private[transaction] case object Ongoing extends TransactionState { val byte: Byte = 1 }
 
 /**
  * Group is preparing to commit
  *
  * transition: received acks from all partitions => CompleteCommit
  */
-private[coordinator] case object PrepareCommit extends TransactionState { val byte: Byte = 2}
+private[transaction] case object PrepareCommit extends TransactionState { val byte: Byte = 2}
 
 /**
  * Group is preparing to abort
  *
  * transition: received acks from all partitions => CompleteAbort
  */
-private[coordinator] case object PrepareAbort extends TransactionState { val byte: Byte = 3 }
+private[transaction] case object PrepareAbort extends TransactionState { val byte: Byte = 3 }
 
 /**
  * Group has completed commit
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[coordinator] case object CompleteCommit extends TransactionState { val byte: Byte = 4 }
+private[transaction] case object CompleteCommit extends TransactionState { val byte: Byte = 4 }
 
 /**
  * Group has completed abort
  *
  * Will soon be removed from the ongoing transaction cache
  */
-private[coordinator] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
+private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
-private[coordinator] object TransactionMetadata {
+private[transaction] object TransactionMetadata {
   def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
@@ -98,7 +98,7 @@ private[coordinator] object TransactionMetadata {
 }
 
 // this is a immutable object representing the target transition of the transaction metadata
-private[coordinator] case class TransactionMetadataTransition(producerId: Long,
+private[transaction] case class TransactionMetadataTransition(producerId: Long,
                                                               producerEpoch: Short,
                                                               txnTimeoutMs: Int,
                                                               txnState: TransactionState,
@@ -117,7 +117,7 @@ private[coordinator] case class TransactionMetadataTransition(producerId: Long,
   * @param txnLastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
   */
 @nonthreadsafe
-private[coordinator] class TransactionMetadata(val producerId: Long,
+private[transaction] class TransactionMetadata(val producerId: Long,
                                                var producerEpoch: Short,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
