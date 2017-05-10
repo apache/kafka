@@ -138,6 +138,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
       CoreUtils.delete(s.config.logDirs)
     }
     super.tearDown()
+    closeSasl()
   }
 
   /**
