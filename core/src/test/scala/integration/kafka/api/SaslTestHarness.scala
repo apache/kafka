@@ -24,10 +24,9 @@ trait SaslTestHarness extends ZooKeeperTestHarness with SaslSetup {
 
   @Before
   override def setUp() {
-    if (zkSaslEnabled)
-      startSasl(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both, kafkaServerJaasEntryName)
-    else
-      startSasl(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, kafkaServerJaasEntryName)
+    val mode = if (zkSaslEnabled) Both else KafkaSasl
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), mode,
+      kafkaServerJaasEntryName))
     super.setUp
   }
 

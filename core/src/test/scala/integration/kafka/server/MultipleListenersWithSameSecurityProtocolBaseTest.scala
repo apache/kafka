@@ -22,16 +22,16 @@ import java.io.File
 import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 
-import kafka.api.{Both, SaslSetup}
+import kafka.api.SaslSetup
 import kafka.common.Topic
 import kafka.coordinator.group.OffsetConfig
+import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.network.{ListenerName, Mode}
-import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Assert.assertEquals
 import org.junit.{After, Before, Test}
 
@@ -48,7 +48,7 @@ object MultipleListenersWithSameSecurityProtocolBaseTest {
   val Plain = "PLAIN"
 }
 
-abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeeperTestHarness with SaslSetup{
+abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeeperTestHarness with SaslSetup {
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
@@ -56,17 +56,16 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   private val servers = new ArrayBuffer[KafkaServer]
   private val producers = mutable.Map[ListenerName, KafkaProducer[Array[Byte], Array[Byte]]]()
   private val consumers = mutable.Map[ListenerName, KafkaConsumer[Array[Byte], Array[Byte]]]()
-  private val kafkaClientSaslMechanism = Plain
-  private val kafkaServerSaslMechanisms = List(GssApi, Plain)
 
-  protected def setSaslProperties(listenerName: ListenerName): Option[Properties]
-  protected def addJaasSection(): Unit = {}
+  protected val kafkaClientSaslMechanism = Plain
+  protected val kafkaServerSaslMechanisms = List(GssApi, Plain)
+
+  protected def saslProperties(listenerName: ListenerName): Properties
+  protected def jaasSections: Seq[JaasSection]
 
   @Before
   override def setUp(): Unit = {
-    startSasl(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both, withDefaultJaasContext = false)
-    addJaasSection()
-    writeJaasConfigurationToFile()
+    startSasl(jaasSections)
     super.setUp()
     // 2 brokers so that we can test that the data propagates correctly via UpdateMetadadaRequest
     val numServers = 2
@@ -97,30 +96,36 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
       servers += TestUtils.createServer(KafkaConfig.fromProps(props))
     }
 
-    val serverConfig = servers.head.config
-    assertEquals(4, serverConfig.listeners.size)
+    servers.map(_.config).foreach { config =>
+      assertEquals(s"Unexpected listener count for broker ${config.brokerId}", 4, config.listeners.size)
+      // KAFKA-5184 seems to show that this value can sometimes be PLAINTEXT, so verify it here
+      assertEquals(s"Unexpected ${KafkaConfig.InterBrokerListenerNameProp} for broker ${config.brokerId}",
+        Internal, config.interBrokerListenerName.value)
+    }
 
     TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName, OffsetConfig.DefaultOffsetsTopicNumPartitions,
       replicationFactor = 2, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
 
-    serverConfig.listeners.foreach { endPoint =>
+    servers.head.config.listeners.foreach { endPoint =>
       val listenerName = endPoint.listenerName
 
       TestUtils.createTopic(zkUtils, listenerName.value, 2, 2, servers)
 
       val trustStoreFile =
-        if (endPoint.securityProtocol == SecurityProtocol.SASL_SSL) Some(this.trustStoreFile)
+        if (TestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)
         else None
 
-      val saslProperties = setSaslProperties(listenerName)
+      val saslProps =
+        if (TestUtils.usesSaslAuthentication(endPoint.securityProtocol)) Some(saslProperties(listenerName))
+        else None
 
       val bootstrapServers = TestUtils.bootstrapServers(servers, listenerName)
 
       producers(listenerName) = TestUtils.createNewProducer(bootstrapServers, acks = -1,
-        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProperties)
+        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
 
       consumers(listenerName) = TestUtils.createNewConsumer(bootstrapServers, groupId = listenerName.value,
-        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProperties)
+        securityProtocol = endPoint.securityProtocol, trustStoreFile = trustStoreFile, saslProperties = saslProps)
     }
   }
 
