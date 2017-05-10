@@ -119,8 +119,6 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalFetchRequestRate = newMeter(BrokerTopicStats.TotalFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
-  val replicationBytesInRate = newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
-  val replicationBytesOutRate = newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
 
   def close() {
     removeMetric(BrokerTopicStats.MessagesInPerSec, tags)
@@ -131,8 +129,16 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
-    removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, tags)
-    removeMetric(BrokerTopicStats.ReplicationBytesOutPerSec, tags)
+  }
+}
+
+class BrokerReplicationMetrics() extends KafkaMetricsGroup {
+  val replicationBytesInRate = newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, Map.empty)
+  val replicationBytesOutRate = newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, Map.empty)
+
+  def close() {
+    removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, Map.empty)
+    removeMetric(BrokerTopicStats.ReplicationBytesOutPerSec, Map.empty)
   }
 }
 
@@ -151,8 +157,10 @@ object BrokerTopicStats extends Logging {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
   private val allTopicsStats = new BrokerTopicMetrics(None)
+  private val replicationStats = new BrokerReplicationMetrics()
 
   def getBrokerAllTopicsStats(): BrokerTopicMetrics = allTopicsStats
+  def getBrokerReplicationStats(): BrokerReplicationMetrics = replicationStats
 
   def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic)
@@ -162,5 +170,14 @@ object BrokerTopicStats extends Logging {
     val metrics = stats.remove(topic)
     if (metrics != null)
       metrics.close()
+  }
+
+  def updateBytesOut(topic: String, isFollower: Boolean, value: Long) {
+    if (isFollower) {
+      BrokerTopicStats.getBrokerReplicationStats.replicationBytesOutRate.mark(value)
+    } else {
+      BrokerTopicStats.getBrokerTopicStats(topic).bytesOutRate.mark(value)
+      BrokerTopicStats.getBrokerAllTopicsStats.bytesOutRate.mark(value)
+    }
   }
 }
