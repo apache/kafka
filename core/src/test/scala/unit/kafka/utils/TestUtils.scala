@@ -129,8 +129,10 @@ object TestUtils extends Logging {
     try {
       server.startup()
     } catch {
-      case e: Throwable => maybeLogJaasConfig()
-      throw e
+      case e: Throwable =>
+        maybeLogJaasConfig()
+        dumpThreads()
+        throw e
     }
     server
   }
@@ -151,6 +153,15 @@ object TestUtils extends Logging {
     } catch {
       case e: Throwable => error(s"Failed to log jaas config, exception: $e")
     }
+  }
+
+  def dumpThreads() {
+    val stacks = Thread.getAllStackTraces();
+    stacks.asScala.foreach(t => {
+        val name = t._1.getName
+        val stacktrace = t._2.toList.mkString("\n")
+        error(s"Thread $name stackTrace $stacktrace")
+      })
   }
 
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
