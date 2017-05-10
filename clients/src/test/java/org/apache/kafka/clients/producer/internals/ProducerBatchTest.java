@@ -20,12 +20,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 
 public class ProducerBatchTest {
 
@@ -69,5 +72,15 @@ public class ProducerBatchTest {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         // Set `now` to 2ms before the create time.
         assertFalse(batch.maybeExpire(10240, 10240L, now - 2L, 10240L, true));
+    }
+
+    @Test
+    public void testShouldNotAppendOnceRecordBatchGetsFull() {
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        FutureRecordMetadata result0 = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        assertNotNull(result0);
+        memoryRecordsBuilder.closeForRecordAppends();
+        assertFalse(memoryRecordsBuilder.hasRoomFor(now, null, new byte[10]));
+        assertEquals(null, batch.tryAppend(now + 1, null, new byte[10], Record.EMPTY_HEADERS, null, now + 1));
     }
 }
