@@ -17,7 +17,7 @@
 package kafka.api
 
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
 
 import org.apache.kafka.common.utils.Utils
@@ -27,7 +27,7 @@ import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
-import org.apache.kafka.common.errors.TopicExistsException
+import org.apache.kafka.common.errors.{SecurityDisabledException, TopicExistsException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
@@ -153,6 +153,25 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
       assertEquals(1, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
     }
+    client.close()
+  }
+
+  val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
+      new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW));
+
+  /**
+   * Test that ACL operations are not possible when the authorizer is disabled.
+   * Also see {@link kafka.api.SaslSslAdminClientIntegrationTest} for tests of ACL operations
+   * when the authorizer is enabled.
+   */
+  @Test
+  def testAclOperations(): Unit = {
+    client = AdminClient.create(createConfig())
+    assertFutureExceptionTypeEquals(client.describeAcls(AclBindingFilter.ANY).all(), classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.createAcls(Collections.singleton(ACL1)).all(),
+        classOf[SecurityDisabledException])
+    assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
+      classOf[SecurityDisabledException])
     client.close()
   }
 

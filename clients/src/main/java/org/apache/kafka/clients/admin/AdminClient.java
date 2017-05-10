@@ -183,4 +183,70 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                  The ApiVersionsResults.
      */
     public abstract ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
+
+    /**
+     * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions),
+     * but uses the default options.
+     *
+     * @param filter            The filter to use.
+     * @return                  The DeleteAclsResult.
+     */
+    public DescribeAclsResults describeAcls(AclBindingFilter filter) {
+        return describeAcls(filter, new DescribeAclsOptions());
+    }
+
+    /**
+     * Lists access control lists (ACLs) according to the supplied filter.
+     *
+     * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected
+     * in the output of describeAcls.
+     *
+     * @param filter            The filter to use.
+     * @param options           The options to use when listing the ACLs.
+     * @return                  The DeleteAclsResult.
+     */
+    public abstract DescribeAclsResults describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
+
+    /**
+     * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions),
+     * but uses the default options.
+     *
+     * @param acls              The ACLs to create
+     * @return                  The CreateAclsResult.
+     */
+    public CreateAclsResults createAcls(Collection<AclBinding> acls) {
+        return createAcls(acls, new CreateAclsOptions());
+    }
+
+    /**
+     * Creates access control lists (ACLs) which are bound to specific resources.
+     *
+     * If you attempt to add an ACL that duplicates an existing ACL, no error will be raised, but
+     * no changes will be made.
+     *
+     * @param acls              The ACLs to create
+     * @param options           The options to use when creating the ACLs.
+     * @return                  The CreateAclsResult.
+     */
+    public abstract CreateAclsResults createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
+
+    /**
+     * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions),
+     * but uses the default options.
+     *
+     * @param filters           The filters to use.
+     * @return                  The DeleteAclsResult.
+     */
+    public DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters) {
+        return deleteAcls(filters, new DeleteAclsOptions());
+    }
+
+    /**
+     * Deletes access control lists (ACLs) according to the supplied filters.
+     *
+     * @param filters           The filters to use.
+     * @param options           The options to use when deleting the ACLs.
+     * @return                  The DeleteAclsResult.
+     */
+    public abstract DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
 }

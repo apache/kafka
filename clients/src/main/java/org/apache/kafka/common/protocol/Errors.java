@@ -62,6 +62,7 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -487,9 +488,14 @@ public enum Errors {
         public ApiException build(String message) {
             return new ProducerIdAuthorizationException(message);
         }
-    });
-
-
+    }),
+    SECURITY_DISABLED(55, "Security features are disabled.",
+        new ApiExceptionBuilder() {
+            @Override
+            public ApiException build(String message) {
+                return new SecurityDisabledException(message);
+            }
+        });
              
     private interface ApiExceptionBuilder {
         ApiException build(String message);
