@@ -1,12 +1,10 @@
 package integration.kafka.tools
 
 import kafka.api.IntegrationTestHarness
-import kafka.cluster.BrokerEndPoint
 import kafka.tools.GetOffsetShell
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -41,15 +39,15 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
   def twoReplicatedPartitions: Unit = {
     val producerP0Offset = sendRecords(topic1, 0, 10).last.offset
     val producerP1Offset = sendRecords(topic1, 1, 20).last.offset
-    val offsets = getOffsets(Set(
-      new TopicPartition(topic1, 0),
-      new TopicPartition(topic1, 1)
-    ))
+    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+      Set(
+        new TopicPartition(topic1, 0),
+        new TopicPartition(topic1, 1)
+      ))
     assertEquals(s"Must have 2 offset entries: $offsets", 2, offsets.size)
-    /*TODO Currently the test fails because one of offsets has actually Left(NOT_LEADER_FOR_PARTITION). Fix it when switching to KafkaConsumer. */
-    val actualP0Offset = offsets(new TopicPartition(topic1, 0)).right.get.head
+    val actualP0Offset = offsets(new TopicPartition(topic1, 0)).right.get
     assertEquals("Actual offset for partition 0 must be equal to producer offset plus 1", producerP0Offset + 1, actualP0Offset)
-    val actualP1Offset = offsets(new TopicPartition(topic1, 1)).right.get.head
+    val actualP1Offset = offsets(new TopicPartition(topic1, 1)).right.get
     assertEquals("Actual offset for partition 1 must be equal to producer offset plus 1", producerP1Offset + 1, actualP1Offset)
   }
 
@@ -59,14 +57,5 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
       producers.head.send(record)
     }
     futures.map(_.get)
-  }
-
-  private def getOffsets(topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[Errors, Seq[Long]]] = {
-    val (brokerHost, brokerPort) = BrokerEndPoint.parseHostPort(CoreUtils.parseCsvList(brokerList).head).get
-    GetOffsetShell.getOffsets(brokerHost,
-      brokerPort,
-      topicPartitions,
-      -1,
-      1)
   }
 }

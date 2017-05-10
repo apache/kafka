@@ -25,6 +25,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.common.TopicAndPartition
 import kafka.consumer._
 import kafka.utils.{CommandLineUtils, Logging, ToolsUtils}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.protocol.Errors
@@ -161,5 +162,19 @@ object GetOffsetShell extends Logging {
         case _ => new TopicPartition(tp.topic, tp.partition) -> Left(partitionOffsetsResponse.error)
       }
       }
+  }
+
+  def getOffsetsNew(bootstrapServers: String, topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[Errors, Long]] = {
+    import collection.JavaConversions._
+    val consumerConfig = Map(
+      ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers,
+      ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
+      ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer"
+    )
+    val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(consumerConfig)
+    val offsets: Map[TopicPartition, Long] = consumer.endOffsets(topicPartitions).mapValues(Long2long).toMap
+    offsets.map { case (tp, offset) => tp -> Right(offset) }
+//    consumer.assign(topicPartitions)
+//    consumer.seekToEnd(Nil)
   }
 }
