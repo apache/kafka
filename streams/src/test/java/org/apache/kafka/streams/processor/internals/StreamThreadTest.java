@@ -1160,10 +1160,13 @@ public class StreamThreadTest {
         thread.partitionAssignor(new MockStreamsPartitionAssignor(Collections.<TaskId, Set<TopicPartition>>emptyMap()));
 
         final StateDirectory testStateDir = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
-        assertFalse(testStateDir.lock(taskId, 0));
-        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
-        assertTrue(testStateDir.lock(taskId, 0));
-        testStateDir.unlock(taskId);
+        try {
+            assertFalse(testStateDir.lock(taskId, 0));
+            thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+            assertTrue(testStateDir.lock(taskId, 0));
+        } finally {
+            testStateDir.unlock(taskId);
+        }
     }
 
     @Test
@@ -1227,10 +1230,13 @@ public class StreamThreadTest {
         thread.partitionAssignor(new MockStreamsPartitionAssignor(Collections.<TaskId, Set<TopicPartition>>emptyMap()));
 
         final StateDirectory testStateDir = new StateDirectory(applicationId, config.getString(StreamsConfig.STATE_DIR_CONFIG));
-        assertFalse(testStateDir.lock(taskId, 0));
-        thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
-        assertTrue(testStateDir.lock(taskId, 0));
-        testStateDir.unlock(taskId);
+        try {
+            assertFalse(testStateDir.lock(taskId, 0));
+            thread.rebalanceListener.onPartitionsAssigned(Collections.<TopicPartition>emptyList());
+            assertTrue(testStateDir.lock(taskId, 0));
+        } finally {
+            testStateDir.unlock(taskId);
+        }
     }
 
     private void initPartitionGrouper(StreamsConfig config, StreamThread thread, MockClientSupplier clientSupplier) {
