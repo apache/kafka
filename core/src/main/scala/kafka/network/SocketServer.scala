@@ -398,16 +398,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-
-  private def buildMetricTagsMap() = { 
-    var metricTagsMap = Map("protocol" -> securityProtocol.name)
-    if (!securityProtocol.name.equals(listenerName.value)) {
-      metricTagsMap ++= Map("listener" -> listenerName.value) 
-    }
-    metricTagsMap ++= Map("networkProcessor" -> id.toString)
-    metricTagsMap.asJava
-  }
-  val metricTags = buildMetricTagsMap
+  val metricTags = Map("protocol" -> securityProtocol.name, "listener" -> listenerName.value, "networkProcessor" -> id.toString).asJava
 
   newGauge("IdlePercent",
     new Gauge[Double] {
