@@ -77,16 +77,16 @@ class Segments {
             if (!isSegment(segment, segmentId)) {
                 cleanup(segmentId);
             }
-            if (!segments.containsKey(key)) {
-                Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
+            Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
+            Segment previousSegment = segments.putIfAbsent(key, newSegment);
+            if (previousSegment == null) {
                 newSegment.openDB(context);
-                segments.put(key, newSegment);
                 maxSegmentId = segmentId > maxSegmentId ? segmentId : maxSegmentId;
                 if (minSegmentId == Long.MAX_VALUE) {
                     minSegmentId = maxSegmentId;
                 }
             }
-            return segments.get(key);
+            return previousSegment == null ? newSegment : previousSegment;
         } else {
             return null;
         }

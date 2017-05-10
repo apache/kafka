@@ -49,7 +49,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private var leaderNode: KafkaServer = null
 
   // Run tests concurrently since a throttle could be up to 1 second because quota percentage allocated is very low
-  case class Task(val apiKey: ApiKeys, val future: Future[_])
+  case class Task(apiKey: ApiKeys, future: Future[_])
   private val executor = Executors.newCachedThreadPool
   private val tasks = new ListBuffer[Task]
 
@@ -183,7 +183,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new requests.MetadataRequest.Builder(List(topic).asJava)
 
         case ApiKeys.LIST_OFFSETS =>
-          requests.ListOffsetRequest.Builder.forConsumer(false).setTargetTimes(Map(tp -> (0L: java.lang.Long)).asJava)
+          requests.ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+            .setTargetTimes(Map(tp -> (0L: java.lang.Long)).asJava)
 
         case ApiKeys.LEADER_AND_ISR =>
           new LeaderAndIsrRequest.Builder(brokerId, Int.MaxValue,
@@ -285,7 +286,7 @@ class RequestQuotaTest extends BaseRequestTest {
     apiKey.parseResponse(request.version, responseBuffer)
   }
 
-  case class Client(val clientId: String, val apiKey: ApiKeys) {
+  case class Client(clientId: String, apiKey: ApiKeys) {
     var correlationId: Int = 0
     val builder = requestBuilder(apiKey)
     def runUntil(until: (Struct) => Boolean): Boolean = {

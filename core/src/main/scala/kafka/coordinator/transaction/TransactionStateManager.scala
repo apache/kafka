@@ -31,6 +31,7 @@ import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -172,8 +173,7 @@ class TransactionStateManager(brokerId: Int,
         warn(s"Attempted to load offsets and group metadata from $topicPartition, but found no log")
 
       case Some(log) =>
-        val buffer = ByteBuffer.allocate(config.transactionLogLoadBufferSize)
-
+        lazy val buffer = ByteBuffer.allocate(config.transactionLogLoadBufferSize)
         val loadedTransactions = mutable.Map.empty[String, TransactionMetadata]
         val removedTransactionalIds = mutable.Set.empty[String]
 
@@ -183,11 +183,17 @@ class TransactionStateManager(brokerId: Int,
                 && loadingPartitions.contains(topicPartition.partition())
                 && !shuttingDown.get()) {
           buffer.clear()
-          val fileRecords = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None, minOneMessage = true)
-            .records.asInstanceOf[FileRecords]
-          val bufferRead = fileRecords.readInto(buffer, 0)
+          val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
+            minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+          val memRecords = fetchDataInfo.records match {
+            case records: MemoryRecords => records
+            case fileRecords: FileRecords =>
+              buffer.clear()
+              val bufferRead = fileRecords.readInto(buffer, 0)
+              MemoryRecords.readableRecords(bufferRead)
+          }
 
-          MemoryRecords.readableRecords(bufferRead).batches.asScala.foreach { batch =>
+          memRecords.batches.asScala.foreach { batch =>
             for (record <- batch.asScala) {
               require(record.hasKey, "Transaction state log's key should not be null")
               TransactionLog.readMessageKey(record.key) match {
@@ -278,7 +284,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(topicPartition.toString, loadTransactions)
+    scheduler.schedule(topicPartition.toString, loadTransactions _)
   }
 
   /**
@@ -313,7 +319,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(topicPartition.toString, removeTransactions)
+    scheduler.schedule(topicPartition.toString, removeTransactions _)
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
@@ -428,6 +434,7 @@ class TransactionStateManager(brokerId: Int,
       txnMetadata.txnTimeoutMs.toLong,
       TransactionLog.EnforcedRequiredAcks,
       internalTopicsAllowed = true,
+      isFromClient = false,
       recordsPerPartition,
       updateCacheCallback)
   }

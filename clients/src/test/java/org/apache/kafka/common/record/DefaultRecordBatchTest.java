@@ -224,25 +224,32 @@ public class DefaultRecordBatchTest {
     }
 
     @Test
-    public void testReadAndWriteControlRecord() {
-        ByteBuffer buffer = ByteBuffer.allocate(128);
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 0L);
+    public void testReadAndWriteControlBatch() {
+        long producerId = 1L;
+        short producerEpoch = 0;
+        int coordinatorEpoch = 15;
 
-        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.COMMIT, null);
-        builder.appendControlRecord(System.currentTimeMillis(), ControlRecordType.ABORT, null);
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE, TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, producerId,
+                producerEpoch, RecordBatch.NO_SEQUENCE, true, true, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                buffer.remaining());
+
+        EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
+        builder.appendEndTxnMarker(System.currentTimeMillis(), marker);
         MemoryRecords records = builder.build();
 
+        List<MutableRecordBatch> batches = TestUtils.toList(records.batches());
+        assertEquals(1, batches.size());
+
+        MutableRecordBatch batch = batches.get(0);
+        assertTrue(batch.isControlBatch());
+
         List<Record> logRecords = TestUtils.toList(records.records());
-        assertEquals(2, logRecords.size());
+        assertEquals(1, logRecords.size());
 
         Record commitRecord = logRecords.get(0);
-        assertTrue(commitRecord.isControlRecord());
-        assertEquals(ControlRecordType.COMMIT, ControlRecordType.parse(commitRecord.key()));
-
-        Record abortRecord = logRecords.get(1);
-        assertTrue(abortRecord.isControlRecord());
-        assertEquals(ControlRecordType.ABORT, ControlRecordType.parse(abortRecord.key()));
+        assertEquals(marker, EndTransactionMarker.deserialize(commitRecord));
     }
 
     @Test

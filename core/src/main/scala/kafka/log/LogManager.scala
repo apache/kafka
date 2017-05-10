@@ -189,7 +189,7 @@ class LogManager(val logDirs: Array[File],
         }
       }
 
-      jobs(cleanShutdownFile) = jobsForDir.map(pool.submit).toSeq
+      jobs(cleanShutdownFile) = jobsForDir.map(pool.submit)
     }
 
 
@@ -218,28 +218,28 @@ class LogManager(val logDirs: Array[File],
     if(scheduler != null) {
       info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
       scheduler.schedule("kafka-log-retention",
-                         cleanupLogs,
+                         cleanupLogs _,
                          delay = InitialTaskDelayMs,
                          period = retentionCheckMs,
                          TimeUnit.MILLISECONDS)
       info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
-      scheduler.schedule("kafka-log-flusher", 
-                         flushDirtyLogs, 
-                         delay = InitialTaskDelayMs, 
-                         period = flushCheckMs, 
+      scheduler.schedule("kafka-log-flusher",
+                         flushDirtyLogs _,
+                         delay = InitialTaskDelayMs,
+                         period = flushCheckMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-recovery-point-checkpoint",
-                         checkpointRecoveryPointOffsets,
+                         checkpointRecoveryPointOffsets _,
                          delay = InitialTaskDelayMs,
                          period = flushRecoveryOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-log-start-offset-checkpoint",
-                         checkpointLogStartOffsets,
+                         checkpointLogStartOffsets _,
                          delay = InitialTaskDelayMs,
                          period = flushStartOffsetCheckpointMs,
                          TimeUnit.MILLISECONDS)
       scheduler.schedule("kafka-delete-logs",
-                         deleteLogs,
+                         deleteLogs _,
                          delay = InitialTaskDelayMs,
                          period = defaultConfig.fileDeleteDelayMs,
                          TimeUnit.MILLISECONDS)
@@ -282,7 +282,6 @@ class LogManager(val logDirs: Array[File],
       jobs(dir) = jobsForDir.map(pool.submit).toSeq
     }
 
-
     try {
       for ((dir, dirJobs) <- jobs) {
         dirJobs.foreach(_.get)
@@ -311,7 +310,6 @@ class LogManager(val logDirs: Array[File],
 
     info("Shutdown complete.")
   }
-
 
   /**
    * Truncate the partition logs to the specified offsets and checkpoint the recovery point to this offset
@@ -454,7 +452,7 @@ class LogManager(val logDirs: Array[File],
       case e: Throwable => 
         error(s"Exception in kafka-delete-logs thread.", e)
     }
-}
+  }
 
   /**
     * Rename the directory of the given topic-partition "logdir" as "logdir.uuid.delete" and 

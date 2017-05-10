@@ -201,13 +201,19 @@ object ReassignPartitionsCommand extends Logging {
         .mkString(". ")
       throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicatesMsg))
     }
-    //Check that all partitions in the proposed assignment exist in the cluster
+    // check that all partitions in the proposed assignment exist in the cluster
     val proposedTopics = partitionsToBeReassigned.map { case (tp, _) => tp.topic }.distinct
     val existingAssignment = zkUtils.getReplicaAssignmentForTopics(proposedTopics)
     val nonExistentPartitions = partitionsToBeReassigned.map { case (tp, _) => tp }.filterNot(existingAssignment.contains)
     if (nonExistentPartitions.nonEmpty)
       throw new AdminCommandFailedException("The proposed assignment contains non-existent partitions: " +
         nonExistentPartitions)
+
+    // check that all brokers in the proposed assignment exist in the cluster
+    val existingBrokerIDs = zkUtils.getSortedBrokerList()
+    val nonExistingBrokerIDs = partitionsToBeReassigned.toMap.values.flatten.filterNot(existingBrokerIDs.contains).toSet
+    if (nonExistingBrokerIDs.nonEmpty)
+      throw new AdminCommandFailedException("The proposed assignment contains non-existent brokerIDs: " + nonExistingBrokerIDs.mkString(","))
 
     partitionsToBeReassigned
   }

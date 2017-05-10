@@ -29,7 +29,8 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.protocol.ApiKeys
-import org.junit.{After, Rule, Test}
+import org.junit.{After, Before, Rule, Test}
+import org.apache.kafka.common.requests.MetadataResponse
 import org.junit.rules.Timeout
 import org.junit.Assert._
 
@@ -46,6 +47,12 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   def globalTimeout = Timeout.millis(120000)
 
   var client: AdminClient = null
+
+  @Before
+  override def setUp(): Unit = {
+    super.setUp
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+  }
 
   @After
   def closeClient(): Unit = {
@@ -129,9 +136,14 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testGetAllBrokerVersions(): Unit = {
+  def testGetAllBrokerVersionsAndDescribeCluster(): Unit = {
     client = AdminClient.create(createConfig())
     val nodes = client.describeCluster().nodes().get()
+    val clusterId = client.describeCluster().clusterId().get()
+    assertEquals(servers.head.apis.clusterId, clusterId)
+    val controller = client.describeCluster().controller().get()
+    assertEquals(servers.head.apis.metadataCache.getControllerId.
+      getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
     val nodesToVersions = client.apiVersions(nodes).all().get()
     val brokers = brokerList.split(",")
     assert(brokers.size == nodesToVersions.size())

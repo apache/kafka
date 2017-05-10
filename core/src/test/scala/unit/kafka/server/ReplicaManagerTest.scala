@@ -21,7 +21,6 @@ import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.utils.{MockScheduler, MockTime, TestUtils, ZkUtils}
 import TestUtils.createBroker
@@ -29,7 +28,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{LeaderAndIsrRequest, PartitionState}
+import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, PartitionState}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -109,6 +108,7 @@ class ReplicaManagerTest {
         timeout = 0,
         requiredAcks = 3,
         internalTopicsAllowed = false,
+        isFromClient = true,
         entriesPerPartition = Map(new TopicPartition("test1", 0) -> MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord("first message".getBytes))),
         responseCallback = callback)
@@ -166,6 +166,7 @@ class ReplicaManagerTest {
         timeout = 1000,
         requiredAcks = -1,
         internalTopicsAllowed = false,
+        isFromClient = true,
         entriesPerPartition = Map(new TopicPartition(topic, 0) -> MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord("first message".getBytes()))),
         responseCallback = produceCallback)
@@ -178,7 +179,8 @@ class ReplicaManagerTest {
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
-        responseCallback = fetchCallback)
+        responseCallback = fetchCallback,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
       // Make this replica the follower
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(0, 0,
@@ -192,7 +194,133 @@ class ReplicaManagerTest {
       rm.shutdown(checkpointHW = false)
     }
   }
-  
+
+  @Test
+  def testReadCommittedFetchLimitedAtLSO(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    props.put("broker.id", Int.box(0))
+    val config = KafkaConfig.fromProps(props)
+    val logProps = new Properties()
+    logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray, LogConfig(logProps))
+    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1))
+    val metadataCache = EasyMock.createMock(classOf[MetadataCache])
+    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(0))).andReturn(true).anyTimes()
+    EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(1))).andReturn(true).anyTimes()
+    EasyMock.replay(metadataCache)
+    val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, metadataCache, Option(this.getClass.getName))
+
+    try {
+      val brokerList: java.util.List[Integer] = Seq[Integer](0, 1).asJava
+      val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1).asJava
+
+      val partition = rm.getOrCreatePartition(new TopicPartition(topic, 0))
+      partition.getOrCreateReplica(0)
+
+      // Make this replica the leader.
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(0, 0,
+        collection.immutable.Map(new TopicPartition(topic, 0) -> new PartitionState(0, 0, 0, brokerList, 0, brokerSet)).asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => {})
+      rm.getLeaderReplicaIfLocal(new TopicPartition(topic, 0))
+
+      def produceCallback(responseStatus: Map[TopicPartition, PartitionResponse]) =
+        responseStatus.values.foreach { status =>
+          assertEquals(Errors.NONE, status.error)
+        }
+
+      val producerId = 234L
+      val epoch = 5.toShort
+
+      // write a few batches as part of a transaction
+      val numRecords = 3
+      for (sequence <- 0 until numRecords) {
+        val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
+          new SimpleRecord(s"message $sequence".getBytes))
+        rm.appendRecords(
+          timeout = 1000,
+          requiredAcks = -1,
+          internalTopicsAllowed = false,
+          isFromClient = true,
+          entriesPerPartition = Map(new TopicPartition(topic, 0) -> records),
+          responseCallback = produceCallback)
+      }
+
+      var fetchCallbackFired = false
+      var fetchError = Errors.NONE
+      var fetchedRecords: Records = null
+      def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
+        fetchError = responseStatus.map(_._2).head.error
+        fetchedRecords = responseStatus.map(_._2).head.records
+        fetchCallbackFired = true
+      }
+
+      def fetchMessages(fetchInfos: Seq[(TopicPartition, PartitionData)],
+                        isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED): Unit = {
+        rm.fetchMessages(
+          timeout = 1000,
+          replicaId = 1,
+          fetchMinBytes = 0,
+          fetchMaxBytes = Int.MaxValue,
+          hardMaxBytesLimit = false,
+          fetchInfos = fetchInfos,
+          responseCallback = fetchCallback,
+          isolationLevel = isolationLevel)
+      }
+
+      // fetch as follower to advance the high watermark
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords, 0, 100000)),
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+
+      // fetch should return empty since LSO should be stuck at 0
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        isolationLevel = IsolationLevel.READ_COMMITTED)
+
+      assertTrue(fetchCallbackFired)
+      assertEquals(Errors.NONE, fetchError)
+      assertTrue(fetchedRecords.batches.asScala.isEmpty)
+      fetchCallbackFired = false
+
+      // now commit the transaction
+      val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
+      val commitRecordBatch = MemoryRecords.withEndTransactionMarker(producerId, epoch, endTxnMarker)
+      rm.appendRecords(
+        timeout = 1000,
+        requiredAcks = -1,
+        internalTopicsAllowed = false,
+        isFromClient = false,
+        entriesPerPartition = Map(new TopicPartition(topic, 0) -> commitRecordBatch),
+        responseCallback = produceCallback)
+
+      // the LSO has advanced, but the appended commit marker has not been replicated, so
+      // none of the data from the transaction should be visible yet
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        isolationLevel = IsolationLevel.READ_COMMITTED)
+
+      assertTrue(fetchCallbackFired)
+      assertEquals(Errors.NONE, fetchError)
+      assertTrue(fetchedRecords.batches.asScala.isEmpty)
+      fetchCallbackFired = false
+
+      // fetch as follower to advance the high watermark
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(numRecords + 1, 0, 100000)),
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+
+      // now all of the records should be fetchable
+      fetchMessages(fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(0, 0, 100000)),
+        isolationLevel = IsolationLevel.READ_COMMITTED)
+
+      assertTrue(fetchCallbackFired)
+      assertEquals(Errors.NONE, fetchError)
+      assertEquals(numRecords + 1, fetchedRecords.batches.asScala.size)
+    } finally {
+      rm.shutdown(checkpointHW = false)
+    }
+  }
+
   @Test
   def testFetchBeyondHighWatermarkReturnEmptyResponse() {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
@@ -211,8 +339,8 @@ class ReplicaManagerTest {
     EasyMock.replay(metadataCache)
     val rm = new ReplicaManager(config, metrics, time, zkUtils, new MockScheduler(time), mockLogMgr,
       new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time).follower, metadataCache, Option(this.getClass.getName))
+
     try {
-      
       val brokerList: java.util.List[Integer] = Seq[Integer](0, 1, 2).asJava
       val brokerSet: java.util.Set[Integer] = Set[Integer](0, 1, 2).asJava
       
@@ -234,6 +362,7 @@ class ReplicaManagerTest {
           timeout = 1000,
           requiredAcks = -1,
           internalTopicsAllowed = false,
+          isFromClient = true,
           entriesPerPartition = Map(new TopicPartition(topic, 0) -> TestUtils.singletonRecords("message %d".format(i).getBytes)),
           responseCallback = produceCallback)
       
@@ -254,7 +383,8 @@ class ReplicaManagerTest {
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 0, 100000)),
-        responseCallback = fetchCallback)
+        responseCallback = fetchCallback,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
         
       
       assertTrue(fetchCallbackFired)
@@ -270,11 +400,12 @@ class ReplicaManagerTest {
         fetchMaxBytes = Int.MaxValue,
         hardMaxBytesLimit = false,
         fetchInfos = Seq(new TopicPartition(topic, 0) -> new PartitionData(1, 0, 100000)),
-        responseCallback = fetchCallback)
+        responseCallback = fetchCallback,
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED)
           
-        assertTrue(fetchCallbackFired)
-        assertEquals("Should not give an exception", Errors.NONE, fetchError)
-        assertEquals("Should return empty response", MemoryRecords.EMPTY, fetchedRecords)
+      assertTrue(fetchCallbackFired)
+      assertEquals("Should not give an exception", Errors.NONE, fetchError)
+      assertEquals("Should return empty response", MemoryRecords.EMPTY, fetchedRecords)
     } finally {
       rm.shutdown(checkpointHW = false)
     }
