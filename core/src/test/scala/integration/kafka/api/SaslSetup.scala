@@ -81,7 +81,7 @@ trait SaslSetup {
     (serverKeytabFile.get, clientKeytabFile.get)
   }
 
-  protected def jaasSections(kafkaServerSaslMechanisms: List[String],
+  protected def jaasSections(kafkaServerSaslMechanisms: Seq[String],
                              kafkaClientSaslMechanism: Option[String],
                              mode: SaslSetupMode = Both,
                              kafkaServerEntryName: String = JaasTestUtils.KafkaServerContextName): Seq[JaasSection] = {
