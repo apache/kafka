@@ -298,7 +298,7 @@ class WorkerSinkTask extends WorkerTask {
             taskProvidedOffsets = task.preCommit(new HashMap<>(currentOffsets));
         } catch (Throwable t) {
             if (closing) {
-                log.warn("{} Offset commit failed during close");
+                log.warn("{} Offset commit failed during close", this);
                 onCommitCompleted(t, commitSeqno);
             } else {
                 log.error("{} Offset commit failed, rewinding to last committed offsets", this, t);
