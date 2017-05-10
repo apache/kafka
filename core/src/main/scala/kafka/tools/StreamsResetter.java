@@ -111,6 +111,9 @@ public class StreamsResetter {
                             "Make sure to stop all running application instances before running the reset tool.");
             }
 
+            if (dryRun) {
+                System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
+            }
             maybeResetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
             maybeDeleteInternalTopics(zkUtils);
 
@@ -177,20 +180,18 @@ public class StreamsResetter {
 
         String groupId = options.valueOf(applicationIdOption);
 
+        if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
+            System.out.println("No input or intermediate topics specified. Skipping seek.");
+            return;
+        }
+
         if (!dryRun) {
-            if (inputTopics.size() == 0 && intermediateTopics.size() == 0) {
-                System.out.println("No input or intermediate topics specified. Skipping seek.");
-                return;
-            } else {
-                if (inputTopics.size() != 0) {
-                    System.out.println("Seek-to-beginning for input topics " + inputTopics + " and all internal topics.");
-                }
-                if (intermediateTopics.size() != 0) {
-                    System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
-                }
+            if (inputTopics.size() != 0) {
+                System.out.println("Seek-to-beginning for input topics " + inputTopics + " and all internal topics.");
             }
-        } else {
-            System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
+            if (intermediateTopics.size() != 0) {
+                System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
+            }
         }
 
         final Set<String> topicsToSubscribe = new HashSet<>(inputTopics.size() + intermediateTopics.size());
@@ -254,14 +255,14 @@ public class StreamsResetter {
 
             if (notFoundInputTopics.size() > 0) {
                 System.out.println("Following input topics are not found, skipping them");
-                for (String topic : notFoundInputTopics) {
+                for (final String topic : notFoundInputTopics) {
                     System.out.println("Topic: " + topic);
                 }
             }
 
             if (notFoundIntermediateTopics.size() > 0) {
                 System.out.println("Following intermediate topics are not found, skipping them");
-                for (String topic : notFoundIntermediateTopics) {
+                for (final String topic : notFoundIntermediateTopics) {
                     System.out.println("Topic:" + topic);
                 }
             }
@@ -270,10 +271,7 @@ public class StreamsResetter {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
-
-        if (!dryRun) {
-            System.out.println("Done.");
-        }
+        System.out.println("Done.");
     }
 
     private void maybeSeekToEnd(final KafkaConsumer<byte[], byte[]> client, final Set<TopicPartition> intermediateTopicPartitions) {
@@ -354,10 +352,7 @@ public class StreamsResetter {
                 }
             }
         }
-
-        if (!dryRun) {
-            System.out.println("Done.");
-        }
+        System.out.println("Done.");
     }
 
     private boolean isInternalTopic(final String topicName) {
