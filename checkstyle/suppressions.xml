@@ -11,6 +11,7 @@
               files="(Fetcher|Sender|SenderTest|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient).java"/>
     <suppress checks="ClassFanOutComplexity"
               files=".*/protocol/Errors.java"/>
+    <suppress checks="ImportControl" files="ApiKey.java"/>
     <suppress checks="ClassFanOutComplexity"
               files=".*/common/utils/Utils.java"/>
     <suppress checks="ClassFanOutComplexity"

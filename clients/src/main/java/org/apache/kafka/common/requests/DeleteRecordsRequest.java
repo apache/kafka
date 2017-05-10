@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -52,7 +53,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
         private final Map<TopicPartition, Long> partitionOffsets;
 
         public Builder(int timeout, Map<TopicPartition, Long> partitionOffsets) {
-            super(ApiKeys.DELETE_RECORDS);
+            super(ApiKey.DELETE_RECORDS);
             this.timeout = timeout;
             this.partitionOffsets = partitionOffsets;
         }
@@ -97,7 +98,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
     }
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DELETE_RECORDS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.DELETE_RECORDS, version()));
         Map<String, Map<Integer, Long>> offsetsByTopic = CollectionUtils.groupDataByTopic(partitionOffsets);
         struct.set(TIMEOUT_KEY_NAME, timeout);
         List<Struct> topicStructArray = new ArrayList<>();
@@ -132,7 +133,7 @@ public class DeleteRecordsRequest extends AbstractRequest {
                 return new DeleteRecordsResponse(throttleTimeMs, responseMap);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    versionId, this.getClass().getSimpleName(), ApiKeys.DELETE_RECORDS.latestVersion()));
+                    versionId, this.getClass().getSimpleName(), ApiKey.DELETE_RECORDS.supportedRange().highest()));
         }
     }
 
@@ -145,6 +146,6 @@ public class DeleteRecordsRequest extends AbstractRequest {
     }
 
     public static DeleteRecordsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteRecordsRequest(ApiKeys.DELETE_RECORDS.parseRequest(version, buffer), version);
+        return new DeleteRecordsRequest(ApiKeys.parseRequest(ApiKey.DELETE_RECORDS, version, buffer), version);
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -156,12 +157,12 @@ public class ListOffsetResponse extends AbstractResponse {
     }
 
     public static ListOffsetResponse parse(ByteBuffer buffer, short version) {
-        return new ListOffsetResponse(ApiKeys.LIST_OFFSETS.parseResponse(version, buffer));
+        return new ListOffsetResponse(ApiKeys.parseResponse(ApiKey.LIST_OFFSETS, version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.LIST_OFFSETS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.LIST_OFFSETS, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);

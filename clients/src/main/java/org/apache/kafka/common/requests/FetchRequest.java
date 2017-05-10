@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -122,7 +123,7 @@ public class FetchRequest extends AbstractRequest {
 
         private Builder(Short desiredVersion, int replicaId, int maxWait, int minBytes,
                         LinkedHashMap<TopicPartition, PartitionData> fetchData, IsolationLevel isolationLevel) {
-            super(ApiKeys.FETCH, desiredVersion);
+            super(ApiKey.FETCH, desiredVersion);
             this.replicaId = replicaId;
             this.maxWait = maxWait;
             this.minBytes = minBytes;
@@ -247,12 +248,12 @@ public class FetchRequest extends AbstractRequest {
     }
 
     public static FetchRequest parse(ByteBuffer buffer, short version) {
-        return new FetchRequest(ApiKeys.FETCH.parseRequest(version, buffer), version);
+        return new FetchRequest(ApiKeys.parseRequest(ApiKey.FETCH, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.FETCH.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.FETCH, version()));
         List<TopicAndPartitionData<PartitionData>> topicsData = TopicAndPartitionData.batchByTopic(fetchData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -39,7 +40,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
         private final Integer timeout;
 
         public Builder(Set<String> topics, Integer timeout) {
-            super(ApiKeys.DELETE_TOPICS);
+            super(ApiKey.DELETE_TOPICS);
             this.topics = topics;
             this.timeout = timeout;
         }
@@ -79,7 +80,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DELETE_TOPICS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.DELETE_TOPICS, version()));
         struct.set(TOPICS_KEY_NAME, topics.toArray());
         struct.set(TIMEOUT_KEY_NAME, timeout);
         return struct;
@@ -98,7 +99,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
                 return new DeleteTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                    version(), this.getClass().getSimpleName(), ApiKeys.DELETE_TOPICS.latestVersion()));
+                    version(), this.getClass().getSimpleName(), ApiKey.DELETE_TOPICS.supportedRange().highest()));
         }
     }
 
@@ -111,7 +112,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     public static DeleteTopicsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteTopicsRequest(ApiKeys.DELETE_TOPICS.parseRequest(version, buffer), version);
+        return new DeleteTopicsRequest(ApiKeys.parseRequest(ApiKey.DELETE_TOPICS, version, buffer), version);
     }
 
 }

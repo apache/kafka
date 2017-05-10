@@ -21,10 +21,11 @@ import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
 import kafka.common.{TopicAndPartition, _}
-import kafka.network.{RequestOrResponseSend, RequestChannel}
+import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.ApiKey
+import org.apache.kafka.common.protocol.Errors
 
 object OffsetFetchRequest extends Logging {
   val CurrentVersion: Short = 2
@@ -56,7 +57,7 @@ case class OffsetFetchRequest(groupId: String,
                               versionId: Short = OffsetFetchRequest.CurrentVersion,
                               correlationId: Int = 0,
                               clientId: String = OffsetFetchRequest.DefaultClientId)
-    extends RequestOrResponse(Some(ApiKeys.OFFSET_FETCH.id)) {
+    extends RequestOrResponse(Some(ApiKey.OFFSET_FETCH.id)) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_.topic)
 

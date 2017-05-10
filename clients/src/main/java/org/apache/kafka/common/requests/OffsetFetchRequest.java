@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -47,7 +48,7 @@ public class OffsetFetchRequest extends AbstractRequest {
         private final List<TopicPartition> partitions;
 
         public Builder(String groupId, List<TopicPartition> partitions) {
-            super(ApiKeys.OFFSET_FETCH);
+            super(ApiKey.OFFSET_FETCH);
             this.groupId = groupId;
             this.partitions = partitions;
         }
@@ -141,7 +142,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                 return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.OFFSET_FETCH.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.OFFSET_FETCH.supportedRange().highest()));
         }
     }
 
@@ -159,7 +160,7 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchRequest(ApiKeys.OFFSET_FETCH.parseRequest(version, buffer), version);
+        return new OffsetFetchRequest(ApiKeys.parseRequest(ApiKey.OFFSET_FETCH, version, buffer), version);
     }
 
     public boolean isAllPartitions() {
@@ -168,7 +169,7 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.OFFSET_FETCH.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.OFFSET_FETCH, version()));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         if (partitions != null) {
             Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);

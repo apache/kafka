@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -297,7 +298,7 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(ApiKeys.METADATA.parseResponse(version, buffer));
+        return new MetadataResponse(ApiKeys.parseResponse(ApiKey.METADATA, version, buffer));
     }
 
     public static class TopicMetadata {
@@ -386,7 +387,7 @@ public class MetadataResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.METADATA.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.METADATA, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> brokerArray = new ArrayList<>();

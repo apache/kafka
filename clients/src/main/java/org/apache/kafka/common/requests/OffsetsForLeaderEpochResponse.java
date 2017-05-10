@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -63,12 +64,12 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
     }
 
     public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short versionId) {
-        return new OffsetsForLeaderEpochResponse(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(versionId).read(buffer));
+        return new OffsetsForLeaderEpochResponse(ApiKeys.responseSchema(ApiKey.OFFSET_FOR_LEADER_EPOCH, versionId).read(buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct responseStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.responseSchema(version));
+        Struct responseStruct = new Struct(ApiKeys.responseSchema(ApiKey.OFFSET_FOR_LEADER_EPOCH, version));
 
         Map<String, Map<Integer, EpochEndOffset>> endOffsetsByTopic = CollectionUtils.groupDataByTopic(epochEndOffsetsByPartition);
 

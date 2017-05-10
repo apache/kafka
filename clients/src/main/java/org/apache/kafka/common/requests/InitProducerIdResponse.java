@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -75,7 +76,7 @@ public class InitProducerIdResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.INIT_PRODUCER_ID.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.INIT_PRODUCER_ID, version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(EPOCH_KEY_NAME, epoch);
@@ -84,7 +85,7 @@ public class InitProducerIdResponse extends AbstractResponse {
     }
 
     public static InitProducerIdResponse parse(ByteBuffer buffer, short version) {
-        return new InitProducerIdResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
+        return new InitProducerIdResponse(ApiKeys.parseResponse(ApiKey.INIT_PRODUCER_ID, version, buffer));
     }
 
     @Override

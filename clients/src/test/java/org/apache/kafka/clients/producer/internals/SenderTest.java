@@ -24,6 +24,7 @@ import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
@@ -36,7 +37,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.NetworkReceive;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
@@ -145,7 +145,7 @@ public class SenderTest {
 
         // now the partition leader supports only v2
         apiVersions.update("0", NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
+                new ApiVersionsResponse.ApiVersion(ApiKey.PRODUCE.id(), (short) 0, (short) 2))));
 
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
@@ -185,7 +185,7 @@ public class SenderTest {
 
         // now the partition leader supports only v2
         apiVersions.update("0", NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
+                new ApiVersionsResponse.ApiVersion(ApiKey.PRODUCE.id(), (short) 0, (short) 2))));
 
         Future<RecordMetadata> future2 = accumulator.append(tp1, 0L, "key".getBytes(), "value".getBytes(),
                 null, null, MAX_BLOCK_TIMEOUT).future;
@@ -238,7 +238,7 @@ public class SenderTest {
                 1000, 1000, 64 * 1024, 64 * 1024, 1000,
                 time, true, new ApiVersions(), throttleTimeSensor);
 
-        short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
+        short apiVersionsResponseVersion = ApiKey.API_VERSIONS.supportedRange().highest();
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
         while (!client.ready(node, time.milliseconds()))
@@ -253,7 +253,7 @@ public class SenderTest {
             client.send(request, time.milliseconds());
             client.poll(1, time.milliseconds());
             ProduceResponse response = produceResponse(tp0, i, Errors.NONE, throttleTimeMs);
-            buffer = response.serialize(ApiKeys.PRODUCE.latestVersion(), new ResponseHeader(request.correlationId()));
+            buffer = response.serialize(ApiKey.PRODUCE.supportedRange().highest(), new ResponseHeader(request.correlationId()));
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
             client.poll(1, time.milliseconds());
             selector.clear();
@@ -332,7 +332,7 @@ public class SenderTest {
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
             String id = client.requests().peek().destination();
-            assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
+            assertEquals(ApiKey.PRODUCE, client.requests().peek().requestBuilder().api());
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.hasInFlightRequests());
@@ -651,7 +651,7 @@ public class SenderTest {
             sender.run(time.milliseconds()); // send produce request
             assertEquals("The sequence number should be 0", 0, txnManager.sequenceNumber(tp).longValue());
             String id = client.requests().peek().destination();
-            assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
+            assertEquals(ApiKey.PRODUCE, client.requests().peek().requestBuilder().api());
             Node node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
@@ -668,7 +668,7 @@ public class SenderTest {
             assertFalse("The future shouldn't have been done.", f1.isDone());
             assertFalse("The future shouldn't have been done.", f2.isDone());
             id = client.requests().peek().destination();
-            assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
+            assertEquals(ApiKey.PRODUCE, client.requests().peek().requestBuilder().api());
             node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
@@ -684,7 +684,7 @@ public class SenderTest {
             assertEquals("Offset of the first message should be 0", 0L, f1.get().offset());
             sender.run(time.milliseconds()); // send produce request
             id = client.requests().peek().destination();
-            assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
+            assertEquals(ApiKey.PRODUCE, client.requests().peek().requestBuilder().api());
             node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));

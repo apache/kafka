@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -67,7 +68,7 @@ public class DeleteTopicsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DELETE_TOPICS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.DELETE_TOPICS, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> topicErrorCodeStructs = new ArrayList<>(errors.size());
@@ -90,6 +91,6 @@ public class DeleteTopicsResponse extends AbstractResponse {
     }
 
     public static DeleteTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteTopicsResponse(ApiKeys.DELETE_TOPICS.responseSchema(version).read(buffer));
+        return new DeleteTopicsResponse(ApiKeys.responseSchema(ApiKey.DELETE_TOPICS, version).read(buffer));
     }
 }

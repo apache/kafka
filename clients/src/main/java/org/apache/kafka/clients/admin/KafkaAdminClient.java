@@ -24,12 +24,16 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
+import org.apache.kafka.common.ApiKey;
+import org.apache.kafka.common.ApiVersionRange;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.NodeVersions;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.acl.AclBinding;
@@ -58,6 +62,8 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.AlterConfigsRequest;
 import org.apache.kafka.common.requests.AlterConfigsResponse;
+import org.apache.kafka.common.requests.ApiVersionsRequest;
+import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -415,6 +421,22 @@ public class KafkaAdminClient extends AdminClient {
         @Override
         public Node provide() {
             return metadata.fetch().nodeById(nodeId);
+        }
+    }
+
+    /**
+     * Provides a constant node which is known at construction time.
+     */
+    private static class ConstantNodeProvider implements NodeProvider {
+        private final Node node;
+
+        ConstantNodeProvider(Node node) {
+            this.node = node;
+        }
+
+        @Override
+        public Node provide() {
+            return node;
         }
     }
 
@@ -1261,6 +1283,53 @@ public class KafkaAdminClient extends AdminClient {
 
         return new DescribeClusterResult(describeClusterFuture, controllerFuture, clusterIdFuture);
     }
+
+    @Override
+    public ApiVersionsResult apiVersions(Collection<Node> nodes, ApiVersionsOptions options) {
+        final long now = time.milliseconds();
+        final long deadlineMs = calcDeadlineMs(now, options.timeoutMs());
+        Map<Node, KafkaFuture<NodeVersions>> nodeFutures = new HashMap<>();
+        for (final Node node : nodes) {
+            if (nodeFutures.get(node) != null)
+                continue;
+            final KafkaFutureImpl<NodeVersions> nodeFuture = new KafkaFutureImpl<>();
+            nodeFutures.put(node, nodeFuture);
+            runnable.call(new Call("apiVersions", deadlineMs, new ConstantNodeProvider(node)) {
+                    @Override
+                    public AbstractRequest.Builder createRequest(int timeoutMs) {
+                        return new ApiVersionsRequest.Builder();
+                    }
+
+                    @Override
+                    public void handleResponse(AbstractResponse abstractResponse) {
+                        ApiVersionsResponse response = (ApiVersionsResponse) abstractResponse;
+                        nodeFuture.complete(toNodeVersions(new NodeApiVersions(response.apiVersions())));
+                    }
+
+                    @Override
+                    public void handleFailure(Throwable throwable) {
+                        nodeFuture.completeExceptionally(throwable);
+                    }
+                }, now);
+        }
+        return new ApiVersionsResult(nodeFutures);
+    }
+
+    private static NodeVersions toNodeVersions(NodeApiVersions versions) {
+        HashMap<Short, ApiVersionRange> apiVersionRanges = new HashMap<>();
+        for (ApiKey api : ApiKey.VALUES) {
+            ApiVersionsResponse.ApiVersion apiVersion = versions.apiVersion(api);
+            if (apiVersion != null) {
+                apiVersionRanges.put(api.id(), new ApiVersionRange(apiVersion.minVersion, apiVersion.maxVersion));
+            }
+        }
+        for (ApiVersionsResponse.ApiVersion apiVersion : versions.unknownApis()) {
+            String name = String.format("Unknown(%d)", apiVersion.apiKey);
+            apiVersionRanges.put(apiVersion.apiKey, new ApiVersionRange(apiVersion.minVersion, apiVersion.maxVersion));
+        }
+        return new NodeVersions(apiVersionRanges);
+    }
+
 
     @Override
     public DescribeAclsResult describeAcls(final AclBindingFilter filter, DescribeAclsOptions options) {

@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -40,26 +40,26 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() throws Exception {
-        assertEquals(apiKeysInResponse(ApiVersionsResponse.API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.API_VERSIONS_RESPONSE), new HashSet<>(ApiKey.VALUES));
     }
 
     @Test
     public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() throws Exception {
         ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
-        assertEquals(Utils.mkSet(ApiKeys.values()), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKey.VALUES), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
     }
     
     private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
         for (final ApiVersionsResponse.ApiVersion version : response.apiVersions()) {
-            assertTrue(ApiKeys.forId(version.apiKey).minRequiredInterBrokerMagic <= maxMagic);
+            assertTrue(ApiKeys.info(ApiKey.fromId(version.apiKey)).minRequiredInterBrokerMagic() <= maxMagic);
         }
     }
 
-    private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
-        final Set<ApiKeys> apiKeys = new HashSet<>();
+    private Set<ApiKey> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
+        final Set<ApiKey> apiKeys = new HashSet<>();
         for (final ApiVersionsResponse.ApiVersion version : apiVersions.apiVersions()) {
-            apiKeys.add(ApiKeys.forId(version.apiKey));
+            apiKeys.add(ApiKey.fromId(version.apiKey));
         }
         return apiKeys;
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -72,7 +73,7 @@ public class SyncGroupResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.SYNC_GROUP.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.SYNC_GROUP, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
@@ -81,7 +82,7 @@ public class SyncGroupResponse extends AbstractResponse {
     }
 
     public static SyncGroupResponse parse(ByteBuffer buffer, short version) {
-        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer));
+        return new SyncGroupResponse(ApiKeys.parseResponse(ApiKey.SYNC_GROUP, version, buffer));
     }
 
 }

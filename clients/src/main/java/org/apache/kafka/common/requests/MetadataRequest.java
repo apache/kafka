@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -47,7 +48,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         public Builder(List<String> topics, boolean allowAutoTopicCreation) {
-            super(ApiKeys.METADATA);
+            super(ApiKey.METADATA);
             this.topics = topics;
             this.allowAutoTopicCreation = allowAutoTopicCreation;
         }
@@ -138,7 +139,7 @@ public class MetadataRequest extends AbstractRequest {
                 return new MetadataResponse(throttleTimeMs, Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.METADATA.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.METADATA.supportedRange().highest()));
         }
     }
 
@@ -155,12 +156,12 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer, short version) {
-        return new MetadataRequest(ApiKeys.METADATA.parseRequest(version, buffer), version);
+        return new MetadataRequest(ApiKeys.parseRequest(ApiKey.METADATA, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.METADATA.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.METADATA, version()));
         if (topics == null)
             struct.set(TOPICS_KEY_NAME, null);
         else

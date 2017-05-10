@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -79,7 +80,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.ADD_PARTITIONS_TO_TXN.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.ADD_PARTITIONS_TO_TXN, version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 
         Map<String, Map<Integer, Errors>> errorsByTopic = CollectionUtils.groupDataByTopic(errors);
@@ -103,7 +104,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     }
 
     public static AddPartitionsToTxnResponse parse(ByteBuffer buffer, short version) {
-        return new AddPartitionsToTxnResponse(ApiKeys.ADD_PARTITIONS_TO_TXN.parseResponse(version, buffer));
+        return new AddPartitionsToTxnResponse(ApiKeys.parseResponse(ApiKey.ADD_PARTITIONS_TO_TXN, version, buffer));
     }
 
     @Override

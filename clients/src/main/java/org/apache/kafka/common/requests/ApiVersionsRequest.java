@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -27,11 +28,11 @@ public class ApiVersionsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<ApiVersionsRequest> {
 
         public Builder() {
-            super(ApiKeys.API_VERSIONS);
+            super(ApiKey.API_VERSIONS);
         }
 
         public Builder(short version) {
-            super(ApiKeys.API_VERSIONS, version);
+            super(ApiKey.API_VERSIONS, version);
         }
 
         @Override
@@ -55,7 +56,7 @@ public class ApiVersionsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return new Struct(ApiKeys.API_VERSIONS.requestSchema(version()));
+        return new Struct(ApiKeys.requestSchema(ApiKey.API_VERSIONS, version()));
     }
 
     @Override
@@ -68,12 +69,12 @@ public class ApiVersionsRequest extends AbstractRequest {
                 return new ApiVersionsResponse(throttleTimeMs, Errors.forException(e), Collections.<ApiVersionsResponse.ApiVersion>emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.API_VERSIONS.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.API_VERSIONS.supportedRange().highest()));
         }
     }
 
     public static ApiVersionsRequest parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsRequest(ApiKeys.API_VERSIONS.parseRequest(version, buffer), version);
+        return new ApiVersionsRequest(ApiKeys.parseRequest(ApiKey.API_VERSIONS, version, buffer), version);
     }
 
 }

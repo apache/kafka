@@ -29,7 +29,8 @@ import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.ApiKey
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
 import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
@@ -79,7 +80,7 @@ class AdminClient(val time: Time,
   networkThread.start()
 
   private def send(target: Node,
-                   api: ApiKeys,
+                   api: ApiKey,
                    request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     val future: RequestFuture[ClientResponse] = client.send(target, request)
     pendingFutures.add(future)
@@ -91,7 +92,7 @@ class AdminClient(val time: Time,
       throw future.exception()
   }
 
-  private def sendAnyNode(api: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
+  private def sendAnyNode(api: ApiKey, request: AbstractRequest.Builder[_ <: AbstractRequest]): AbstractResponse = {
     bootstrapBrokers.foreach { broker =>
       try {
         return send(broker, api, request)
@@ -107,7 +108,7 @@ class AdminClient(val time: Time,
     val requestBuilder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
 
     def sendRequest: Try[FindCoordinatorResponse] =
-      Try(sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])
+      Try(sendAnyNode(ApiKey.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])
 
     val startTime = time.milliseconds
     var response = sendRequest
@@ -133,13 +134,13 @@ class AdminClient(val time: Time,
   }
 
   def listGroups(node: Node): List[GroupOverview] = {
-    val response = send(node, ApiKeys.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
+    val response = send(node, ApiKey.LIST_GROUPS, new ListGroupsRequest.Builder()).asInstanceOf[ListGroupsResponse]
     response.error.maybeThrow()
     response.groups.asScala.map(group => GroupOverview(group.groupId, group.protocolType)).toList
   }
 
   def getApiVersions(node: Node): List[ApiVersion] = {
-    val response = send(node, ApiKeys.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
+    val response = send(node, ApiKey.API_VERSIONS, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
     response.error.maybeThrow()
     response.apiVersions.asScala.toList
   }
@@ -158,7 +159,7 @@ class AdminClient(val time: Time,
 
   def findAllBrokers(): List[Node] = {
     val request = MetadataRequest.Builder.allTopics()
-    val response = sendAnyNode(ApiKeys.METADATA, request).asInstanceOf[MetadataResponse]
+    val response = sendAnyNode(ApiKey.METADATA, request).asInstanceOf[MetadataResponse]
     val errors = response.errors
     if (!errors.isEmpty)
       debug(s"Metadata request contained errors: $errors")
@@ -195,7 +196,7 @@ class AdminClient(val time: Time,
 
   def listGroupOffsets(groupId: String): Map[TopicPartition, Long] = {
     val coordinator = findCoordinator(groupId)
-    val responseBody = send(coordinator, ApiKeys.OFFSET_FETCH, OffsetFetchRequest.Builder.allTopicPartitions(groupId))
+    val responseBody = send(coordinator, ApiKey.OFFSET_FETCH, OffsetFetchRequest.Builder.allTopicPartitions(groupId))
     val response = responseBody.asInstanceOf[OffsetFetchResponse]
     if (response.hasError)
       throw response.error.exception
@@ -226,7 +227,7 @@ class AdminClient(val time: Time,
 
   def deleteRecordsBefore(offsets: Map[TopicPartition, Long]): Future[Map[TopicPartition, DeleteRecordsResult]] = {
     val metadataRequest = new MetadataRequest.Builder(offsets.keys.map(_.topic).toSet.toList.asJava, true)
-    val response = sendAnyNode(ApiKeys.METADATA, metadataRequest).asInstanceOf[MetadataResponse]
+    val response = sendAnyNode(ApiKey.METADATA, metadataRequest).asInstanceOf[MetadataResponse]
     val errors = response.errors
     if (!errors.isEmpty)
       error(s"Metadata request contained errors: $errors")
@@ -292,7 +293,7 @@ class AdminClient(val time: Time,
                                   coordinator: Node)
 
   def describeConsumerGroupHandler(coordinator: Node, groupId: String): GroupMetadata = {
-    val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
+    val responseBody = send(coordinator, ApiKey.DESCRIBE_GROUPS,
         new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
     val response = responseBody.asInstanceOf[DescribeGroupsResponse]
     val metadata = response.groups.get(groupId)

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion;
 import org.junit.Assert;
@@ -38,9 +38,9 @@ public class NodeApiVersionsTest {
         NodeApiVersions versions = new NodeApiVersions(Collections.<ApiVersion>emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            bld.append(prefix).append(apiKey.name).
-                    append("(").append(apiKey.id).append("): UNSUPPORTED");
+        for (ApiKey api : ApiKey.VALUES) {
+            bld.append(prefix).append(api.title()).
+                    append("(").append(api.id()).append("): UNSUPPORTED");
             prefix = ", ";
         }
         bld.append(")");
@@ -57,37 +57,27 @@ public class NodeApiVersionsTest {
     @Test
     public void testVersionsToString() {
         List<ApiVersion> versionList = new ArrayList<>();
-        for (ApiKeys apiKey : ApiKeys.values()) {
-            if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
-                versionList.add(new ApiVersion(apiKey.id, (short) 0, (short) 0));
-            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
-                versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
+        for (ApiKey api : ApiKey.values()) {
+            if (api == ApiKey.CONTROLLED_SHUTDOWN_KEY) {
+                versionList.add(new ApiVersion(api.id(), (short) 0, (short) 0));
+            } else if (api == ApiKey.DELETE_TOPICS) {
+                versionList.add(new ApiVersion(api.id(), (short) 10000, (short) 10001));
             } else {
-                versionList.add(new ApiVersion(apiKey));
+                versionList.add(new ApiVersion(api));
             }
         }
         NodeApiVersions versions = new NodeApiVersions(versionList);
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
-        for (ApiKeys apiKey : ApiKeys.values()) {
+        for (ApiKey api : ApiKey.VALUES) {
             bld.append(prefix);
-            if (apiKey == ApiKeys.CONTROLLED_SHUTDOWN_KEY) {
+            if (api == ApiKey.CONTROLLED_SHUTDOWN_KEY) {
                 bld.append("ControlledShutdown(7): 0 [unusable: node too old]");
-            } else if (apiKey == ApiKeys.DELETE_TOPICS) {
+            } else if (api == ApiKey.DELETE_TOPICS) {
                 bld.append("DeleteTopics(20): 10000 to 10001 [unusable: node too new]");
             } else {
-                bld.append(apiKey.name).append("(").
-                        append(apiKey.id).append("): ");
-                if (apiKey.oldestVersion() ==
-                        apiKey.latestVersion()) {
-                    bld.append(apiKey.oldestVersion());
-                } else {
-                    bld.append(apiKey.oldestVersion()).
-                            append(" to ").
-                            append(apiKey.latestVersion());
-                }
-                bld.append(" [usable: ").append(apiKey.latestVersion()).
-                        append("]");
+                bld.append(api.title()).append("(").append(api.id()).append("): ").append(api.supportedRange());
+                bld.append(" [usable: ").append(api.supportedRange().highest()).append("]");
             }
             prefix = ", ";
         }
@@ -98,53 +88,53 @@ public class NodeApiVersionsTest {
     @Test
     public void testUsableVersionCalculation() {
         List<ApiVersion> versionList = new ArrayList<>();
-        versionList.add(new ApiVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY.id, (short) 0, (short) 0));
-        versionList.add(new ApiVersion(ApiKeys.FETCH.id, (short) 1, (short) 2));
+        versionList.add(new ApiVersion(ApiKey.CONTROLLED_SHUTDOWN_KEY.id(), (short) 0, (short) 0));
+        versionList.add(new ApiVersion(ApiKey.FETCH.id(), (short) 1, (short) 2));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
         try {
-            versions.usableVersion(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
+            versions.usableVersion(ApiKey.CONTROLLED_SHUTDOWN_KEY);
             Assert.fail("expected UnsupportedVersionException");
         } catch (UnsupportedVersionException e) {
             // pass
         }
-        assertEquals(2, versions.usableVersion(ApiKeys.FETCH));
+        assertEquals(2, versions.usableVersion(ApiKey.FETCH));
     }
 
     @Test
     public void testUsableVersionNoDesiredVersionReturnsLatestUsable() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 3)));
-        assertEquals(3, apiVersions.usableVersion(ApiKeys.PRODUCE, null));
+                new ApiVersion(ApiKey.PRODUCE.id(), (short) 1, (short) 3)));
+        assertEquals(3, apiVersions.usableVersion(ApiKey.PRODUCE, null));
     }
 
     @Test
     public void testDesiredVersion() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 3)));
-        assertEquals(1, apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 1));
-        assertEquals(2, apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 2));
-        assertEquals(3, apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 3));
+                new ApiVersion(ApiKey.PRODUCE.id(), (short) 1, (short) 3)));
+        assertEquals(1, apiVersions.usableVersion(ApiKey.PRODUCE, (short) 1));
+        assertEquals(2, apiVersions.usableVersion(ApiKey.PRODUCE, (short) 2));
+        assertEquals(3, apiVersions.usableVersion(ApiKey.PRODUCE, (short) 3));
     }
 
     @Test(expected = UnsupportedVersionException.class)
     public void testDesiredVersionTooLarge() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 2)));
-        apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 3);
+                new ApiVersion(ApiKey.PRODUCE.id(), (short) 1, (short) 2)));
+        apiVersions.usableVersion(ApiKey.PRODUCE, (short) 3);
     }
 
     @Test(expected = UnsupportedVersionException.class)
     public void testDesiredVersionTooSmall() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 2)));
-        apiVersions.usableVersion(ApiKeys.PRODUCE, (short) 0);
+                new ApiVersion(ApiKey.PRODUCE.id(), (short) 1, (short) 2)));
+        apiVersions.usableVersion(ApiKey.PRODUCE, (short) 0);
     }
 
     @Test(expected = UnsupportedVersionException.class)
     public void testUsableVersionCalculationNoKnownVersions() {
         List<ApiVersion> versionList = new ArrayList<>();
         NodeApiVersions versions =  new NodeApiVersions(versionList);
-        versions.usableVersion(ApiKeys.FETCH);
+        versions.usableVersion(ApiKey.FETCH);
     }
 
     @Test
@@ -156,8 +146,8 @@ public class NodeApiVersionsTest {
         // Add an API key that we don't know about.
         versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
         NodeApiVersions versions =  new NodeApiVersions(versionList);
-        for (ApiKeys apiKey: ApiKeys.values()) {
-            assertEquals(apiKey.latestVersion(), versions.usableVersion(apiKey));
+        for (ApiKey api: ApiKey.VALUES) {
+            assertEquals(api.supportedRange().highest(), versions.usableVersion(api));
         }
     }
 }

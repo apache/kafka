@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -47,7 +48,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         public Builder(String transactionalId, String consumerGroupId, long producerId, short producerEpoch,
                        Map<TopicPartition, CommittedOffset> offsets) {
-            super(ApiKeys.TXN_OFFSET_COMMIT);
+            super(ApiKey.TXN_OFFSET_COMMIT);
             this.transactionalId = transactionalId;
             this.consumerGroupId = consumerGroupId;
             this.producerId = producerId;
@@ -143,7 +144,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.TXN_OFFSET_COMMIT, version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
         struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
@@ -185,7 +186,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {
-        return new TxnOffsetCommitRequest(ApiKeys.TXN_OFFSET_COMMIT.parseRequest(version, buffer), version);
+        return new TxnOffsetCommitRequest(ApiKeys.parseRequest(ApiKey.TXN_OFFSET_COMMIT, version, buffer), version);
     }
 
     public static class CommittedOffset {

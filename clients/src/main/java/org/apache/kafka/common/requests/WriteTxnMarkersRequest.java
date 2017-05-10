@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -113,7 +114,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         private final List<TxnMarkerEntry> markers;
 
         public Builder(List<TxnMarkerEntry> markers) {
-            super(ApiKeys.WRITE_TXN_MARKERS);
+            super(ApiKey.WRITE_TXN_MARKERS);
             this.markers = markers;
         }
 
@@ -166,7 +167,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKERS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.WRITE_TXN_MARKERS, version()));
 
         Object[] markersArray = new Object[markers.size()];
         int i = 0;
@@ -211,7 +212,7 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     }
 
     public static WriteTxnMarkersRequest parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersRequest(ApiKeys.WRITE_TXN_MARKERS.parseRequest(version, buffer), version);
+        return new WriteTxnMarkersRequest(ApiKeys.parseRequest(ApiKey.WRITE_TXN_MARKERS, version, buffer), version);
     }
 
     @Override

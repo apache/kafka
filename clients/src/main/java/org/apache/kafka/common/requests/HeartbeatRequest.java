@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -33,7 +34,7 @@ public class HeartbeatRequest extends AbstractRequest {
         private final String memberId;
 
         public Builder(String groupId, int groupGenerationId, String memberId) {
-            super(ApiKeys.HEARTBEAT);
+            super(ApiKey.HEARTBEAT);
             this.groupId = groupId;
             this.groupGenerationId = groupGenerationId;
             this.memberId = memberId;
@@ -84,7 +85,7 @@ public class HeartbeatRequest extends AbstractRequest {
                 return new HeartbeatResponse(throttleTimeMs, Errors.forException(e));
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.HEARTBEAT.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.HEARTBEAT.supportedRange().highest()));
         }
     }
 
@@ -101,12 +102,12 @@ public class HeartbeatRequest extends AbstractRequest {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, short version) {
-        return new HeartbeatRequest(ApiKeys.HEARTBEAT.parseRequest(version, buffer), version);
+        return new HeartbeatRequest(ApiKeys.parseRequest(ApiKey.HEARTBEAT, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.HEARTBEAT.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.HEARTBEAT, version()));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GROUP_GENERATION_ID_KEY_NAME, groupGenerationId);
         struct.set(MEMBER_ID_KEY_NAME, memberId);

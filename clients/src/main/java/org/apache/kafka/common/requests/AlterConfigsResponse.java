@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -64,7 +65,7 @@ public class AlterConfigsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.ALTER_CONFIGS, version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> resourceStructs = new ArrayList<>(errors.size());
         for (Map.Entry<Resource, ApiError> entry : errors.entrySet()) {
@@ -80,7 +81,7 @@ public class AlterConfigsResponse extends AbstractResponse {
     }
 
     public static AlterConfigsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterConfigsResponse(ApiKeys.ALTER_CONFIGS.parseResponse(version, buffer));
+        return new AlterConfigsResponse(ApiKeys.parseResponse(ApiKey.ALTER_CONFIGS, version, buffer));
     }
 
 }

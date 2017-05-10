@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
 import org.apache.kafka.common.network.MultiSend;
@@ -263,7 +264,7 @@ public class FetchResponse extends AbstractResponse {
     }
 
     public static FetchResponse parse(ByteBuffer buffer, short version) {
-        return new FetchResponse(ApiKeys.FETCH.responseSchema(version).read(buffer));
+        return new FetchResponse(ApiKeys.responseSchema(ApiKey.FETCH, version).read(buffer));
     }
 
     private static void addResponseData(Struct struct, int throttleTimeMs, String dest, List<Send> sends) {
@@ -317,7 +318,7 @@ public class FetchResponse extends AbstractResponse {
     }
 
     private static Struct toStruct(short version, LinkedHashMap<TopicPartition, PartitionData> responseData, int throttleTime) {
-        Struct struct = new Struct(ApiKeys.FETCH.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.FETCH, version));
         List<FetchRequest.TopicAndPartitionData<PartitionData>> topicsData = FetchRequest.TopicAndPartitionData.batchByTopic(responseData);
         List<Struct> topicArray = new ArrayList<>();
         for (FetchRequest.TopicAndPartitionData<PartitionData> topicEntry: topicsData) {

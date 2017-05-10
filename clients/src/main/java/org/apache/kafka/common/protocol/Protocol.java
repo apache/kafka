@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.ApiKey;
+import org.apache.kafka.common.ApiVersionRange;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Type;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -1708,90 +1712,118 @@ public class Protocol {
 
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
-    public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
-    public static final Schema[][] RESPONSES = new Schema[ApiKeys.MAX_API_KEY + 1][];
-    static final short[] MIN_VERSIONS = new short[ApiKeys.MAX_API_KEY + 1];
+    public static final Schema[][] REQUESTS = new Schema[ApiKey.VALUES.size()][];
+    public static final Schema[][] RESPONSES = new Schema[ApiKey.VALUES.size()][];
+    static final short[] MIN_VERSIONS = new short[ApiKey.VALUES.size()];
 
     /* the latest version of each api */
-    static final short[] CURR_VERSION = new short[ApiKeys.MAX_API_KEY + 1];
+    static final short[] CURR_VERSION = new short[ApiKey.VALUES.size()];
+
+    private static final Map<ApiKey, ApiVersionRange> API_TO_VERSION_RANGE;
+
+    /**
+     * Get the range of versions of the given API which we supports.
+     *
+     * @param api       The API.
+     * @return          The version range, or null if no versions are supported.
+     */
+    private static ApiVersionRange getVersionRange(ApiKey api) {
+        short lowest = -1;
+        for (int i = 0; i < REQUESTS[api.id()].length; ++i) {
+            if (REQUESTS[api.id()][i] != null) {
+                lowest = (short) i;
+                break;
+            }
+        }
+        if (lowest == -1)
+            return null;
+        short highest = (short) (REQUESTS[api.id()].length - 1);
+        for (int i = lowest + 1; i < REQUESTS[api.id()].length; ++i) {
+            if (REQUESTS[api.id()][i] == null) {
+                highest = (short) (i - 1);
+                break;
+            }
+        }
+        return new ApiVersionRange(lowest, highest);
+    }
 
     static {
-        REQUESTS[ApiKeys.PRODUCE.id] = PRODUCE_REQUEST;
-        REQUESTS[ApiKeys.FETCH.id] = FETCH_REQUEST;
-        REQUESTS[ApiKeys.LIST_OFFSETS.id] = LIST_OFFSET_REQUEST;
-        REQUESTS[ApiKeys.METADATA.id] = METADATA_REQUEST;
-        REQUESTS[ApiKeys.LEADER_AND_ISR.id] = LEADER_AND_ISR_REQUEST;
-        REQUESTS[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_REQUEST;
-        REQUESTS[ApiKeys.UPDATE_METADATA_KEY.id] = UPDATE_METADATA_REQUEST;
-        REQUESTS[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_REQUEST;
-        REQUESTS[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_REQUEST;
-        REQUESTS[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_REQUEST;
-        REQUESTS[ApiKeys.FIND_COORDINATOR.id] = FIND_COORDINATOR_REQUEST;
-        REQUESTS[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_REQUEST;
-        REQUESTS[ApiKeys.HEARTBEAT.id] = HEARTBEAT_REQUEST;
-        REQUESTS[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_REQUEST;
-        REQUESTS[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_REQUEST;
-        REQUESTS[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_REQUEST;
-        REQUESTS[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_REQUEST;
-        REQUESTS[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_REQUEST;
-        REQUESTS[ApiKeys.API_VERSIONS.id] = API_VERSIONS_REQUEST;
-        REQUESTS[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_REQUEST;
-        REQUESTS[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_REQUEST;
-        REQUESTS[ApiKeys.DELETE_RECORDS.id] = DELETE_RECORDS_REQUEST;
-        REQUESTS[ApiKeys.INIT_PRODUCER_ID.id] = INIT_PRODUCER_ID_REQUEST;
-        REQUESTS[ApiKeys.OFFSET_FOR_LEADER_EPOCH.id] = OFFSET_FOR_LEADER_EPOCH_REQUEST;
-        REQUESTS[ApiKeys.ADD_PARTITIONS_TO_TXN.id] = ADD_PARTITIONS_TO_TXN_REQUEST;
-        REQUESTS[ApiKeys.ADD_OFFSETS_TO_TXN.id] = ADD_OFFSETS_TO_TXN_REQUEST;
-        REQUESTS[ApiKeys.END_TXN.id] = END_TXN_REQUEST;
-        REQUESTS[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_REQUEST;
-        REQUESTS[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_REQUEST;
-        REQUESTS[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_REQUEST;
-        REQUESTS[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_REQUEST;
-        REQUESTS[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_REQUEST;
-        REQUESTS[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_REQUEST;
-        REQUESTS[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_REQUEST;
+        REQUESTS[ApiKey.PRODUCE.id()] = PRODUCE_REQUEST;
+        REQUESTS[ApiKey.FETCH.id()] = FETCH_REQUEST;
+        REQUESTS[ApiKey.LIST_OFFSETS.id()] = LIST_OFFSET_REQUEST;
+        REQUESTS[ApiKey.METADATA.id()] = METADATA_REQUEST;
+        REQUESTS[ApiKey.LEADER_AND_ISR.id()] = LEADER_AND_ISR_REQUEST;
+        REQUESTS[ApiKey.STOP_REPLICA.id()] = STOP_REPLICA_REQUEST;
+        REQUESTS[ApiKey.UPDATE_METADATA_KEY.id()] = UPDATE_METADATA_REQUEST;
+        REQUESTS[ApiKey.CONTROLLED_SHUTDOWN_KEY.id()] = CONTROLLED_SHUTDOWN_REQUEST;
+        REQUESTS[ApiKey.OFFSET_COMMIT.id()] = OFFSET_COMMIT_REQUEST;
+        REQUESTS[ApiKey.OFFSET_FETCH.id()] = OFFSET_FETCH_REQUEST;
+        REQUESTS[ApiKey.FIND_COORDINATOR.id()] = FIND_COORDINATOR_REQUEST;
+        REQUESTS[ApiKey.JOIN_GROUP.id()] = JOIN_GROUP_REQUEST;
+        REQUESTS[ApiKey.HEARTBEAT.id()] = HEARTBEAT_REQUEST;
+        REQUESTS[ApiKey.LEAVE_GROUP.id()] = LEAVE_GROUP_REQUEST;
+        REQUESTS[ApiKey.SYNC_GROUP.id()] = SYNC_GROUP_REQUEST;
+        REQUESTS[ApiKey.DESCRIBE_GROUPS.id()] = DESCRIBE_GROUPS_REQUEST;
+        REQUESTS[ApiKey.LIST_GROUPS.id()] = LIST_GROUPS_REQUEST;
+        REQUESTS[ApiKey.SASL_HANDSHAKE.id()] = SASL_HANDSHAKE_REQUEST;
+        REQUESTS[ApiKey.API_VERSIONS.id()] = API_VERSIONS_REQUEST;
+        REQUESTS[ApiKey.CREATE_TOPICS.id()] = CREATE_TOPICS_REQUEST;
+        REQUESTS[ApiKey.DELETE_TOPICS.id()] = DELETE_TOPICS_REQUEST;
+        REQUESTS[ApiKey.DELETE_RECORDS.id()] = DELETE_RECORDS_REQUEST;
+        REQUESTS[ApiKey.INIT_PRODUCER_ID.id()] = INIT_PRODUCER_ID_REQUEST;
+        REQUESTS[ApiKey.OFFSET_FOR_LEADER_EPOCH.id()] = OFFSET_FOR_LEADER_EPOCH_REQUEST;
+        REQUESTS[ApiKey.ADD_PARTITIONS_TO_TXN.id()] = ADD_PARTITIONS_TO_TXN_REQUEST;
+        REQUESTS[ApiKey.ADD_OFFSETS_TO_TXN.id()] = ADD_OFFSETS_TO_TXN_REQUEST;
+        REQUESTS[ApiKey.END_TXN.id()] = END_TXN_REQUEST;
+        REQUESTS[ApiKey.WRITE_TXN_MARKERS.id()] = WRITE_TXN_REQUEST;
+        REQUESTS[ApiKey.TXN_OFFSET_COMMIT.id()] = TXN_OFFSET_COMMIT_REQUEST;
+        REQUESTS[ApiKey.DESCRIBE_ACLS.id()] = DESCRIBE_ACLS_REQUEST;
+        REQUESTS[ApiKey.CREATE_ACLS.id()] = CREATE_ACLS_REQUEST;
+        REQUESTS[ApiKey.DELETE_ACLS.id()] = DELETE_ACLS_REQUEST;
+        REQUESTS[ApiKey.DESCRIBE_CONFIGS.id()] = DESCRIBE_CONFIGS_REQUEST;
+        REQUESTS[ApiKey.ALTER_CONFIGS.id()] = ALTER_CONFIGS_REQUEST;
 
-        RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
-        RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
-        RESPONSES[ApiKeys.LIST_OFFSETS.id] = LIST_OFFSET_RESPONSE;
-        RESPONSES[ApiKeys.METADATA.id] = METADATA_RESPONSE;
-        RESPONSES[ApiKeys.LEADER_AND_ISR.id] = LEADER_AND_ISR_RESPONSE;
-        RESPONSES[ApiKeys.STOP_REPLICA.id] = STOP_REPLICA_RESPONSE;
-        RESPONSES[ApiKeys.UPDATE_METADATA_KEY.id] = UPDATE_METADATA_RESPONSE;
-        RESPONSES[ApiKeys.CONTROLLED_SHUTDOWN_KEY.id] = CONTROLLED_SHUTDOWN_RESPONSE;
-        RESPONSES[ApiKeys.OFFSET_COMMIT.id] = OFFSET_COMMIT_RESPONSE;
-        RESPONSES[ApiKeys.OFFSET_FETCH.id] = OFFSET_FETCH_RESPONSE;
-        RESPONSES[ApiKeys.FIND_COORDINATOR.id] = FIND_COORDINATOR_RESPONSE;
-        RESPONSES[ApiKeys.JOIN_GROUP.id] = JOIN_GROUP_RESPONSE;
-        RESPONSES[ApiKeys.HEARTBEAT.id] = HEARTBEAT_RESPONSE;
-        RESPONSES[ApiKeys.LEAVE_GROUP.id] = LEAVE_GROUP_RESPONSE;
-        RESPONSES[ApiKeys.SYNC_GROUP.id] = SYNC_GROUP_RESPONSE;
-        RESPONSES[ApiKeys.DESCRIBE_GROUPS.id] = DESCRIBE_GROUPS_RESPONSE;
-        RESPONSES[ApiKeys.LIST_GROUPS.id] = LIST_GROUPS_RESPONSE;
-        RESPONSES[ApiKeys.SASL_HANDSHAKE.id] = SASL_HANDSHAKE_RESPONSE;
-        RESPONSES[ApiKeys.API_VERSIONS.id] = API_VERSIONS_RESPONSE;
-        RESPONSES[ApiKeys.CREATE_TOPICS.id] = CREATE_TOPICS_RESPONSE;
-        RESPONSES[ApiKeys.DELETE_TOPICS.id] = DELETE_TOPICS_RESPONSE;
-        RESPONSES[ApiKeys.DELETE_RECORDS.id] = DELETE_RECORDS_RESPONSE;
-        RESPONSES[ApiKeys.INIT_PRODUCER_ID.id] = INIT_PRODUCER_ID_RESPONSE;
-        RESPONSES[ApiKeys.OFFSET_FOR_LEADER_EPOCH.id] = OFFSET_FOR_LEADER_EPOCH_RESPONSE;
-        RESPONSES[ApiKeys.ADD_PARTITIONS_TO_TXN.id] = ADD_PARTITIONS_TO_TXN_RESPONSE;
-        RESPONSES[ApiKeys.ADD_OFFSETS_TO_TXN.id] = ADD_OFFSETS_TO_TXN_RESPONSE;
-        RESPONSES[ApiKeys.END_TXN.id] = END_TXN_RESPONSE;
-        RESPONSES[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_RESPONSE;
-        RESPONSES[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_RESPONSE;
-        RESPONSES[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_RESPONSE;
-        RESPONSES[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_RESPONSE;
-        RESPONSES[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_RESPONSE;
-        RESPONSES[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_RESPONSE;
-        RESPONSES[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_RESPONSE;
+        RESPONSES[ApiKey.PRODUCE.id()] = PRODUCE_RESPONSE;
+        RESPONSES[ApiKey.FETCH.id()] = FETCH_RESPONSE;
+        RESPONSES[ApiKey.LIST_OFFSETS.id()] = LIST_OFFSET_RESPONSE;
+        RESPONSES[ApiKey.METADATA.id()] = METADATA_RESPONSE;
+        RESPONSES[ApiKey.LEADER_AND_ISR.id()] = LEADER_AND_ISR_RESPONSE;
+        RESPONSES[ApiKey.STOP_REPLICA.id()] = STOP_REPLICA_RESPONSE;
+        RESPONSES[ApiKey.UPDATE_METADATA_KEY.id()] = UPDATE_METADATA_RESPONSE;
+        RESPONSES[ApiKey.CONTROLLED_SHUTDOWN_KEY.id()] = CONTROLLED_SHUTDOWN_RESPONSE;
+        RESPONSES[ApiKey.OFFSET_COMMIT.id()] = OFFSET_COMMIT_RESPONSE;
+        RESPONSES[ApiKey.OFFSET_FETCH.id()] = OFFSET_FETCH_RESPONSE;
+        RESPONSES[ApiKey.FIND_COORDINATOR.id()] = FIND_COORDINATOR_RESPONSE;
+        RESPONSES[ApiKey.JOIN_GROUP.id()] = JOIN_GROUP_RESPONSE;
+        RESPONSES[ApiKey.HEARTBEAT.id()] = HEARTBEAT_RESPONSE;
+        RESPONSES[ApiKey.LEAVE_GROUP.id()] = LEAVE_GROUP_RESPONSE;
+        RESPONSES[ApiKey.SYNC_GROUP.id()] = SYNC_GROUP_RESPONSE;
+        RESPONSES[ApiKey.DESCRIBE_GROUPS.id()] = DESCRIBE_GROUPS_RESPONSE;
+        RESPONSES[ApiKey.LIST_GROUPS.id()] = LIST_GROUPS_RESPONSE;
+        RESPONSES[ApiKey.SASL_HANDSHAKE.id()] = SASL_HANDSHAKE_RESPONSE;
+        RESPONSES[ApiKey.API_VERSIONS.id()] = API_VERSIONS_RESPONSE;
+        RESPONSES[ApiKey.CREATE_TOPICS.id()] = CREATE_TOPICS_RESPONSE;
+        RESPONSES[ApiKey.DELETE_TOPICS.id()] = DELETE_TOPICS_RESPONSE;
+        RESPONSES[ApiKey.DELETE_RECORDS.id()] = DELETE_RECORDS_RESPONSE;
+        RESPONSES[ApiKey.INIT_PRODUCER_ID.id()] = INIT_PRODUCER_ID_RESPONSE;
+        RESPONSES[ApiKey.OFFSET_FOR_LEADER_EPOCH.id()] = OFFSET_FOR_LEADER_EPOCH_RESPONSE;
+        RESPONSES[ApiKey.ADD_PARTITIONS_TO_TXN.id()] = ADD_PARTITIONS_TO_TXN_RESPONSE;
+        RESPONSES[ApiKey.ADD_OFFSETS_TO_TXN.id()] = ADD_OFFSETS_TO_TXN_RESPONSE;
+        RESPONSES[ApiKey.END_TXN.id()] = END_TXN_RESPONSE;
+        RESPONSES[ApiKey.WRITE_TXN_MARKERS.id()] = WRITE_TXN_RESPONSE;
+        RESPONSES[ApiKey.TXN_OFFSET_COMMIT.id()] = TXN_OFFSET_COMMIT_RESPONSE;
+        RESPONSES[ApiKey.DESCRIBE_ACLS.id()] = DESCRIBE_ACLS_RESPONSE;
+        RESPONSES[ApiKey.CREATE_ACLS.id()] = CREATE_ACLS_RESPONSE;
+        RESPONSES[ApiKey.DELETE_ACLS.id()] = DELETE_ACLS_RESPONSE;
+        RESPONSES[ApiKey.DESCRIBE_CONFIGS.id()] = DESCRIBE_CONFIGS_RESPONSE;
+        RESPONSES[ApiKey.ALTER_CONFIGS.id()] = ALTER_CONFIGS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
-        for (ApiKeys api : ApiKeys.values()) {
-            CURR_VERSION[api.id] = (short) (REQUESTS[api.id].length - 1);
-            for (int i = 0; i < REQUESTS[api.id].length; ++i)
-                if (REQUESTS[api.id][i] != null) {
-                    MIN_VERSIONS[api.id] = (short) i;
+        for (ApiKey api : ApiKey.values()) {
+            CURR_VERSION[api.id()] = (short) (REQUESTS[api.id()].length - 1);
+            for (int i = 0; i < REQUESTS[api.id()].length; ++i)
+                if (REQUESTS[api.id()][i] != null) {
+                    MIN_VERSIONS[api.id()] = (short) i;
                     break;
                 }
         }
@@ -1799,17 +1831,41 @@ public class Protocol {
         /* sanity check that:
          *   - we have the same number of request and response versions for each api
          *   - we have a consistent set of request and response versions for each api */
-        for (ApiKeys api : ApiKeys.values()) {
-            if (REQUESTS[api.id].length != RESPONSES[api.id].length)
-                throw new IllegalStateException(REQUESTS[api.id].length + " request versions for api " + api.name
-                        + " but " + RESPONSES[api.id].length + " response versions.");
+        for (ApiKey api : ApiKey.values()) {
+            if (REQUESTS[api.id()].length != RESPONSES[api.id()].length)
+                throw new IllegalStateException(REQUESTS[api.id()].length + " request versions for api " + api.title()
+                    + " but " + RESPONSES[api.id()].length + " response versions.");
 
-            for (int i = 0; i < REQUESTS[api.id].length; ++i)
-                if ((REQUESTS[api.id][i] == null && RESPONSES[api.id][i] != null) ||
-                        (REQUESTS[api.id][i] != null && RESPONSES[api.id][i] == null))
+            for (int i = 0; i < REQUESTS[api.id()].length; ++i)
+                if ((REQUESTS[api.id()][i] == null && RESPONSES[api.id()][i] != null) ||
+                    (REQUESTS[api.id()][i] != null && RESPONSES[api.id()][i] == null))
                     throw new IllegalStateException("Request and response for version " + i + " of API "
-                            + api.id + " are defined inconsistently. One is null while the other is not null.");
+                        + api.id() + " are defined inconsistently. One is null while the other is not null.");
         }
+    }
+
+    static {
+        Map<ApiKey, ApiVersionRange> map = new HashMap<>();
+        for (ApiKey api : ApiKey.VALUES) {
+            short lowest = 0;
+            for (; lowest < REQUESTS[api.id()].length; ++lowest) {
+                if (REQUESTS[api.id()][lowest] != null)
+                    break;
+            }
+            if (lowest != REQUESTS[api.id()].length) {
+                short highest = lowest;
+                for (; highest < REQUESTS[api.id()].length; ++highest) {
+                    if (REQUESTS[api.id()][highest] == null)
+                        break;
+                }
+                map.put(api, new ApiVersionRange(lowest, (short) (highest - 1)));
+            }
+        }
+        API_TO_VERSION_RANGE = Collections.unmodifiableMap(map);
+    }
+
+    public static ApiVersionRange supportedVersionRange(ApiKey api) {
+        return API_TO_VERSION_RANGE.get(api);
     }
 
     public static boolean apiVersionSupported(short apiKey, short apiVersion) {
@@ -1920,17 +1976,17 @@ public class Protocol {
         b.append("</pre>\n");
         schemaToFieldTableHtml(RESPONSE_HEADER, b);
 
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKey api : ApiKey.values()) {
             // Key
             b.append("<h5>");
-            b.append("<a name=\"The_Messages_" + key.name + "\">");
-            b.append(key.name);
+            b.append("<a name=\"The_Messages_" + api.title() + "\">");
+            b.append(api.title());
             b.append(" API (Key: ");
-            b.append(key.id);
+            b.append(api.id());
             b.append("):</a></h5>\n\n");
             // Requests
             b.append("<b>Requests:</b><br>\n");
-            Schema[] requests = REQUESTS[key.id];
+            Schema[] requests = REQUESTS[api.id()];
             for (int i = 0; i < requests.length; i++) {
                 Schema schema = requests[i];
                 // Schema
@@ -1938,7 +1994,7 @@ public class Protocol {
                     b.append("<p>");
                     // Version header
                     b.append("<pre>");
-                    b.append(key.name);
+                    b.append(api.title());
                     b.append(" Request (Version: ");
                     b.append(i);
                     b.append(") => ");
@@ -1951,7 +2007,7 @@ public class Protocol {
 
             // Responses
             b.append("<b>Responses:</b><br>\n");
-            Schema[] responses = RESPONSES[key.id];
+            Schema[] responses = RESPONSES[api.id()];
             for (int i = 0; i < responses.length; i++) {
                 Schema schema = responses[i];
                 // Schema
@@ -1959,7 +2015,7 @@ public class Protocol {
                     b.append("<p>");
                     // Version header
                     b.append("<pre>");
-                    b.append(key.name);
+                    b.append(api.title());
                     b.append(" Response (Version: ");
                     b.append(i);
                     b.append(") => ");

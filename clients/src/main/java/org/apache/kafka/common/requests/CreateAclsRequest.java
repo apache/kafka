@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -63,7 +64,7 @@ public class CreateAclsRequest extends AbstractRequest {
         private final List<AclCreation> creations;
 
         public Builder(List<AclCreation> creations) {
-            super(ApiKeys.CREATE_ACLS);
+            super(ApiKey.CREATE_ACLS);
             this.creations = creations;
         }
 
@@ -96,7 +97,7 @@ public class CreateAclsRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.CREATE_ACLS.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.CREATE_ACLS, version()));
         List<Struct> requests = new ArrayList<>();
         for (AclCreation creation : aclCreations) {
             Struct creationStruct = struct.instance(CREATIONS);
@@ -122,11 +123,11 @@ public class CreateAclsRequest extends AbstractRequest {
                 return new CreateAclsResponse(throttleTimeMs, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.CREATE_ACLS.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.CREATE_ACLS.supportedRange().highest()));
         }
     }
 
     public static CreateAclsRequest parse(ByteBuffer buffer, short version) {
-        return new CreateAclsRequest(ApiKeys.CREATE_ACLS.parseRequest(version, buffer), version);
+        return new CreateAclsRequest(ApiKeys.parseRequest(ApiKey.CREATE_ACLS, version, buffer), version);
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -59,7 +60,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
 
         public Builder(int controllerId, int controllerEpoch,
                        Map<TopicPartition, PartitionState> partitionStates, Set<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR);
+            super(ApiKey.LEADER_AND_ISR);
             this.controllerId = controllerId;
             this.controllerEpoch = controllerEpoch;
             this.partitionStates = partitionStates;
@@ -145,7 +146,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.LEADER_AND_ISR.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.LEADER_AND_ISR, version));
         struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
         struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
 
@@ -191,7 +192,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
                 return new LeaderAndIsrResponse(Errors.NONE, responses);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.LEADER_AND_ISR.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.LEADER_AND_ISR.supportedRange().highest()));
         }
     }
 
@@ -212,7 +213,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     public static LeaderAndIsrRequest parse(ByteBuffer buffer, short version) {
-        return new LeaderAndIsrRequest(ApiKeys.LEADER_AND_ISR.parseRequest(version, buffer), version);
+        return new LeaderAndIsrRequest(ApiKeys.parseRequest(ApiKey.LEADER_AND_ISR, version, buffer), version);
     }
 
 }

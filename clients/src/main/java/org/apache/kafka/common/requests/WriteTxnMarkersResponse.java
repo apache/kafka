@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -85,7 +86,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.WRITE_TXN_MARKERS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.WRITE_TXN_MARKERS, version));
 
         Object[] responsesArray = new Object[errors.size()];
         int k = 0;
@@ -127,7 +128,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     }
 
     public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersResponse(ApiKeys.WRITE_TXN_MARKERS.parseResponse(version, buffer));
+        return new WriteTxnMarkersResponse(ApiKeys.parseResponse(ApiKey.WRITE_TXN_MARKERS, version, buffer));
     }
 
 }

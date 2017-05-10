@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -73,7 +74,7 @@ public class JoinGroupRequest extends AbstractRequest {
 
         public Builder(String groupId, int sessionTimeout, String memberId,
                        String protocolType, List<ProtocolMetadata> groupProtocols) {
-            super(ApiKeys.JOIN_GROUP);
+            super(ApiKey.JOIN_GROUP);
             this.groupId = groupId;
             this.sessionTimeout = sessionTimeout;
             this.rebalanceTimeout = sessionTimeout;
@@ -174,7 +175,7 @@ public class JoinGroupRequest extends AbstractRequest {
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.JOIN_GROUP.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.JOIN_GROUP.supportedRange().highest()));
         }
     }
 
@@ -203,13 +204,13 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer, short version) {
-        return new JoinGroupRequest(ApiKeys.JOIN_GROUP.parseRequest(version, buffer), version);
+        return new JoinGroupRequest(ApiKeys.parseRequest(ApiKey.JOIN_GROUP, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
         short version = version();
-        Struct struct = new Struct(ApiKeys.JOIN_GROUP.requestSchema(version));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.JOIN_GROUP, version));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
         if (version >= 1) {

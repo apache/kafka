@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -137,12 +138,12 @@ public class JoinGroupResponse extends AbstractResponse {
     }
 
     public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
-        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(version, buffer));
+        return new JoinGroupResponse(ApiKeys.parseResponse(ApiKey.JOIN_GROUP, version, buffer));
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.JOIN_GROUP.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.JOIN_GROUP, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
 

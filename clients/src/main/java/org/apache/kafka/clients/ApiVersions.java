@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.ProduceRequest;
 
@@ -53,7 +53,7 @@ public class ApiVersions {
         // we will need to convert the messages when they are ready to be sent.
         byte maxUsableMagic = RecordBatch.CURRENT_MAGIC_VALUE;
         for (NodeApiVersions versions : this.nodeApiVersions.values()) {
-            byte nodeMaxUsableMagic = ProduceRequest.requiredMagicForVersion(versions.usableVersion(ApiKeys.PRODUCE));
+            byte nodeMaxUsableMagic = ProduceRequest.requiredMagicForVersion(versions.usableVersion(ApiKey.PRODUCE));
             maxUsableMagic = (byte) Math.min(nodeMaxUsableMagic, maxUsableMagic);
         }
         return maxUsableMagic;

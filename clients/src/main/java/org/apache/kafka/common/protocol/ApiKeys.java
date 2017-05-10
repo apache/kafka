@@ -16,165 +16,131 @@
  */
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
+import java.util.EnumMap;
+import java.util.Map;
 
 /**
  * Identifiers for all the Kafka APIs
  */
-public enum ApiKeys {
-    PRODUCE(0, "Produce"),
-    FETCH(1, "Fetch"),
-    LIST_OFFSETS(2, "Offsets"),
-    METADATA(3, "Metadata"),
-    LEADER_AND_ISR(4, "LeaderAndIsr", true),
-    STOP_REPLICA(5, "StopReplica", true),
-    UPDATE_METADATA_KEY(6, "UpdateMetadata", true),
-    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown", true),
-    OFFSET_COMMIT(8, "OffsetCommit"),
-    OFFSET_FETCH(9, "OffsetFetch"),
-    FIND_COORDINATOR(10, "FindCoordinator"),
-    JOIN_GROUP(11, "JoinGroup"),
-    HEARTBEAT(12, "Heartbeat"),
-    LEAVE_GROUP(13, "LeaveGroup"),
-    SYNC_GROUP(14, "SyncGroup"),
-    DESCRIBE_GROUPS(15, "DescribeGroups"),
-    LIST_GROUPS(16, "ListGroups"),
-    SASL_HANDSHAKE(17, "SaslHandshake"),
-    API_VERSIONS(18, "ApiVersions") {
-        @Override
-        public Struct parseResponse(short version, ByteBuffer buffer) {
+public class ApiKeys {
+    static {
+        EnumMap<ApiKey, Info> info = new EnumMap<ApiKey, Info>(ApiKey.class);
+        info.put(ApiKey.PRODUCE, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.FETCH, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.LIST_OFFSETS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.METADATA, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.LEADER_AND_ISR, new Info(true, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.STOP_REPLICA, new Info(true, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.UPDATE_METADATA_KEY, new Info(true, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.CONTROLLED_SHUTDOWN_KEY, new Info(true, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.OFFSET_COMMIT, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.OFFSET_FETCH, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.FIND_COORDINATOR, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.JOIN_GROUP, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.HEARTBEAT, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.LEAVE_GROUP, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.SYNC_GROUP, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.DESCRIBE_GROUPS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.LIST_GROUPS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.SASL_HANDSHAKE, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.API_VERSIONS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.CREATE_TOPICS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.DELETE_TOPICS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.DELETE_RECORDS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.INIT_PRODUCER_ID, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.OFFSET_FOR_LEADER_EPOCH, new Info(true, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.ADD_PARTITIONS_TO_TXN, new Info(false, RecordBatch.MAGIC_VALUE_V2));
+        info.put(ApiKey.ADD_OFFSETS_TO_TXN, new Info(false, RecordBatch.MAGIC_VALUE_V2));
+        info.put(ApiKey.END_TXN, new Info(false, RecordBatch.MAGIC_VALUE_V2));
+        info.put(ApiKey.WRITE_TXN_MARKERS, new Info(true, RecordBatch.MAGIC_VALUE_V2));
+        info.put(ApiKey.TXN_OFFSET_COMMIT, new Info(false, RecordBatch.MAGIC_VALUE_V2));
+        info.put(ApiKey.DESCRIBE_ACLS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.CREATE_ACLS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.DELETE_ACLS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.DESCRIBE_CONFIGS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        info.put(ApiKey.ALTER_CONFIGS, new Info(false, RecordBatch.MAGIC_VALUE_V0));
+        INFO = info;
+    }
+
+    private final static Map<ApiKey, Info> INFO;
+
+    public static class Info {
+        /** indicates if this is a ClusterAction request used only by brokers */
+        public final boolean clusterAction;
+
+        /** indicates the minimum required inter broker magic required to support the API */
+        public final byte minRequiredInterBrokerMagic;
+
+        Info(boolean clusterAction, byte minRequiredInterBrokerMagic) {
+            this.clusterAction = clusterAction;
+            this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
+        }
+
+        public boolean clusterAction() {
+            return clusterAction;
+        }
+
+        public byte minRequiredInterBrokerMagic() {
+            return minRequiredInterBrokerMagic;
+        }
+    }
+
+    public static Info info(ApiKey api) {
+        return INFO.get(api);
+    }
+
+    public static Schema requestSchema(ApiKey api, short version) {
+        return schemaFor(api, Protocol.REQUESTS, version);
+    }
+
+    public static Schema responseSchema(ApiKey api, short version) {
+        return schemaFor(api, Protocol.RESPONSES, version);
+    }
+
+    public static Struct parseRequest(ApiKey api, short version, ByteBuffer buffer) {
+        return requestSchema(api, version).read(buffer);
+    }
+
+    public static Struct parseResponse(ApiKey api, short version, ByteBuffer buffer) {
+        if (api == ApiKey.API_VERSIONS) {
             // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
             // using a version higher than that supported by the broker, a version 0 response is sent
             // to the client indicating UNSUPPORTED_VERSION.
-            return parseResponse(version, buffer, (short) 0);
+            return parseResponse(api, version, buffer, (short) 0);
+        } else {
+            return responseSchema(api, version).read(buffer);
         }
-    },
-    CREATE_TOPICS(19, "CreateTopics"),
-    DELETE_TOPICS(20, "DeleteTopics"),
-    DELETE_RECORDS(21, "DeleteRecords"),
-    INIT_PRODUCER_ID(22, "InitProducerId"),
-    OFFSET_FOR_LEADER_EPOCH(23, "OffsetForLeaderEpoch", true),
-    ADD_PARTITIONS_TO_TXN(24, "AddPartitionsToTxn", false, RecordBatch.MAGIC_VALUE_V2),
-    ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false, RecordBatch.MAGIC_VALUE_V2),
-    END_TXN(26, "EndTxn", false, RecordBatch.MAGIC_VALUE_V2),
-    WRITE_TXN_MARKERS(27, "WriteTxnMarkers", true, RecordBatch.MAGIC_VALUE_V2),
-    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false, RecordBatch.MAGIC_VALUE_V2),
-    DESCRIBE_ACLS(29, "DescribeAcls"),
-    CREATE_ACLS(30, "CreateAcls"),
-    DELETE_ACLS(31, "DeleteAcls"),
-    DESCRIBE_CONFIGS(32, "DescribeConfigs"),
-    ALTER_CONFIGS(33, "AlterConfigs");
-
-    private static final ApiKeys[] ID_TO_TYPE;
-    private static final int MIN_API_KEY = 0;
-    public static final int MAX_API_KEY;
-
-    static {
-        int maxKey = -1;
-        for (ApiKeys key : ApiKeys.values())
-            maxKey = Math.max(maxKey, key.id);
-        ApiKeys[] idToType = new ApiKeys[maxKey + 1];
-        for (ApiKeys key : ApiKeys.values())
-            idToType[key.id] = key;
-        ID_TO_TYPE = idToType;
-        MAX_API_KEY = maxKey;
     }
 
-    /** the permanent and immutable id of an API--this can't change ever */
-    public final short id;
-
-    /** an english description of the api--this is for debugging and can change */
-    public final String name;
-
-    /** indicates if this is a ClusterAction request used only by brokers */
-    public final boolean clusterAction;
-
-    /** indicates the minimum required inter broker magic required to support the API */
-    public final byte minRequiredInterBrokerMagic;
-
-    ApiKeys(int id, String name) {
-        this(id, name, false);
-    }
-
-    ApiKeys(int id, String name, boolean clusterAction) {
-        this(id, name, clusterAction, RecordBatch.MAGIC_VALUE_V0);
-    }
-
-    ApiKeys(int id, String name, boolean clusterAction, byte minRequiredInterBrokerMagic) {
-        if (id < 0)
-            throw new IllegalArgumentException("id must not be negative, id: " + id);
-        this.id = (short) id;
-        this.name = name;
-        this.clusterAction = clusterAction;
-        this.minRequiredInterBrokerMagic = minRequiredInterBrokerMagic;
-    }
-
-    public static ApiKeys forId(int id) {
-        if (!hasId(id))
-            throw new IllegalArgumentException(String.format("Unexpected ApiKeys id `%s`, it should be between `%s` " +
-                    "and `%s` (inclusive)", id, MIN_API_KEY, MAX_API_KEY));
-        return ID_TO_TYPE[id];
-    }
-
-    public static boolean hasId(int id) {
-        return id >= MIN_API_KEY && id <= MAX_API_KEY;
-    }
-
-    public short latestVersion() {
-        if (id >= Protocol.CURR_VERSION.length)
-            throw new IllegalArgumentException("Latest version for API key " + this + " is not defined");
-        return Protocol.CURR_VERSION[id];
-    }
-
-    public short oldestVersion() {
-        if (id >= Protocol.MIN_VERSIONS.length)
-            throw new IllegalArgumentException("Oldest version for API key " + this + " is not defined");
-        return Protocol.MIN_VERSIONS[id];
-    }
-
-    public Schema requestSchema(short version) {
-        return schemaFor(Protocol.REQUESTS, version);
-    }
-
-    public Schema responseSchema(short version) {
-        return schemaFor(Protocol.RESPONSES, version);
-    }
-
-    public Struct parseRequest(short version, ByteBuffer buffer) {
-        return requestSchema(version).read(buffer);
-    }
-
-    public Struct parseResponse(short version, ByteBuffer buffer) {
-        return responseSchema(version).read(buffer);
-    }
-
-    protected Struct parseResponse(short version, ByteBuffer buffer, short fallbackVersion) {
+    protected static Struct parseResponse(ApiKey api, short version, ByteBuffer buffer, short fallbackVersion) {
         int bufferPosition = buffer.position();
         try {
-            return responseSchema(version).read(buffer);
+            return responseSchema(api, version).read(buffer);
         } catch (SchemaException e) {
             if (version != fallbackVersion) {
                 buffer.position(bufferPosition);
-                return responseSchema(fallbackVersion).read(buffer);
+                return responseSchema(api, fallbackVersion).read(buffer);
             } else
                 throw e;
         }
     }
 
-    private Schema schemaFor(Schema[][] schemas, short version) {
-        if (id > schemas.length)
-            throw new IllegalArgumentException("No schema available for API key " + this);
-        if (version < 0 || version > latestVersion())
-            throw new IllegalArgumentException("Invalid version for API key " + this + ": " + version);
+    private static Schema schemaFor(ApiKey api, Schema[][] schemas, short version) {
+        if (api.id() > schemas.length)
+            throw new IllegalArgumentException("No schema available for API key " + api);
+        if (version < 0 || version > api.supportedRange().highest())
+            throw new IllegalArgumentException("Invalid version for API key " + api + ": " + version);
 
-        Schema[] versions = schemas[id];
+        Schema[] versions = schemas[api.id()];
         if (versions[version] == null)
-            throw new IllegalArgumentException("Unsupported version for API key " + this + ": " + version);
+            throw new IllegalArgumentException("Unsupported version for API key " + api + ": " + version);
         return versions[version];
     }
 
@@ -185,13 +151,13 @@ public enum ApiKeys {
         b.append("<th>Name</th>\n");
         b.append("<th>Key</th>\n");
         b.append("</tr>");
-        for (ApiKeys key : ApiKeys.values()) {
+        for (ApiKey api : ApiKey.values()) {
             b.append("<tr>\n");
             b.append("<td>");
-            b.append("<a href=\"#The_Messages_" + key.name + "\">" + key.name + "</a>");
+            b.append("<a href=\"#The_Messages_" + api.title() + "\">" + api.title() + "</a>");
             b.append("</td>");
             b.append("<td>");
-            b.append(key.id);
+            b.append(api.id());
             b.append("</td>");
             b.append("</tr>\n");
         }
@@ -202,5 +168,4 @@ public enum ApiKeys {
     public static void main(String[] args) {
         System.out.println(toHtml());
     }
-
 }

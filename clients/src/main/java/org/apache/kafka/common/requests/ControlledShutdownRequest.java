@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -31,7 +32,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
         private final int brokerId;
 
         public Builder(int brokerId) {
-            super(ApiKeys.CONTROLLED_SHUTDOWN_KEY);
+            super(ApiKey.CONTROLLED_SHUTDOWN_KEY);
             this.brokerId = brokerId;
         }
 
@@ -72,7 +73,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
                 return new ControlledShutdownResponse(Errors.forException(e), Collections.<TopicPartition>emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN_KEY.latestVersion()));
+                        versionId, this.getClass().getSimpleName(), ApiKey.CONTROLLED_SHUTDOWN_KEY.supportedRange().highest()));
         }
     }
 
@@ -82,12 +83,12 @@ public class ControlledShutdownRequest extends AbstractRequest {
 
     public static ControlledShutdownRequest parse(ByteBuffer buffer, short version) {
         return new ControlledShutdownRequest(
-                ApiKeys.CONTROLLED_SHUTDOWN_KEY.parseRequest(version, buffer), version);
+                ApiKeys.parseRequest(ApiKey.CONTROLLED_SHUTDOWN_KEY, version, buffer), version);
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.CONTROLLED_SHUTDOWN_KEY.requestSchema(version()));
+        Struct struct = new Struct(ApiKeys.requestSchema(ApiKey.CONTROLLED_SHUTDOWN_KEY, version()));
         struct.set(BROKER_ID_KEY_NAME, brokerId);
         return struct;
     }

@@ -24,11 +24,11 @@ import java.nio.ByteBuffer
 import kafka.integration.KafkaServerTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ApiKey, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
-import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, RecordBatch, MemoryRecords}
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse, ResponseHeader}
 import org.junit.Assert._
 import org.junit.Test
@@ -116,7 +116,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val version = 2: Short
     val serializedBytes = {
-      val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.latestVersion, null,
+      val headerBytes = requestHeaderBytes(ApiKey.PRODUCE.id, ApiKey.PRODUCE.supportedRange().highest(), null,
         correlationId)
       val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("message".getBytes))
       val request = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, 1, 10000,
@@ -144,7 +144,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   @Test
   def testHeaderOnlyRequest() {
-    verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
+    verifyDisconnect(requestHeaderBytes(ApiKey.PRODUCE.id, 1))
   }
 
   @Test
@@ -154,7 +154,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
   @Test
   def testInvalidApiVersionRequest() {
-    verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
+    verifyDisconnect(requestHeaderBytes(ApiKey.PRODUCE.id, -1))
   }
 
   @Test
@@ -165,7 +165,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
         2 /* apiKey */ +
           2 /* apiVersion */
       )
-      buffer.putShort(ApiKeys.PRODUCE.id)
+      buffer.putShort(ApiKey.PRODUCE.id)
       buffer.putShort(1)
       buffer.array()
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -118,7 +119,7 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DELETE_ACLS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.DELETE_ACLS, version));
         struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
         for (AclFilterResponse response : responses) {
@@ -148,7 +149,7 @@ public class DeleteAclsResponse extends AbstractResponse {
     }
 
     public static DeleteAclsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteAclsResponse(ApiKeys.DELETE_ACLS.responseSchema(version).read(buffer));
+        return new DeleteAclsResponse(ApiKeys.responseSchema(ApiKey.DELETE_ACLS, version).read(buffer));
     }
 
     public String toString() {

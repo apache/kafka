@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -87,7 +88,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.FIND_COORDINATOR.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.FIND_COORDINATOR, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
@@ -103,7 +104,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
     }
 
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer));
+        return new FindCoordinatorResponse(ApiKeys.responseSchema(ApiKey.FIND_COORDINATOR, version).read(buffer));
     }
 
     @Override

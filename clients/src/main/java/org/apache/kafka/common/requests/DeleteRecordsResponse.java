@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -106,7 +107,7 @@ public class DeleteRecordsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.DELETE_RECORDS.responseSchema(version));
+        Struct struct = new Struct(ApiKeys.responseSchema(ApiKey.DELETE_RECORDS, version));
         if (struct.hasField(THROTTLE_TIME_KEY_NAME))
             struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         Map<String, Map<Integer, PartitionResponse>> responsesByTopic = CollectionUtils.groupDataByTopic(responses);
@@ -139,6 +140,6 @@ public class DeleteRecordsResponse extends AbstractResponse {
     }
 
     public static DeleteRecordsResponse parse(ByteBuffer buffer, short version) {
-        return new DeleteRecordsResponse(ApiKeys.DELETE_RECORDS.responseSchema(version).read(buffer));
+        return new DeleteRecordsResponse(ApiKeys.responseSchema(ApiKey.DELETE_RECORDS, version).read(buffer));
     }
 }

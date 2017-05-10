@@ -49,7 +49,7 @@ import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, A
 import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition}
+import org.apache.kafka.common.{ApiKey, Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
 import org.apache.kafka.common.resource.{Resource => AdminResource}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -93,41 +93,41 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
         format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
-      ApiKeys.forId(request.requestId) match {
-        case ApiKeys.PRODUCE => handleProduceRequest(request)
-        case ApiKeys.FETCH => handleFetchRequest(request)
-        case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
-        case ApiKeys.METADATA => handleTopicMetadataRequest(request)
-        case ApiKeys.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
-        case ApiKeys.STOP_REPLICA => handleStopReplicaRequest(request)
-        case ApiKeys.UPDATE_METADATA_KEY => handleUpdateMetadataRequest(request)
-        case ApiKeys.CONTROLLED_SHUTDOWN_KEY => handleControlledShutdownRequest(request)
-        case ApiKeys.OFFSET_COMMIT => handleOffsetCommitRequest(request)
-        case ApiKeys.OFFSET_FETCH => handleOffsetFetchRequest(request)
-        case ApiKeys.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
-        case ApiKeys.JOIN_GROUP => handleJoinGroupRequest(request)
-        case ApiKeys.HEARTBEAT => handleHeartbeatRequest(request)
-        case ApiKeys.LEAVE_GROUP => handleLeaveGroupRequest(request)
-        case ApiKeys.SYNC_GROUP => handleSyncGroupRequest(request)
-        case ApiKeys.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
-        case ApiKeys.LIST_GROUPS => handleListGroupsRequest(request)
-        case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
-        case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
-        case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
-        case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
-        case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-        case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
-        case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
-        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
-        case ApiKeys.END_TXN => handleEndTxnRequest(request)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
-        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
-        case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
-        case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
-        case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
-        case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
-        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
+      ApiKey.fromId(request.requestId) match {
+        case ApiKey.PRODUCE => handleProduceRequest(request)
+        case ApiKey.FETCH => handleFetchRequest(request)
+        case ApiKey.LIST_OFFSETS => handleListOffsetRequest(request)
+        case ApiKey.METADATA => handleTopicMetadataRequest(request)
+        case ApiKey.LEADER_AND_ISR => handleLeaderAndIsrRequest(request)
+        case ApiKey.STOP_REPLICA => handleStopReplicaRequest(request)
+        case ApiKey.UPDATE_METADATA_KEY => handleUpdateMetadataRequest(request)
+        case ApiKey.CONTROLLED_SHUTDOWN_KEY => handleControlledShutdownRequest(request)
+        case ApiKey.OFFSET_COMMIT => handleOffsetCommitRequest(request)
+        case ApiKey.OFFSET_FETCH => handleOffsetFetchRequest(request)
+        case ApiKey.FIND_COORDINATOR => handleFindCoordinatorRequest(request)
+        case ApiKey.JOIN_GROUP => handleJoinGroupRequest(request)
+        case ApiKey.HEARTBEAT => handleHeartbeatRequest(request)
+        case ApiKey.LEAVE_GROUP => handleLeaveGroupRequest(request)
+        case ApiKey.SYNC_GROUP => handleSyncGroupRequest(request)
+        case ApiKey.DESCRIBE_GROUPS => handleDescribeGroupRequest(request)
+        case ApiKey.LIST_GROUPS => handleListGroupsRequest(request)
+        case ApiKey.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
+        case ApiKey.API_VERSIONS => handleApiVersionsRequest(request)
+        case ApiKey.CREATE_TOPICS => handleCreateTopicsRequest(request)
+        case ApiKey.DELETE_TOPICS => handleDeleteTopicsRequest(request)
+        case ApiKey.DELETE_RECORDS => handleDeleteRecordsRequest(request)
+        case ApiKey.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
+        case ApiKey.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
+        case ApiKey.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+        case ApiKey.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+        case ApiKey.END_TXN => handleEndTxnRequest(request)
+        case ApiKey.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+        case ApiKey.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
+        case ApiKey.DESCRIBE_ACLS => handleDescribeAcls(request)
+        case ApiKey.CREATE_ACLS => handleCreateAcls(request)
+        case ApiKey.DELETE_ACLS => handleDeleteAcls(request)
+        case ApiKey.ALTER_CONFIGS => handleAlterConfigsRequest(request)
+        case ApiKey.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1279,7 +1279,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {
-    // Note that broker returns its full list of supported ApiKeys and versions regardless of current
+    // Note that broker returns its full list of supported ApiKey and versions regardless of current
     // authentication state (e.g., before SASL authentication on an SASL listener, do note that no
     // Kafka protocol requests may take place on a SSL listener before the SSL handshake is finished).
     // If this is considered to leak information about the broker version a workaround is to use SSL
@@ -1287,7 +1287,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     // ApiVersionRequest is not available.
     def sendResponseCallback(requestThrottleMs: Int) {
       val responseSend =
-        if (Protocol.apiVersionSupported(ApiKeys.API_VERSIONS.id, request.header.apiVersion))
+        if (Protocol.apiVersionSupported(ApiKey.API_VERSIONS.id, request.header.apiVersion))
           ApiVersionsResponse.apiVersionsResponse(requestThrottleMs, config.interBrokerProtocolVersion.messageFormatVersion).toSend(request.connectionId, request.header)
         else ApiVersionsResponse.unsupportedVersionSend(request.connectionId, request.header)
       requestChannel.sendResponse(RequestChannel.Response(request, responseSend))
@@ -1886,7 +1886,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def handleError(request: RequestChannel.Request, e: Throwable) {
-    val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] || !ApiKeys.forId(request.requestId).clusterAction
+    val mayThrottle = e.isInstanceOf[ClusterAuthorizationException] ||
+      !ApiKeys.info(ApiKey.fromId(request.requestId)).clusterAction
     if (request.requestObj != null) {
       def sendResponseCallback(requestThrottleMs: Int) {
         request.requestObj.handleError(e, requestChannel, request)

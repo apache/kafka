@@ -21,8 +21,9 @@ import java.util.Properties
 
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
+import org.apache.kafka.common.ApiKey
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -130,7 +131,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val topic4 = "t4"
     TestUtils.createTopic(zkUtils, topic1, 1, 1, servers)
 
-    val response1 = sendMetadataRequest(new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKeys.METADATA.latestVersion))
+    val response1 = sendMetadataRequest(new MetadataRequest(Seq(topic1, topic2).asJava, true, ApiKey.METADATA.supportedRange.highest))
     checkAutoCreatedTopic(topic1, topic2, response1)
 
     // V3 doesn't support a configurable allowAutoTopicCreation, so the fact that we set it to `false` has no effect
@@ -236,7 +237,7 @@ class MetadataRequestTest extends BaseRequestTest {
   }
 
   private def sendMetadataRequest(request: MetadataRequest, destination: Option[SocketServer] = None): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination.getOrElse(anySocketServer))
+    val response = connectAndSend(request, ApiKey.METADATA, destination = destination.getOrElse(anySocketServer))
     MetadataResponse.parse(response, request.version)
   }
 }

@@ -21,8 +21,9 @@ import java.util.Properties
 
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
+import org.apache.kafka.common.ApiKey
 import org.apache.kafka.common.protocol.types.Struct
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
@@ -137,18 +138,18 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   protected def sendCreateTopicRequestStruct(requestStruct: Struct, apiVersion: Short,
                                              socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = connectAndSendStruct(requestStruct, ApiKeys.CREATE_TOPICS, apiVersion, socketServer)
+    val response = connectAndSendStruct(requestStruct, ApiKey.CREATE_TOPICS, apiVersion, socketServer)
     CreateTopicsResponse.parse(response, apiVersion)
   }
 
   protected def sendCreateTopicRequest(request: CreateTopicsRequest, socketServer: SocketServer = controllerSocketServer): CreateTopicsResponse = {
-    val response = connectAndSend(request, ApiKeys.CREATE_TOPICS, socketServer)
+    val response = connectAndSend(request, ApiKey.CREATE_TOPICS, socketServer)
     CreateTopicsResponse.parse(response, request.version)
   }
 
   protected def sendMetadataRequest(request: MetadataRequest, destination: SocketServer = anySocketServer): MetadataResponse = {
-    val response = connectAndSend(request, ApiKeys.METADATA, destination = destination)
-    MetadataResponse.parse(response, ApiKeys.METADATA.latestVersion)
+    val response = connectAndSend(request, ApiKey.METADATA, destination = destination)
+    MetadataResponse.parse(response, ApiKey.METADATA.supportedRange().highest())
   }
 
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
 
@@ -26,24 +27,24 @@ import java.nio.ByteBuffer;
 public abstract class AbstractRequest extends AbstractRequestResponse {
 
     public static abstract class Builder<T extends AbstractRequest> {
-        private final ApiKeys apiKey;
+        private final ApiKey api;
         private final Short desiredVersion;
 
-        public Builder(ApiKeys apiKey) {
-            this(apiKey, null);
+        public Builder(ApiKey api) {
+            this(api, null);
         }
 
-        public Builder(ApiKeys apiKey, Short desiredVersion) {
-            this.apiKey = apiKey;
+        public Builder(ApiKey api, Short desiredVersion) {
+            this.api = api;
             this.desiredVersion = desiredVersion;
         }
 
-        public ApiKeys apiKey() {
-            return apiKey;
+        public ApiKey api() {
+            return api;
         }
 
         public short desiredOrLatestVersion() {
-            return desiredVersion == null ? apiKey.latestVersion() : desiredVersion;
+            return desiredVersion == null ? api.supportedRange().highest() : desiredVersion;
         }
 
         public Short desiredVersion() {
@@ -108,10 +109,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
     public static RequestAndSize getRequest(int requestId, short version, ByteBuffer buffer) {
-        ApiKeys apiKey = ApiKeys.forId(requestId);
-        Struct struct = apiKey.parseRequest(version, buffer);
+        ApiKey api = ApiKey.fromId(requestId);
+        Struct struct = ApiKeys.parseRequest(api, version, buffer);
         AbstractRequest request;
-        switch (apiKey) {
+        switch (api) {
             case PRODUCE:
                 request = new ProduceRequest(struct, version);
                 break;
@@ -216,7 +217,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
-                        "code should be updated to do so.", apiKey));
+                        "code should be updated to do so.", api));
         }
         return new RequestAndSize(request, struct.sizeOf());
     }

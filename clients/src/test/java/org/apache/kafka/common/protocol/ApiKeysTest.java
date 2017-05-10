@@ -22,6 +22,7 @@ import java.util.List;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+import org.apache.kafka.common.ApiKey;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.junit.Test;
@@ -30,17 +31,17 @@ public class ApiKeysTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testForIdWithInvalidIdLow() {
-        ApiKeys.forId(-1);
+        ApiKey.fromId(-1);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testForIdWithInvalidIdHigh() {
-        ApiKeys.forId(10000);
+        ApiKey.fromId(10000);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void schemaVersionOutOfRange() {
-        ApiKeys.PRODUCE.requestSchema((short) Protocol.REQUESTS[ApiKeys.PRODUCE.id].length);
+        ApiKeys.requestSchema(ApiKey.PRODUCE, (short) Protocol.REQUESTS[ApiKey.PRODUCE.id()].length);
     }
 
     /**
@@ -55,15 +56,15 @@ public class ApiKeysTest {
      */
     @Test
     public void testResponseThrottleTime() {
-        List<ApiKeys> authenticationKeys = Arrays.asList(ApiKeys.SASL_HANDSHAKE);
+        List<ApiKey> authenticationKeys = Arrays.asList(ApiKey.SASL_HANDSHAKE);
 
-        for (ApiKeys apiKey: ApiKeys.values()) {
-            Schema responseSchema = apiKey.responseSchema(apiKey.latestVersion());
+        for (ApiKey api: ApiKey.values()) {
+            Schema responseSchema = ApiKeys.responseSchema(api, api.supportedRange().highest());
             Field throttleTimeField = responseSchema.get("throttle_time_ms");
-            if (apiKey.clusterAction || authenticationKeys.contains(apiKey))
-                assertNull("Unexpected throttle time field: " + apiKey, throttleTimeField);
+            if (ApiKeys.info(api).clusterAction() || authenticationKeys.contains(api))
+                assertNull("Unexpected throttle time field: " + api, throttleTimeField);
             else
-                assertNotNull("Throttle time field missing: " + apiKey, throttleTimeField);
+                assertNotNull("Throttle time field missing: " + api, throttleTimeField);
         }
     }
 }

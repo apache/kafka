@@ -319,4 +319,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Method name="main"/>
         <Bug pattern="IL_INFINITE_LOOP"/>
     </Match>
+
+    <Match>
+        <!-- Suppress a spurious warning about a mutable array. -->
+        <Class name="org.apache.kafka.common.ApiKey"/>
+        <Bug pattern="MS_MUTABLE_ARRAY"/>
+    </Match>
 </FindBugsFilter>

@@ -31,7 +31,7 @@ import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils, ZkUtils}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{ApiKey, TopicPartition}
 import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -143,7 +143,7 @@ class KafkaApisTest {
     channel.buffer.getInt()
 
     val responseHeader = ResponseHeader.parse(channel.buffer)
-    val struct = ApiKeys.WRITE_TXN_MARKERS.responseSchema(writeTxnMarkersRequest.version()).read(channel.buffer)
+    val struct = ApiKeys.responseSchema(ApiKey.WRITE_TXN_MARKERS, writeTxnMarkersRequest.version()).read(channel.buffer)
 
     val markersResponse = new WriteTxnMarkersResponse(struct)
     Assert.assertEquals(expectedErrors, markersResponse.errors(1))
@@ -192,8 +192,7 @@ class KafkaApisTest {
     channel.buffer.getInt()
 
     val responseHeader = ResponseHeader.parse(channel.buffer)
-    val struct = ApiKeys.WRITE_TXN_MARKERS.responseSchema(writeTxnMarkersRequest.version()).read(channel.buffer)
-
+    val struct = ApiKeys.responseSchema(ApiKey.WRITE_TXN_MARKERS, writeTxnMarkersRequest.version()).read(channel.buffer)
     val markersResponse = new WriteTxnMarkersResponse(struct)
     Assert.assertEquals(expectedErrors, markersResponse.errors(1))
     EasyMock.verify(replicaManager)
@@ -223,7 +222,7 @@ class KafkaApisTest {
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(Utils.mkList(
     new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions))).build()
-    val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS.id, writeTxnMarkersRequest.version(), "", 0)
+    val header = new RequestHeader(ApiKey.WRITE_TXN_MARKERS.id(), writeTxnMarkersRequest.version(), "", 0)
     val byteBuffer = writeTxnMarkersRequest.serialize(header)
 
     val request = RequestChannel.Request(1, "1",
