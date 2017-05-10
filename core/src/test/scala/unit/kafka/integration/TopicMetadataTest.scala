@@ -27,25 +27,20 @@ import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert._
 import org.junit.{Test, After, Before}
 
-abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
+class TopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
   var brokerEndPoints: Seq[BrokerEndPoint] = null
   var adHocConfigs: Seq[KafkaConfig] = null
   val numConfigs: Int = 4
 
-  // This should be defined if `securityProtocol` uses SSL (eg SSL, SASL_SSL)
-  protected def trustStoreFile: Option[File]
-  protected def securityProtocol: SecurityProtocol
-
   @Before
   override def setUp() {
     super.setUp()
-    val props = createBrokerConfigs(numConfigs, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile)
+    val props = createBrokerConfigs(numConfigs, zkConnect)
     val configs: Seq[KafkaConfig] = props.map(KafkaConfig.fromProps)
     adHocConfigs = configs.takeRight(configs.size - 1) // Started and stopped by individual test cases
     server1 = TestUtils.createServer(configs.head)
@@ -134,8 +129,7 @@ abstract class BaseTopicMetadataTest extends ZooKeeperTestHarness {
 
   @Test
   def testAutoCreateTopicWithInvalidReplication {
-    val adHocProps = createBrokerConfig(2, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile)
+    val adHocProps = createBrokerConfig(2, zkConnect)
     // Set default replication higher than the number of live brokers
     adHocProps.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
     // start adHoc brokers with replication factor too high

@@ -227,7 +227,7 @@ object TestUtils extends Logging {
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
 
-    if (protocolAndPorts.exists { case (protocol, _) => usesSaslTransportLayer(protocol) })
+    if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
       props.putAll(saslConfigs(saslProperties))
 
     interBrokerSecurityProtocol.foreach { protocol =>
@@ -492,7 +492,7 @@ object TestUtils extends Logging {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
-    if (usesSaslTransportLayer(securityProtocol))
+    if (usesSaslAuthentication(securityProtocol))
       props.putAll(saslConfigs(saslProperties))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
@@ -549,12 +549,12 @@ object TestUtils extends Logging {
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
 
-  private def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
+  def usesSslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
     case SecurityProtocol.SSL | SecurityProtocol.SASL_SSL => true
     case _ => false
   }
 
-  private def usesSaslTransportLayer(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
+  def usesSaslAuthentication(securityProtocol: SecurityProtocol): Boolean = securityProtocol match {
     case SecurityProtocol.SASL_PLAINTEXT | SecurityProtocol.SASL_SSL => true
     case _ => false
   }
