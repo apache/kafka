@@ -387,10 +387,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void closeOpenIterators() {
-        for (KeyValueIterator iterator : new HashSet<>(openIterators)) {
+        HashSet<KeyValueIterator> iterators = null;
+        synchronized (openIterators) {
+            iterators = new HashSet<>(openIterators);
+        }
+        for (KeyValueIterator iterator : iterators) {
             iterator.close();
         }
-        openIterators.clear();
     }
 
     private class RocksDbIterator implements KeyValueIterator<K, V> {
