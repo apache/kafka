@@ -134,6 +134,14 @@ private[transaction] class TransactionMetadata(val producerId: Long,
     topicPartitions ++= partitions
   }
 
+  def removePartition(topicPartition: TopicPartition): Unit = {
+    if (pendingState.isDefined || (state != PrepareCommit && state != PrepareAbort))
+      throw new IllegalStateException(s"Transation metadata's current state is $state, and its pending state is $state " +
+        s"while trying to remove partitions whose txn marker has been sent, this is not expected")
+
+    topicPartitions -= topicPartition
+  }
+
   def prepareNoTransit(): TransactionMetadataTransition =
     prepareTransitionTo(state, producerEpoch, txnTimeoutMs, immutable.Set.empty[TopicPartition], txnStartTimestamp, txnLastUpdateTimestamp)
 
@@ -288,15 +296,15 @@ private[transaction] class TransactionMetadata(val producerId: Long,
       producerEpoch == other.producerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
-      pendingState.equals(other.pendingState) &&
       topicPartitions.equals(other.topicPartitions) &&
       txnStartTimestamp.equals(other.txnStartTimestamp) &&
       txnLastUpdateTimestamp.equals(other.txnLastUpdateTimestamp)
+
     case _ => false
   }
 
   override def hashCode(): Int = {
-    val state = Seq(producerId, producerEpoch, txnTimeoutMs, state, pendingState, topicPartitions, txnStartTimestamp, txnLastUpdateTimestamp)
-    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+    val fields = Seq(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions, txnStartTimestamp, txnLastUpdateTimestamp)
+    fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }

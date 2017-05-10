@@ -84,7 +84,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                 error match {
                   case Errors.NONE =>
 
-                    epochAndMetadata.transactionMetadata.topicPartitions -= topicPartition  // TODO
+                    txnMetadata.removePartition(topicPartition)
 
                   case Errors.CORRUPT_MESSAGE |
                        Errors.MESSAGE_TOO_LARGE |
