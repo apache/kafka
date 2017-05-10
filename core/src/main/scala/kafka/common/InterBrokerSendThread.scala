@@ -30,7 +30,7 @@ class InterBrokerSendThread(name: String,
                             networkClient: NetworkClient,
                             requestGenerator: () => Iterable[RequestAndCompletionHandler],
                             time: Time)
-  extends ShutdownableThread(name, isInterruptible = false) {
+  extends ShutdownableThread(name, isInterruptible = true) {
 
   override def doWork() {
     val now = time.milliseconds()
