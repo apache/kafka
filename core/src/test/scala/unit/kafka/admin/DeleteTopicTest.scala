@@ -234,7 +234,6 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     brokerConfigs.head.setProperty("log.cleaner.enable","true")
     brokerConfigs.head.setProperty("log.cleanup.policy","compact")
     brokerConfigs.head.setProperty("log.segment.bytes","100")
-    brokerConfigs.head.setProperty("log.segment.delete.delay.ms","1000")
     brokerConfigs.head.setProperty("log.cleaner.dedupe.buffer.size","1048577")
 
     val servers = createTestTopicAndCluster(topic,brokerConfigs)

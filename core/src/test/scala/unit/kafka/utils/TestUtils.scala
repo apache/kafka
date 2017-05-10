@@ -217,6 +217,7 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
+    props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
     props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
@@ -1105,6 +1106,24 @@ object TestUtils extends Logging {
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
     }), "Cleaner offset for deleted partition should have been removed")
+    import scala.collection.JavaConverters._
+    TestUtils.waitUntilTrue(() => servers.forall(server =>
+      server.config.logDirs.forall { logDir =>
+        topicPartitions.forall { tp =>
+          !new File(logDir, tp.topic + "-" + tp.partition).exists()
+        }
+      }
+    ), "Failed to soft-delete the data to a delete directory")
+    TestUtils.waitUntilTrue(() => servers.forall(server =>
+      server.config.logDirs.forall { logDir =>
+        topicPartitions.forall { tp =>
+          !java.util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
+            partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
+              partitionDirectoryName.endsWith(Log.DeleteDirSuffix)
+          }
+        }
+      }
+    ), "Failed to hard-delete the delete directory")
   }
 
   /**
