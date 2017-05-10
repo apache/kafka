@@ -47,7 +47,7 @@ object ZKEphemeralTest {
 
 @RunWith(value = classOf[Parameterized])
 class ZKEphemeralTest(val secure: Boolean) extends ZooKeeperTestHarness {
-  val jaasFile = kafka.utils.JaasTestUtils.writeZkFile()
+  val jaasFile = kafka.utils.JaasTestUtils.writeJaasContextsToFile(kafka.utils.JaasTestUtils.zkSections)
   val authProvider = "zookeeper.authProvider.1"
   var zkSessionTimeoutMs = 1000
   

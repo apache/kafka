@@ -28,16 +28,38 @@ import java.util.Collection;
  */
 @InterfaceStability.Unstable
 public class DescribeClusterResults {
-    private final KafkaFuture<Collection<Node>> future;
+    private final KafkaFuture<Collection<Node>> nodes;
+    private final KafkaFuture<Node> controller;
+    private final KafkaFuture<String> clusterId;
 
-    DescribeClusterResults(KafkaFuture<Collection<Node>> future) {
-        this.future = future;
+    DescribeClusterResults(KafkaFuture<Collection<Node>> nodes,
+                           KafkaFuture<Node> controller,
+                           KafkaFuture<String> clusterId) {
+        this.nodes = nodes;
+        this.controller = controller;
+        this.clusterId = clusterId;
     }
 
     /**
      * Returns a future which yields a collection of nodes.
      */
     public KafkaFuture<Collection<Node>> nodes() {
-        return future;
+        return nodes;
+    }
+
+    /**
+     * Returns a future which yields the current controller id.
+     * Note that this may yield null, if the controller ID is not yet known.
+     */
+    public KafkaFuture<Node> controller() {
+        return controller;
+    }
+
+    /**
+     * Returns a future which yields the current cluster Id.
+     * Note that this may yield null, if the cluster version is too old.
+     */
+    public KafkaFuture<String> clusterId() {
+        return clusterId;
     }
 }

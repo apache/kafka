@@ -224,7 +224,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
                     " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
-            channel.position(targetSize);
             size.set(targetSize);
         }
         return originalSize - targetSize;
@@ -276,11 +275,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param targetOffset The offset to search for.
      * @param startingPosition The starting position in the file to begin searching from.
      */
-    public LogEntryPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
+    public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
             long offset = batch.lastOffset();
             if (offset >= targetOffset)
-                return new LogEntryPosition(offset, batch.position(), batch.sizeInBytes());
+                return new LogOffsetPosition(offset, batch.position(), batch.sizeInBytes());
         }
         return null;
     }
@@ -429,12 +428,12 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
     }
 
-    public static class LogEntryPosition {
+    public static class LogOffsetPosition {
         public final long offset;
         public final int position;
         public final int size;
 
-        public LogEntryPosition(long offset, int position, int size) {
+        public LogOffsetPosition(long offset, int position, int size) {
             this.offset = offset;
             this.position = position;
             this.size = size;
@@ -447,7 +446,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (o == null || getClass() != o.getClass())
                 return false;
 
-            LogEntryPosition that = (LogEntryPosition) o;
+            LogOffsetPosition that = (LogOffsetPosition) o;
 
             return offset == that.offset &&
                     position == that.position &&
@@ -465,7 +464,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
         @Override
         public String toString() {
-            return "LogEntryPosition(" +
+            return "LogOffsetPosition(" +
                     "offset=" + offset +
                     ", position=" + position +
                     ", size=" + size +

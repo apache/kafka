@@ -17,7 +17,9 @@
 
 package kafka.coordinator.group
 
-import kafka.server.DelayedOperation
+import kafka.server.{DelayedOperation, DelayedOperationPurgatory, GroupKey}
+
+import scala.math.{max, min}
 
 /**
  * Delayed rebalance operations that are added to the purgatory when group is preparing for rebalance
@@ -40,4 +42,41 @@ private[group] class DelayedJoin(coordinator: GroupCoordinator,
   override def tryComplete(): Boolean = coordinator.tryCompleteJoin(group, forceComplete _)
   override def onExpiration() = coordinator.onExpireJoin()
   override def onComplete() = coordinator.onCompleteJoin(group)
+}
+
+/**
+  * Delayed rebalance operation that is added to the purgatory when a group is transitioning from
+  * Empty to PreparingRebalance
+  *
+  * When onComplete is triggered we check if any new members have been added and if there is still time remaining
+  * before the rebalance timeout. If both are true we then schedule a further delay. Otherwise we complete the
+  * rebalance.
+  */
+private[group] class InitialDelayedJoin(coordinator: GroupCoordinator,
+                                        purgatory: DelayedOperationPurgatory[DelayedJoin],
+                                        group: GroupMetadata,
+                                        configuredRebalanceDelay: Int,
+                                        delayMs: Int,
+                                        remainingMs: Int) extends DelayedJoin(coordinator, group, delayMs) {
+
+  override def tryComplete(): Boolean = false
+
+  override def onComplete(): Unit = {
+    group synchronized  {
+      if (group.newMemberAdded && remainingMs != 0) {
+        group.newMemberAdded = false
+        val delay = min(configuredRebalanceDelay, remainingMs)
+        val remaining = max(remainingMs - delayMs, 0)
+        purgatory.tryCompleteElseWatch(new InitialDelayedJoin(coordinator,
+          purgatory,
+          group,
+          configuredRebalanceDelay,
+          delay,
+          remaining
+        ), Seq(GroupKey(group.groupId)))
+      } else
+        super.onComplete()
+    }
+  }
+
 }

@@ -216,4 +216,12 @@ public interface RecordBatch extends Iterable<Record> {
      * @return The closeable iterator
      */
     CloseableIterator<Record> streamingIterator();
+
+    /**
+     * Check whether this is a control batch (i.e. whether the control bit is set in the batch attributes).
+     * For magic versions prior to 2, this is always false.
+     *
+     * @return Whether this is a batch containing control records
+     */
+    boolean isControlBatch();
 }
