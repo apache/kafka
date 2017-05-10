@@ -75,6 +75,7 @@ public class StreamsResetter {
     private OptionSet options = null;
     private final Properties consumerConfig = new Properties();
     private final List<String> allTopics = new LinkedList<>();
+    private boolean dryRun = false;
 
     public int run(final String[] args) {
         return run(args, new Properties());
@@ -90,6 +91,7 @@ public class StreamsResetter {
         ZkUtils zkUtils = null;
         try {
             parseArguments(args);
+            dryRun = options.has(dryRunOption);
 
             adminClient = AdminClient.createSimplePlaintext(options.valueOf(bootstrapServerOption));
             final String groupId = options.valueOf(applicationIdOption);
@@ -109,8 +111,8 @@ public class StreamsResetter {
                             "Make sure to stop all running application instances before running the reset tool.");
             }
 
-            mayberesetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
-            maybedeleteInternalTopics(zkUtils);
+            maybeResetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
+            maybeDeleteInternalTopics(zkUtils);
 
         } catch (final Throwable e) {
             exitCode = EXIT_CODE_ERROR;
@@ -164,7 +166,7 @@ public class StreamsResetter {
         }
     }
 
-    private void mayberesetInputAndInternalAndSeekToEndIntermediateTopicOffsets() {
+    private void maybeResetInputAndInternalAndSeekToEndIntermediateTopicOffsets() {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
@@ -173,7 +175,6 @@ public class StreamsResetter {
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
 
-        Boolean dryRun = options.has(dryRunOption);
         String groupId = options.valueOf(applicationIdOption);
 
         if (!dryRun) {
@@ -182,7 +183,7 @@ public class StreamsResetter {
                 return;
             } else {
                 if (inputTopics.size() != 0) {
-                    System.out.println("Resetting offsets to zero for input topics " + inputTopics + " and all internal topics.");
+                    System.out.println("Seek-to-beginning for input topics " + inputTopics + " and all internal topics.");
                 }
                 if (intermediateTopics.size() != 0) {
                     System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
@@ -254,17 +255,16 @@ public class StreamsResetter {
             if (notFoundInputTopics.size() > 0) {
                 System.out.println("Following input topics are not found, skipping them");
                 for (String topic : notFoundInputTopics) {
-                    System.out.println("Topic - " + topic);
+                    System.out.println("Topic: " + topic);
                 }
             }
 
             if (notFoundIntermediateTopics.size() > 0) {
                 System.out.println("Following intermediate topics are not found, skipping them");
                 for (String topic : notFoundIntermediateTopics) {
-                    System.out.println("Topic - " + topic);
+                    System.out.println("Topic:" + topic);
                 }
             }
-            client.close();
 
         } catch (final RuntimeException e) {
             System.err.println("ERROR: Resetting offsets failed.");
@@ -276,9 +276,8 @@ public class StreamsResetter {
         }
     }
 
-    private void maybeSeekToEnd(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> intermediateTopicPartitions) {
+    private void maybeSeekToEnd(final KafkaConsumer<byte[], byte[]> client, final Set<TopicPartition> intermediateTopicPartitions) {
 
-        final Boolean dryRun = options.has(dryRunOption);
         final String groupId = options.valueOf(applicationIdOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
@@ -287,9 +286,9 @@ public class StreamsResetter {
                 client.seekToEnd(intermediateTopicPartitions);
             } else {
                 System.out.println("Following intermediate topics offsets will be reset to end (for consumer group " + groupId + ")");
-                for (String topic : intermediateTopics) {
+                for (final String topic : intermediateTopics) {
                     if (allTopics.contains(topic)) {
-                        System.out.println("Topic - " + topic);
+                        System.out.println("Topic: " + topic);
                     }
                 }
             }
@@ -297,9 +296,10 @@ public class StreamsResetter {
 
     }
 
-    private void maybeSeekToBeginning(KafkaConsumer<byte[], byte[]> client, Set<TopicPartition> inputAndInternalTopicPartitions, List<String> internalTopics) {
+    private void maybeSeekToBeginning(final KafkaConsumer<byte[], byte[]> client,
+                                      final Set<TopicPartition> inputAndInternalTopicPartitions,
+                                      final List<String> internalTopics) {
 
-        final Boolean dryRun = options.has(dryRunOption);
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final String groupId = options.valueOf(applicationIdOption);
 
@@ -308,14 +308,14 @@ public class StreamsResetter {
                 client.seekToBeginning(inputAndInternalTopicPartitions);
             } else {
                 System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
-                for (String topic : inputTopics) {
+                for (final String topic : inputTopics) {
                     if (allTopics.contains(topic)) {
-                        System.out.println("Topic - " + topic);
+                        System.out.println("Topic: " + topic);
                     }
                 }
                 System.out.println("Following internal topics offsets will be reset to beginning (for consumer group " + groupId + ")");
-                for (String topic : internalTopics) {
-                    System.out.println("Topic - " + topic);
+                for (final String topic : internalTopics) {
+                    System.out.println("Topic: " + topic);
                 }
             }
         }
@@ -329,8 +329,7 @@ public class StreamsResetter {
         return options.valuesOf(intermediateTopicsOption).contains(topic);
     }
 
-    private void maybedeleteInternalTopics(final ZkUtils zkUtils) {
-        Boolean dryRun = options.has(dryRunOption);
+    private void maybeDeleteInternalTopics(final ZkUtils zkUtils) {
 
         if (!dryRun) {
             System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
@@ -347,7 +346,7 @@ public class StreamsResetter {
                             "--delete", "--topic", topic});
                         TopicCommand.deleteTopic(zkUtils, commandOptions);
                     } else {
-                        System.out.println("Topic - " + topic);
+                        System.out.println("Topic: " + topic);
                     }
                 } catch (final RuntimeException e) {
                     System.err.println("ERROR: Deleting topic " + topic + " failed.");
