@@ -40,6 +40,17 @@ public interface SegmentedBytesStore extends StateStore {
     KeyValueIterator<Bytes, byte[]> fetch(Bytes key, long from, long to);
 
     /**
+     * Fetch all records from the segmented store in the provided key range and time range
+     * from all existing segments
+     * @param keyFrom   The first key that could be in the range
+     * @param keyTo     The last key that could be in the range
+     * @param from      earliest time to match
+     * @param to        latest time to match
+     * @return  an iterator over key-value pairs
+     */
+    KeyValueIterator<Bytes, byte[]> fetch(Bytes keyFrom, Bytes keyTo, long from, long to);
+
+    /**
      * Remove the record with the provided key. The key
      * should be a composite of the record key, and the timestamp information etc
      * as described by the {@link KeySchema}
@@ -114,7 +125,18 @@ public interface SegmentedBytesStore extends StateStore {
          * @param to            ending time range
          * @return
          */
-        HasNextCondition hasNextCondition(final Bytes binaryKey, long from, long to);
+        HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to);
+
+        /**
+         * Create an implementation of {@link HasNextCondition} that knows when
+         * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
+         * @param binaryKeyFrom the first key in the range
+         * @param binaryKeyTo   the last key in the range
+         * @param from          starting time range
+         * @param to            ending time range
+         * @return
+         */
+        HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to);
 
         /**
          * Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations to determine

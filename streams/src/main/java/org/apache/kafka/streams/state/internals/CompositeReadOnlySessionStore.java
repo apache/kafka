@@ -86,4 +86,47 @@ public class CompositeReadOnlySessionStore<K, V> implements ReadOnlySessionStore
             }
         };
     }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to) {
+        final List<ReadOnlySessionStore<K, V>> stores = storeProvider.stores(storeName, queryableStoreType);
+        for (final ReadOnlySessionStore<K, V> store : stores) {
+            try {
+                final KeyValueIterator<Windowed<K>, V> result = store.fetch(from, to);
+                if (!result.hasNext()) {
+                    result.close();
+                } else {
+                    return result;
+                }
+            } catch (final InvalidStateStoreException ise) {
+                throw new InvalidStateStoreException("State store  [" + storeName + "] is not available anymore" +
+                                                     " and may have been migrated to another instance; " +
+                                                     "please re-discover its location from the state metadata.");
+            }
+        }
+        return new KeyValueIterator<Windowed<K>, V>() {
+            @Override
+            public void close() {
+            }
+
+            @Override
+            public Windowed<K> peekNextKey() {
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return false;
+            }
+
+            @Override
+            public KeyValue<Windowed<K>, V> next() {
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public void remove() {
+            }
+        };
+    }
 }

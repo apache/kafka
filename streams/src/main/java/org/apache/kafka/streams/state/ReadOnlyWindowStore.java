@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
 /**
@@ -59,4 +60,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * @throws InvalidStateStoreException if the store is not initialized
      */
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
+
+    WindowStoreIterator<KeyValue<K, V>> fetch(K from, K to, long timeFrom, long timeTo);
 }

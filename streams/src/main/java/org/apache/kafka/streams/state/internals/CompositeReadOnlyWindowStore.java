@@ -84,4 +84,46 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
             }
         };
     }
+
+    @Override
+    public WindowStoreIterator<KeyValue<K, V>> fetch(K from, K to, long timeFrom, long timeTo) {
+        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
+        for (ReadOnlyWindowStore<K, V> windowStore : stores) {
+            try {
+                final WindowStoreIterator<KeyValue<K, V>> result = windowStore.fetch(from, to, timeFrom, timeTo);
+                if (!result.hasNext()) {
+                    result.close();
+                } else {
+                    return result;
+                }
+            } catch (InvalidStateStoreException e) {
+                throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
+            }
+        }
+
+        return new WindowStoreIterator<KeyValue<K, V>>() {
+            @Override
+            public void close() {
+            }
+
+            @Override
+            public Long peekNextKey() {
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return false;
+            }
+
+            @Override
+            public KeyValue<Long, KeyValue<K, V>> next() {
+                throw new NoSuchElementException();
+            }
+
+            @Override
+            public void remove() {
+            }
+        };
+    }
 }

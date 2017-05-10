@@ -41,4 +41,6 @@ public interface ReadOnlySessionStore<K, AGG> {
      * @return   KeyValueIterator containing all sessions for the provided key.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
+
+    KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to);
 }

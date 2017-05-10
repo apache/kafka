@@ -84,6 +84,11 @@ class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(Bytes keyFrom, Bytes keyTo, long from, long to) {
+        return new MeteredSegmentedBytesStoreIterator(inner.fetch(keyFrom, keyTo, from, to), this.fetchTime);
+    }
+
+    @Override
     public void remove(final Bytes key) {
         final long startNs = time.nanoseconds();
         try {

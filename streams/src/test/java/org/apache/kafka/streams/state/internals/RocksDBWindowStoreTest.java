@@ -189,6 +189,48 @@ public class RocksDBWindowStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
+    public void testFetchRange() throws IOException {
+        windowStore = createWindowStore(context, false, true);
+        long startTime = segmentSize - 4L;
+
+        putFirstBatch(windowStore, startTime, context);
+
+        assertEquals(
+            Utils.mkList(KeyValue.pair(0, "zero"), KeyValue.pair(1, "one")),
+            toList(windowStore.fetch(0, 1, startTime + 0L - windowSize, startTime + 0L + windowSize))
+        );
+        assertEquals(
+            Utils.mkList(KeyValue.pair(1, "one")),
+            toList(windowStore.fetch(1, 1, startTime + 0L - windowSize, startTime + 0L + windowSize))
+        );
+        assertEquals(
+            Utils.mkList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two")),
+            toList(windowStore.fetch(1, 3, startTime + 0L - windowSize, startTime + 0L + windowSize))
+        );
+        assertEquals(
+            Utils.mkList(KeyValue.pair(0, "zero"), KeyValue.pair(1, "one"), KeyValue.pair(2, "two")),
+            toList(windowStore.fetch(0, 5, startTime + 0L - windowSize, startTime + 0L + windowSize))
+        );
+        assertEquals(
+            Utils.mkList(KeyValue.pair(0, "zero"), KeyValue.pair(1, "one"), KeyValue.pair(2, "two"), KeyValue.pair(4, "four"), KeyValue.pair(5, "five")),
+            toList(windowStore.fetch(0, 5, startTime + 0L - windowSize, startTime + 0L + windowSize + 5L))
+        );
+        assertEquals(
+            Utils.mkList(KeyValue.pair(2, "two"), KeyValue.pair(4, "four"), KeyValue.pair(5, "five")),
+            toList(windowStore.fetch(0, 5, startTime + 2L, startTime + 0L + windowSize + 5L))
+        );
+        assertEquals(
+            Utils.mkList(),
+            toList(windowStore.fetch(4, 5, startTime + 2L, startTime + windowSize))
+        );
+        assertEquals(
+            Utils.mkList(),
+            toList(windowStore.fetch(0, 3, startTime + 3L, startTime + windowSize + 5))
+        );
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
     public void testPutAndFetchBefore() throws IOException {
         windowStore = createWindowStore(context, false, true);
         long startTime = segmentSize - 4L;

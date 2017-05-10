@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
@@ -54,6 +55,12 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         @Override
         public WindowStoreIterator<byte[]> fetch(Bytes key, long timeFrom, long timeTo) {
             final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, timeFrom, timeTo);
+            return WrappedWindowStoreIterator.bytesIterator(bytesIterator, serdes).valuesIterator();
+        }
+
+        @Override
+        public WindowStoreIterator<KeyValue<Bytes, byte[]>> fetch(Bytes from, Bytes to, long timeFrom, long timeTo) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(from, to, timeFrom, timeTo);
             return WrappedWindowStoreIterator.bytesIterator(bytesIterator, serdes);
         }
     }
@@ -100,6 +107,12 @@ class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
+        return new WrappedWindowStoreIterator<>(bytesIterator, serdes).valuesIterator();
+    }
+
+    @Override
+    public WindowStoreIterator<KeyValue<K, V>> fetch(K from, K to, long timeFrom, long timeTo) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
         return new WrappedWindowStoreIterator<>(bytesIterator, serdes);
     }
 

@@ -103,6 +103,25 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(K keyFrom,
+                                                           K keyTo,
+                                                           long earliestSessionEndTime,
+                                                           long latestSessionStartTime) {
+        validateStoreOpen();
+        final Bytes binarySessionIdFrom = Bytes.wrap(keySerde.serializer().serialize(topic, keyFrom));
+        final Bytes binarySessionIdTo = Bytes.wrap(keySerde.serializer().serialize(topic, keyTo));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName,
+                                                                                  keySchema.lowerRange(binarySessionIdFrom, earliestSessionEndTime),
+                                                                                  keySchema.upperRange(binarySessionIdTo, latestSessionStartTime));
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(binarySessionIdFrom, binarySessionIdTo, earliestSessionEndTime, latestSessionStartTime);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionIdFrom, binarySessionIdTo,
+                                                                             earliestSessionEndTime,
+                                                                             latestSessionStartTime);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
+        return new MergedSortedCacheSessionStoreIterator<>(filteredCacheIterator, storeIterator, serdes);
+    }
+
+    @Override
     public void remove(final Windowed<K> sessionKey) {
         validateStoreOpen();
         put(sessionKey, null);
@@ -121,6 +140,13 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
         return findSessions(key, 0, Long.MAX_VALUE);
     }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
+        return findSessions(from, to, 0, Long.MAX_VALUE);
+    }
+
+
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = entry.key();

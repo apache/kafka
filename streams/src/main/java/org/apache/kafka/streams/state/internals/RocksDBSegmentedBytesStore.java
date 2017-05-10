@@ -55,6 +55,18 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, Bytes keyTo, final long from, final long to) {
+        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+
+        final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
+        final Bytes binaryTo = keySchema.upperRange(keyTo, to);
+
+        return new SegmentIterator(searchSpace.iterator(),
+                                   keySchema.hasNextCondition(keyFrom, keyTo, from, to),
+                                   binaryFrom, binaryTo);
+    }
+
+    @Override
     public void remove(final Bytes key) {
         final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
         if (segment == null) {
