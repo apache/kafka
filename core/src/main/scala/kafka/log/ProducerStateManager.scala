@@ -88,11 +88,11 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
       // the epoch was bumped by a control record, so we expect the sequence number to be reset
       throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), found $firstSeq " +
         s"(incoming seq. number), but expected 0")
-    } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
+    } else if (firstSeq != RecordBatch.SKIP_SEQUENCE_CHECK && firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
       throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $producerId, (incomingBatch.firstSeq, " +
         s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
         s"(${this.firstSeq}, ${this.lastSeq}).")
-    } else if (firstSeq != this.lastSeq + 1L) {
+    } else if (firstSeq != RecordBatch.SKIP_SEQUENCE_CHECK && firstSeq != this.lastSeq + 1L) {
       throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), $firstSeq " +
         s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
     }
