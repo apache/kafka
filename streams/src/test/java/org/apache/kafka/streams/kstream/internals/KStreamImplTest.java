@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.test.MockKeyValueMapper;
@@ -177,7 +178,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullMapperOnMapValues() throws Exception {
-        testStream.mapValues(null);
+        testStream.mapValues((ValueMapper<? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -227,7 +228,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTransformSupplierOnTransformValues() throws Exception {
-        testStream.transformValues(null);
+        testStream.transformValues((ValueTransformerSupplier<? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -242,7 +243,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullValueJoinerOnJoin() throws Exception {
-        testStream.join(testStream, null, JoinWindows.of(10));
+        testStream.join(testStream, (ValueJoiner<? super String, ? super String, ?>) null, JoinWindows.of(10));
     }
 
     @Test(expected = NullPointerException.class)
@@ -257,7 +258,7 @@ public class KStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullValueMapperOnTableJoin() throws Exception {
-        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), null);
+        testStream.leftJoin(builder.table(Serdes.String(), Serdes.String(), "topic", "store"), (ValueJoiner<? super String, ? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -288,7 +289,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullJoinerOnJoinWithGlobalTable() throws Exception {
         testStream.join(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
-                        null);
+                (ValueJoiner<? super String, ? super String, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -309,7 +310,7 @@ public class KStreamImplTest {
     public void shouldNotAllowNullJoinerOnLeftJoinWithGlobalTable() throws Exception {
         testStream.leftJoin(builder.globalTable(Serdes.String(), Serdes.String(), null, "global", "global"),
                         MockKeyValueMapper.<String, String>SelectValueMapper(),
-                        null);
+                (ValueJoiner<? super String, ? super String, ?>) null);
     }
 
 }

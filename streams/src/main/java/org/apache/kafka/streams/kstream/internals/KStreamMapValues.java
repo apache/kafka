@@ -16,16 +16,17 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.RichValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
 
-    private final ValueMapper<V, V1> mapper;
+    private final RichValueMapper<K, V, V1> mapper;
 
-    public KStreamMapValues(ValueMapper<V, V1> mapper) {
+    public KStreamMapValues(RichValueMapper<K, V, V1> mapper) {
         this.mapper = mapper;
     }
 
@@ -36,9 +37,21 @@ class KStreamMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
 
     private class KStreamMapProcessor extends AbstractProcessor<K, V> {
         @Override
+        public void init(ProcessorContext processorContext) {
+            super.init(processorContext);
+            mapper.init();
+        }
+
+        @Override
         public void process(final K key, final V value) {
-            V1 newValue = mapper.apply(value);
+            V1 newValue = mapper.apply(key, value);
             context().forward(key, newValue);
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            mapper.close();
         }
     }
 }

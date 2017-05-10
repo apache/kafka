@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.RichAggregator;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.RichInitializer;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -34,16 +34,16 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
     private final String storeName;
     private final Windows<W> windows;
-    private final Initializer<T> initializer;
-    private final Aggregator<? super K, ? super V, T> aggregator;
+    private final RichInitializer<T> richInitializer;
+    private final RichAggregator<? super K, ? super V, T> richAggregator;
 
     private boolean sendOldValues = false;
 
-    public KStreamWindowAggregate(Windows<W> windows, String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> aggregator) {
+    public KStreamWindowAggregate(Windows<W> windows, String storeName, RichInitializer<T> richInitializer, RichAggregator<? super K, ? super V, T> richAggregator) {
         this.windows = windows;
         this.storeName = storeName;
-        this.initializer = initializer;
-        this.aggregator = aggregator;
+        this.richInitializer = richInitializer;
+        this.richAggregator = richAggregator;
     }
 
     @Override
@@ -68,6 +68,8 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             windowStore = (WindowStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context, sendOldValues), sendOldValues);
+            richInitializer.init();
+            richAggregator.init();
         }
 
         @Override
@@ -102,10 +104,10 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
                         T oldAgg = entry.value;
 
                         if (oldAgg == null)
-                            oldAgg = initializer.apply();
+                            oldAgg = richInitializer.apply();
 
                         // try to add the new new value (there will never be old value)
-                        T newAgg = aggregator.apply(key, value, oldAgg);
+                        T newAgg = richAggregator.apply(key, value, oldAgg);
 
                         // update the store with the new value
                         windowStore.put(key, newAgg, window.start());
@@ -117,11 +119,18 @@ public class KStreamWindowAggregate<K, V, T, W extends Window> implements KStrea
 
             // create the new window for the rest of unmatched window that do not exist yet
             for (Map.Entry<Long, W> entry : matchedWindows.entrySet()) {
-                T oldAgg = initializer.apply();
-                T newAgg = aggregator.apply(key, value, oldAgg);
+                T oldAgg = richInitializer.apply();
+                T newAgg = richAggregator.apply(key, value, oldAgg);
                 windowStore.put(key, newAgg, entry.getKey());
                 tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, oldAgg);
             }
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            richInitializer.close();
+            richInitializer.close();
         }
     }
 

@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,8 +31,8 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
         }
     };
 
-    KTableKTableJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
-        super(table1, table2, joiner);
+    KTableKTableJoin(KTableImpl<K, ?, V1> table1, KTableImpl<K, ?, V2> table2, RichValueJoiner<? super K, ? super V1, ? super V2, ? extends R> richValueJoiner) {
+        super(table1, table2, richValueJoiner);
     }
 
     @Override
@@ -54,7 +54,7 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
         public KTableValueGetter<K, R> get() {
             return new KTableKTableJoinValueGetter<>(valueGetterSupplier1.get(),
                                                      valueGetterSupplier2.get(),
-                                                     joiner,
+                                                     richValueJoiner,
                                                      keyValueMapper);
         }
     }
@@ -72,6 +72,7 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
         public void init(ProcessorContext context) {
             super.init(context);
             valueGetter.init(context);
+            richValueJoiner.init();
         }
 
         @Override
@@ -90,14 +91,20 @@ class KTableKTableJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, V1, 
             }
 
             if (change.newValue != null) {
-                newValue = joiner.apply(change.newValue, value2);
+                newValue = richValueJoiner.apply(key, change.newValue, value2);
             }
 
             if (sendOldValues && change.oldValue != null) {
-                oldValue = joiner.apply(change.oldValue, value2);
+                oldValue = richValueJoiner.apply(key, change.oldValue, value2);
             }
 
             context().forward(key, new Change<>(newValue, oldValue));
+        }
+
+        @Override
+        public void close() {
+            super.close();
+            richValueJoiner.close();
         }
     }
 

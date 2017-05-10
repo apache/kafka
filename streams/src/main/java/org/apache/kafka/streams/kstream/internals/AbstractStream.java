@@ -22,6 +22,12 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
+import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
+import org.apache.kafka.streams.kstream.RichInitializer;
+import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.RichAggregator;
+import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
@@ -64,14 +70,85 @@ public abstract class AbstractStream<K> {
         return returnName;
     }
 
-    static <T2, T1, R> ValueJoiner<T2, T1, R> reverseJoiner(final ValueJoiner<T1, T2, R> joiner) {
-        return new ValueJoiner<T2, T1, R>() {
+    static <K, T2, T1, R> ValueJoinerWithKey<K, T2, T1, R> reverseJoiner(final ValueJoinerWithKey<K, T1, T2, R> valueJoinerWithKey) {
+        return new ValueJoinerWithKey<K, T2, T1, R>() {
             @Override
-            public R apply(T2 value2, T1 value1) {
-                return joiner.apply(value1, value2);
+            public R apply(K key, T2 value2, T1 value1) {
+                return valueJoinerWithKey.apply(key, value1, value2);
             }
         };
     }
+
+    static <K, T1, T2, R> RichValueJoiner<K, T1, T2, R> convertToRichValueJoiner(final ValueJoinerWithKey<K, T1, T2, R> valueJoinerWithKey) {
+        Objects.requireNonNull(valueJoinerWithKey, "valueJoiner can't be null");
+        if (valueJoinerWithKey instanceof RichValueJoiner) {
+            return (RichValueJoiner<K, T1, T2, R>) valueJoinerWithKey;
+        } else {
+            return new RichValueJoiner<K, T1, T2, R>() {
+                @Override
+                public void init() {}
+
+                @Override
+                public void close() {}
+
+                @Override
+                public R apply(K key, T1 value1, T2 value2) {
+                    return valueJoinerWithKey.apply(key, value1, value2);
+                }
+            };
+        }
+    }
+
+    static <K, T1, T2, R> ValueJoinerWithKey<K, T1, T2, R> convertToValueJoinerWithKey(final ValueJoiner<T1, T2, R> valueJoiner) {
+        Objects.requireNonNull(valueJoiner, "valueJoiner can't be null");
+        return new ValueJoinerWithKey<K, T1, T2, R>() {
+            @Override
+            public R apply(K key, T1 value1, T2 value2) {
+                return valueJoiner.apply(value1, value2);
+            }
+        };
+    }
+
+    static <VA> RichInitializer<VA> checkAndMaybeConvertToRichInitializer(final Initializer<VA> initializer) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        if (initializer instanceof RichInitializer) {
+            return (RichInitializer<VA>) initializer;
+        } else {
+            return new RichInitializer<VA>() {
+                @Override
+                public VA apply() {
+                    return initializer.apply();
+                }
+
+                @Override
+                public void init() {}
+
+                @Override
+                public void close() {}
+            };
+        }
+    }
+
+    static <K, V, VA> RichAggregator<K, V, VA> checkAndMaybeConvertToRichAggregator(final Aggregator<K, V, VA> aggregator) {
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        if (aggregator instanceof RichAggregator) {
+            return (RichAggregator<K, V, VA>) aggregator;
+        } else {
+            return new RichAggregator<K, V, VA>() {
+                @Override
+                public VA apply(K key, V value, VA aggregate) {
+                    return aggregator.apply(key, value, aggregate);
+                }
+
+                @Override
+                public void init() {}
+
+                @Override
+                public void close() {}
+            };
+        }
+    }
+
 
     @SuppressWarnings("unchecked")
     static <T, K>  StateStoreSupplier<KeyValueStore> keyValueStore(final Serde<K> keySerde,

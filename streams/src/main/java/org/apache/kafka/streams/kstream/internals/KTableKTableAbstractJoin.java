@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
 
 abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessorSupplier<K, V1, R> {
 
@@ -24,18 +24,18 @@ abstract class KTableKTableAbstractJoin<K, R, V1, V2> implements KTableProcessor
     protected final KTableImpl<K, ?, V2> table2;
     protected final KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
     protected final KTableValueGetterSupplier<K, V2> valueGetterSupplier2;
-    protected final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    protected final RichValueJoiner<? super K, ? super V1, ? super V2, ? extends R> richValueJoiner;
 
     protected boolean sendOldValues = false;
 
     KTableKTableAbstractJoin(KTableImpl<K, ?, V1> table1,
                              KTableImpl<K, ?, V2> table2,
-                             ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
+                             RichValueJoiner<? super K, ? super V1, ? super V2, ? extends R> richValueJoiner) {
         this.table1 = table1;
         this.table2 = table2;
         this.valueGetterSupplier1 = table1.valueGetterSupplier();
         this.valueGetterSupplier2 = table2.valueGetterSupplier();
-        this.joiner = joiner;
+        this.richValueJoiner = richValueJoiner;
     }
 
     @Override

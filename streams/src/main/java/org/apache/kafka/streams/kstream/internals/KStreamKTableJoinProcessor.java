@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 
@@ -25,16 +25,16 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
 
     private final KTableValueGetter<K2, V2> valueGetter;
     private final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper;
-    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
+    private final RichValueJoiner<? super K1, ? super V1, ? super V2, ? extends R> richValueJoiner;
     private final boolean leftJoin;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
-                               final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                               final RichValueJoiner<? super K1, ? super V1, ? super V2, ? extends R> richValueJoiner,
                                final boolean leftJoin) {
         this.valueGetter = valueGetter;
         this.keyMapper = keyMapper;
-        this.joiner = joiner;
+        this.richValueJoiner = richValueJoiner;
         this.leftJoin = leftJoin;
     }
 
@@ -42,6 +42,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     public void init(final ProcessorContext context) {
         super.init(context);
         valueGetter.init(context);
+        richValueJoiner.init();
     }
 
     @Override
@@ -55,8 +56,14 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
         if (key != null && value != null) {
             final V2 value2 = valueGetter.get(keyMapper.apply(key, value));
             if (leftJoin || value2 != null) {
-                context().forward(key, joiner.apply(value, value2));
+                context().forward(key, richValueJoiner.apply(key, value, value2));
             }
         }
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        richValueJoiner.close();
     }
 }

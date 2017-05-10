@@ -33,6 +33,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.kstream.RichValueMapper;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -413,10 +414,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
     public KStream<K, V> toStream() {
         String name = topology.newName(TOSTREAM_NAME);
 
-        topology.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new ValueMapper<Change<V>, V>() {
+        topology.addProcessor(name, new KStreamMapValues<K, Change<V>, V>(new RichValueMapper<K, Change<V>, V>() {
             @Override
-            public V apply(Change<V> change) {
+            public V apply(K key, Change<V> change) {
                 return change.newValue;
+            }
+
+            @Override
+            public void init() {
+
+            }
+
+            @Override
+            public void close() {
+
             }
         }), this.name);
 
@@ -534,14 +545,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         final KTableKTableAbstractJoin<K, R, V1, V> joinOther;
 
         if (!leftOuter) { // inner
-            joinThis = new KTableKTableJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
-            joinOther = new KTableKTableJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
+            joinThis = new KTableKTableJoin<>(this, (KTableImpl<K, ?, V1>) other, convertToRichValueJoiner(convertToValueJoinerWithKey(joiner)));
+            joinOther = new KTableKTableJoin<>((KTableImpl<K, ?, V1>) other, this, convertToRichValueJoiner(reverseJoiner(convertToValueJoinerWithKey(joiner))));
         } else if (!rightOuter) { // left
-            joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
-            joinOther = new KTableKTableRightJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
+            joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, V1>) other, convertToRichValueJoiner(convertToValueJoinerWithKey(joiner)));
+            joinOther = new KTableKTableRightJoin<>((KTableImpl<K, ?, V1>) other, this, convertToRichValueJoiner(reverseJoiner(convertToValueJoinerWithKey(joiner))));
         } else { // outer
-            joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, ?, V1>) other, joiner);
-            joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, V1>) other, this, reverseJoiner(joiner));
+            joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, ?, V1>) other, convertToRichValueJoiner(convertToValueJoinerWithKey(joiner)));
+            joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, V1>) other, this, convertToRichValueJoiner(reverseJoiner(convertToValueJoinerWithKey(joiner))));
         }
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(

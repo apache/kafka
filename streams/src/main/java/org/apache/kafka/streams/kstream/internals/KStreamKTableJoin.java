@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.RichValueJoiner;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
@@ -30,18 +30,18 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         }
     };
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoiner<? super V1, ? super V2, R> joiner;
+    private final RichValueJoiner<? super K, ? super V1, ? super V2, R> richValueJoiner;
     private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier, final ValueJoiner<? super V1, ? super V2, R> joiner, final boolean leftJoin) {
+    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier, final RichValueJoiner<? super K, ? super V1, ? super V2, R> richValueJoiner, final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
-        this.joiner = joiner;
+        this.richValueJoiner = richValueJoiner;
         this.leftJoin = leftJoin;
     }
 
     @Override
     public Processor<K, V1> get() {
-        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin);
+        return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, richValueJoiner, leftJoin);
     }
 
 }
