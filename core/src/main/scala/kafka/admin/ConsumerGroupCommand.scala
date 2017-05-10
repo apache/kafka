@@ -532,9 +532,6 @@ object ConsumerGroupCommand extends Logging {
           Map.empty
         case Some(states) =>
           state match {
-            case Some("Dead") =>
-              printError(s"Consumer group '$groupId' does not exist.")
-              Map.empty
             case Some("Empty") =>
               val assignmentsToReset = getAssignmentsToReset(states)
               val assignmentsPrepared = prepareAssignmentsToReset(assignmentsToReset)
@@ -543,15 +540,9 @@ object ConsumerGroupCommand extends Logging {
                 //assignmentsToReset: java.util.Map[TopicPartition, ]
                 consumer.commitSync(assignmentsPrepared.asJava)
               assignmentsPrepared
-            case Some("PreparingRebalance") | Some("AwaitingSync") =>
-              printError(s"Consumer group '$groupId' offsets cannot be reset if it is rebalancing.")
+            case Some(currentState) =>
+              printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state $currentState.")
               Map.empty
-            case Some("Stable") =>
-              printError(s"Consumer group '$groupId' offsets cannot be reset if it has members active.")
-              Map.empty
-            case other =>
-              // the control should never reach here
-              throw new KafkaException(s"Expected a valid consumer group state, but found '${other.getOrElse("NONE")}'.")
           }
       }
     }
