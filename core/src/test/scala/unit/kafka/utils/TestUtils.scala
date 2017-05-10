@@ -217,6 +217,7 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
+    props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
     props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
@@ -1122,7 +1123,7 @@ object TestUtils extends Logging {
           }
         }
       }
-    ), "Failed to hard-delete the delete directory", waitTime = 3 * 60 * 1000)
+    ), "Failed to hard-delete the delete directory")
   }
 
   /**
