@@ -121,7 +121,6 @@ object JaasTestUtils {
   val KafkaScramAdminPassword = "scram-admin-secret"
 
   def writeJaasContextsToFile(jaasSections: Seq[JaasSection]): File = {
-    System.out.println("jaasSections " + jaasSections)
     val jaasFile = TestUtils.tempFile()
     writeToFile(jaasFile, jaasSections)
     jaasFile
