@@ -54,30 +54,62 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
       for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
+        val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
 
+        if (errors == null)
+          throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for pid ${txnMarker.producerId}")
+
+        val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
         txnStateManager.getTransactionState(transactionalId) match {
           case None =>
+            info(s"Transaction topic partition for $transactionalId may likely has emigrated, as the corresponding metadata do not exist in the cache" +
+              s"any more; cancel sending transaction markers $txnMarker to the brokers")
+
             // txn topic partition has likely emigrated, just cancel it from the purgatory
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
           case Some(epochAndMetadata) =>
-            val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
-            val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
+            val txnMetadata = epochAndMetadata.transactionMetadata
 
-            if (errors == null)
-              throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for pid ${txnMarker.producerId}")
+            if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
+              // coordinator epoch has changed, just cancel it from the purgatory
+              info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
+                s"${epochAndMetadata.coordinatorEpoch}; cancel sending transaction markers $txnMarker to the brokers")
 
-            epochAndMetadata synchronized {
+              txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+            }
+
+            txnMetadata synchronized {
               for ((topicPartition: TopicPartition, error: Errors) <- errors) {
                 error match {
                   case Errors.NONE =>
-                    epochAndMetadata.transactionMetadata.topicPartitions -= topicPartition
 
-                  case Errors.UNKNOWN_TOPIC_OR_PARTITION | Errors.NOT_LEADER_FOR_PARTITION |
-                       Errors.NOT_ENOUGH_REPLICAS | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+                    epochAndMetadata.transactionMetadata.topicPartitions -= topicPartition  // TODO
+
+                  case Errors.CORRUPT_MESSAGE |
+                       Errors.MESSAGE_TOO_LARGE |
+                       Errors.RECORD_LIST_TOO_LARGE |
+                       Errors.INVALID_REQUIRED_ACKS => // these are all unexpected and fatal errors
+
+                    throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
+
+                  case Errors.UNKNOWN_TOPIC_OR_PARTITION |
+                       Errors.NOT_LEADER_FOR_PARTITION |
+                       Errors.NOT_ENOUGH_REPLICAS |
+                       Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND => // these are retriable errors
+
+                    info(s"Sending $transactionalId's transaction marker for partition $topicPartition has failed with error ${error.exceptionName}, retrying " +
+                      s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
+
                     retryPartitions += topicPartition
 
-                  // TODO: a few more error codes need to be handled: InvalidProducerEpoch
+                  case Errors.INVALID_PRODUCER_EPOCH |
+                       Errors.TRANSACTION_COORDINATOR_FENCED => // producer or coordinator epoch has changed, this txn can now be ignored
+
+                    info(s"Sending $transactionalId's transaction marker for partition $topicPartition has permanently failed with error ${error.exceptionName} " +
+                      s"with the current coordinator epoch ${epochAndMetadata.coordinatorEpoch}; cancel sending any more transaction markers $txnMarker to the brokers")
+
+                    txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
                   case other =>
                     throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
