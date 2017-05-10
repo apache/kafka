@@ -75,7 +75,7 @@ public class ProducerBatchTest {
     }
 
     @Test
-    public void testShouldNotAppendOnceRecordBatchGetsFull() {
+    public void testShouldNotAttemptAppendOnceRecordsBuilderIsClosedForAppends() {
         ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
         FutureRecordMetadata result0 = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
         assertNotNull(result0);
