@@ -1,5 +1,6 @@
 package kafka.tools
 
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue}
 
@@ -102,7 +103,7 @@ object ZookeeperPerformance {
 class ZookeeperPerformance(zkConnect: String) extends Watcher {
   private val zookeeper = new ZooKeeper(zkConnect, 30000, this)
 
-  private def bytes = UUID.randomUUID().toString.getBytes
+  private def bytes = UUID.randomUUID().toString.getBytes(StandardCharsets.UTF_8)
   private def path(x: Int) = s"/$x"
 
   private val checkPath = path(Int.MaxValue)
@@ -116,7 +117,7 @@ class ZookeeperPerformance(zkConnect: String) extends Watcher {
       }
     }
     try {
-      zookeeper.create(checkPath, "".getBytes, ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
+      zookeeper.create(checkPath, Array.empty[Byte], ZooDefs.Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT)
     } catch {
       case e: KeeperException.NodeExistsException =>
     }

@@ -314,4 +314,10 @@ For a detailed description of findbugs bug categories, see http://findbugs.sourc
         <Method name="main"/>
         <Bug pattern="IL_INFINITE_LOOP"/>
     </Match>
+    <Match>
+        <!-- Ignore a warning about exceptions caught but not acted on. -->
+        <Package name="kafka.tools"/>
+        <Source name="ZookeeperPerformance.scala"/>
+        <Bug pattern="DE_MIGHT_IGNORE"/>
+    </Match>
 </FindBugsFilter>
