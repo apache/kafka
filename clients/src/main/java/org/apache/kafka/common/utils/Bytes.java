@@ -50,7 +50,7 @@ public class Bytes implements Comparable<Bytes> {
 
     /**
      * Get the data from the Bytes.
-     * @return The data is only valid between offset and offset+length.
+     * @return The underlying byte array
      */
     public byte[] get() {
         return this.bytes;
