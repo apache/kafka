@@ -117,6 +117,9 @@ class TxnMarkerQueue(@volatile private var destination: Node) {
 
   // TODO: this function is only for metrics recording, not yet added
   def totalNumMarkers(): Int = markersPerTxnTopicPartition.map { case(_, queue) => queue.size()}.sum
+
+  // visible for testing
+  def totalNumMarkers(txnTopicPartition: Int): Int = markersPerTxnTopicPartition(txnTopicPartition).size()
 }
 
 class TransactionMarkerChannelManager(config: KafkaConfig,
@@ -286,3 +289,4 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     txnMarkerPurgatory.checkAndComplete(transactionalId)
   }
 }
+

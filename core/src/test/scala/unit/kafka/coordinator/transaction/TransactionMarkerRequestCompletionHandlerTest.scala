@@ -59,6 +59,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .anyTimes()
+    EasyMock.replay(txnStateManager)
   }
 
   @Test
@@ -101,6 +102,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
       .andReturn(None)
       .anyTimes()
+    EasyMock.replay(txnStateManager)
 
     verifyRemoveDelayedOperationOnError(Errors.NONE)
   }
@@ -110,6 +112,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch+1, txnMetadata)))
       .anyTimes()
+    EasyMock.replay(txnStateManager)
 
     verifyRemoveDelayedOperationOnError(Errors.NONE)
   }
@@ -186,7 +189,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   private def verifyThrowIllegalStateExceptionOnError(error: Errors) = {
-    EasyMock.replay(markerChannelManager)
+    mockCache()
 
     val response = new WriteTxnMarkersResponse(createPidErrorMap(error))
     try {
