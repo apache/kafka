@@ -24,7 +24,7 @@ import kafka.api.TopicMetadataResponse
 import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.Errors
@@ -33,6 +33,7 @@ import org.junit.{Test, After, Before}
 
 class TopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
+  private var adHocServers: Seq[KafkaServer] = Seq()
   var brokerEndPoints: Seq[BrokerEndPoint] = null
   var adHocConfigs: Seq[KafkaConfig] = null
   val numConfigs: Int = 4
@@ -53,7 +54,10 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    server1.shutdown()
+    (adHocServers :+ server1).par.foreach { s =>
+      s.shutdown()
+      CoreUtils.delete(s.config.logDirs)
+    }
     super.tearDown()
   }
 
@@ -134,6 +138,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     adHocProps.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
     // start adHoc brokers with replication factor too high
     val adHocServer = createServer(new KafkaConfig(adHocProps))
+    adHocServers = Seq(adHocServer)
     // We are using the Scala clients and they don't support SSL. Once we move to the Java ones, we should use
     // `securityProtocol` instead of PLAINTEXT below
     val adHocEndpoint = new BrokerEndPoint(adHocServer.config.brokerId, adHocServer.config.hostName,
@@ -147,8 +152,6 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
     assertEquals("Expecting metadata for the test topic", topic, topicsMetadata.head.topic)
     assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
-
-    adHocServer.shutdown()
   }
 
   @Test
@@ -216,7 +219,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     val numBrokers = 2 //just 2 brokers are enough for the test
 
     // start adHoc brokers
-    val adHocServers = adHocConfigs.take(numBrokers - 1).map(p => createServer(p))
+    adHocServers = adHocConfigs.take(numBrokers - 1).map(p => createServer(p))
     val allServers: Seq[KafkaServer] = Seq(server1) ++ adHocServers
 
     // create topic
@@ -232,9 +235,6 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
 
     // check metadata is still correct and updated at all brokers
     checkIsr(allServers)
-
-    // shutdown adHoc brokers
-    adHocServers.map(p => p.shutdown())
   }
 
   private def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
@@ -269,7 +269,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
 
   @Test
   def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup {
-    var adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
+    adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
 
     checkMetadata(adHocServers, numConfigs - 1)
 
@@ -277,13 +277,12 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     adHocServers = adHocServers ++ Seq(createServer(adHocConfigs.head))
 
     checkMetadata(adHocServers, numConfigs)
-    adHocServers.map(p => p.shutdown())
   }
 
 
   @Test
   def testAliveBrokersListWithNoTopicsAfterABrokerShutdown {
-    val adHocServers = adHocConfigs.map(p => createServer(p))
+    adHocServers = adHocConfigs.map(p => createServer(p))
 
     checkMetadata(adHocServers, numConfigs)
 
@@ -292,7 +291,5 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
     adHocServers.last.awaitShutdown()
 
     checkMetadata(adHocServers, numConfigs - 1)
-
-    adHocServers.map(p => p.shutdown())
   }
 }

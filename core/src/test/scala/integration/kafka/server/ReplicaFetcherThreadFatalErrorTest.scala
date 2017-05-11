@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.admin.AdminUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.server.ReplicaFetcherThread.{FetchRequest, PartitionData}
-import kafka.utils.{Exit, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Exit, TestUtils, ZkUtils}
 import kafka.utils.TestUtils.createBrokerConfigs
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
@@ -45,7 +45,10 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     Exit.resetExitProcedure()
-    brokers.foreach(_.shutdown())
+    brokers.par.foreach { s =>
+      s.shutdown()
+      CoreUtils.delete(s.config.logDirs)
+    }
     super.tearDown()
   }
 
