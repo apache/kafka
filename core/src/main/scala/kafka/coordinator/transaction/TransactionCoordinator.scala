@@ -48,7 +48,7 @@ object TransactionCoordinator {
 
     val pidManager = new ProducerIdManager(config.brokerId, zkUtils)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
-    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
+    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false)
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
     new TransactionCoordinator(config.brokerId, pidManager, txnStateManager, txnMarkerChannelManager, txnMarkerPurgatory, time)

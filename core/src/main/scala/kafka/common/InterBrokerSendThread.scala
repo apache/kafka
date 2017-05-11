@@ -32,6 +32,9 @@ class InterBrokerSendThread(name: String,
                             time: Time)
   extends ShutdownableThread(name, isInterruptible = false) {
 
+  // visible for testing
+  def generateRequests(): Iterable[RequestAndCompletionHandler] = requestGenerator()
+
   override def doWork() {
     val now = time.milliseconds()
     var pollTimeout = Long.MaxValue

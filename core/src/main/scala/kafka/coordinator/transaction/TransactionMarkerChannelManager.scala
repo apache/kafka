@@ -152,6 +152,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     markersQueuePerBroker.get(brokerId)
   }
 
+  // visible for testing
+  private[transaction] def senderThread = txnMarkerSendThread
+
   private[transaction] def addMarkersForBroker(broker: Node, txnTopicPartition: Int, txnIdAndMarker: TxnIdAndMarkerEntry) {
     val brokerId = broker.id
 
