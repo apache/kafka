@@ -485,6 +485,12 @@ public class MemoryRecords extends AbstractRecords {
                 producerId, producerEpoch, marker);
     }
 
+    public static MemoryRecords withEndTransactionMarker(long timestamp, long producerId, short producerEpoch,
+                                                         EndTransactionMarker marker) {
+        return withEndTransactionMarker(0L, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH, producerId,
+                producerEpoch, marker);
+    }
+
     public static MemoryRecords withEndTransactionMarker(long initialOffset, long timestamp, int partitionLeaderEpoch,
                                                          long producerId, short producerEpoch,
                                                          EndTransactionMarker marker) {
@@ -506,7 +512,7 @@ public class MemoryRecords extends AbstractRecords {
                 TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
                 RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, partitionLeaderEpoch,
                 buffer.capacity());
-        builder.appendEndTxnMarker(System.currentTimeMillis(), marker);
+        builder.appendEndTxnMarker(timestamp, marker);
         builder.close();
     }
 
