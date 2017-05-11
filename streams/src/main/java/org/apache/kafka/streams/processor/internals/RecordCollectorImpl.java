@@ -43,8 +43,6 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final String logPrefix;
-    private volatile Exception sendException;
-
 
     public RecordCollectorImpl(final Producer<byte[], byte[]> producer, final String streamTaskId) {
         this.producer = producer;
@@ -83,12 +81,11 @@ public class RecordCollectorImpl implements RecordCollector {
                              final Long timestamp,
                              final Serializer<K> keySerializer,
                              final Serializer<V> valueSerializer) {
-        checkForException();
         final byte[] keyBytes = keySerializer.serialize(topic, key);
         final byte[] valBytes = valueSerializer.serialize(topic, value);
 
         final ProducerRecord<byte[], byte[]> serializedRecord =
-                new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
+            new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes);
 
         // counting from 1 to make check further down more natural
         // -> `if (attempt == MAX_SEND_ATTEMPTS)`
@@ -98,16 +95,14 @@ public class RecordCollectorImpl implements RecordCollector {
                     @Override
                     public void onCompletion(final RecordMetadata metadata, final Exception exception) {
                         if (exception == null) {
-                            if (sendException != null) {
-                                return;
-                            }
                             final TopicPartition tp = new TopicPartition(metadata.topic(), metadata.partition());
                             offsets.put(tp, metadata.offset());
                         } else {
-                            if (sendException == null) {
-                                sendException = exception;
-                                log.error("{} Error sending record to topic {}. No more offsets will be recorded for this task and the exception will eventually be thrown", logPrefix, topic, exception);
-                            }
+                            log.error("{} Error sending record with key {} to topic {}, partition {}. " +
+                                    "No more offsets will be " +
+                                    "recorded for this task and the exception will eventually be thrown",
+                                logPrefix, key, topic, partition, exception);
+                            throw new StreamsException(String.format("%s exception caught when producing", logPrefix), exception);
                         }
                     }
                 });
@@ -123,17 +118,11 @@ public class RecordCollectorImpl implements RecordCollector {
         }
     }
 
-    private void checkForException() {
-        if (sendException != null) {
-            throw new StreamsException(String.format("%s exception caught when producing", logPrefix), sendException);
-        }
-    }
 
     @Override
     public void flush() {
         log.debug("{} Flushing producer", logPrefix);
         producer.flush();
-        checkForException();
     }
 
     /**
@@ -142,7 +131,6 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         producer.close();
-        checkForException();
     }
 
     /**
