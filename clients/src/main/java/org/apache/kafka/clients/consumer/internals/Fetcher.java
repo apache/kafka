@@ -1012,6 +1012,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeEnsureValid(currentBatch);
 
                     if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
+                        // remove from the aborted transaction queue all aborted transactions which have begun
+                        // before the current batch's last offset and add the associated producerIds to the
+                        // aborted producer set
+                        consumeAbortedTransactionsUpTo(currentBatch.lastOffset());
+
                         long producerId = currentBatch.producerId();
                         if (containsAbortMarker(currentBatch)) {
                             abortedProducerIds.remove(producerId);
@@ -1057,21 +1062,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return records;
         }
 
-        private boolean isBatchAborted(RecordBatch batch) {
-            /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
-            *   1. Add any the producerIds of any aborted transactions which began at an offset earlier than
-            *      the current batch to the 'abortedProducerIds' set, and remove the aborted transactions
-            *      from the 'abortedTransactions' queue.
-            *   2. If the batch is transactional and the producerId is contained in the 'abortedProducerIds',
-            *      the batch is part of an aborted transaction. Otherwise, it should be returned to the user.
-            */
+        private void consumeAbortedTransactionsUpTo(long offset) {
             if (abortedTransactions == null)
-                return false;
+                return;
 
-            while (!abortedTransactions.isEmpty() && abortedTransactions.peek().firstOffset <= batch.lastOffset()) {
+            while (!abortedTransactions.isEmpty() && abortedTransactions.peek().firstOffset <= offset) {
                 FetchResponse.AbortedTransaction abortedTransaction = abortedTransactions.poll();
                 abortedProducerIds.add(abortedTransaction.producerId);
             }
+        }
+
+        private boolean isBatchAborted(RecordBatch batch) {
             return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
         }
 

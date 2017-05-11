@@ -225,8 +225,8 @@ public class MemoryRecordsTest {
             int partitionLeaderEpoch = 29;
 
             EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
-            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, producerId, producerEpoch,
-                    partitionLeaderEpoch, marker);
+            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, System.currentTimeMillis(),
+                    partitionLeaderEpoch, producerId, producerEpoch, marker);
             // verify that buffer allocation was precise
             assertEquals(records.buffer().remaining(), records.buffer().capacity());
 

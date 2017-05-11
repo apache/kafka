@@ -21,8 +21,7 @@ import java.io.File
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.MemoryRecords.withEndTransactionMarker
-import org.apache.kafka.common.record.{RecordBatch, _}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -332,9 +331,10 @@ class LogSegmentTest {
                             producerEpoch: Short,
                             offset: Long = 0L,
                             partitionLeaderEpoch: Int = 0,
-                            coordinatorEpoch: Int = 0): MemoryRecords = {
+                            coordinatorEpoch: Int = 0,
+                            timestamp: Long = RecordBatch.NO_TIMESTAMP): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    MemoryRecords.withEndTransactionMarker(offset, producerId, producerEpoch, partitionLeaderEpoch, marker)
+    MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, producerEpoch, marker)
   }
 
   /**

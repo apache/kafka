@@ -481,25 +481,29 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withEndTransactionMarker(long producerId, short producerEpoch, EndTransactionMarker marker) {
-        return withEndTransactionMarker(0L, producerId, producerEpoch, RecordBatch.NO_PARTITION_LEADER_EPOCH, marker);
+        return withEndTransactionMarker(0L, System.currentTimeMillis(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                producerId, producerEpoch, marker);
     }
 
-    public static MemoryRecords withEndTransactionMarker(long initialOffset, long producerId, short producerEpoch,
-                                                         int partitionLeaderEpoch, EndTransactionMarker marker) {
+    public static MemoryRecords withEndTransactionMarker(long initialOffset, long timestamp, int partitionLeaderEpoch,
+                                                         long producerId, short producerEpoch,
+                                                         EndTransactionMarker marker) {
         int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD +
                 EndTransactionMarker.CURRENT_END_TXN_SCHEMA_RECORD_SIZE;
         ByteBuffer buffer = ByteBuffer.allocate(endTxnMarkerBatchSize);
-        writeEndTransactionalMarker(buffer, initialOffset, producerId, producerEpoch, partitionLeaderEpoch, marker);
+        writeEndTransactionalMarker(buffer, initialOffset, timestamp, partitionLeaderEpoch, producerId,
+                producerEpoch, marker);
         buffer.flip();
         return MemoryRecords.readableRecords(buffer);
     }
 
-    public static void writeEndTransactionalMarker(ByteBuffer buffer, long initialOffset, long producerId,
-                                                   short producerEpoch, int partitionLeaderEpoch, EndTransactionMarker marker) {
+    public static void writeEndTransactionalMarker(ByteBuffer buffer, long initialOffset, long timestamp,
+                                                   int partitionLeaderEpoch, long producerId, short producerEpoch,
+                                                   EndTransactionMarker marker) {
         boolean isTransactional = true;
         boolean isControlBatch = true;
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, initialOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch,
+                TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
                 RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, partitionLeaderEpoch,
                 buffer.capacity());
         builder.appendEndTxnMarker(System.currentTimeMillis(), marker);

@@ -195,8 +195,8 @@ public class FetcherTest {
         builder.append(0L, "key".getBytes(), null);
         builder.close();
 
-        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, producerId, producerEpoch,
-                partitionLeaderEpoch, new EndTransactionMarker(ControlRecordType.ABORT, 0));
+        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+                new EndTransactionMarker(ControlRecordType.ABORT, 0));
 
         buffer.flip();
 
@@ -1438,6 +1438,46 @@ public class FetcherTest {
     }
 
     @Test
+    public void testReadCommittedAbortMarkerWithNoData() {
+        Fetcher<String, String> fetcher = createFetcher(subscriptions, new Metrics(), new StringDeserializer(),
+                new StringDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+
+        long producerId = 1L;
+
+        abortTransaction(buffer, producerId, 5L);
+
+        appendTransactionalRecords(buffer, producerId, 6L,
+                new SimpleRecord("6".getBytes(), null),
+                new SimpleRecord("7".getBytes(), null),
+                new SimpleRecord("8".getBytes(), null));
+
+        commitTransaction(buffer, producerId, 9L);
+
+        buffer.flip();
+
+        // send the fetch
+        subscriptions.assignFromUser(singleton(tp1));
+        subscriptions.seek(tp1, 0);
+        assertEquals(1, fetcher.sendFetches());
+
+        // prepare the response. the aborted transactions begin at offsets which are no longer in the log
+        List<FetchResponse.AbortedTransaction> abortedTransactions = new ArrayList<>();
+        abortedTransactions.add(new FetchResponse.AbortedTransaction(producerId, 0L));
+
+        client.prepareResponse(fetchResponseWithAbortedTransactions(MemoryRecords.readableRecords(buffer),
+                abortedTransactions, Errors.NONE, 100L, 100L, 0));
+        consumerClient.poll(0);
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<String, String>>> allFetchedRecords = fetcher.fetchedRecords();
+        assertTrue(allFetchedRecords.containsKey(tp1));
+        List<ConsumerRecord<String, String>> fetchedRecords = allFetchedRecords.get(tp1);
+        assertEquals(3, fetchedRecords.size());
+        assertEquals(Arrays.asList(6L, 7L, 8L), collectRecordOffsets(fetchedRecords));
+    }
+
+    @Test
     public void testReadCommittedWithCompactedTopic() {
         Fetcher<String, String> fetcher = createFetcher(subscriptions, new Metrics(), new StringDeserializer(),
                 new StringDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
@@ -1588,16 +1628,16 @@ public class FetcherTest {
     private int commitTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
-        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, producerId, producerEpoch,
-                partitionLeaderEpoch, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
+        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+                new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         return 1;
     }
 
     private int abortTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
-        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, producerId, producerEpoch,
-                partitionLeaderEpoch, new EndTransactionMarker(ControlRecordType.ABORT, 0));
+        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+                new EndTransactionMarker(ControlRecordType.ABORT, 0));
         return 1;
     }
 

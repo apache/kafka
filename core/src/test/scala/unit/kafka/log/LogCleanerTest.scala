@@ -149,13 +149,89 @@ class LogCleanerTest extends JUnitSuite {
     appendProducer1(Seq(9, 10))
     log.appendAsLeader(abortMarker(pid1, producerEpoch), leaderEpoch = 0, isFromClient = false)
 
-    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    // we have only cleaned the records in the first segment
+    val dirtyOffset = cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))._1
     assertEquals(List(2, 3, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10), keysInLog(log))
 
     log.roll()
 
-    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    // finally only the keys from pid3 should remain
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, dirtyOffset, log.activeSegment.baseOffset))
     assertEquals(List(2, 3, 6, 7, 8, 9), keysInLog(log))
+  }
+
+  @Test
+  def testCommitMarkerRemoval(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    appendProducer(Seq(1))
+    appendProducer(Seq(2, 3))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    appendProducer(Seq(2))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    // cannot remove the marker in this pass because there are still valid records
+    var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = time.milliseconds())._1
+    assertEquals(List(1, 3, 2), keysInLog(log))
+    assertEquals(List(0, 2, 3, 4, 5), offsetsInLog(log))
+
+    appendProducer(Seq(1, 3))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    // the first cleaning preserves the commit marker (at offset 3) since there were still records for the transaction
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = time.milliseconds())._1
+    assertEquals(List(2, 1, 3), keysInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
+
+    // delete horizon forced to 0 to verify marker is not removed early
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = 0L)._1
+    assertEquals(List(2, 1, 3), keysInLog(log))
+    assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
+
+    // clean again with the delete horizon set back to the current time and verify the marker is removed
+    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = time.milliseconds())
+    assertEquals(List(2, 1, 3), keysInLog(log))
+    assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
+  }
+
+  @Test
+  def testAbortMarkerRemoval(): Unit = {
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 256: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    appendProducer(Seq(1))
+    appendProducer(Seq(2, 3))
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    appendProducer(Seq(3))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    // delete horizon set to 0 to verify marker is not removed early
+    val dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = 0L)._1
+    assertEquals(List(3), keysInLog(log))
+    assertEquals(List(3, 4, 5), offsetsInLog(log))
+
+    // clean again with the delete horizon set back to the current time and verify the marker is removed
+    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = time.milliseconds())
+    assertEquals(List(3), keysInLog(log))
+    assertEquals(List(4, 5), offsetsInLog(log))
   }
 
   /**
@@ -918,24 +994,25 @@ class LogCleanerTest extends JUnitSuite {
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>
         val keyBytes = key.toString.getBytes
-        new SimpleRecord(keyBytes, keyBytes) // use key as value
+        new SimpleRecord(keyBytes, keyBytes) // the value doesn't matter too much since we validate offsets
       }
-      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
-        producerEpoch, sequence, simpleRecords: _*)
+      val records = transactionalRecords(simpleRecords, producerId, producerEpoch, sequence)
       log.appendAsLeader(records, leaderEpoch = 0)
       sequence += simpleRecords.size
     }
   }
 
-  def commitMarker(producerId: Long, producerEpoch: Short): MemoryRecords =
-    endTxnMarker(producerId, producerEpoch, ControlRecordType.COMMIT)
+  def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+    endTxnMarker(producerId, producerEpoch, ControlRecordType.COMMIT, 0L, timestamp)
 
-  def abortMarker(producerId: Long, producerEpoch: Short): MemoryRecords =
-    endTxnMarker(producerId, producerEpoch, ControlRecordType.ABORT)
+  def abortMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+    endTxnMarker(producerId, producerEpoch, ControlRecordType.ABORT, 0L, timestamp)
 
-  def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType): MemoryRecords = {
+  def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType,
+                   offset: Long, timestamp: Long): MemoryRecords = {
     val endTxnMarker = new EndTransactionMarker(controlRecordType, 0)
-    MemoryRecords.withEndTransactionMarker(producerId, producerEpoch, endTxnMarker)
+    MemoryRecords.withEndTransactionMarker(offset, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      producerId, producerEpoch, endTxnMarker)
   }
 
   def record(key: Int, value: Array[Byte]): MemoryRecords =
@@ -955,12 +1032,12 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
   private def keyFor(key: ByteBuffer) =
     new String(Utils.readBytes(key.duplicate), "UTF-8")
 
-  def put(key: ByteBuffer, offset: Long): Unit = {
+  override def put(key: ByteBuffer, offset: Long): Unit = {
     lastOffset = offset
     map.put(keyFor(key), offset)
   }
   
-  def get(key: ByteBuffer): Long = {
+  override def get(key: ByteBuffer): Long = {
     val k = keyFor(key)
     if(map.containsKey(k))
       map.get(k)
@@ -968,11 +1045,15 @@ class FakeOffsetMap(val slots: Int) extends OffsetMap {
       -1L
   }
   
-  def clear(): Unit = map.clear()
+  override def clear(): Unit = map.clear()
   
-  def size: Int = map.size
+  override def size: Int = map.size
 
-  def latestOffset: Long = lastOffset
+  override def latestOffset: Long = lastOffset
+
+  override def updateLatestOffset(offset: Long): Unit = {
+    lastOffset = offset
+  }
 
   override def toString: String = map.toString
 }

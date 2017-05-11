@@ -332,10 +332,22 @@ private[log] class Cleaner(val id: Int,
    * @return The first offset not cleaned and the statistics for this round of cleaning
    */
   private[log] def clean(cleanable: LogToClean): (Long, CleanerStats) = {
-    val stats = new CleanerStats()
+    // figure out the timestamp below which it is safe to remove delete tombstones
+    // this position is defined to be a configurable time beneath the last modified time of the last clean segment
+    val deleteHorizonMs = 
+      cleanable.log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
+        case None => 0L
+        case Some(seg) => seg.lastModified - cleanable.log.config.deleteRetentionMs
+    }
 
+    doClean(cleanable, deleteHorizonMs)
+  }
+
+  private[log] def doClean(cleanable: LogToClean, deleteHorizonMs: Long): (Long, CleanerStats) = {
     info("Beginning cleaning of log %s.".format(cleanable.log.name))
+
     val log = cleanable.log
+    val stats = new CleanerStats()
 
     // build the offset map
     info("Building offset map for %s...".format(cleanable.log.name))
@@ -343,21 +355,13 @@ private[log] class Cleaner(val id: Int,
     buildOffsetMap(log, cleanable.firstDirtyOffset, upperBoundOffset, offsetMap, stats)
     val endOffset = offsetMap.latestOffset + 1
     stats.indexDone()
-    
-    // figure out the timestamp below which it is safe to remove delete tombstones
-    // this position is defined to be a configurable time beneath the last modified time of the last clean segment
-    val deleteHorizonMs = 
-      log.logSegments(0, cleanable.firstDirtyOffset).lastOption match {
-        case None => 0L
-        case Some(seg) => seg.lastModified - log.config.deleteRetentionMs
-    }
+
+    val abortedTransactions = log.collectAbortedTransactions(log.logStartOffset, upperBoundOffset)
+    val transactionMetadata = CleanedTransactionMetadata(abortedTransactions)
 
     // determine the timestamp up to which the log will be cleaned
     // this is the lower of the last active segment and the compaction lag
     val cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset).lastOption.map(_.lastModified).getOrElse(0L)
-
-    val abortedTransactions = log.collectAbortedTransactions(log.logStartOffset, upperBoundOffset)
-    val transactionMetadata = CleanedTransactionMetadata(abortedTransactions)
 
     // group the segments and clean the groups
     info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
@@ -512,10 +516,13 @@ private[log] class Cleaner(val id: Int,
   private def shouldDiscardBatch(batch: RecordBatch,
                                  transactionMetadata: CleanedTransactionMetadata,
                                  retainTxnMarkers: Boolean): Boolean = {
-    if (batch.isControlBatch)
-      transactionMetadata.canDiscardControlBatch(batch) && !retainTxnMarkers
-    else
-      transactionMetadata.isBatchAborted(batch)
+    if (batch.isControlBatch) {
+      val canDiscardControlBatch = transactionMetadata.onControlBatchRead(batch)
+      canDiscardControlBatch && !retainTxnMarkers
+    } else {
+      val canDiscardBatch = transactionMetadata.onBatchRead(batch)
+      canDiscardBatch
+    }
   }
 
   private def shouldRetainRecord(source: kafka.log.LogSegment,
@@ -669,16 +676,29 @@ private[log] class Cleaner(val id: Int,
       throttler.maybeThrottle(records.sizeInBytes)
 
       val startPosition = position
-      for (batch <- records.batches.asScala; record <- batch.asScala) {
+      for (batch <- records.batches.asScala) {
         if (batch.isControlBatch) {
-          transactionMetadata.canDiscardControlBatch(batch)
-        } else if (record.hasKey && record.offset >= start && !transactionMetadata.isBatchAborted(batch)) {
-          if (map.size < maxDesiredMapSize)
-            map.put(record.key, record.offset)
-          else
-            return true
+          transactionMetadata.onControlBatchRead(batch)
+          stats.indexMessagesRead(1)
+        } else {
+          val isAborted = transactionMetadata.onBatchRead(batch)
+          if (isAborted) {
+            if (batch.lastOffset >= start)
+              map.updateLatestOffset(batch.lastOffset)
+            // count is non-null since a transactional batch must have magic > 2, which means count is defined
+            stats.indexMessagesRead(batch.countOrNull)
+          } else {
+            for (record <- batch.asScala) {
+              if (record.hasKey && record.offset >= start) {
+                if (map.size < maxDesiredMapSize)
+                  map.put(record.key, record.offset)
+                else
+                  return true
+              }
+              stats.indexMessagesRead(1)
+            }
+          }
         }
-        stats.indexMessagesRead(1)
       }
       val bytesRead = records.validBytes
       position += bytesRead
@@ -785,7 +805,9 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
    * Update the cleaned transaction state with a control batch that has just been traversed by the cleaner.
    * Return true if the control batch can be discarded.
    */
-  def canDiscardControlBatch(controlBatch: RecordBatch): Boolean = {
+  def onControlBatchRead(controlBatch: RecordBatch): Boolean = {
+    consumeAbortedTxnsUpTo(controlBatch.lastOffset)
+
     val controlRecord = controlBatch.iterator.next()
     val controlType = ControlRecordType.parse(controlRecord.key)
     val producerId = controlBatch.producerId
@@ -805,11 +827,15 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
     }
   }
 
-  def isBatchAborted(batch: RecordBatch): Boolean = {
-    while (abortedTransactions.headOption.exists(_.firstOffset <= batch.lastOffset)) {
+  private def consumeAbortedTxnsUpTo(offset: Long): Unit = {
+    while (abortedTransactions.headOption.exists(_.firstOffset <= offset)) {
       val abortedTxn = abortedTransactions.dequeue()
       ongoingAbortedTxns += abortedTxn.producerId -> abortedTxn
     }
+  }
+
+  def onBatchRead(batch: RecordBatch): Boolean = {
+    consumeAbortedTxnsUpTo(batch.lastOffset)
     if (batch.isTransactional) {
       if (ongoingAbortedTxns.contains(batch.producerId))
         true
