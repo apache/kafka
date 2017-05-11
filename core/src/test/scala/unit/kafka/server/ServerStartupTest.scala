@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.utils.{CoreUtils, TestUtils, ZkUtils}
+import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -30,8 +30,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     if (server != null) {
-      server.shutdown()
-      CoreUtils.delete(server.config.logDirs)
+      TestUtils.shutdownServers(Seq(server))
     }
     super.tearDown()
   }

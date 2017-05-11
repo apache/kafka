@@ -41,10 +41,7 @@ class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    servers.par.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 

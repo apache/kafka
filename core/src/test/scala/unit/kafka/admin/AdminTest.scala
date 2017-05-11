@@ -51,10 +51,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @After
   override def tearDown() {
-    servers.par.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 

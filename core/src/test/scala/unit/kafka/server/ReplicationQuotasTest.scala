@@ -57,7 +57,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    brokers.par.foreach(_.shutdown())
+    shutdownServers(brokers)
     producer.close()
     super.tearDown()
   }

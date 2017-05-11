@@ -18,7 +18,7 @@ package kafka.admin
 
 import kafka.log.Log
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.ZkUtils._
 import kafka.server.{KafkaConfig, KafkaServer}
 import org.junit.Assert._
@@ -35,10 +35,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    servers.par.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 

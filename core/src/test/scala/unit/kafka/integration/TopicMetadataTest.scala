@@ -54,10 +54,7 @@ class TopicMetadataTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    (adHocServers :+ server1).par.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(adHocServers :+ server1)
     super.tearDown()
   }
 

@@ -22,7 +22,7 @@ import kafka.admin.AdminUtils
 import kafka.server.KafkaConfig._
 import kafka.server.{BlockingSend, KafkaConfig, KafkaServer, ReplicaFetcherBlockingSend}
 import kafka.utils.TestUtils._
-import kafka.utils.{CoreUtils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.metrics.Metrics
@@ -53,10 +53,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
   @After
   override def tearDown() {
-    brokers.par.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(brokers)
     if (producer != null)
       producer.close()
     super.tearDown()
