@@ -84,6 +84,28 @@ public class SerializationTest {
     }
 
     @Test
+    public void testShortSerializer() {
+        Short[] shorts = new Short[]{
+            32767,
+            -32768
+        };
+
+        Serializer<Short> serializer = Serdes.Short().serializer();
+        Deserializer<Short> deserializer = Serdes.Short().deserializer();
+
+        for (Short value : shorts) {
+            assertEquals("Should get the original short after serialization and deserialization",
+                    value, deserializer.deserialize(topic, serializer.serialize(topic, value)));
+        }
+
+        assertEquals("Should support null in serialization and deserialization",
+                null, deserializer.deserialize(topic, serializer.serialize(topic, null)));
+
+        serializer.close();
+        deserializer.close();
+    }
+
+    @Test
     public void testIntegerSerializer() {
         Integer[] integers = new Integer[]{
             423412424,
