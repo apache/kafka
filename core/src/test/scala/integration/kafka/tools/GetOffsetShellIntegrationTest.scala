@@ -5,9 +5,8 @@ import kafka.tools.GetOffsetShell
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.Errors
 import org.junit.Assert._
-import org.junit.{After, Before, Ignore, Test}
+import org.junit.{After, Before, Test}
 
 class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
 
@@ -100,26 +99,29 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
     assertEquals("Actual offset for topic2 partition 1 must be equal to producer offset plus 1", producerT2P1Offset + 1, actualT2P1Offset)
   }
 
-  //TODO Add support for non-existing topics and partitions
-  @Ignore
+  @Test
   def nonExistingTopic: Unit = {
     sendRecords(topic1, 0, 1)
     val offsets = GetOffsetShell.getOffsetsNew(brokerList,
       Set(new TopicPartition("topic999", 0)))
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
     val error = offsets(new TopicPartition("topic999", 0)).left.get
-    assertEquals("Must return an error about non-existing topic", Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
+    assertTrue("Must return an error about non-existing topic",
+      error.toLowerCase.contains("topic not found")
+        && error.contains("topic999"))
   }
 
-  //TODO Add support for non-existing topics and partitions
-  @Ignore
+  @Test
   def nonExistingPartition: Unit = {
     sendRecords(topic1, 0, 1)
     val offsets = GetOffsetShell.getOffsetsNew(brokerList,
       Set(new TopicPartition(topic1, 9999)))
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
     val error = offsets(new TopicPartition(topic1, 9999)).left.get
-    assertEquals("Must return an error about non-existing partition", Errors.UNKNOWN_TOPIC_OR_PARTITION, error)
+    assertTrue("Must return an error about non-existing partition",
+      error.toLowerCase.contains("partition for topic not found")
+        && error.contains(topic1)
+        && error.contains("9999"))
   }
 
   private def sendRecords(topic: String, partition: Int, number: Int): Seq[RecordMetadata] = {

@@ -26,9 +26,9 @@ import kafka.common.TopicAndPartition
 import kafka.consumer._
 import kafka.utils.{CommandLineUtils, Logging, ToolsUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
 import scala.collection.Seq
 
@@ -164,7 +164,7 @@ object GetOffsetShell extends Logging {
       }
   }
 
-  def getOffsetsNew(bootstrapServers: String, topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[Errors, Long]] = {
+  def getOffsetsNew(bootstrapServers: String, topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
     import collection.JavaConversions._
     val consumerConfig = Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers,
@@ -172,9 +172,21 @@ object GetOffsetShell extends Logging {
       ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer"
     )
     val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(consumerConfig)
-    val offsets: Map[TopicPartition, Long] = consumer.endOffsets(topicPartitions).mapValues(Long2long).toMap
-    offsets.map { case (tp, offset) => tp -> Right(offset) }
+    val availableTopics: Map[String, List[PartitionInfo]] = consumer.listTopics().toMap.mapValues(asScalaBuffer(_).toList)
+    val (nonExistingPartitions,  existingPartitions) = extractExistingPartitions(topicPartitions, availableTopics)
+    val offsets: Map[TopicPartition, Long] = consumer.endOffsets(existingPartitions).mapValues(Long2long).toMap
+    nonExistingPartitions ++ offsets.map { case (tp, offset) => tp -> Right(offset) }
 //    consumer.assign(topicPartitions)
 //    consumer.seekToEnd(Nil)
+  }
+
+  private def extractExistingPartitions(requestedPartitions: Set[TopicPartition],
+                                availableTopics: Map[String, List[PartitionInfo]]):
+                                (Map[TopicPartition, Either[String, Long]], Set[TopicPartition]) = {
+    val topicsPair = requestedPartitions.partition(tp => !availableTopics.contains(tp.topic()))
+    val nonExistingTopics = topicsPair._1.map(tp => tp -> Left(s"Topic not found: ${tp.topic()}")).toMap
+    val partitionsPair = topicsPair._2.partition(tp => !availableTopics(tp.topic()).exists(p => p.partition() == tp.partition()))
+    val nonExistingPartitions = partitionsPair._1.map(tp => tp -> Left(s"Partition for topic not found: ${tp.topic()}:${tp.partition()}")).toMap
+    (nonExistingTopics ++ nonExistingPartitions, partitionsPair._2)
   }
 }
