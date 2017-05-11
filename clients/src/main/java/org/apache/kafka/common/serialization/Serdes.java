@@ -70,6 +70,12 @@ public class Serdes {
         }
     }
 
+    static public final class ShortSerde extends WrapperSerde<Short> {
+        public ShortSerde() {
+            super(new ShortSerializer(), new ShortDeserializer());
+        }
+    }
+
     static public final class FloatSerde extends WrapperSerde<Float> {
         public FloatSerde() {
             super(new FloatSerializer(), new FloatDeserializer());
@@ -110,6 +116,10 @@ public class Serdes {
     static public <T> Serde<T> serdeFrom(Class<T> type) {
         if (String.class.isAssignableFrom(type)) {
             return (Serde<T>) String();
+        }
+
+        if (Short.class.isAssignableFrom(type)) {
+            return (Serde<T>) Short();
         }
 
         if (Integer.class.isAssignableFrom(type)) {
@@ -173,6 +183,13 @@ public class Serdes {
      */
     static public Serde<Integer> Integer() {
         return new IntegerSerde();
+    }
+
+    /*
+     * A serde for nullable {@code Short} type.
+     */
+    static public Serde<Short> Short() {
+        return new ShortSerde();
     }
 
     /*
