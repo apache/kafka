@@ -24,9 +24,12 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Modules;
+import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -183,6 +186,15 @@ public class Worker {
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = modules.newConnector(connClass);
+            Class<?> klass = connector.getClass();
+            Class<?> klass2 = SinkConnector.class;
+            Class<?> klass3 = SourceConnector.class;
+            boolean result1 = SinkConnector.class.isAssignableFrom(klass);
+            boolean result2 = SourceConnector.class.isAssignableFrom(klass);
+            boolean result3 = klass2.isAssignableFrom(klass);
+            boolean result4 = klass.isAssignableFrom(klass2);
+            boolean result5 = klass3.isAssignableFrom(klass);
+            boolean result6 = klass.isAssignableFrom(klass3);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
             workerConnector.initialize(connConfig);
@@ -316,8 +328,11 @@ public class Worker {
         final WorkerTask workerTask;
         try {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
+            ClassLoader save = Thread.currentThread().getContextClassLoader();
+            if (!save.equals(modules.getDelegatingLoader())) {
+                Thread.currentThread().setContextClassLoader(modules.getDelegatingLoader());
+            }
             final TaskConfig taskConfig = new TaskConfig(taskProps);
-
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
             final Task task = modules.newTask(taskClass);
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
@@ -335,6 +350,9 @@ public class Worker {
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter);
             workerTask.initialize(taskConfig);
+            if (!save.equals(modules.getDelegatingLoader())) {
+                Thread.currentThread().setContextClassLoader(save);
+            }
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
             statusListener.onFailure(id, t);

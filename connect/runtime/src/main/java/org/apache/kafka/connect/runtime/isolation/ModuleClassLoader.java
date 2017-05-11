@@ -20,21 +20,23 @@ import java.net.URL;
 import java.net.URLClassLoader;
 
 public class ModuleClassLoader extends URLClassLoader {
-    private static final String[] EXCLUSIONS = {"java.", "javax.", "org.apache.kafka."};
+    private final String pluginPath;
 
     public ModuleClassLoader(URL[] urls, ClassLoader parent) {
         super(urls, parent);
+        pluginPath = path();
     }
 
     public ModuleClassLoader(URL[] urls) {
         super(urls);
+        pluginPath = path();
     }
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
-            if (validate(name)) {
+            if (ModuleUtils.validate(name)) {
                 try {
                     klass = findClass(name);
                 } catch (ClassNotFoundException e) {
@@ -51,11 +53,18 @@ public class ModuleClassLoader extends URLClassLoader {
         return klass;
     }
 
-    protected boolean validate(String name) {
-        boolean result = false;
-        for (String exclusion : EXCLUSIONS) {
-            result |= name.startsWith(exclusion);
+    public String path() {
+        URL[] urls = getURLs();
+        if (urls.length == 0) {
+            return "";
         }
-        return !result;
+
+        String first = urls[0].toString();
+        return first.substring(0, first.lastIndexOf("/"));
+    }
+
+    @Override
+    public String toString() {
+        return "ModuleClassLoader{topURL=" + pluginPath + "}";
     }
 }

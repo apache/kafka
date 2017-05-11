@@ -16,18 +16,23 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.connect.storage.Converter;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+public class ModuleUtils {
+    private static final String BLACKLIST = "^(?:java|javax|org\\.apache\\.kafka\\.common|org\\"
+            + ".apache\\.kafka\\.connect|org\\.apache\\.log4j)\\..*$";
 
-public class Converters extends AbstractModuleFactory<Converter> {
-    private static final Logger log = LoggerFactory.getLogger(Converters.class);
+    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\."
+            + "(?:transforms\\.(?!Transformation$).*|json\\..*|file\\..*|converters\\..*"
+            + "|storage\\.StringConverter)$";
 
-    public Converters(DelegatingClassLoader loader) {
-        super(loader);
-    }
-
-    public Converter newConverter(String converterClassOrAlias) {
-        return newModule(converterClassOrAlias, Converter.class);
+    public static boolean validate(String name) {
+        //boolean result = name.matches(BLACKLIST) && !name.matches(WHITELIST);
+        if (name.equals("org.apache.kafka.connect.transforms.Transformation")) {
+            boolean yeap = true;
+        }
+        boolean result = name.matches(BLACKLIST);
+        if(result) {
+            result = !name.matches(WHITELIST);
+        }
+        return !result;
     }
 }

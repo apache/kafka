@@ -16,32 +16,69 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
-public class ModuleDesc implements Comparable<ModuleDesc> {
-    private final Class<?> klass;
+import java.util.Objects;
+
+public class ModuleDesc<T> implements Comparable<ModuleDesc<T>> {
+    private final Class<? extends T> klass;
     private final String name;
     private final String version;
     private final DefaultArtifactVersion encodedVersion;
+    private final ModuleType type;
+    private final String typeName;
+    private final String path;
 
-    public ModuleDesc(Class<?> klass, String version) {
+    public ModuleDesc(Class<? extends T> klass, String version, ModuleClassLoader loader) {
         this.klass = klass;
         this.name = klass.getCanonicalName();
         this.version = version;
         this.encodedVersion = new DefaultArtifactVersion(version);
+        this.type = ModuleType.from(klass);
+        this.typeName = type.toString();
+        this.path = loader.path();
     }
 
-    public Class<?> moduleClass() {
+    public Class<? extends T> moduleClass() {
         return klass;
     }
 
+    @Override
+    public String toString() {
+        return "ModuleDesc{" +
+                "klass=" + klass +
+                ", name='" + name + '\'' +
+                ", version='" + version + '\'' +
+                ", encodedVersion=" + encodedVersion +
+                ", type=" + type +
+                ", typeName='" + typeName + '\'' +
+                ", path='" + path + '\'' +
+                '}';
+    }
+
+    @JsonProperty("class")
     public String className() {
         return name;
     }
 
+    @JsonProperty("version")
     public String version() {
         return version;
+    }
+
+    public ModuleType type() {
+        return type;
+    }
+
+    @JsonProperty("type")
+    public String typeName() {
+        return typeName;
+    }
+
+    @JsonProperty("path")
+    public String path() {
+        return typeName;
     }
 
     @Override
@@ -53,9 +90,12 @@ public class ModuleDesc implements Comparable<ModuleDesc> {
             return false;
         }
 
-        ModuleDesc that = (ModuleDesc) o;
+        ModuleDesc<?> that = (ModuleDesc<?>) o;
 
         if (klass != null ? !klass.equals(that.klass) : that.klass != null) {
+            return false;
+        }
+        if (name != null ? !name.equals(that.name) : that.name != null) {
             return false;
         }
         return version != null ? version.equals(that.version) : that.version == null;
@@ -63,7 +103,7 @@ public class ModuleDesc implements Comparable<ModuleDesc> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(klass, version);
+        return Objects.hash(klass, name, version);
     }
 
     @Override

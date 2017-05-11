@@ -21,11 +21,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.ConnectorFactory;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
-import org.apache.kafka.connect.runtime.isolation.ModuleClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Modules;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -38,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
-import java.net.URL;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
@@ -71,6 +68,7 @@ public class ConnectStandalone {
         Time time = Time.SYSTEM;
         StandaloneConfig config = new StandaloneConfig(workerProps);
         Modules modules = new Modules(config);
+        modules.init();
 
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();

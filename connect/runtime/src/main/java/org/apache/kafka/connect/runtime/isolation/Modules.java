@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
@@ -26,6 +28,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -36,20 +39,16 @@ public class Modules {
 
     private final List<String> moduleTopPaths;
     private final Map<ModuleClassLoader, URL[]> loaders;
-    private final Map<String, ModuleClassLoader> modulesToLoaders;
     private final DelegatingClassLoader delegatingLoader;
-    private final Connectors connectors;
-    private final Converters converters;
-    private final Transformations transformations;
 
     public Modules(WorkerConfig workerConfig) {
         loaders = new HashMap<>();
-        modulesToLoaders = new HashMap<>();
         moduleTopPaths = workerConfig.getList(WorkerConfig.MODULE_PATH_CONFIG);
         delegatingLoader = new DelegatingClassLoader(moduleTopPaths);
-        connectors = new Connectors(delegatingLoader);
-        converters = new Converters(delegatingLoader);
-        transformations = new Transformations(delegatingLoader);
+    }
+
+    public void init() {
+        delegatingLoader.initLoaders();
     }
 
     public DelegatingClassLoader getDelegatingLoader() {
@@ -60,28 +59,97 @@ public class Modules {
         return loaders;
     }
 
+    @SuppressWarnings("unchecked")
     public Connector newConnector(String connectorClassOrAlias) {
-        return connectors.newConnector(connectorClassOrAlias);
+        Class<? extends Connector> klass;
+        try {
+            klass = moduleClass(
+                    delegatingLoader,
+                    connectorClassOrAlias,
+                    Connector.class
+            );
+        } catch (ClassNotFoundException e) {
+            List<ModuleDesc<Connector>> matches = new ArrayList<>();
+            for (ModuleDesc module : delegatingLoader.connectors()) {
+                Class<?> moduleClass = module.moduleClass();
+                String simpleName = moduleClass.getSimpleName();
+                if (simpleName.equals(connectorClassOrAlias)
+                        || simpleName.equals(connectorClassOrAlias + "Connector")) {
+                    matches.add(module);
+                }
+            }
+
+            if (matches.isEmpty()) {
+                throw new ConnectException(
+                        "Failed to find any class that implements Connector and which name matches "
+                        + connectorClassOrAlias
+                        + ", available connectors are: "
+                        + moduleNames(delegatingLoader.connectors())
+                );
+            }
+            if (matches.size() > 1) {
+                throw new ConnectException(
+                        "More than one connector matches alias "
+                        + connectorClassOrAlias
+                        +
+                        ". Please use full package and class name instead. Classes found: "
+                        + moduleNames(matches)
+                );
+            }
+
+            klass = matches.get(0).moduleClass();
+        }
+        return newModule(klass);
+    }
+
+    private static <T> String moduleNames(Collection<ModuleDesc<T>> modules) {
+        StringBuilder names = new StringBuilder();
+        for (ModuleDesc<T> module : modules) {
+            names.append(module.className()).append(", ");
+        }
+        String result = names.toString();
+        return result.isEmpty()
+               ? ""
+               : result.substring(0, result.length() - 2);
     }
 
     public Task newTask(Class<? extends Task> taskClass) {
-        return connectors.newTask(taskClass);
+        return null;
     }
 
     public Converter newConverter(String converterClassOrAlias) {
-        return converters.newConverter(converterClassOrAlias);
+        return null;
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
-            String converterClassOrAlias
+            String transformationClassOrAlias
     ) {
-        return transformations.newTransformation(converterClassOrAlias);
+        return null;
     }
 
-    private static String connectorNames(Collection<Class<? extends Connector>> connectors) {
-        StringBuilder names = new StringBuilder();
-        for (Class<?> c : connectors)
-            names.append(c.getName()).append(", ");
-        return names.substring(0, names.toString().length() - 2);
+    protected static <T> T newModule(Class<T> klass) {
+        try {
+            return Utils.newInstance(klass);
+        } catch (Throwable t) {
+            throw new ConnectException("Instantiation error", t);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    protected static <U> Class<? extends U> moduleClass(
+            DelegatingClassLoader loader,
+            String classOrAlias,
+            Class<U> moduleClass
+    ) throws ClassNotFoundException {
+        Class<?> klass = loader.loadClass(classOrAlias, false);
+        if (moduleClass.isAssignableFrom(klass)) {
+            return (Class<? extends U>) klass;
+        }
+
+        throw new ClassNotFoundException(
+                "Requested class: "
+                + classOrAlias
+                + " does not extend " + moduleClass.getSimpleName()
+        );
     }
 }

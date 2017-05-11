@@ -62,6 +62,7 @@ public class ConnectDistributed {
         Time time = Time.SYSTEM;
         DistributedConfig config = new DistributedConfig(workerProps);
         Modules modules = new Modules(config);
+        modules.init();
 
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();

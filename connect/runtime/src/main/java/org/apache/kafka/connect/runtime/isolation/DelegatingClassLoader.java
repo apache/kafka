@@ -35,23 +35,23 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
+import java.util.SortedSet;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
-    private static final String[] EXCLUSIONS = {
-            "java.",
-            "javax.",
-            "org.apache.kafka.",
-            "org.apache.log4j."
-    };
 
-    private final Map<String, SortedMap<ModuleDesc, ModuleClassLoader>> moduleLoaders;
+    private final Map<String, SortedMap<ModuleDesc<?>, ModuleClassLoader>> moduleLoaders;
+    private final SortedSet<ModuleDesc<Connector>> connectors;
+    private final SortedSet<ModuleDesc<Converter>> converters;
+    private final SortedSet<ModuleDesc<Transformation>> transformations;
     private final List<String> modulePaths;
     private final Map<Path, ModuleClassLoader> activePaths;
     private final Map<Path, Void> inactivePaths;
@@ -62,11 +62,85 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.moduleLoaders = new HashMap<>();
         this.activePaths = new HashMap<>();
         this.inactivePaths = new HashMap<>();
-        initLoaders();
+        this.connectors = new TreeSet<>();
+        this.converters = new TreeSet<>();
+        this.transformations = new TreeSet<>();
     }
 
     public DelegatingClassLoader(List<String> modulePaths) {
         this(modulePaths, ClassLoader.getSystemClassLoader());
+    }
+
+    private static boolean isConcrete(Class<?> cls) {
+        final int mod = cls.getModifiers();
+        return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
+    }
+
+    private static List<Path> moduleDirs(Path topDir) throws IOException {
+        DirectoryStream.Filter<Path> dirFilter = new DirectoryStream.Filter<Path>() {
+            public boolean accept(Path path) throws IOException {
+                return Files.isDirectory(path);
+            }
+        };
+
+        List<Path> dirs = new ArrayList<>();
+        // Non-recursive for now
+        try (DirectoryStream<Path> listing = Files.newDirectoryStream(topDir, dirFilter)) {
+            for (Path dir : listing) {
+                dirs.add(dir);
+            }
+        }
+        return dirs;
+    }
+
+    private static List<URL> jarPaths(Path moduleDir) throws IOException {
+        DirectoryStream.Filter<Path> jarFilter = new DirectoryStream.Filter<Path>() {
+            public boolean accept(Path file) throws IOException {
+                return file.toString().toLowerCase().endsWith(".jar");
+            }
+        };
+
+        List<URL> jars = new ArrayList<>();
+        try (DirectoryStream<Path> listing = Files.newDirectoryStream(moduleDir, jarFilter)) {
+            for (Path jar : listing) {
+                jars.add(jar.toUri().toURL());
+            }
+        }
+        return jars;
+    }
+
+    private <T> void addModules(Collection<ModuleDesc<T>> modules, ModuleClassLoader loader) {
+        for (ModuleDesc<T> module : modules) {
+            String moduleClassName = module.className();
+            SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(moduleClassName);
+            if (inner == null) {
+                inner = new TreeMap<>();
+                moduleLoaders.put(moduleClassName, inner);
+            }
+            inner.put(module, loader);
+
+            /*
+            switch (module.type()) {
+                case SOURCE:
+                case SINK:
+                case CONNECTOR:
+                    connectors.add(module);
+                    log.info("Connector module type: {}", module);
+                    break;
+                case CONVERTER:
+                    converters.add(module);
+                    log.info("Converter module type: {}", module);
+                    break;
+                case TRANSFORMATION:
+                    transformations.add(module);
+                    log.info("Transformation module type: {}", module);
+                    break;
+                default:
+                    log.warn("Unknown module type: {}", module);
+                    break;
+            }
+            */
+        }
     }
 
     public void initLoaders() {
@@ -74,25 +148,26 @@ public class DelegatingClassLoader extends URLClassLoader {
             try {
                 Path modulePath = Paths.get(path).toAbsolutePath();
                 if (Files.isDirectory(modulePath)) {
-                    URL[] jars = getJarPaths(modulePath).toArray(new URL[0]);
-                    ModuleClassLoader loader = new ModuleClassLoader(jars);
-                    List<ModuleDesc> modules = scanModulePath(loader, jars);
+                    for (Path dir : moduleDirs(modulePath)) {
+                        log.info("Loading dir: {}", dir);
+                        URL[] jars = jarPaths(dir).toArray(new URL[0]);
+                        // log.info("Loading jars: " + Arrays.toString(jars));
+                        ModuleClassLoader loader = new ModuleClassLoader(jars);
+                        log.info("Using loader: {}", loader);
+                        ModuleScanResult modules = scanModulePath(loader, jars);
 
-                    if (modules.isEmpty()) {
-                        inactivePaths.put(modulePath, null);
-                    } else {
-                        activePaths.put(modulePath, loader);
-                    }
-
-                    for (ModuleDesc module : modules) {
-                        String moduleClassName = module.className();
-                        SortedMap<ModuleDesc, ModuleClassLoader> inner =
-                                moduleLoaders.get(moduleClassName);
-                        if (inner == null) {
-                            inner = new TreeMap<>();
-                            moduleLoaders.put(moduleClassName, inner);
+                        if (modules.isEmpty()) {
+                            inactivePaths.put(dir, null);
+                        } else {
+                            activePaths.put(dir, loader);
                         }
-                        inner.put(module, loader);
+
+                        addModules(modules.connectors(), loader);
+                        connectors.addAll(modules.connectors());
+                        addModules(modules.converters(), loader);
+                        converters.addAll(modules.converters());
+                        addModules(modules.transformations(), loader);
+                        transformations.addAll(modules.transformations());
                     }
                 }
             } catch (InvalidPathException | MalformedURLException e) {
@@ -105,10 +180,23 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
-    public List<ModuleDesc> scanModulePath(
+    public Set<ModuleDesc<Connector>> connectors() {
+        return connectors;
+    }
+
+    public Set<ModuleDesc<Converter>> converters() {
+        return converters;
+    }
+
+    public Set<ModuleDesc<Transformation>> transformations() {
+        return transformations;
+    }
+
+    private ModuleScanResult scanModulePath(
             ModuleClassLoader loader,
             URL[] urls
     ) throws InstantiationException, IllegalAccessException {
+        //log.info("Scanning module path urls: " + Arrays.toString(urls));
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new ModuleClassLoader[]{loader});
         builder.addUrls(urls);
@@ -117,64 +205,53 @@ public class DelegatingClassLoader extends URLClassLoader {
         List<ModuleDesc> modules = new ArrayList<>();
         Class<?>[] moduleClasses = {Connector.class, Converter.class, Transformation.class};
         for (Class<?> moduleClass : moduleClasses) {
-            modules.addAll(getModuleDesc(reflections, moduleClass));
+            modules.addAll(getModuleDesc(reflections, moduleClass, loader));
         }
-        return modules;
+
+        return new ModuleScanResult(
+                getModuleDesc(reflections, Connector.class, loader),
+                getModuleDesc(reflections, Converter.class, loader),
+                getModuleDesc(reflections, Transformation.class, loader)
+        );
     }
 
-    public <T> List<ModuleDesc> getModuleDesc(
+    private <T> Collection<ModuleDesc<T>> getModuleDesc(
             Reflections reflections,
-            Class<T> klass
+            Class<T> klass,
+            ModuleClassLoader loader
     ) throws InstantiationException, IllegalAccessException {
         Set<Class<? extends T>> modules = reflections.getSubTypesOf(klass);
 
-        List<ModuleDesc> result = new ArrayList<>();
+        Collection<ModuleDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> module : modules) {
             if (isConcrete(module)) {
+                // Temporary workaround until all the modules are versioned.
                 if (Connector.class.isAssignableFrom(module)) {
                     result.add(
-                            new ModuleDesc(module, ((Connector) module.newInstance()).version())
+                            new ModuleDesc<>(
+                                    module,
+                                    ((Connector) module.newInstance()).version(),
+                                    loader
+                            )
                     );
                 } else {
-                    result.add(new ModuleDesc(module, "undefined"));
+                    result.add(new ModuleDesc<>(module, "undefined", loader));
                 }
             }
         }
         return result;
     }
 
-
-    private static boolean isConcrete(Class<?> cls) {
-        final int mod = cls.getModifiers();
-        return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
-    }
-
-    private static List<URL> getJarPaths(Path topDir) throws IOException {
-        List<URL> jars = new ArrayList<>();
-        DirectoryStream.Filter<Path> jarFilter = new DirectoryStream.Filter<Path>() {
-            public boolean accept(Path file) throws IOException {
-                return file.toString().toLowerCase().endsWith(".jar");
-            }
-        };
-
-        // Non-recursive for now
-        try (DirectoryStream<Path> listing = Files.newDirectoryStream(topDir, jarFilter)) {
-            for (Path jar : listing) {
-                jars.add(jar.toUri().toURL());
-            }
-        }
-        return jars;
-    }
-
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (!validate(name)) {
+        if (!ModuleUtils.validate(name)) {
             // There are no paths in this classloader, will attempt to load with the parent.
             return super.loadClass(name, resolve);
         }
 
-        SortedMap<ModuleDesc, ModuleClassLoader> inner = moduleLoaders.get(name);
+        SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(name);
         if (inner != null) {
+            log.warn("Class has been found before: {} by {}", name, inner.get(inner.lastKey()));
             return inner.get(inner.lastKey()).loadClass(name, resolve);
         }
 
@@ -182,6 +259,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         for (ModuleClassLoader loader : activePaths.values()) {
             try {
                 klass = loader.loadClass(name, resolve);
+                break;
             } catch (ClassNotFoundException e) {
                 // Not found in this loader.
             }
@@ -190,13 +268,5 @@ public class DelegatingClassLoader extends URLClassLoader {
             return super.loadClass(name, resolve);
         }
         return klass;
-    }
-
-    protected boolean validate(String name) {
-        boolean result = false;
-        for (String exclusion : EXCLUSIONS) {
-            result |= name.startsWith(exclusion);
-        }
-        return !result;
     }
 }
