@@ -419,4 +419,17 @@ class SocketServerTest extends JUnitSuite {
     assertEquals(Map.empty, nonZeroMetricNamesAndValues)
   }
 
+  @Test
+  def testProcessorMetricTags(): Unit = {
+    val metricsNames = YammerMetrics
+      .defaultRegistry
+      .allMetrics.asScala
+      .filterKeys(k => k.getType.equals("Processor"))
+      .collect { case (k, metric: Gauge[_]) => k }
+
+    assertEquals(2, metricsNames.size)
+    assert(metricsNames.head.getMBeanName.endsWith("protocol=PLAINTEXT,listener=PLAINTEXT,networkProcessor=0"))
+    assert(metricsNames.last.getMBeanName.endsWith("protocol=TRACE,listener=TRACE,networkProcessor=1"))
+  }
+
 }

@@ -101,12 +101,12 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        val allIoWaitRatioMetrics = processors.map { p => 
-          Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)))
+        val allIoWaitRatioMetricNames = processors.map { p => 
+          metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
         }
-        
-        def value = allIoWaitRatioMetrics.map { m =>
-          m.fold(0.0)(_.value)
+
+        def value = allIoWaitRatioMetricNames.map { metricName =>
+          Option(metrics.metric(metricName)).fold(0.0)(_.value)
         }.sum / totalProcessorThreads
       }
     )
