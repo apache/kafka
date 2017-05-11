@@ -781,8 +781,8 @@ private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDir
 private[log] object CleanedTransactionMetadata {
   def apply(abortedTransactions: List[AbortedTxn]): CleanedTransactionMetadata = {
     val queue = mutable.PriorityQueue.empty[AbortedTxn](new Ordering[AbortedTxn] {
-      override def compare(x: AbortedTxn, y: AbortedTxn): Int = -(x.firstOffset compare y.firstOffset)
-    })
+      override def compare(x: AbortedTxn, y: AbortedTxn): Int = x.firstOffset compare y.firstOffset
+    }.reverse)
     queue ++= abortedTransactions
     new CleanedTransactionMetadata(queue)
   }
