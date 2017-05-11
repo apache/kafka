@@ -107,6 +107,7 @@ abstract class BaseRequestTest extends KafkaServerTestHarness {
                      apiVersion: Option[Short] = None,
                      protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): ByteBuffer = {
     val socket = connect(destination, protocol)
+    Thread.sleep(7000)
     try send(request, apiKey, socket, apiVersion)
     finally socket.close()
   }
