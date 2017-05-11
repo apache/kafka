@@ -250,15 +250,11 @@ public class TransactionManager {
         return currentState == State.ERROR;
     }
 
-    public synchronized boolean maybeSetError(Exception exception) {
-        if (isTransactional() && isInTransaction()) {
-            if (exception instanceof ProducerFencedException)
-                transitionTo(State.FENCED, exception);
-            else
-                transitionTo(State.ERROR, exception);
-            return true;
-        }
-        return false;
+    public synchronized void setError(Exception exception) {
+        if (exception instanceof ProducerFencedException)
+            transitionTo(State.FENCED, exception);
+        else
+            transitionTo(State.ERROR, exception);
     }
 
     /**

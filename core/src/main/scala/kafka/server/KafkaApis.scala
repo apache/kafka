@@ -1391,20 +1391,26 @@ class KafkaApis(val requestChannel: RequestChannel,
     val initPidRequest = request.body[InitPidRequest]
     val transactionalId = initPidRequest.transactionalId
 
-    if(authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
-      // Send response callback
-      def sendResponseCallback(result: InitPidResult): Unit = {
-        def createResponse(throttleTimeMs: Int): AbstractResponse = {
-          val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
-          trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
-          responseBody
+    // TODO: What are we authorizing here?
+    if (authorize(request.session, Write, new Resource(ProducerIdResource, ""))) {
+      if (transactionalId == null || authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+        // Send response callback
+        def sendResponseCallback(result: InitPidResult): Unit = {
+          def createResponse(throttleTimeMs: Int): AbstractResponse = {
+            val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
+            trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
+            responseBody
+          }
+
+          sendResponseMaybeThrottle(request, createResponse)
         }
-        sendResponseMaybeThrottle(request, createResponse)
+
+        txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
       }
-      txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
-    }
-    else
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+      else
+        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+    } else
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.PRODUCER_ID_AUTHORIZATION_FAILED))
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {

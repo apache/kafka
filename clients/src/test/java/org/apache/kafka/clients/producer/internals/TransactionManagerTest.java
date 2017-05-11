@@ -507,7 +507,7 @@ public class TransactionManagerTest {
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (exception != null && transactionManager != null) {
-                transactionManager.maybeSetError(exception);
+                transactionManager.setError(exception);
             }
         }
     }

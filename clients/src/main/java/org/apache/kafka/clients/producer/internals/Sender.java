@@ -370,22 +370,28 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private void maybeWaitForPid() {
+    private boolean maybeWaitForPid() {
         // If this is a transactional producer, the PID will be received when recovering transactions in the
         // initTransactions() method of the producer.
         if (transactionManager == null || transactionManager.isTransactional())
-            return;
+            return true;
 
-        while (!transactionManager.hasPid()) {
+        while (!transactionManager.hasPid() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
                     if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
                         InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        PidAndEpoch pidAndEpoch = new PidAndEpoch(
-                                initPidResponse.producerId(), initPidResponse.epoch());
-                        transactionManager.setPidAndEpoch(pidAndEpoch);
+                        Errors error = initPidResponse.error();
+                        if (error == Errors.PRODUCER_ID_AUTHORIZATION_FAILED) {
+                            transactionManager.setError(error.exception());
+                            return false;
+                        } else {
+                            PidAndEpoch pidAndEpoch = new PidAndEpoch(
+                                    initPidResponse.producerId(), initPidResponse.epoch());
+                            transactionManager.setPidAndEpoch(pidAndEpoch);
+                        }
                     } else {
                         log.error("Received an unexpected response type for an InitPidRequest from {}. " +
                                 "We will back off and try again.", node);
@@ -401,6 +407,7 @@ public class Sender implements Runnable {
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
+        return true;
     }
 
     /**
