@@ -22,7 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.nio.charset.Charset
 import java.security.cert.X509Certificate
-import java.util.Properties
+import java.util.{ArrayList, Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
 
@@ -40,7 +40,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.{ListenerName, Mode}
@@ -1267,6 +1267,19 @@ object TestUtils extends Logging {
     }
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
 
+  }
+
+  def consumeMessages(servers: Seq[KafkaServer], topic: String, numMessages: Int): List[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+    val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
+    val consumer = createNewConsumer(
+            TestUtils.getBrokerListStrFromServers(servers),
+            securityProtocol = SecurityProtocol.PLAINTEXT)
+    consumer.subscribe(Collections.singleton(topic))
+    do {
+      for (record <- consumer.poll(50).asScala)
+        records.add(record)
+    } while (records.size < numMessages)
+    records.asScala.toList
   }
 }
 

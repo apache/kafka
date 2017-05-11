@@ -115,8 +115,12 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
   val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
   val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
-  private[server] val replicationBytesInRate = if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags)) else None
-  private[server] val replicationBytesOutRate = if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)) else None
+  private[server] val replicationBytesInRate =
+    if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags))
+    else None
+  private[server] val replicationBytesOutRate =
+    if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags))
+    else None
   val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
@@ -160,14 +164,14 @@ object BrokerTopicStats extends Logging {
   }
 
   def updateReplicationBytesIn(value: Long) {
-    if (getBrokerAllTopicsStats.replicationBytesInRate.isDefined) {
-      getBrokerAllTopicsStats.replicationBytesInRate.get.mark(value)
+    getBrokerAllTopicsStats.replicationBytesInRate.foreach { metric =>
+      metric.mark(value)
     }
   }
 
   def updateReplicationBytesOut(value: Long) {
-    if (getBrokerAllTopicsStats.replicationBytesOutRate.isDefined) {
-      getBrokerAllTopicsStats.replicationBytesOutRate.get.mark(value)
+    getBrokerAllTopicsStats.replicationBytesOutRate.foreach { metric =>
+      metric.mark(value)
     }
   }
 
