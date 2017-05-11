@@ -132,6 +132,7 @@ class ReplicaManager(val config: KafkaConfig,
                      quotaManager: ReplicationQuotaManager,
                      val metadataCache: MetadataCache,
                      threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
@@ -243,6 +244,15 @@ class ReplicaManager(val config: KafkaConfig,
   def tryCompleteDelayedDeleteRecords(key: DelayedOperationKey) {
     val completed = delayedDeleteRecordsPurgatory.checkAndComplete(key)
     debug("Request key %s unblocked %d DeleteRecordsRequest.".format(key.keyLabel, completed))
+  }
+
+  /**
+    * Force complete any delayed produce requests with the request key. This can
+    * be triggered when a partition emmigrates
+    */
+  def forceCompleteDelayedProduce(key: DelayedOperationKey): Unit = {
+    val completed = delayedProducePurgatory.forceComplete(key)
+    debug(s"force completed $completed produce requests for key ${key.keyLabel}")
   }
 
   def startup() {

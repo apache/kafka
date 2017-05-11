@@ -25,7 +25,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.common.{KafkaException, Topic}
 import kafka.log.LogConfig
 import kafka.message.NoCompressionCodec
-import kafka.server.ReplicaManager
+import kafka.server.{ReplicaManager, TopicPartitionOperationKey}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
@@ -299,6 +299,9 @@ class TransactionStateManager(brokerId: Int,
             numTxnsRemoved += 1
           }
         }
+
+        replicaManager.forceCompleteDelayedProduce(
+          new TopicPartitionOperationKey(topicPartition))
 
         if (numTxnsRemoved > 0)
           info(s"Removed $numTxnsRemoved cached transaction metadata for $topicPartition on follower transition")

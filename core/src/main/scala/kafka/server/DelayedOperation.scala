@@ -261,6 +261,19 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         Nil
     }
   }
+
+  /**
+    * Force complete any watched operations for the provided key
+    *
+    * @return the number of completed operations
+    */
+  def forceComplete(key: Any): Int = {
+    val watchers = inReadLock(removeWatchersLock) {watchersForKey.get(key)}
+    if (watchers == null)
+      0
+    else
+      watchers.forceComplete()
+  }
   /*
    * Return all the current watcher lists,
    * note that the returned watchers may be removed from the list by other threads
@@ -369,6 +382,20 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
         removeKeyIfEmpty(key, this)
 
       purged
+    }
+
+    def forceComplete(): Int = {
+      var completed = 0
+      val iter = operations.iterator()
+      while(iter.hasNext) {
+        val current = iter.next()
+        if (!current.isCompleted) {
+          current.forceComplete()
+          iter.remove()
+          completed +=1
+        }
+      }
+      completed
     }
   }
 

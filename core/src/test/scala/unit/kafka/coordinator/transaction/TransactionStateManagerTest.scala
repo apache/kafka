@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import kafka.common.Topic
 import kafka.common.Topic.TransactionStateTopicName
 import kafka.log.Log
-import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
+import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager, TopicPartitionOperationKey}
 import kafka.utils.{MockScheduler, ZkUtils}
 import kafka.utils.TestUtils.fail
 import org.apache.kafka.common.TopicPartition
@@ -312,6 +312,18 @@ class TransactionStateManagerTest {
   @Test
   def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
     verifyWritesTxnMarkersInPrepareState(PrepareAbort)
+  }
+
+  @Test
+  def shouldRemoveDelayedProduceOperationsWhenPartitionRemoved(): Unit = {
+    EasyMock.expect(replicaManager.forceCompleteDelayedProduce(
+      new TopicPartitionOperationKey(new TopicPartition(Topic.TransactionStateTopicName, 0))))
+
+    EasyMock.replay(replicaManager)
+    transactionManager.removeTransactionsForPartition(0)
+    scheduler.tick()
+
+    EasyMock.verify(replicaManager)
   }
 
   private def verifyWritesTxnMarkersInPrepareState(state: TransactionState): Unit = {

@@ -117,6 +117,16 @@ class DelayedOperationTest {
     assertEquals(Nil, cancelledOperations)
   }
 
+  @Test
+  def shouldForceCompleteRequestForKey(): Unit = {
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key"))
+    purgatory.tryCompleteElseWatch(new MockDelayedOperation(10000L), Seq("key2"))
+
+    assertEquals(2, purgatory.forceComplete("key"))
+    assertEquals(1, purgatory.watched)
+    assertEquals(1, purgatory.forceComplete("key2"))
+  }
 
 
   class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
