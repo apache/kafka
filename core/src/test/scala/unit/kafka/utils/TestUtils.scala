@@ -20,11 +20,13 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.nio.charset.Charset
+import java.nio.charset.{Charset, StandardCharsets}
+import java.nio.file._
 import java.security.cert.X509Certificate
 import java.util.Properties
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
+import javax.security.auth.login.Configuration
 
 import kafka.admin.AdminUtils
 import kafka.api._
@@ -46,6 +48,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.{ByteArraySerializer, Serializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
@@ -123,8 +126,42 @@ object TestUtils extends Logging {
    */
   def createServer(config: KafkaConfig, time: Time = Time.SYSTEM): KafkaServer = {
     val server = new KafkaServer(config, time)
-    server.startup()
+    try {
+      server.startup()
+    } catch {
+      case e: Throwable =>
+        maybeLogJaasConfig()
+        dumpThreads()
+        throw e
+    }
     server
+  }
+
+  private def maybeLogJaasConfig() {
+    try {
+      val jaasConfig = System.getProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM);
+      val serverContext = Configuration.getConfiguration().getAppConfigurationEntry("KafkaServer")
+      if (jaasConfig != null) {
+        val jaasFile = new File(jaasConfig)
+        error(s"Jaas config $jaasConfig exists? ${jaasFile.exists()}, KafkaServer context is: $serverContext")
+        if (jaasFile.exists()) {
+          val contents = Files.readAllLines(Paths.get(jaasConfig), StandardCharsets.UTF_8).asScala.mkString("\n")
+          error(s"Jaas config file contents: $contents")
+        }
+      } else
+        error(s"Jaas config system property not set, KafkaServer context is: $serverContext")
+    } catch {
+      case e: Throwable => error(s"Failed to log jaas config, exception: $e")
+    }
+  }
+
+  def dumpThreads() {
+    val stacks = Thread.getAllStackTraces();
+    stacks.asScala.foreach(t => {
+        val name = t._1.getName
+        val stacktrace = t._2.toList.mkString("\n")
+        error(s"Thread $name stackTrace $stacktrace")
+      })
   }
 
   def boundPort(server: KafkaServer, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int =
