@@ -174,6 +174,16 @@ object TestUtils extends Logging {
   }
 
   /**
+    * Shutdown `servers` and delete their log directories.
+    */
+  def shutdownServers(servers: Seq[KafkaServer]) {
+    servers.par.foreach { s =>
+      s.shutdown()
+      CoreUtils.delete(s.config.logDirs)
+    }
+  }
+
+  /**
     * Create a test config for the provided parameters.
     *
     * Note that if `interBrokerSecurityProtocol` is defined, the listener for the `SecurityProtocol` will be enabled.
@@ -939,9 +949,10 @@ object TestUtils extends Logging {
   }
 
   def verifyNonDaemonThreadsStatus(threadNamePrefix: String) {
-    assertEquals(0, Thread.getAllStackTraces.keySet().toArray
-      .map(_.asInstanceOf[Thread])
-      .count(t => !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)))
+    val threadCount = Thread.getAllStackTraces.keySet.asScala.count { t =>
+      !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
+    }
+    assertEquals(0, threadCount)
   }
 
   /**
