@@ -911,7 +911,7 @@ class Log(@volatile var dir: File,
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
                                          startingSegmentEntry: JEntry[JLong, LogSegment],
-                                         accumulator: List[AbortedTxn] => Unit): Unit= {
+                                         accumulator: List[AbortedTxn] => Unit): Unit = {
     var segmentEntry = startingSegmentEntry
     while (segmentEntry != null) {
       val searchResult = segmentEntry.getValue.collectAbortedTxns(startOffset, upperBoundOffset)
