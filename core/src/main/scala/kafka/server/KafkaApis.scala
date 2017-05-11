@@ -363,6 +363,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.bodyAndSize.size
 
+    val transactionalIdAuthorized = if(produceRequest.transactionalId() != null)
+      authorize(request.session, Write, new Resource(ProducerTransactionalId, produceRequest.transactionalId()))
+    else
+      true
+
     val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
       produceRequest.partitionRecordsOrFail.asScala.partition { case (tp, _) =>
         authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
@@ -375,9 +380,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-      val mergedResponseStatus = responseStatus ++
-        unauthorizedForWriteRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
-        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+      val mergedResponseStatus = if (!transactionalIdAuthorized) {
+         responseStatus ++
+           produceRequest.partitionRecordsOrFail().asScala.mapValues(_ => new PartitionResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+      } else {
+        responseStatus ++
+          unauthorizedForWriteRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
+          nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+      }
 
       var errorInResponse = false
 
@@ -428,7 +438,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceResponseCallback)
     }
 
-    if (authorizedRequestInfo.isEmpty)
+    if (authorizedRequestInfo.isEmpty || !transactionalIdAuthorized)
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
@@ -1391,26 +1401,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     val initPidRequest = request.body[InitPidRequest]
     val transactionalId = initPidRequest.transactionalId
 
-    // TODO: What are we authorizing here?
-    if (authorize(request.session, Write, new Resource(ProducerIdResource, ""))) {
-      if (transactionalId == null || authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
-        // Send response callback
-        def sendResponseCallback(result: InitPidResult): Unit = {
-          def createResponse(throttleTimeMs: Int): AbstractResponse = {
-            val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
-            trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
-            responseBody
-          }
-
-          sendResponseMaybeThrottle(request, createResponse)
+    if (transactionalId == null || authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+      // Send response callback
+      def sendResponseCallback(result: InitPidResult): Unit = {
+        def createResponse(throttleTimeMs: Int): AbstractResponse = {
+          val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
+          trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
+          responseBody
         }
 
-        txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+        sendResponseMaybeThrottle(request, createResponse)
       }
-      else
-        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
-    } else
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.PRODUCER_ID_AUTHORIZATION_FAILED))
+
+      txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+    }
+    else
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
