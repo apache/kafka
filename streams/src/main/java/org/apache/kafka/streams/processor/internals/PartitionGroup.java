@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -35,8 +34,6 @@ public class PartitionGroup {
     private final Map<TopicPartition, RecordQueue> partitionQueues;
 
     private final PriorityQueue<RecordQueue> queuesByTime;
-
-    private final TimestampExtractor timestampExtractor;
 
     public static class RecordInfo {
         public RecordQueue queue;
@@ -57,7 +54,7 @@ public class PartitionGroup {
     // since task is thread-safe, we do not need to synchronize on local variables
     private int totalBuffered;
 
-    public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues, TimestampExtractor timestampExtractor) {
+    public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues) {
         this.queuesByTime = new PriorityQueue<>(partitionQueues.size(), new Comparator<RecordQueue>() {
 
             @Override
@@ -72,8 +69,6 @@ public class PartitionGroup {
         });
 
         this.partitionQueues = partitionQueues;
-
-        this.timestampExtractor = timestampExtractor;
 
         this.totalBuffered = 0;
     }

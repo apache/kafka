@@ -68,11 +68,12 @@ public class StreamThreadStateStoreProviderTest {
     private StateDirectory stateDirectory;
     private File stateDir;
     private boolean storesAvailable;
+    private final String topicName = "topic";
 
     @Before
     public void before() throws IOException {
         final TopologyBuilder builder = new TopologyBuilder();
-        builder.addSource("the-source", "the-source");
+        builder.addSource("the-source", topicName);
         builder.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         builder.addStateStore(Stores.create("kv-store")
                                   .withStringKeys()
@@ -188,7 +189,7 @@ public class StreamThreadStateStoreProviderTest {
                                          final ProcessorTopology topology,
                                          final TaskId taskId) {
         return new StreamTask(taskId, applicationId, Collections
-                .singletonList(new TopicPartition("topic", taskId.partition)), topology,
+                .singletonList(new TopicPartition(topicName, taskId.partition)), topology,
                               clientSupplier.consumer,
                               new StoreChangelogReader(clientSupplier.restoreConsumer, Time.SYSTEM, 5000),
                               streamsConfig, new MockStreamsMetrics(new Metrics()), stateDirectory, null, new MockTime(), new NoOpRecordCollector()) {
