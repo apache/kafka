@@ -76,29 +76,31 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
     this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
 
-  private def validateAppend(epoch: Short, firstSeq: Int, lastSeq: Int) = {
+  private def validateAppend(epoch: Short, firstSeq: Int, lastSeq: Int, shouldValidateSequenceNumbers: Boolean) = {
     if (this.producerEpoch > epoch) {
       throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
         s"with a newer epoch. $epoch (request epoch), ${this.producerEpoch} (server epoch)")
-    } else if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < epoch) {
-      if (firstSeq != 0)
-        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $epoch " +
-          s"(request epoch), $firstSeq (seq. number)")
-    } else if (this.firstSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
-      // the epoch was bumped by a control record, so we expect the sequence number to be reset
-      throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), found $firstSeq " +
-        s"(incoming seq. number), but expected 0")
-    } else if (firstSeq != RecordBatch.SKIP_SEQUENCE_CHECK && firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
-      throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $producerId, (incomingBatch.firstSeq, " +
-        s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
-        s"(${this.firstSeq}, ${this.lastSeq}).")
-    } else if (firstSeq != RecordBatch.SKIP_SEQUENCE_CHECK && firstSeq != this.lastSeq + 1L) {
-      throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), $firstSeq " +
-        s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
+    } else if (shouldValidateSequenceNumbers) {
+      if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < epoch) {
+        if (firstSeq != 0)
+          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $epoch " +
+            s"(request epoch), $firstSeq (seq. number)")
+      } else if (this.firstSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
+        // the epoch was bumped by a control record, so we expect the sequence number to be reset
+        throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), found $firstSeq " +
+          s"(incoming seq. number), but expected 0")
+      } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
+        throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $producerId, (incomingBatch.firstSeq, " +
+          s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
+          s"(${this.firstSeq}, ${this.lastSeq}).")
+      } else if (firstSeq != this.lastSeq + 1L) {
+        throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), $firstSeq " +
+          s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
+      }
     }
   }
 
-  def append(batch: RecordBatch): Option[CompletedTxn] = {
+  def append(batch: RecordBatch, shouldValidateSequenceNumbers: Boolean = true): Option[CompletedTxn] = {
     if (batch.isControlBatch) {
       val record = batch.iterator.next()
       val endTxnMarker = EndTransactionMarker.deserialize(record)
@@ -106,7 +108,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
       Some(completedTxn)
     } else {
       append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
-        batch.isTransactional)
+        batch.isTransactional, shouldValidateSequenceNumbers)
       None
     }
   }
@@ -116,11 +118,12 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
              lastSeq: Int,
              lastTimestamp: Long,
              lastOffset: Long,
-             isTransactional: Boolean): Unit = {
+             isTransactional: Boolean,
+             shouldValidateSequenceNumbers: Boolean): Unit = {
     if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
       // skip validation if this is the first entry when loading from the log. Log retention
       // will generally have removed the beginning entries from each PID
-      validateAppend(epoch, firstSeq, lastSeq)
+      validateAppend(epoch, firstSeq, lastSeq, shouldValidateSequenceNumbers)
 
     this.producerEpoch = epoch
     this.firstSeq = firstSeq

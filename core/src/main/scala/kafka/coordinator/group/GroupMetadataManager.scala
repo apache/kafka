@@ -75,7 +75,9 @@ class GroupMetadataManager(brokerId: Int,
   /* single-thread scheduler to handle offset/group metadata cache loading and unloading */
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "group-metadata-manager-")
 
-  /* The groups with open transactional offsets commits per producer */
+  /* The groups with open transactional offsets commits per producer. We need this because when the commit or abort
+   * marker comes in for a transaction, it is for a particular partition on the offsets topic and a particular producerId.
+   * We use this structure to quickly find the groups which need to be updated by the commit/abort marker. */
   private val openGroupsForProducer = mutable.HashMap[Long, mutable.Set[String]]()
 
   this.logIdent = "[Group Metadata Manager on Broker " + brokerId + "]: "
@@ -249,6 +251,11 @@ class GroupMetadataManager(brokerId: Int,
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
 
+    if (!group.hasReceivedConsistentOffsetCommits)
+      warn(s"group: ${group.groupId} with leader: ${group.leaderId} has received offset commits from consumers as well" +
+        s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
+        s"should be avoided.")
+
     val isTxnOffsetCommit = producerId != RecordBatch.NO_PRODUCER_ID
     // construct the message set to append
     if (filteredOffsetMetadata.isEmpty) {
@@ -272,11 +279,14 @@ class GroupMetadataManager(brokerId: Int,
           val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType, records.asJava))
 
           if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
-            throw new IllegalStateException("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)
+            throw Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.exception("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)
 
           val builder = if (isTxnOffsetCommit)
+            // We don't need to set sequence numbers for these messages because sequence number validation is skipped
+            // for transactional messages written to the offsets topic. We only need to validate the epoch for these
+            // messages.
             MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L, time.milliseconds(),
-              producerId, producerEpoch, RecordBatch.SKIP_SEQUENCE_CHECK, true, RecordBatch.NO_PARTITION_LEADER_EPOCH)
+              producerId, producerEpoch, 0, true, RecordBatch.NO_PARTITION_LEADER_EPOCH)
           else
             MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L)
 
@@ -353,7 +363,7 @@ class GroupMetadataManager(brokerId: Int,
           if (isTxnOffsetCommit) {
             addProducerGroup(producerId, group.groupId)
             group synchronized {
-              group.prepareTxnOffsetCommit(producerId, mutable.Map(offsetMetadata.toSeq: _*))
+              group.prepareTxnOffsetCommit(producerId, offsetMetadata)
             }
           } else {
             group synchronized {
@@ -465,6 +475,7 @@ class GroupMetadataManager(brokerId: Int,
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, OffsetAndMetadata]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
+        val producerGroups = mutable.Map[Long, mutable.Set[String]]()
 
         while (currOffset < highWaterMark && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true,
@@ -514,7 +525,7 @@ class GroupMetadataManager(brokerId: Int,
                       val value = GroupMetadataManager.readOffsetMessageValue(record.value)
                       if (isTxnOffsetCommit) {
                         pendingOffsets(batch.producerId).put(key, value)
-                        addProducerGroup(batch.producerId, key.group)
+                        producerGroups.getOrElseUpdate(batch.producerId, mutable.Set[String]()).add(key.group)
                       } else {
                         loadedOffsets.put(key, value)
                       }
@@ -558,6 +569,11 @@ class GroupMetadataManager(brokerId: Int,
                 groupProducerOffsets ++= offsets
               }
           }
+
+          producerGroups.foreach { case (producerId, groups) =>
+            groups.foreach(addProducerGroup(producerId, _))
+          }
+
           val (pendingGroupOffsets, pendingEmptyGroupOffsets) = pendingOffsetsByGroup
             .partition { case (group, _) => loadedGroups.contains(group)}
 
@@ -608,7 +624,7 @@ class GroupMetadataManager(brokerId: Int,
     trace(s"Initialized offsets $loadedOffsets for group ${group.groupId}")
     group.initializeOffsets(loadedOffsets)
     pendingTransactionalOffsets.foreach { case (producerId, offsets) =>
-      group.prepareTxnOffsetCommit(producerId, offsets)
+      group.prepareTxnOffsetCommit(producerId, offsets.toMap)
     }
 
     val currentGroup = addGroup(group)
@@ -762,7 +778,11 @@ class GroupMetadataManager(brokerId: Int,
   private def removeProducerGroupsBelongingToPartitions(producerId: Long, partitions: Set[Int]) = openGroupsForProducer synchronized {
     val (ownedGroups, remainingGroups) = openGroupsForProducer.getOrElse(producerId, mutable.Set.empty[String])
       .partition { case (group) => partitions.contains(partitionFor(group)) }
-    openGroupsForProducer(producerId) --= ownedGroups
+    if (ownedGroups.nonEmpty) {
+      openGroupsForProducer(producerId) --= ownedGroups
+      if (openGroupsForProducer(producerId).isEmpty)
+        openGroupsForProducer.remove(producerId)
+    }
     ownedGroups
   }
   /*
@@ -808,8 +828,6 @@ class GroupMetadataManager(brokerId: Int,
       ownedPartitions.add(partition)
     }
   }
-
-
 }
 
 /**

@@ -109,6 +109,47 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testLoadTransactionalOffsetsWithoutGroup() {
+    val groupMetadataTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId)
+    val producerId = 1000L
+    val producerEpoch: Short = 2
+
+    val committedOffsets = Map(
+      new TopicPartition("foo", 0) -> 23L,
+      new TopicPartition("foo", 1) -> 455L,
+      new TopicPartition("bar", 0) -> 8992L
+    )
+
+    val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)
+    val buffer = ByteBuffer.allocate(1024)
+    var builder = MemoryRecords.builder(buffer, CompressionType.NONE, 0L, producerId, producerEpoch, 0, true)
+
+    offsetCommitRecords.foreach(builder.append)
+    builder.build()
+    builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
+      TimestampType.LOG_APPEND_TIME, 3L, time.milliseconds(), producerId, producerEpoch, 0, true, true,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH)
+    builder.appendEndTxnMarker(time.milliseconds(), new EndTransactionMarker(ControlRecordType.COMMIT, 0))
+    builder.build()
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+    expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
+
+    EasyMock.replay(replicaManager)
+
+    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => ())
+
+    val group = groupMetadataManager.getGroup(groupId).getOrElse(fail("Group was not loaded into the cache"))
+    assertEquals(groupId, group.groupId)
+    assertEquals(Empty, group.currentState)
+    assertEquals(committedOffsets.size, group.allOffsets.size)
+    committedOffsets.foreach { case (topicPartition, offset) =>
+      assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+    }
+  }
+
+  @Test
   def testLoadOffsetsWithTombstones() {
     val groupMetadataTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId)
     val startOffset = 15L

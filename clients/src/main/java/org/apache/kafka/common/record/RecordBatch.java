@@ -55,12 +55,6 @@ public interface RecordBatch extends Iterable<Record> {
     int NO_SEQUENCE = -1;
 
     /**
-     * For offset commit messages, we need to skip the sequence checks since sequence numbers are not
-     * generated on the producer for these messages.
-     */
-    int SKIP_SEQUENCE_CHECK = -3;
-
-    /**
      * Used to indicate an unknown leader epoch, which will be the case when the record set is
      * first created by the producer.
      */
