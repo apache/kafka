@@ -164,8 +164,29 @@ object GetOffsetShell extends Logging {
       }
   }
 
-  def getOffsetsNew(bootstrapServers: String, topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
+  /**
+    * Gets last offsets for given topic partitions.
+    * <p>
+    * This method asks the broker for existing topics and partitions. If a given partition exists on the broker,
+    * then the method returns the last offset for it. Otherwise (either topic or partition does not exist on the broker)
+    * the method returns a string that describes the problem.
+    * <p>
+    * The last offset of a partition is the offset of the latest message in this partition plus one.
+    * This implementation obtains last offsets by means of [[KafkaConsumer.endOffsets KafkaConsumer.endOffsets()]].
+    * In total, this implementation makes at most two requests for the broker,
+    * no matter how many topics and partitions are given in the argument:
+    * get available partitions and get last offsets for partitions.
+    * @param bootstrapServers Bootstrap Kafka servers - a comma separated list as KafkaConsumer accepts.
+    * @param topicPartitions A set of topic partitions.
+    * @return A map of Either objects per each topic partition. If partition exists, then the Either Right entry contains a long offset.
+    *         For a non-existing partition, the Either Left entry contains a string with the problem description.
+    */
+  def getLastOffsets(bootstrapServers: String, topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
     import collection.JavaConversions._
+
+    require(bootstrapServers != null, "Bootstrap servers cannot be null")
+    require(topicPartitions != null, "Topic partitions cannot be null")
+
     val consumerConfig = Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers,
       ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
@@ -176,10 +197,15 @@ object GetOffsetShell extends Logging {
     val (nonExistingPartitions,  existingPartitions) = extractExistingPartitions(topicPartitions, availableTopics)
     val offsets: Map[TopicPartition, Long] = consumer.endOffsets(existingPartitions).mapValues(Long2long).toMap
     nonExistingPartitions ++ offsets.map { case (tp, offset) => tp -> Right(offset) }
-//    consumer.assign(topicPartitions)
-//    consumer.seekToEnd(Nil)
   }
 
+  /**
+    * Extracts existing topic partitions, putting them aside of non-existing partitions.
+    * @param requestedPartitions The set of requested partitions. Some of them may not exist.
+    * @param availableTopics The map of available topics as received from [[KafkaConsumer.listTopics KafkaConsumer.listTopics()]].
+    * @return A tuple: (non-existing partitions, existing partitions). Non-existing partitions is a map,
+    *         that has descriptions per each partitions in the Left object.
+    */
   private def extractExistingPartitions(requestedPartitions: Set[TopicPartition],
                                 availableTopics: Map[String, List[PartitionInfo]]):
                                 (Map[TopicPartition, Either[String, Long]], Set[TopicPartition]) = {

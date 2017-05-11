@@ -38,7 +38,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
   @Test
   def oneTopicOnePartitionOneMessage: Unit = {
     val producerOffset = sendRecords(topic1, 0, 1).last.offset
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(new TopicPartition(topic1, 0)))
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
     val actualOffset = offsets(new TopicPartition(topic1, 0)).right.get
@@ -48,7 +48,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
   @Test
   def oneTopicOnePartitionManyMessages: Unit = {
     val producerOffset = sendRecords(topic1, 0, 10).last.offset
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(new TopicPartition(topic1, 0)))
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
     val actualOffset = offsets(new TopicPartition(topic1, 0)).right.get
@@ -60,7 +60,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
     val producerP0Offset = sendRecords(topic1, 0, 10).last.offset
     val producerP1Offset = sendRecords(topic1, 1, 20).last.offset
     val producerP2Offset = sendRecords(topic1, 2, 30).last.offset
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(
         new TopicPartition(topic1, 0),
         new TopicPartition(topic1, 1),
@@ -81,7 +81,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
     val producerT1P1Offset = sendRecords(topic1, 1, 20).last.offset
     val producerT2P0Offset = sendRecords(topic2, 0, 30).last.offset
     val producerT2P1Offset = sendRecords(topic2, 1, 40).last.offset
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(
         new TopicPartition(topic1, 0),
         new TopicPartition(topic1, 1),
@@ -102,7 +102,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
   @Test
   def nonExistingTopic: Unit = {
     sendRecords(topic1, 0, 1)
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(new TopicPartition("topic999", 0)))
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
     val error = offsets(new TopicPartition("topic999", 0)).left.get
@@ -114,7 +114,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
   @Test
   def nonExistingPartition: Unit = {
     sendRecords(topic1, 0, 1)
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(new TopicPartition(topic1, 9999)))
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
     val error = offsets(new TopicPartition(topic1, 9999)).left.get

@@ -39,7 +39,7 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
   def twoReplicatedPartitions: Unit = {
     val producerP0Offset = sendRecords(topic1, 0, 10).last.offset
     val producerP1Offset = sendRecords(topic1, 1, 20).last.offset
-    val offsets = GetOffsetShell.getOffsetsNew(brokerList,
+    val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(
         new TopicPartition(topic1, 0),
         new TopicPartition(topic1, 1)
