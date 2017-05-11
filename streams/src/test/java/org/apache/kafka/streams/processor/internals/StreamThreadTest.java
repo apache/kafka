@@ -1178,6 +1178,7 @@ public class StreamThreadTest {
         consumer.assign(task0Assignment);
 
         consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, new byte[0], new byte[0]));
+        mockTime.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG) + 1);
         TestUtils.waitForCondition(
             new TestCondition() {
                 @Override

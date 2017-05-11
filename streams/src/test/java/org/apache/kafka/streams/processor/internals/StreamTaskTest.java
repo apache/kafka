@@ -554,7 +554,7 @@ public class StreamTaskTest {
             eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
         assertTrue(producer.transactionInitialized());
-        assertTrue(producer.transactionStarted());
+        assertTrue(producer.transactionInFlight());
     }
 
     @Test
@@ -564,7 +564,7 @@ public class StreamTaskTest {
             config, streamsMetrics, stateDirectory, null, time, producer);
 
         assertFalse(producer.transactionInitialized());
-        assertFalse(producer.transactionStarted());
+        assertFalse(producer.transactionInFlight());
     }
 
     @Test
@@ -580,7 +580,7 @@ public class StreamTaskTest {
         task.suspend();
         assertTrue(producer.sentOffsets());
         assertTrue(producer.transactionCommitted());
-        assertFalse(producer.transactionStarted());
+        assertFalse(producer.transactionInFlight());
     }
 
     @Test
@@ -596,7 +596,7 @@ public class StreamTaskTest {
         task.suspend();
         assertFalse(producer.sentOffsets());
         assertFalse(producer.transactionCommitted());
-        assertFalse(producer.transactionStarted());
+        assertFalse(producer.transactionInFlight());
     }
 
     @Test
@@ -611,7 +611,7 @@ public class StreamTaskTest {
         task.suspend();
 
         task.resume();
-        assertTrue(producer.transactionStarted());
+        assertTrue(producer.transactionInFlight());
     }
 
     @Test
@@ -626,7 +626,7 @@ public class StreamTaskTest {
         task.suspend();
 
         task.resume();
-        assertFalse(producer.transactionStarted());
+        assertFalse(producer.transactionInFlight());
     }
 
     @Test
@@ -640,7 +640,7 @@ public class StreamTaskTest {
         task.process();
 
         task.commit(true);
-        assertTrue(producer.transactionStarted());
+        assertTrue(producer.transactionInFlight());
     }
 
     @Test
@@ -654,7 +654,7 @@ public class StreamTaskTest {
         task.process();
 
         task.commit(true);
-        assertFalse(producer.transactionStarted());
+        assertFalse(producer.transactionInFlight());
     }
 
     @Test

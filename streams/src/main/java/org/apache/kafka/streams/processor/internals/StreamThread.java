@@ -704,8 +704,6 @@ public class StreamThread extends Thread {
                     name = "commit";
                     commitOne(task);
                 }
-                name = "punctuate";
-                maybePunctuate(task);
             }
         });
         if (e != null) {
@@ -1115,7 +1113,7 @@ public class StreamThread extends Thread {
 
         for (final StandbyTask task : standbyTasks.values()) {
             try {
-                commitOne(task);
+                task.suspend();
             } catch (final RuntimeException e) {
                 firstException.compareAndSet(null, e);
             }

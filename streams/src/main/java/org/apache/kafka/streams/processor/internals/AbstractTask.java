@@ -51,7 +51,7 @@ public abstract class AbstractTask {
     InternalProcessorContext processorContext;
     private final ThreadCache cache;
     final String logPrefix;
-    boolean eosEnabled;
+    final boolean eosEnabled;
 
     /**
      * @throws ProcessorStateException if the state manager cannot be created

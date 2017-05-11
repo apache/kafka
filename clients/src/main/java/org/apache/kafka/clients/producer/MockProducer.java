@@ -37,6 +37,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -66,7 +67,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionAborted;
     private boolean producerFenced;
     private boolean sentOffsets;
-    private boolean flushed;
     private long commitCount = 0L;
 
     /**
@@ -97,10 +97,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.consumerGroupOffsets = new ArrayList<>();
         this.uncommittedConsumerGroupOffsets = new HashMap<>();
         this.completions = new ArrayDeque<>();
-    }
-
-    private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
-        return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
     }
 
     /**
@@ -155,7 +151,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = true;
         this.transactionCommitted = false;
         this.transactionAborted = false;
-        sentOffsets = false;
+        this.sentOffsets = false;
     }
 
     @Override
@@ -164,13 +160,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyNoTransactionInFlight();
+        Objects.requireNonNull(consumerGroupId);
+        if (offsets.size() == 0) {
+            return;
+        }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets = this.uncommittedConsumerGroupOffsets.get(consumerGroupId);
         if (uncommittedOffsets == null) {
             uncommittedOffsets = new HashMap<>();
             this.uncommittedConsumerGroupOffsets.put(consumerGroupId, uncommittedOffsets);
         }
         uncommittedOffsets.putAll(offsets);
-        sentOffsets = true;
+        this.sentOffsets = true;
     }
 
     @Override
@@ -191,7 +191,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionAborted = false;
         this.transactionInFlight = false;
 
-        ++commitCount;
+        ++this.commitCount;
     }
 
     @Override
@@ -226,7 +226,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (!this.transactionInFlight) {
             throw new IllegalStateException("There is no open transaction.");
         }
-        // TODO double check transactionAborted = true;
     }
 
     /**
@@ -247,7 +246,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
         verifyProducerState();
-        flushed = false;
         int partition = 0;
         if (!this.cluster.partitionsForTopic(record.topic()).isEmpty())
             partition = partition(record, this.cluster);
@@ -276,9 +274,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * Get the next offset for this topic/partition
      */
     private long nextOffset(TopicPartition tp) {
-        if (closed) {
-            throw new IllegalStateException("MockedProducer is already closed.");
-        }
         Long offset = this.offsets.get(tp);
         if (offset == null) {
             this.offsets.put(tp, 1L);
@@ -291,15 +286,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void flush() {
-        if (closed) {
-            throw new IllegalStateException("MockedProducer is already closed.");
-        }
-        if (producerFenced) {
-            throw new ProducerFencedException("MockProducer got fenced.");
-        }
+        verifyProducerState();
         while (!this.completions.isEmpty())
             completeNext();
-        flushed = true;
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {
@@ -323,10 +312,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (transactionInFlight)
             abortTransaction();
         this.closed = true;
-    }
-
-    public void fenceProducer() {
-        producerFenced = true;
     }
 
     public boolean closed() {
@@ -356,31 +341,15 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public boolean flushed() {
-        return flushed;
-    }
-
-    public boolean transactionInitialized() {
-        return transactionInitialized;
-    }
-
-    public boolean transactionStarted() {
-        return transactionStarted;
+        return this.completions.isEmpty();
     }
 
     public boolean sentOffsets() {
-        return sentOffsets;
-    }
-
-    public boolean transactionCommitted() {
-        return transactionCommitted;
+        return this.sentOffsets;
     }
 
     public long commitCount() {
-        return commitCount;
-    }
-
-    public boolean transactionAborted() {
-        return transactionAborted;
+        return this.commitCount;
     }
 
     /**

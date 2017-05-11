@@ -87,6 +87,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
     private final boolean eosEnabled;
+    private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
 
     /**
@@ -138,7 +139,9 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code commit.interval.ms} */
     public static final String COMMIT_INTERVAL_MS_CONFIG = "commit.interval.ms";
-    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor. (Note, if 'processing.guarantee' is set to '" + EXACTLY_ONCE + "', the default value is " + EOS_DEFAULT_COMMIT_INTERVAL_MS + ")";
+    private static final String COMMIT_INTERVAL_MS_DOC = "The frequency with which to save the position of the processor." +
+        " (Note, if 'processing.guarantee' is set to '" + EXACTLY_ONCE + "', the default value is " + EOS_DEFAULT_COMMIT_INTERVAL_MS + "," +
+        " otherwise the default value is " + DEFAULT_COMMIT_INTERVAL_MS + ".";
 
     /** {@code connections.max.idle.ms} */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
@@ -330,7 +333,7 @@ public class StreamsConfig extends AbstractConfig {
                         DEFAULT_VALUE_SERDE_CLASS_DOC)
             .define(COMMIT_INTERVAL_MS_CONFIG,
                     Type.LONG,
-                    30000,
+                    DEFAULT_COMMIT_INTERVAL_MS,
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
             .define(POLL_MS_CONFIG,

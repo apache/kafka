@@ -389,16 +389,31 @@ public class StreamTask extends AbstractTask implements Punctuator {
      *              otherwise, just close open resources
      */
     @Override
-    public void close(final boolean clean) {
+    public void close(boolean clean) {
         log.debug("{} Closing", logPrefix);
+
+        RuntimeException firstException = null;
         try {
             suspend(clean);
+        } catch (final RuntimeException e) {
+            clean = false;
+            firstException = e;
+            log.error("{} Could not close task due to {}", logPrefix, e);
+        }
+
+        try {
             closeStateManager(clean);
+        } catch (final RuntimeException e) {
+            clean = false;
+            if (firstException == null) {
+                firstException = e;
+            }
+            log.error("{} Could not close state manager due to {}", logPrefix, e);
+        }
+
+        try {
             partitionGroup.close();
             metrics.removeAllSensors();
-        } catch (final RuntimeException e) {
-            closeStateManager(false);
-            throw e;
         } finally {
             if (eosEnabled) {
                 if (!clean) {
@@ -414,6 +429,10 @@ public class StreamTask extends AbstractTask implements Punctuator {
                     log.error("{} Failed to close producer: ", logPrefix, e);
                 }
             }
+        }
+
+        if (firstException != null) {
+            throw firstException;
         }
     }
 
