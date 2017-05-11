@@ -115,6 +115,8 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
   val bytesInRate = newMeter(BrokerTopicStats.BytesInPerSec, "bytes", TimeUnit.SECONDS, tags)
   val bytesOutRate = newMeter(BrokerTopicStats.BytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)
   val bytesRejectedRate = newMeter(BrokerTopicStats.BytesRejectedPerSec, "bytes", TimeUnit.SECONDS, tags)
+  private[server] val replicationBytesInRate = if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, tags)) else None
+  private[server] val replicationBytesOutRate = if (name.isEmpty) Some(newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, tags)) else None
   val failedProduceRequestRate = newMeter(BrokerTopicStats.FailedProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val failedFetchRequestRate = newMeter(BrokerTopicStats.FailedFetchRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
   val totalProduceRequestRate = newMeter(BrokerTopicStats.TotalProduceRequestsPerSec, "requests", TimeUnit.SECONDS, tags)
@@ -125,20 +127,13 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetric(BrokerTopicStats.BytesInPerSec, tags)
     removeMetric(BrokerTopicStats.BytesOutPerSec, tags)
     removeMetric(BrokerTopicStats.BytesRejectedPerSec, tags)
+    removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, tags)
+    removeMetric(BrokerTopicStats.ReplicationBytesOutPerSec, tags)
     removeMetric(BrokerTopicStats.FailedProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
-  }
-}
 
-class BrokerReplicationMetrics() extends KafkaMetricsGroup {
-  val replicationBytesInRate = newMeter(BrokerTopicStats.ReplicationBytesInPerSec, "bytes", TimeUnit.SECONDS, Map.empty)
-  val replicationBytesOutRate = newMeter(BrokerTopicStats.ReplicationBytesOutPerSec, "bytes", TimeUnit.SECONDS, Map.empty)
-
-  def close() {
-    removeMetric(BrokerTopicStats.ReplicationBytesInPerSec, Map.empty)
-    removeMetric(BrokerTopicStats.ReplicationBytesOutPerSec, Map.empty)
   }
 }
 
@@ -147,23 +142,33 @@ object BrokerTopicStats extends Logging {
   val BytesInPerSec = "BytesInPerSec"
   val BytesOutPerSec = "BytesOutPerSec"
   val BytesRejectedPerSec = "BytesRejectedPerSec"
+  val ReplicationBytesInPerSec = "ReplicationBytesInPerSec"
+  val ReplicationBytesOutPerSec = "ReplicationBytesOutPerSec"
   val FailedProduceRequestsPerSec = "FailedProduceRequestsPerSec"
   val FailedFetchRequestsPerSec = "FailedFetchRequestsPerSec"
   val TotalProduceRequestsPerSec = "TotalProduceRequestsPerSec"
   val TotalFetchRequestsPerSec = "TotalFetchRequestsPerSec"
-  val ReplicationBytesInPerSec = "ReplicationBytesInPerSec"
-  val ReplicationBytesOutPerSec = "ReplicationBytesOutPerSec"
 
   private val valueFactory = (k: String) => new BrokerTopicMetrics(Some(k))
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
   private val allTopicsStats = new BrokerTopicMetrics(None)
-  private val replicationStats = new BrokerReplicationMetrics()
 
   def getBrokerAllTopicsStats(): BrokerTopicMetrics = allTopicsStats
-  def getBrokerReplicationStats(): BrokerReplicationMetrics = replicationStats
 
   def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic)
+  }
+
+  def updateReplicationBytesIn(value: Long) {
+    if (getBrokerAllTopicsStats.replicationBytesInRate.isDefined) {
+      getBrokerAllTopicsStats.replicationBytesInRate.get.mark(value)
+    }
+  }
+
+  def updateReplicationBytesOut(value: Long) {
+    if (getBrokerAllTopicsStats.replicationBytesOutRate.isDefined) {
+      getBrokerAllTopicsStats.replicationBytesOutRate.get.mark(value)
+    }
   }
 
   def removeMetrics(topic: String) {
@@ -174,10 +179,10 @@ object BrokerTopicStats extends Logging {
 
   def updateBytesOut(topic: String, isFollower: Boolean, value: Long) {
     if (isFollower) {
-      BrokerTopicStats.getBrokerReplicationStats.replicationBytesOutRate.mark(value)
+      updateReplicationBytesOut(value)
     } else {
-      BrokerTopicStats.getBrokerTopicStats(topic).bytesOutRate.mark(value)
-      BrokerTopicStats.getBrokerAllTopicsStats.bytesOutRate.mark(value)
+      getBrokerTopicStats(topic).bytesOutRate.mark(value)
+      getBrokerAllTopicsStats.bytesOutRate.mark(value)
     }
   }
 }
