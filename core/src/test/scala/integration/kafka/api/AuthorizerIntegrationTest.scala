@@ -835,6 +835,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     transactionalProducer.initTransactions()
   }
 
+  // TODO: Make this work
   //@Test
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessDuringSend(): Unit = {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), producerTransactionalIdResource)
