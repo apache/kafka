@@ -290,3 +290,4 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 }
 
+case class TxnIdAndMarkerEntry(txnId: String, txnMarkerEntry: TxnMarkerEntry)
