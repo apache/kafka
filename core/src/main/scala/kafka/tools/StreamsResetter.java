@@ -329,11 +329,7 @@ public class StreamsResetter {
 
     private void maybeDeleteInternalTopics(final ZkUtils zkUtils) {
 
-        if (!dryRun) {
-            System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
-        } else {
-            System.out.println("Following internal/auto-created topics will be Deleted for application " + options.valueOf(applicationIdOption));
-        }
+        System.out.println("Deleting all internal/auto-created topics for application " + options.valueOf(applicationIdOption));
 
         for (final String topic : allTopics) {
             if (isInternalTopic(topic)) {
