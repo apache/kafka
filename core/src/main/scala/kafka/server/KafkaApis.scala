@@ -1505,10 +1505,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     if(!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
       sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     else {
-      val (_, unAuthorized) = partitionsToAdd.asScala.partition {
+      val internalTopics = partitionsToAdd.asScala.filter {tp => kafka.common.Topic.InternalTopics.contains(tp.topic())}
+
+      val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
+        partitionsToAdd.asScala.partition { tp =>
+          authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
+        }
+
+      val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
         tp => authorize(request.session, Write, new Resource(Topic, tp.topic))
       }
-      if (unAuthorized.nonEmpty)
+
+      if (nonExistingOrUnauthorizedForDescribeTopics.nonEmpty)
+        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+      else if (unauthorizedForWriteRequestInfo.nonEmpty || internalTopics.nonEmpty)
         sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TOPIC_AUTHORIZATION_FAILED))
       else {
         // Send response callback
