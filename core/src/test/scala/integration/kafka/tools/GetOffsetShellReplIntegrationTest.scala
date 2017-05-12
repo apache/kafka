@@ -37,18 +37,20 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
 
   @Test
   def twoReplicatedPartitions: Unit = {
-    val producerP0Offset = sendRecordsLastOffsets(topic1, 0, 10)
-    val producerP1Offset = sendRecordsLastOffsets(topic1, 1, 20)
-    val offsets = GetOffsetShell.getLastOffsets(brokerList,
-      Set(
-        new TopicPartition(topic1, 0),
-        new TopicPartition(topic1, 1)
-      ))
-    assertEquals(s"Must have 2 offset entries: $offsets", 2, offsets.size)
-    val actualP0Offset = offsets(new TopicPartition(topic1, 0)).right.get
-    assertEquals("Actual offset for partition 0 must be equal to producer offset plus 1", producerP0Offset + 1, actualP0Offset)
-    val actualP1Offset = offsets(new TopicPartition(topic1, 1)).right.get
-    assertEquals("Actual offset for partition 1 must be equal to producer offset plus 1", producerP1Offset + 1, actualP1Offset)
+    val partitions = 0 to 1
+    val producerOffsets = partitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
+    val offsets = GetOffsetShell.getOffsets(brokerList,
+      Set(topic1),
+      partitions.toSet,
+      -1,
+      false)
+
+    assertEquals(s"Must have all offset entries: $offsets", partitions.size, offsets.size)
+
+    for (p <- partitions) {
+      val actualOffset = offsets(new TopicPartition(topic1, p)).right.get
+      assertEquals(s"Actual offset for partition $topic1:$p must be equal to producer offset plus 1", producerOffsets(p) + 1, actualOffset)
+    }
   }
 
   private def sendRecordsLastOffsets(topic: String, partition: Int, number: Int): Long = {

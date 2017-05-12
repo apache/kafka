@@ -19,9 +19,12 @@
 package kafka.tools
 
 import joptsimple._
+import kafka.common.Topic.InternalTopics
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ToolsUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.{PartitionInfo, TopicPartition}
+import org.apache.kafka.common.TopicPartition
+
+import scala.collection.JavaConversions._
 
 
 object GetOffsetShell extends Logging {
@@ -29,6 +32,7 @@ object GetOffsetShell extends Logging {
   private val CLIENT_ID = "GetOffsetShell"
 
   def main(args: Array[String]): Unit = {
+    //TODO Check ConsoleConsumer on where to add logging statements
     val parser = new OptionParser
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
                            .withRequiredArg
@@ -79,24 +83,18 @@ object GetOffsetShell extends Logging {
     val topicList = options.valueOf(topicOpt)
     val includeInternalTopics = options.has(includeInternalTopicsOpt)
     val partitionList = options.valueOf(partitionOpt)
-    //TODO Add support for -2(earliest) and other time values
-    val time = options.valueOf(timeOpt).longValue
-
-    //TODO Organize imports
-    import collection.JavaConversions._
+    //TODO Add support for -2(earliest) and other time values.
+    //TODO Return error message when no offset for this timestamp.
+    val timestamp = options.valueOf(timeOpt).longValue
     //TODO Pass props to KafkaConsumer
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
 
     //TODO Add support for non-provided topics
     val topics = CoreUtils.parseCsvList(topicList).toSet
     //TODO Add support for non-provided partitions
-    val partitions = CoreUtils.parseCsvList(partitionList).map(_.toInt)
-    val topicPartitions = for {
-      topic <- topics
-      partition <- partitions
-    } yield new TopicPartition(topic, partition)
-    //TODO Add support for -2(earliest) and other time values
-    val offsets = getLastOffsets(brokerList, topicPartitions, includeInternalTopics)
+    val partitions = CoreUtils.parseCsvList(partitionList).map(_.toInt).toSet
+   //TODO Add support for -2(earliest) and other time values
+    val offsets = getOffsets(brokerList, topics, partitions, timestamp, includeInternalTopics)
     val report = offsets
       .toList.sortBy { case (tp, _) => (tp.topic, tp.partition) }
       .map {
@@ -110,33 +108,29 @@ object GetOffsetShell extends Logging {
   }
 
   /**
-    * Gets last offsets for given topic partitions.
+    * Gets offsets for given topic partitions, for the given timestamp.
     * <p>
-    * This method asks the broker for existing topics and partitions. If a given partition exists on the broker,
-    * then the method returns the last offset for it. Otherwise (either topic or partition does not exist on the broker)
-    * the method returns a string that describes the problem.
-    * <p>
-    * The last offset of a partition is the offset of the latest message in this partition plus one.
-    * This implementation obtains last offsets by means of [[KafkaConsumer.endOffsets KafkaConsumer.endOffsets()]].
     * In total, this implementation makes at most two requests for the broker,
     * no matter how many topics and partitions are given in the argument:
     * get available partitions and get last offsets for partitions.
-    * @param bootstrapServers Bootstrap Kafka servers - a comma separated list as KafkaConsumer accepts.
-    * @param topicPartitions A set of topic partitions. If empty, then offsets for all partitions of all available topics will be retrieved.
+    *
+    * @param bootstrapServers      Bootstrap Kafka servers - a comma separated list as KafkaConsumer accepts.
+    * @param topics                Topics to query. If empty, all available topics are queried.
+    * @param partitions            Partitions to query. If empty, all available partitions are queried.
+    * @param timestamp             Get the earliest offset whose timestamp is greater than or equal to this timestamp value.
+    *                              Special values are: -1 (the latest offsets), -2 (the earliest offsets).
     * @param includeInternalTopics When the topic partitions argument is empty, exclude internal topics (like consumer offsets) from consideration.
-    * @return A map of Either objects per each topic partition. If partition exists, then the Either Right entry contains a long offset.
-    *         For a non-existing partition, the Either Left entry contains a string with the problem description.
-    * @throws IllegalArgumentException Bootstraps server is null, topic partitions is null.
+    * @return A map of entries per each topic partition, each entry contains either the offset or an error message.
+    * @throws IllegalArgumentException Bootstrap servers is null, topics is null, partitions is null.
     */
-  //TODO Eliminate magic constants
-  //TODO Check ConsoleConsumer on where to add logging statements
-  def getLastOffsets(bootstrapServers: String,
-                     topicPartitions: Set[TopicPartition],
-                     includeInternalTopics: Boolean = false): Map[TopicPartition, Either[String, Long]] = {
-    import collection.JavaConversions._
-
+  def getOffsets(bootstrapServers: String,
+                 topics: Set[String],
+                 partitions: Set[Int],
+                 timestamp: Long,
+                 includeInternalTopics: Boolean): Map[TopicPartition, Either[String, Long]] = {
     require(bootstrapServers != null, "Bootstrap servers cannot be null")
-    require(topicPartitions != null, "Topic partitions cannot be null")
+    require(topics != null, "Topics cannot be null")
+    require(partitions != null, "Partitions cannot be null")
 
     val consumerConfig = Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers,
@@ -144,45 +138,101 @@ object GetOffsetShell extends Logging {
       ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer"
     )
     val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(consumerConfig)
-    val availableTopics: Map[String, List[PartitionInfo]] = consumer.listTopics().toMap.mapValues(asScalaBuffer(_).toList)
-    val (nonExistingPartitions,  existingPartitions) =
-      if (topicPartitions.isEmpty)
-        (Map.empty, availablePartitions(availableTopics, includeInternalTopics))
-      else
-        extractExistingPartitions(topicPartitions, availableTopics)
-    val offsets: Map[TopicPartition, Long] = consumer.endOffsets(existingPartitions).mapValues(Long2long).toMap
-    nonExistingPartitions ++ offsets.map { case (tp, offset) => tp -> Right(offset) }
+
+    val available = consumer.listTopics()
+      .map { case (topic, pInfos) => topic -> pInfos.map(_.partition()).toSet }
+      .toMap
+    val (toError, toRequest) = extractExistingPartitions(topics, partitions, available, includeInternalTopics)
+    val offsets = getEndOffsets(consumer, toRequest)
+    toError ++ offsets
   }
 
-  /**
-    * Extracts existing topic partitions from the given set of requested partitions,
-    * putting existing partitions aside of non-existing partitions.
-    * @param requestedPartitions The set of requested partitions. Some of them may not exist.
-    * @param availableTopics The map of available topics as received from [[KafkaConsumer.listTopics KafkaConsumer.listTopics()]].
-    * @return A tuple: (non-existing partitions, existing partitions). Non-existing partitions is a map,
-    *         that has descriptions per each partitions in the Left object.
-    */
-  private def extractExistingPartitions(requestedPartitions: Set[TopicPartition],
-                                availableTopics: Map[String, List[PartitionInfo]]):
-                                (Map[TopicPartition, Either[String, Long]], Set[TopicPartition]) = {
-    val topicsPair = requestedPartitions.partition(tp => !availableTopics.contains(tp.topic()))
-    val nonExistingTopics = topicsPair._1.map(tp => tp -> Left(s"Topic not found: ${tp.topic()}")).toMap
-    val partitionsPair = topicsPair._2.partition(tp => !availableTopics(tp.topic()).exists(p => p.partition() == tp.partition()))
-    val nonExistingPartitions = partitionsPair._1.map(tp => tp -> Left(s"Partition for topic not found: ${tp.topic()}:${tp.partition()}")).toMap
-    (nonExistingTopics ++ nonExistingPartitions, partitionsPair._2)
+  private def extractExistingPartitions(topics: Set[String],
+                                        partitions: Set[Int],
+                                        available: Map[String, Set[Int]],
+                                        includeInternalTopics: Boolean):
+                     (Map[TopicPartition, Either[String, Long]], Set[TopicPartition]) = {
+    if (topics.isEmpty && partitions.isEmpty) {
+      val availablePartitions = toPartitions(available)
+      (
+        Map.empty,
+        checkIncludeInternalTopics(availablePartitions, includeInternalTopics)
+      )
+    } else if (topics.isEmpty) {
+      val toRequest = toPartitions(available).filter(tp => partitions.contains(tp.partition()))
+      val toError = getNonExistingPartitions(partitions, available)
+      (
+        missingPartitions(checkIncludeInternalTopics(toError, includeInternalTopics)),
+        checkIncludeInternalTopics(toRequest, includeInternalTopics)
+      )
+    } else if (partitions.isEmpty) {
+      val toRequest = available.filter { case (topic, ps) => topics.contains(topic) }
+      val toError = topics.filter(topic => !available.contains(topic))
+      (
+        missingTopics(toError),
+        toPartitions(toRequest)
+      )
+    } else {
+      val requestedPartitions = for {
+        topic <- topics
+        partition <- partitions
+      } yield new TopicPartition(topic, partition)
+      val availablePartitions = toPartitions(available)
+      val (toError, toRequest) = requestedPartitions.partition(tp => !availablePartitions.contains(tp))
+      (
+        missingPartitions(toError),
+        toRequest
+      )
+    }
   }
 
-  private def availablePartitions(availableTopics: Map[String, List[PartitionInfo]],
-                                  includeInternalTopics: Boolean): Set[TopicPartition] = {
-    val availablePartitions = (for {
-      (topic, pinfos) <- availableTopics
-      pinfo <- pinfos
-    } yield (new TopicPartition(topic, pinfo.partition()))).toSet
+  private def toPartitions(partitionsByTopic: Map[String, Set[Int]]): Set[TopicPartition] = {
+    (for {
+      (topic, partitions) <- partitionsByTopic
+      partition <- partitions
+    } yield new TopicPartition(topic, partition)).toSet
+  }
 
-    import kafka.common.Topic.InternalTopics
+  private def checkIncludeInternalTopics(partitions: Set[TopicPartition], includeInternalTopics: Boolean): Set[TopicPartition] = {
     if (includeInternalTopics)
-      availablePartitions
+      partitions
     else
-      availablePartitions.filterNot(tp => InternalTopics.contains(tp.topic()))
+      partitions.filterNot(tp => InternalTopics.contains(tp.topic()))
+  }
+
+  private def getNonExistingPartitions(partitions: Set[Int],
+                                       available: Map[String, Set[Int]]): Set[TopicPartition] = {
+    available
+      .map { case (topic, ps) => (topic, partitions -- ps) }
+      .flatMap { case (topic, ps) => ps.map(p => new TopicPartition(topic, p)) }
+      .toSet
+  }
+
+  private def missingPartitions(partitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
+    partitions.map(tp => tp -> Left(s"Partition for topic not found: ${tp.topic()}:${tp.partition()}")).toMap
+  }
+
+  private def missingTopics(topics: Set[String]): Map[TopicPartition, Either[String, Long]] = {
+    topics.map(topic => new TopicPartition(topic, 0) -> Left(s"Topic not found: $topic")).toMap
+  }
+
+  private def getEndOffsets(consumer: Consumer[Array[Byte], Array[Byte]],
+                            partitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
+    consumer.endOffsets(partitions)
+      .map { case (tp, offset) => tp -> Right(Long2long(offset)) }.toMap
+  }
+
+  private def getBeginOffsets(consumer: Consumer[Array[Byte], Array[Byte]],
+                              partitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
+    consumer.beginningOffsets(partitions)
+      .map { case (tp, offset) => tp -> Right(Long2long(offset)) }.toMap
+  }
+
+  private def getOffsetsForTimestamp(consumer: Consumer[Array[Byte], Array[Byte]],
+                                     partitions: Set[TopicPartition],
+                                     timestamp: Long): Map[TopicPartition, Either[String, Long]] = {
+    val timestamps = partitions.map(_ -> long2Long(timestamp)).toMap
+    consumer.offsetsForTimes(timestamps)
+      .map { case (tp, offsetTimestamp) => tp -> Right(offsetTimestamp.offset()) }.toMap
   }
 }
