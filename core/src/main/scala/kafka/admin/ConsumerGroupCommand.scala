@@ -17,8 +17,9 @@
 
 package kafka.admin
 
-import java.time._
-import java.util.Properties
+import java.text.SimpleDateFormat
+import java.util.{Date, Properties}
+import javax.xml.datatype.DatatypeFactory
 
 import joptsimple.{OptionParser, OptionSpec}
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
@@ -469,24 +470,19 @@ object ConsumerGroupCommand extends Logging {
 
     protected def getLogStartOffset(topicPartition: TopicPartition): LogOffsetResult = {
       val consumer = getConsumer()
-      consumer.assign(List(topicPartition).asJava)
-      consumer.seekToBeginning(List(topicPartition).asJava)
-      val logStartOffset = consumer.position(topicPartition)
+      val offsets = consumer.beginningOffsets(List(topicPartition).asJava)
+      val logStartOffset = offsets.get(topicPartition)
       LogOffsetResult.LogOffset(logStartOffset)
     }
 
-    protected def getLogTimestampOffset(topicPartition: TopicPartition, timestamp: Long): LogOffsetResult = {
+    protected def getLogTimestampOffset(topicPartition: TopicPartition, timestamp: java.lang.Long): LogOffsetResult = {
       val consumer = getConsumer()
       consumer.assign(List(topicPartition).asJava)
-      val offsetForTimestamp = Option(consumer.offsetsForTimes(Map(topicPartition -> timestamp.asInstanceOf[java.lang.Long]).asJava))
-      offsetForTimestamp match {
-        case Some(offset) =>
-          if (!offset.isEmpty)
-            LogOffsetResult.LogOffset(offset.get(topicPartition).offset())
-          else {
-            getLogEndOffset(topicPartition)
-          }
-        case None => getLogEndOffset(topicPartition)
+      val offsetForTimestamp = consumer.offsetsForTimes(Map(topicPartition -> timestamp).asJava)
+      if (!offsetForTimestamp.isEmpty)
+        LogOffsetResult.LogOffset(offsetForTimestamp.get(topicPartition).offset())
+      else {
+        getLogEndOffset(topicPartition)
       }
     }
 
@@ -542,6 +538,9 @@ object ConsumerGroupCommand extends Logging {
               assignmentsPrepared
             case Some(currentState) =>
               printError(s"Assignments can only be reset if the group '$groupId' is inactive, but the current state $currentState.")
+              Map.empty
+            case _ =>
+              printError(s"Assignments can only be reset if the group '$groupId' is inactive.")
               Map.empty
           }
       }
@@ -655,9 +654,10 @@ object ConsumerGroupCommand extends Logging {
         assignmentsToReset.map {
           assignment =>
             val duration = opts.options.valueOf(opts.resetByDurationOpt)
-            val durationParsed = Duration.parse(duration)
-            val instant = Instant.now().minus(durationParsed)
-            val timestamp = instant.toEpochMilli
+            val now = new Date()
+            val durationParsed = DatatypeFactory.newInstance().newDuration(duration)
+            durationParsed.negate().addTo(now)
+            val timestamp = now.getTime
             val topicPartition = new TopicPartition(assignment.topic.get, assignment.partition.get)
             val logTimestampOffset = getLogTimestampOffset(topicPartition, timestamp)
             logTimestampOffset match {
@@ -688,13 +688,14 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def getDateTime = {
+    private def getDateTime: java.lang.Long = {
       val datetime: String = opts.options.valueOf(opts.resetToDatetimeOpt) match {
         case ts if ts.split("T")(1).contains("+") || ts.split("T")(1).contains("-") || ts.split("T")(1).contains("Z") => ts.toString
         case ts => s"${ts}Z"
       }
-      val zonedDateTime = ZonedDateTime.parse(datetime)
-      zonedDateTime.toInstant.toEpochMilli
+      val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
+      val date = format.parse(datetime)
+      date.getTime
     }
 
     override def exportAssignmentsToReset(assignmentsToReset: Map[TopicPartition, OffsetAndMetadata]): String = {

@@ -13,9 +13,9 @@
 package unit.kafka.admin
 
 import java.io.{BufferedWriter, File, FileWriter}
-import java.time.{Duration, LocalDateTime, ZonedDateTime}
+import java.text.SimpleDateFormat
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.{Calendar, Collections, Date, Properties}
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, KafkaConsumerGroupService}
 import kafka.admin.{AdminUtils, ConsumerGroupCommand}
@@ -78,7 +78,11 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
   def testResetOffsetsToLocalDateTime() {
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
 
-    val checkpoint = LocalDateTime.now().minusDays(1)
+    val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS")
+    val checkpoint = new Date()
+    val calendar = Calendar.getInstance()
+    calendar.add(Calendar.DATE, -1)
+
 
     TestUtils.produceMessages(servers, topic1, 100, acks = 1, 100 * 1000)
 
@@ -103,7 +107,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     executor.shutdown()
 
-    val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", checkpoint.toString, "--execute")
+    val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", format.format(calendar.getTime), "--execute")
     val opts1 = new ConsumerGroupCommandOptions(cgcArgs1)
     val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
 
@@ -123,7 +127,8 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     AdminUtils.createTopic(zkUtils, topic1, 1, 1)
     TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
 
-    val checkpoint = ZonedDateTime.now()
+    val format = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSX")
+    val checkpoint = new Date()
 
     TestUtils.produceMessages(servers, topic1, 50, acks = 1, 100 * 1000)
 
@@ -147,7 +152,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     executor.shutdown()
 
-    val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", checkpoint.toString, "--execute")
+    val cgcArgs1 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--to-datetime", format.format(checkpoint), "--execute")
     val opts1 = new ConsumerGroupCommandOptions(cgcArgs1)
     val consumerGroupCommand1 = new KafkaConsumerGroupService(opts1)
 
@@ -164,7 +169,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
   @Test
   def testResetOffsetsByDuration() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--by-duration", Duration.ofMinutes(1).toString, "--execute")
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--by-duration", "PT1M", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
@@ -185,7 +190,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
   @Test
   def testResetOffsetsByDurationToEarliest() {
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--by-duration", Duration.ofMillis(1).toString, "--execute")
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics", "--by-duration", "PT0.1S", "--execute")
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupCommand = new KafkaConsumerGroupService(opts)
 
