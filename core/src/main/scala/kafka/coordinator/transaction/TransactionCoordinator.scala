@@ -96,7 +96,7 @@ class TransactionCoordinator(brokerId: Int,
     if (transactionalId == null || transactionalId.isEmpty) {
       // if the transactional id is not specified, then always blindly accept the request
       // and return a new producerId from the producerId manager
-      val producerId = producerIdManager.generateNextProducerId()
+      val producerId = producerIdManager.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
     } else if (!txnManager.isCoordinatorFor(transactionalId)) {
       // check if it is the assigned coordinator for the transactional id
@@ -110,7 +110,7 @@ class TransactionCoordinator(brokerId: Int,
       // only try to get a new producerId and update the cache if the transactional id is unknown
       val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
         case None =>
-          val producerId = producerIdManager.generateNextProducerId()
+          val producerId = producerIdManager.generateProducerId()
           val now = time.milliseconds()
           val createdMetadata = new TransactionMetadata(producerId = producerId,
             producerEpoch = 0,
