@@ -43,7 +43,8 @@ public class Modules {
 
     public Modules(WorkerConfig workerConfig) {
         loaders = new HashMap<>();
-        moduleTopPaths = workerConfig.getList(WorkerConfig.MODULE_PATH_CONFIG);
+        List<String> paths = workerConfig.getList(WorkerConfig.MODULE_PATH_CONFIG);
+        moduleTopPaths = paths == null ? new ArrayList<String>() : paths;
         delegatingLoader = new DelegatingClassLoader(moduleTopPaths);
     }
 
