@@ -247,6 +247,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       protocol = null
       transitionTo(Empty)
     }
+    receivedConsumerOffsetCommits = false
+    receivedTransactionalOffsetCommits = false
   }
 
   def currentMemberMetadata: Map[String, Array[Byte]] = {
@@ -269,8 +271,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     GroupOverview(groupId, protocolType.getOrElse(""))
   }
 
-  def initializeOffsets(offsets: collection.Map[TopicPartition, OffsetAndMetadata]) {
-     this.offsets ++= offsets
+  def initializeOffsets(offsets: collection.Map[TopicPartition, OffsetAndMetadata],
+                        pendingTxnOffsets: Map[Long, mutable.Map[TopicPartition, OffsetAndMetadata]]) {
+    this.offsets ++= offsets
+    this.pendingTransactionalOffsetCommits ++= pendingTxnOffsets
   }
 
   def completePendingOffsetWrite(topicPartition: TopicPartition, offset: OffsetAndMetadata) {
@@ -315,6 +319,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         if (pendingOffsets.isEmpty)
           pendingTransactionalOffsetCommits.remove(producerId)
       case _ =>
+        // We may hit this case if the partition in question has emigrated already.
     }
   }
 
@@ -338,6 +343,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
+      pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
+        pendingOffsets.remove(topicPartition)
+      }
       val removedOffset = offsets.remove(topicPartition)
       removedOffset.map(topicPartition -> _)
     }.toMap
