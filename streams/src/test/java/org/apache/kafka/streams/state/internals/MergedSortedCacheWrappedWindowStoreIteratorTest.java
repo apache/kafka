@@ -72,7 +72,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @Test
-    public void shouldPeekNextKey() throws Exception {
+    public void shouldPeekNextStoreKey() throws Exception {
         windowStoreKvPairs.add(KeyValue.pair(10L, "a".getBytes()));
         cache.put(namespace, WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes), new LRUCacheEntry("b".getBytes()));
         Bytes fromBytes = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
@@ -86,7 +86,7 @@ public class MergedSortedCacheWrappedWindowStoreIteratorTest {
     }
 
     @Test
-    public void shouldPeekNextKey2() throws Exception {
+    public void shouldPeekNextCacheKey() throws Exception {
         windowStoreKvPairs.add(KeyValue.pair(0L, "a".getBytes()));
         cache.put(namespace, WindowStoreUtils.toBinaryKey("a", 10L, 0, stateSerdes), new LRUCacheEntry("b".getBytes()));
         Bytes fromBytes = WindowStoreUtils.toBinaryKey("a", 0, 0, stateSerdes);
