@@ -270,7 +270,8 @@ public class ProducerPerformance {
                 // If number of records cannot be exactly divided by num threads, some threads need to send one more
                 // record.
                 int numRecordsAdjustment = i < numRecords % numThreads ? 1 : 0;
-                threadStatsArr[i] = new ThreadStats(i, numRecordsPerThread + numRecordsAdjustment, reportingInterval, sampling);
+                threadStatsArr[i] = new ThreadStats(i, numRecordsPerThread + numRecordsAdjustment, reportingInterval,
+                                                    sampling, numThreads != 1);
             }
             this.start = System.currentTimeMillis();
         }
@@ -326,7 +327,8 @@ public class ProducerPerformance {
     }
 
     private static class ThreadStats {
-        private int threadId;
+        private final boolean logThreadId;
+        private final int threadId;
         private long windowStart;
         private int[] latencies;
         private int sampling;
@@ -342,7 +344,7 @@ public class ProducerPerformance {
         private long windowBytes;
         private long reportingInterval;
 
-        ThreadStats(int threadId, long numRecords, int reportingInterval, int sampling) {
+        ThreadStats(int threadId, long numRecords, int reportingInterval, int sampling, boolean logThreadId) {
             this.threadId = threadId;
             this.windowStart = System.currentTimeMillis();
             this.index = 0;
@@ -357,6 +359,7 @@ public class ProducerPerformance {
             this.windowBytes = 0;
             this.totalLatency = 0;
             this.reportingInterval = reportingInterval;
+            this.logThreadId = logThreadId;
         }
 
         public void record(int iter, int latency, int bytes, long time) {
@@ -389,8 +392,8 @@ public class ProducerPerformance {
             long elapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) elapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) elapsed / (1024.0 * 1024.0);
-            System.out.printf("[Thread-%d] %d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
-                    threadId,
+            System.out.printf("%s%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
+                    logThreadId ? String.format("[Thread-%d] ", threadId) : "",
                     windowCount,
                     recsPerSec,
                     mbPerSec,
