@@ -723,6 +723,10 @@ public class NetworkClient implements KafkaClient {
         @Override
         public void handleDisconnection(String destination) {
             Cluster cluster = metadata.fetch();
+            // 'processDisconnection' generates warnings for misconfigured bootstrap server configuration
+            // resulting in 'Connection Refused' and misconfigured security resulting in authentication failures.
+            // The warning below handles the case where connection to a broker was established, but was disconnected
+            // before metadata could be obtained.
             if (cluster.isBootstrapConfigured()) {
                 int nodeId = Integer.parseInt(destination);
                 Node node = cluster.nodeById(nodeId);
