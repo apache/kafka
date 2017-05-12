@@ -391,6 +391,7 @@ class TransactionCoordinator(brokerId: Int,
       idAndMetadata.metadata synchronized {
         if (!txnManager.isCoordinatorLoadingInProgress(idAndMetadata.transactionalId)
           && idAndMetadata.metadata.pendingState.isEmpty) {
+          // bump the producerEpoch so that any further requests for this transactionalId will be fenced
           idAndMetadata.metadata.producerEpoch = (idAndMetadata.metadata.producerEpoch + 1).toShort
           idAndMetadata.metadata.prepareTransitionTo(Ongoing)
           txnManager.appendTransactionToLog(idAndMetadata.transactionalId, idAndMetadata.metadata, (errors: Errors) => {
