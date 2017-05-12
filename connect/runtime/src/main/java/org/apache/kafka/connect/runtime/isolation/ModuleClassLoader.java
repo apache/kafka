@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.net.URL;
 import java.net.URLClassLoader;
 
 public class ModuleClassLoader extends URLClassLoader {
+    private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private final String pluginPath;
 
     public ModuleClassLoader(URL[] urls, ClassLoader parent) {
@@ -34,6 +38,11 @@ public class ModuleClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
+
+        if (name.startsWith("io.confluent.connect.storage.partitioner")) {
+            log.info("ModuleLoader Trying to load a storage class: ");
+        }
+
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
             if (ModuleUtils.validate(name)) {
@@ -65,6 +74,6 @@ public class ModuleClassLoader extends URLClassLoader {
 
     @Override
     public String toString() {
-        return "ModuleClassLoader{topURL=" + pluginPath + "}";
+        return "ModuleClassLoader{pluginPath=" + pluginPath + "}";
     }
 }

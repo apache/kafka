@@ -44,11 +44,13 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
 
-    private final Map<String, SortedMap<ModuleDesc<?>, ModuleClassLoader>> moduleLoaders;
+    private final ConcurrentMap<String, SortedMap<ModuleDesc<?>, ModuleClassLoader>> moduleLoaders;
     private final SortedSet<ModuleDesc<Connector>> connectors;
     private final SortedSet<ModuleDesc<Converter>> converters;
     private final SortedSet<ModuleDesc<Transformation>> transformations;
@@ -59,7 +61,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     public DelegatingClassLoader(List<String> modulePaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.modulePaths = modulePaths;
-        this.moduleLoaders = new HashMap<>();
+        this.moduleLoaders = new ConcurrentHashMap<>();
         this.activePaths = new HashMap<>();
         this.inactivePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
@@ -109,6 +111,13 @@ public class DelegatingClassLoader extends URLClassLoader {
         return jars;
     }
 
+    public void addAlias(ModuleDesc<?> module, String alias) {
+        SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(module.className());
+        if (inner != null) {
+            moduleLoaders.putIfAbsent(alias, inner);
+        }
+    }
+
     private <T> void addModules(Collection<ModuleDesc<T>> modules, ModuleClassLoader loader) {
         for (ModuleDesc<T> module : modules) {
             String moduleClassName = module.className();
@@ -118,28 +127,6 @@ public class DelegatingClassLoader extends URLClassLoader {
                 moduleLoaders.put(moduleClassName, inner);
             }
             inner.put(module, loader);
-
-            /*
-            switch (module.type()) {
-                case SOURCE:
-                case SINK:
-                case CONNECTOR:
-                    connectors.add(module);
-                    log.info("Connector module type: {}", module);
-                    break;
-                case CONVERTER:
-                    converters.add(module);
-                    log.info("Converter module type: {}", module);
-                    break;
-                case TRANSFORMATION:
-                    transformations.add(module);
-                    log.info("Transformation module type: {}", module);
-                    break;
-                default:
-                    log.warn("Unknown module type: {}", module);
-                    break;
-            }
-            */
         }
     }
 
@@ -242,11 +229,25 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
+    public ModuleClassLoader connectorLoader(Connector connector) {
+        return connectorLoader(connector.getClass().getCanonicalName());
+    }
+
+    public ModuleClassLoader connectorLoader(String connectorClassOrAlias) {
+        SortedMap<ModuleDesc<?>, ModuleClassLoader> inner =
+                moduleLoaders.get(connectorClassOrAlias);
+        return inner.get(inner.lastKey());
+    }
+
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         if (!ModuleUtils.validate(name)) {
             // There are no paths in this classloader, will attempt to load with the parent.
             return super.loadClass(name, resolve);
+        }
+
+        if (name.startsWith("io.confluent.connect.storage.partitioner")) {
+            log.info("Trying to load a storage class: ");
         }
 
         SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(name);

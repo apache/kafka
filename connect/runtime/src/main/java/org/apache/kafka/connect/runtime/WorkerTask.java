@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.isolation.ModuleClassLoader;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,6 +40,7 @@ abstract class WorkerTask implements Runnable {
 
     protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
+    protected final ClassLoader loader;
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
     private volatile TargetState targetState;
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
@@ -46,9 +48,11 @@ abstract class WorkerTask implements Runnable {
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
-                      TargetState initialState) {
+                      TargetState initialState,
+                      ClassLoader loader) {
         this.id = id;
         this.statusListener = statusListener;
+        this.loader = loader;
         this.targetState = initialState;
         this.stopping = false;
         this.cancelled = false;
@@ -177,6 +181,7 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
+        Thread.currentThread().setContextClassLoader(loader);
         try {
             doRun();
             onShutdown();

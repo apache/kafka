@@ -70,7 +70,7 @@ public class Modules {
             );
         } catch (ClassNotFoundException e) {
             List<ModuleDesc<Connector>> matches = new ArrayList<>();
-            for (ModuleDesc module : delegatingLoader.connectors()) {
+            for (ModuleDesc<Connector> module : delegatingLoader.connectors()) {
                 Class<?> moduleClass = module.moduleClass();
                 String simpleName = moduleClass.getSimpleName();
                 if (simpleName.equals(connectorClassOrAlias)
@@ -97,7 +97,9 @@ public class Modules {
                 );
             }
 
-            klass = matches.get(0).moduleClass();
+            ModuleDesc<Connector> entry = matches.get(0);
+            delegatingLoader.addAlias(entry, connectorClassOrAlias);
+            klass = entry.moduleClass();
         }
         return newModule(klass);
     }
@@ -114,7 +116,7 @@ public class Modules {
     }
 
     public Task newTask(Class<? extends Task> taskClass) {
-        return null;
+        return newModule(taskClass);
     }
 
     public Converter newConverter(String converterClassOrAlias) {

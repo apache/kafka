@@ -234,7 +234,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
         Connector connector = getConnector(connType);
-
+        ClassLoader save = Thread.currentThread().getContextClassLoader();
+        ClassLoader connectorLoader = worker.getConnectorFactory().getDelegatingLoader()
+                .connectorLoader(connector);
+        if (!save.equals(connectorLoader)) {
+            Thread.currentThread().setContextClassLoader(connectorLoader);
+        }
         final ConfigDef connectorConfigDef = ConnectorConfig.enrich(
                 (connector instanceof SourceConnector) ? SourceConnectorConfig.configDef() : SinkConnectorConfig.configDef(),
                 connectorConfig,
@@ -258,6 +263,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         allGroups.addAll(configDef.groups());
         configValues.addAll(config.configValues());
 
+        if (!save.equals(connectorLoader)) {
+            Thread.currentThread().setContextClassLoader(save);
+        }
         return generateResult(connType, configKeys, configValues, allGroups);
     }
 

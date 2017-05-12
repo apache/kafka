@@ -24,12 +24,9 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Modules;
-import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.Converter;
@@ -186,19 +183,13 @@ public class Worker {
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = modules.newConnector(connClass);
-            Class<?> klass = connector.getClass();
-            Class<?> klass2 = SinkConnector.class;
-            Class<?> klass3 = SourceConnector.class;
-            boolean result1 = SinkConnector.class.isAssignableFrom(klass);
-            boolean result2 = SourceConnector.class.isAssignableFrom(klass);
-            boolean result3 = klass2.isAssignableFrom(klass);
-            boolean result4 = klass.isAssignableFrom(klass2);
-            boolean result5 = klass3.isAssignableFrom(klass);
-            boolean result6 = klass.isAssignableFrom(klass3);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
+            ClassLoader connectorLoader = modules.getDelegatingLoader().connectorLoader(connector);
+            ClassLoader save = compareAndSwapLoaders(connectorLoader);
             workerConnector.initialize(connConfig);
             workerConnector.transitionTo(initialState);
+            compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start connector {}", connName, t);
             statusListener.onFailure(connName, t);
@@ -328,10 +319,9 @@ public class Worker {
         final WorkerTask workerTask;
         try {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
-            ClassLoader save = Thread.currentThread().getContextClassLoader();
-            if (!save.equals(modules.getDelegatingLoader())) {
-                Thread.currentThread().setContextClassLoader(modules.getDelegatingLoader());
-            }
+            String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
+            ClassLoader connectorLoader = modules.getDelegatingLoader().connectorLoader(connType);
+            ClassLoader save = compareAndSwapLoaders(connectorLoader);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
             final Task task = modules.newTask(taskClass);
@@ -348,11 +338,9 @@ public class Worker {
             else
                 valueConverter = defaultValueConverter;
 
-            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter);
+            workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
             workerTask.initialize(taskConfig);
-            if (!save.equals(modules.getDelegatingLoader())) {
-                Thread.currentThread().setContextClassLoader(save);
-            }
+            compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
             statusListener.onFailure(id, t);
@@ -376,7 +364,8 @@ public class Worker {
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
                                        Converter keyConverter,
-                                       Converter valueConverter) {
+                                       Converter valueConverter,
+                                       ClassLoader loader) {
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations());
@@ -386,11 +375,11 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, time);
+                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, loader, time);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
-                    valueConverter, transformationChain, time);
+                    valueConverter, transformationChain, loader, time);
         } else {
             log.error("Tasks must be a subclass of either SourceTask or SinkTask", task);
             throw new ConnectException("Tasks must be a subclass of either SourceTask or SinkTask");
@@ -494,6 +483,12 @@ public class Worker {
         log.info("Setting connector {} state to {}", connName, state);
 
         WorkerConnector connector = connectors.get(connName);
+
+        Connector connectorObject = connector.connector();
+        ClassLoader connectorLoader = modules.getDelegatingLoader()
+                .connectorLoader(connectorObject);
+
+        ClassLoader save = compareAndSwapLoaders(connectorLoader);
         if (connector != null)
             connector.transitionTo(state);
 
@@ -501,6 +496,16 @@ public class Worker {
             if (taskEntry.getKey().connector().equals(connName))
                 taskEntry.getValue().transitionTo(state);
         }
+
+        compareAndSwapLoaders(save);
+    }
+
+    private ClassLoader compareAndSwapLoaders(ClassLoader loader) {
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+        if (!current.equals(loader)) {
+            Thread.currentThread().setContextClassLoader(loader);
+        }
+        return current;
     }
 
 }
