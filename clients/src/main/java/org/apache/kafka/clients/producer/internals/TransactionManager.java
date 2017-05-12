@@ -95,7 +95,8 @@ public class TransactionManager {
                 case INITIALIZING:
                     return source == UNINITIALIZED || source == ERROR;
                 case READY:
-                    return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
+                    return source == INITIALIZING || source == COMMITTING_TRANSACTION
+                            || source == ABORTING_TRANSACTION || source == ERROR;
                 case IN_TRANSACTION:
                     return source == READY;
                 case COMMITTING_TRANSACTION:
