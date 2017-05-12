@@ -1445,7 +1445,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       } catch {
         case e: Exception =>
           error(s"Received an exception while trying to update the offsets cache on transaction completion: $e")
-          val producerIdErrors = errors.getOrDefault(pid, new util.HashMap[TopicPartition, Errors]())
+          val producerIdErrors = if (errors.contains(pid))
+            errors.get(pid)
+          else
+            new util.HashMap[TopicPartition, Errors]()
           successfulPartitions.foreach(producerIdErrors.put(_, Errors.UNKNOWN))
           errors.put(pid, producerIdErrors)
       }
