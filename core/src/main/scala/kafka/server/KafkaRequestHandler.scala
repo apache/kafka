@@ -137,7 +137,6 @@ class BrokerTopicMetrics(name: Option[String]) extends KafkaMetricsGroup {
     removeMetric(BrokerTopicStats.FailedFetchRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalProduceRequestsPerSec, tags)
     removeMetric(BrokerTopicStats.TotalFetchRequestsPerSec, tags)
-
   }
 }
 
@@ -169,7 +168,7 @@ object BrokerTopicStats extends Logging {
     }
   }
 
-  def updateReplicationBytesOut(value: Long) {
+  private def updateReplicationBytesOut(value: Long) {
     getBrokerAllTopicsStats.replicationBytesOutRate.foreach { metric =>
       metric.mark(value)
     }

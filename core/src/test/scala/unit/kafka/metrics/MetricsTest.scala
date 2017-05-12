@@ -112,18 +112,15 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testBrokerTopicMetrics() {
-    val replicationBytesIn = "ReplicationBytesInPerSec"
-    val replicationBytesOut = "ReplicationBytesOutPerSec"
-    val bytesIn = "BytesInPerSec,topic=" + topic
-    val bytesOut = "BytesOutPerSec,topic=" + topic
+  def testBrokerTopicMetricsBytesInOut() {
+    val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
+    val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
+    val bytesIn = BrokerTopicStats.BytesInPerSec + ",topic=" + topic
+    val bytesOut = BrokerTopicStats.BytesOutPerSec + ",topic=" + topic
 
     createTopic(zkUtils, topic, 1, numNodes, servers)
-    // Topic metrics can take a moment to be created
-    TestUtils.waitUntilTrue(
-        () => Metrics.defaultRegistry.allMetrics.asScala.filterKeys(k => k.getMBeanName.endsWith(topic)).size > 1,
-        s"Timed out while waiting the metrics for ${topic} to be created",
-        3000L)
+    // Produce a few messages to create the metrics
+    TestUtils.produceMessages(servers, topic, nMessages)
 
     val initialReplicationBytesIn = getMeterCount(replicationBytesIn)
     val initialReplicationBytesOut = getMeterCount(replicationBytesOut)
