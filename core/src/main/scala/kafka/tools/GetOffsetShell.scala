@@ -24,7 +24,7 @@ import kafka.client.ClientUtils
 import kafka.cluster.BrokerEndPoint
 import kafka.common.TopicAndPartition
 import kafka.consumer._
-import kafka.utils.{CommandLineUtils, Logging, ToolsUtils}
+import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ToolsUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.protocol.Errors
@@ -43,13 +43,17 @@ object GetOffsetShell extends Logging {
                            .withRequiredArg
                            .describedAs("hostname:port,...,hostname:port")
                            .ofType(classOf[String])
-    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to get offset from.")
+    //TODO Rename to 'topics' to be consistent with 'partitions'
+    val topicOpt = parser.accepts("topic", "The list of topics to get offsets from. If not specified, it will find offsets for all topics.")
                            .withRequiredArg
-                           .describedAs("topic")
+                           .describedAs("topic1,...,topicN")
                            .ofType(classOf[String])
-    val partitionOpt = parser.accepts("partitions", "comma separated list of partition ids. If not specified, it will find offsets for all partitions")
+                           .defaultsTo("")
+    //TODO Don't hardcode the tool name
+    val includeInternalTopicsOpt = parser.accepts("include-internal-topics", "By default, when the list if topics is not given, GetOffsetShell excludes internal topics like consumer offsets. This options forces GetOffsetShell to include them.")
+    val partitionOpt = parser.accepts("partitions", "The list of partition ids. If not specified, it will find offsets for all partitions.")
                            .withRequiredArg
-                           .describedAs("partition ids")
+                           .describedAs("p1,...pM")
                            .ofType(classOf[String])
                            .defaultsTo("")
     val timeOpt = parser.accepts("time", "timestamp of the offsets before that")
@@ -57,12 +61,16 @@ object GetOffsetShell extends Logging {
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(-1L)
-    val nOffsetsOpt = parser.accepts("offsets", "number of offsets returned")
+    val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
+                           .withRequiredArg
+                           .describedAs("property1=value1,...")
+                           .ofType(classOf[String])
+    val nOffsetsOpt = parser.accepts("offsets", "DEPRECATED AND IGNORED: Always one offset is returned for each partition. Number of offsets returned")
                            .withRequiredArg
                            .describedAs("count")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
-    val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
+    val maxWaitMsOpt = parser.accepts("max-wait-ms", s"DEPRECATED AND IGNORED: Use ${consumerPropertyOpt} and pass ${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG} instead. The max amount of time each fetch request waits.")
                            .withRequiredArg
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
@@ -73,36 +81,38 @@ object GetOffsetShell extends Logging {
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
 
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
-    val topic = options.valueOf(topicOpt)
+    val topicList = options.valueOf(topicOpt)
+    val includeInternalTopics = options.has(includeInternalTopicsOpt)
     val partitionList = options.valueOf(partitionOpt)
+    //TODO Add support for -2(earliest) and other time values
     val time = options.valueOf(timeOpt).longValue
-    val nOffsets = options.valueOf(nOffsetsOpt).intValue
-    val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
-    val partitions: Set[Int] = partitionList match {
-      case "" => getTopicPartitionsFromMetadata(topic, metadataTargetBrokers, maxWaitMs)
-      case _ => partitionList.split(',').map(_.toInt).toSet
-    }
+    //TODO Organize imports
+    import collection.JavaConversions._
+    //TODO Pass props to KafkaConsumer
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
 
-    /*TODO This implementation does not handle the situation when the first broker in the list is down.
-    * After switching to KafkaConsumer, this problem will be resolved. */
-    val targetBroker = metadataTargetBrokers.head
-    val offsets = getOffsets(targetBroker.host,
-      targetBroker.port,
-      partitions.map(new TopicPartition(topic, _)),
-      time,
-      nOffsets)
+    //TODO Add support for non-provided topics
+    val topics = CoreUtils.parseCsvList(topicList).toSet
+    //TODO Add support for non-provided partitions
+    val partitions = CoreUtils.parseCsvList(partitionList).map(_.toInt)
+    val topicPartitions = for {
+      topic <- topics
+      partition <- partitions
+    } yield new TopicPartition(topic, partition)
+    //TODO Add support for -2(earliest) and other time values
+    val offsets = getLastOffsets(brokerList, topicPartitions, includeInternalTopics)
     val report = offsets
-      .toList.sortBy(e => (e._1.topic, e._1.partition))
-      .map { case (topicPartition, errorOffsets) => errorOffsets match {
-        case Right(offsets) => "%s:%d:%s".format(topicPartition.topic, topicPartition.partition, offsets.mkString(","))
-        case Left(error) => "%s:%d: Exception: %s".format(topicPartition.topic, topicPartition.partition, error.exception.getMessage)
-      }
+      .toList.sortBy { case (tp, _) => (tp.topic, tp.partition) }
+      .map {
+        case (tp, reply) => reply match {
+          case Right(offset) => "%s:%d: %d".format(tp.topic, tp.partition, offset)
+          case Left(error) => "%s:%d: %s".format(tp.topic, tp.partition, error)
+        }
       }
       .mkString("\n")
     println(report)
@@ -178,14 +188,16 @@ object GetOffsetShell extends Logging {
     * get available partitions and get last offsets for partitions.
     * @param bootstrapServers Bootstrap Kafka servers - a comma separated list as KafkaConsumer accepts.
     * @param topicPartitions A set of topic partitions. If empty, then offsets for all partitions of all available topics will be retrieved.
-    * @param excludeInternalTopics When the topic partitions argument is empty, exclude internal topics (like consumer offsets) from consideration.
+    * @param includeInternalTopics When the topic partitions argument is empty, exclude internal topics (like consumer offsets) from consideration.
     * @return A map of Either objects per each topic partition. If partition exists, then the Either Right entry contains a long offset.
     *         For a non-existing partition, the Either Left entry contains a string with the problem description.
     * @throws IllegalArgumentException Bootstraps server is null, topic partitions is null.
     */
+  //TODO Eliminate magic constants
+  //TODO Check ConsoleConsumer on where to add logging statements
   def getLastOffsets(bootstrapServers: String,
                      topicPartitions: Set[TopicPartition],
-                     excludeInternalTopics: Boolean = true): Map[TopicPartition, Either[String, Long]] = {
+                     includeInternalTopics: Boolean = false): Map[TopicPartition, Either[String, Long]] = {
     import collection.JavaConversions._
 
     require(bootstrapServers != null, "Bootstrap servers cannot be null")
@@ -200,7 +212,7 @@ object GetOffsetShell extends Logging {
     val availableTopics: Map[String, List[PartitionInfo]] = consumer.listTopics().toMap.mapValues(asScalaBuffer(_).toList)
     val (nonExistingPartitions,  existingPartitions) =
       if (topicPartitions.isEmpty)
-        (Map.empty, availablePartitions(availableTopics, excludeInternalTopics))
+        (Map.empty, availablePartitions(availableTopics, includeInternalTopics))
       else
         extractExistingPartitions(topicPartitions, availableTopics)
     val offsets: Map[TopicPartition, Long] = consumer.endOffsets(existingPartitions).mapValues(Long2long).toMap
@@ -226,16 +238,16 @@ object GetOffsetShell extends Logging {
   }
 
   private def availablePartitions(availableTopics: Map[String, List[PartitionInfo]],
-                                  excludeInternalTopics: Boolean): Set[TopicPartition] = {
+                                  includeInternalTopics: Boolean): Set[TopicPartition] = {
     val availablePartitions = (for {
       (topic, pinfos) <- availableTopics
       pinfo <- pinfos
     } yield (new TopicPartition(topic, pinfo.partition()))).toSet
 
     import kafka.common.Topic.InternalTopics
-    if (excludeInternalTopics)
-      availablePartitions.filterNot(tp => InternalTopics.contains(tp.topic()))
-    else
+    if (includeInternalTopics)
       availablePartitions
+    else
+      availablePartitions.filterNot(tp => InternalTopics.contains(tp.topic()))
   }
 }
