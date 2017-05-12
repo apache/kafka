@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.rest.resources;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
@@ -36,6 +37,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigValueInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.tools.MockConnector;
@@ -55,6 +57,7 @@ import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -358,18 +361,121 @@ public class ConnectorPluginsResourceTest {
     @Test
     public void testListConnectorPlugins() {
         Set<ConnectorPluginInfo> connectorPlugins = new HashSet<>(connectorPluginsResource.listConnectorPlugins());
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(Connector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SourceConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SinkConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSourceConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSinkConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockSourceConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockSinkConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockConnector.class.getCanonicalName())));
-        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SchemaSourceConnector.class.getCanonicalName())));
-        assertTrue(connectorPlugins.contains(new ConnectorPluginInfo(ConnectorPluginsResourceTestConnector.class.getCanonicalName())));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(Connector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SourceConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SinkConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSourceConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(VerifiableSinkConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockSourceConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockSinkConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(MockConnector.class)));
+        assertFalse(connectorPlugins.contains(new ConnectorPluginInfo(SchemaSourceConnector.class)));
+        assertTrue(connectorPlugins.contains(new ConnectorPluginInfo(ConnectorPluginsResourceTestConnector.class)));
     }
 
+    @Test
+    public void testConnectorPluginsIncludesTypeAndVersionInformation()
+        throws IOException {
+        ConnectorPluginInfo sinkInfo = new ConnectorPluginInfo(TestSinkConnector.class);
+        ConnectorPluginInfo sourceInfo = new ConnectorPluginInfo(TestSourceConnector.class);
+        ConnectorPluginInfo unkownInfo =
+            new ConnectorPluginInfo(ConnectorPluginsResourceTestConnector.class);
+        assertEquals(ConnectorType.SINK, sinkInfo.type());
+        assertEquals(ConnectorType.SOURCE, sourceInfo.type());
+        assertEquals(ConnectorType.UNKNOWN, unkownInfo.type());
+        assertEquals(TestSinkConnector.VERSION, sinkInfo.version());
+        assertEquals(TestSourceConnector.VERSION, sourceInfo.version());
+
+        final ObjectMapper objectMapper = new ObjectMapper();
+        String serializedSink = objectMapper.writeValueAsString(ConnectorType.SINK);
+        String serializedSource = objectMapper.writeValueAsString(ConnectorType.SOURCE);
+        String serializedUnknown = objectMapper.writeValueAsString(ConnectorType.UNKNOWN);
+        assertTrue(serializedSink.contains("sink"));
+        assertTrue(serializedSource.contains("source"));
+        assertTrue(serializedUnknown.contains("unknown"));
+        assertEquals(
+            ConnectorType.SINK,
+            objectMapper.readValue(serializedSink, ConnectorType.class)
+        );
+        assertEquals(
+            ConnectorType.SOURCE,
+            objectMapper.readValue(serializedSource, ConnectorType.class)
+        );
+        assertEquals(
+            ConnectorType.UNKNOWN,
+            objectMapper.readValue(serializedUnknown, ConnectorType.class)
+        );
+    }
+
+    public static class TestSinkConnector extends SinkConnector {
+
+        static final String VERSION = "some great version";
+
+        @Override
+        public String version() {
+            return VERSION;
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+
+        }
+
+        @Override
+        public Class<? extends Task> taskClass() {
+            return null;
+        }
+
+        @Override
+        public List<Map<String, String>> taskConfigs(int maxTasks) {
+            return null;
+        }
+
+        @Override
+        public void stop() {
+
+        }
+
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+    }
+
+    public static class TestSourceConnector extends SourceConnector {
+
+        static final String VERSION = "an entirely different version";
+
+        @Override
+        public String version() {
+            return VERSION;
+        }
+
+        @Override
+        public void start(Map<String, String> props) {
+
+        }
+
+        @Override
+        public Class<? extends Task> taskClass() {
+            return null;
+        }
+
+        @Override
+        public List<Map<String, String>> taskConfigs(int maxTasks) {
+            return null;
+        }
+
+        @Override
+        public void stop() {
+
+        }
+
+        @Override
+        public ConfigDef config() {
+            return null;
+        }
+    }
 
     /* Name here needs to be unique as we are testing the aliasing mechanism */
     public static class ConnectorPluginsResourceTestConnector extends Connector {
