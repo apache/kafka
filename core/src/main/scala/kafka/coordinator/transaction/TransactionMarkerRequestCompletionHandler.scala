@@ -58,7 +58,6 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for pid ${txnMarker.producerId}")
 
-        val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
         txnStateManager.getTransactionState(transactionalId) match {
           case None =>
             info(s"Transaction topic partition for $transactionalId may likely has emigrated, as the corresponding metadata do not exist in the cache" +
@@ -69,64 +68,71 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
           case Some(epochAndMetadata) =>
             val txnMetadata = epochAndMetadata.transactionMetadata
+            val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
 
-            if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
+            val abortSending: Boolean = if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
               // coordinator epoch has changed, just cancel it from the purgatory
               info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
                 s"${epochAndMetadata.coordinatorEpoch}; cancel sending transaction markers $txnMarker to the brokers")
 
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
-            }
+              true
+            } else {
+              txnMetadata synchronized {
+                for ((topicPartition: TopicPartition, error: Errors) <- errors) {
+                  error match {
+                    case Errors.NONE =>
 
-            txnMetadata synchronized {
-              for ((topicPartition: TopicPartition, error: Errors) <- errors) {
-                error match {
-                  case Errors.NONE =>
+                      txnMetadata.removePartition(topicPartition)
+                      false
 
-                    txnMetadata.removePartition(topicPartition)
+                    case Errors.CORRUPT_MESSAGE |
+                         Errors.MESSAGE_TOO_LARGE |
+                         Errors.RECORD_LIST_TOO_LARGE |
+                         Errors.INVALID_REQUIRED_ACKS => // these are all unexpected and fatal errors
 
-                  case Errors.CORRUPT_MESSAGE |
-                       Errors.MESSAGE_TOO_LARGE |
-                       Errors.RECORD_LIST_TOO_LARGE |
-                       Errors.INVALID_REQUIRED_ACKS => // these are all unexpected and fatal errors
+                      throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
 
-                    throw new IllegalStateException(s"Received fatal error ${error.exceptionName} while sending txn marker for $transactionalId")
+                    case Errors.UNKNOWN_TOPIC_OR_PARTITION |
+                         Errors.NOT_LEADER_FOR_PARTITION |
+                         Errors.NOT_ENOUGH_REPLICAS |
+                         Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND => // these are retriable errors
 
-                  case Errors.UNKNOWN_TOPIC_OR_PARTITION |
-                       Errors.NOT_LEADER_FOR_PARTITION |
-                       Errors.NOT_ENOUGH_REPLICAS |
-                       Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND => // these are retriable errors
+                      info(s"Sending $transactionalId's transaction marker for partition $topicPartition has failed with error ${error.exceptionName}, retrying " +
+                        s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
 
-                    info(s"Sending $transactionalId's transaction marker for partition $topicPartition has failed with error ${error.exceptionName}, retrying " +
-                      s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
+                      retryPartitions += topicPartition
+                      false
 
-                    retryPartitions += topicPartition
+                    case Errors.INVALID_PRODUCER_EPOCH |
+                         Errors.TRANSACTION_COORDINATOR_FENCED => // producer or coordinator epoch has changed, this txn can now be ignored
 
-                  case Errors.INVALID_PRODUCER_EPOCH |
-                       Errors.TRANSACTION_COORDINATOR_FENCED => // producer or coordinator epoch has changed, this txn can now be ignored
+                      info(s"Sending $transactionalId's transaction marker for partition $topicPartition has permanently failed with error ${error.exceptionName} " +
+                        s"with the current coordinator epoch ${epochAndMetadata.coordinatorEpoch}; cancel sending any more transaction markers $txnMarker to the brokers")
 
-                    info(s"Sending $transactionalId's transaction marker for partition $topicPartition has permanently failed with error ${error.exceptionName} " +
-                      s"with the current coordinator epoch ${epochAndMetadata.coordinatorEpoch}; cancel sending any more transaction markers $txnMarker to the brokers")
+                      txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+                      true
 
-                    txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
-
-                  case other =>
-                    throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
+                    case other =>
+                      throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")
+                  }
                 }
               }
             }
 
-            if (retryPartitions.nonEmpty) {
-              // re-enqueue with possible new leaders of the partitions
-              txnMarkerChannelManager.addTxnMarkersToBrokerQueue(
-                transactionalId,
-                txnMarker.producerId(),
-                txnMarker.producerEpoch(),
-                txnMarker.transactionResult,
-                txnMarker.coordinatorEpoch(),
-                retryPartitions.toSet)
-            } else {
-              txnMarkerChannelManager.completeSendMarkersForTxnId(transactionalId)
+            if (!abortSending) {
+              if (retryPartitions.nonEmpty) {
+                // re-enqueue with possible new leaders of the partitions
+                txnMarkerChannelManager.addTxnMarkersToBrokerQueue(
+                  transactionalId,
+                  txnMarker.producerId(),
+                  txnMarker.producerEpoch(),
+                  txnMarker.transactionResult,
+                  txnMarker.coordinatorEpoch(),
+                  retryPartitions.toSet)
+              } else {
+                txnMarkerChannelManager.completeSendMarkersForTxnId(transactionalId)
+              }
             }
         }
       }
