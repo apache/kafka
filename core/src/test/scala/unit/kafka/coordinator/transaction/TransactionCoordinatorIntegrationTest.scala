@@ -26,7 +26,6 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.CompressionType
-import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Utils
 import org.junit.{Assert, Test}
 
@@ -56,6 +55,12 @@ class TransactionCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
     val txnId = "txn"
     tc.handleInitPid(txnId, 900000, callback)
+
+    while(initPidResult == null) {
+      Utils.sleep(1)
+    }
+
+    Assert.assertEquals(Errors.NONE, initPidResult.error)
 
     @volatile var addPartitionErrors: Errors = null
     def addPartitionsCallback(errors: Errors): Unit = {

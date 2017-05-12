@@ -89,25 +89,27 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
       EasyMock.eq(partition1.topic),
       EasyMock.eq(partition1.partition),
-      EasyMock.anyObject())
-    ).andReturn(Some(broker1))
+      EasyMock.anyObject()))
+      .andReturn(Some(broker1))
+      .anyTimes()
 
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
       EasyMock.eq(partition2.topic),
       EasyMock.eq(partition2.partition),
-      EasyMock.anyObject())
-    ).andReturn(Some(broker2))
+      EasyMock.anyObject()))
+      .andReturn(Some(broker2))
+      .anyTimes()
 
     EasyMock.replay(metadataCache)
 
     val txnMetadata = new TransactionMetadata(producerId1, producerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0L, 0L)
     channelManager.addTxnMarkersToSend(transactionalId1, coordinatorEpoch, txnResult, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
 
-    assertEquals(1, txnMarkerPurgatory.watched)
+    assertEquals(1 * 2, txnMarkerPurgatory.watched)
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
-    assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition2))
+    assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers(txnTopicPartition1))
 
     val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
       Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
@@ -118,7 +120,7 @@ class TransactionMarkerChannelManagerTest {
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
-    assertEquals(List((broker1, expectedBroker1Request), (broker2, expectedBroker2Request)), requests)
+    assertEquals(Map(broker1 -> expectedBroker1Request, broker2 -> expectedBroker2Request), requests)
     assertTrue(senderThread.generateRequests().isEmpty)
   }
 
@@ -129,37 +131,31 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
       EasyMock.eq(partition1.topic),
       EasyMock.eq(partition1.partition),
-      EasyMock.anyObject())
-    ).andReturn(Some(broker1))
-
-    EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
-      EasyMock.eq(partition2.topic),
-      EasyMock.eq(partition2.partition),
-      EasyMock.anyObject())
-    ).andReturn(Some(broker1))
+      EasyMock.anyObject()))
+      .andReturn(Some(broker1))
+      .anyTimes()
 
     EasyMock.replay(metadataCache)
 
     val txnMetadata1 = new TransactionMetadata(producerId1, producerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L, 0L)
-    val txnMetadata2 = new TransactionMetadata(producerId2, producerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition2), 0L, 0L)
+    val txnMetadata2 = new TransactionMetadata(producerId2, producerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L, 0L)
     channelManager.addTxnMarkersToSend(transactionalId1, coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
-    assertEquals(2, txnMarkerPurgatory.watched)
+    assertEquals(2 * 2, txnMarkerPurgatory.watched)
     assertEquals(2, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition2))
 
-    val expectedPartition1Request = new WriteTxnMarkersRequest.Builder(
-      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
-    val expectedPartition2Request = new WriteTxnMarkersRequest.Builder(
-      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, TransactionResult.COMMIT, Utils.mkList(partition2)))).build()
+    val expectedBroker1Request = new WriteTxnMarkersRequest.Builder(
+      Utils.mkList(new WriteTxnMarkersRequest.TxnMarkerEntry(producerId1, producerEpoch, coordinatorEpoch, TransactionResult.COMMIT, Utils.mkList(partition1)),
+        new WriteTxnMarkersRequest.TxnMarkerEntry(producerId2, producerEpoch, coordinatorEpoch, TransactionResult.COMMIT, Utils.mkList(partition1)))).build()
 
     val requests: Map[Node, WriteTxnMarkersRequest] = senderThread.generateRequests().map { handler =>
       (handler.destination, handler.request.asInstanceOf[WriteTxnMarkersRequest.Builder].build())
     }.toMap
 
-    assertEquals(List((broker1, expectedPartition1Request), (broker1, expectedPartition2Request)), requests)
+    assertEquals(Map(broker1 -> expectedBroker1Request), requests)
     assertTrue(senderThread.generateRequests().isEmpty)
   }
 
@@ -189,8 +185,9 @@ class TransactionMarkerChannelManagerTest {
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
       EasyMock.eq(partition1.topic),
       EasyMock.eq(partition1.partition),
-      EasyMock.anyObject())
-    ).andReturn(Some(broker1))
+      EasyMock.anyObject()))
+      .andReturn(Some(broker1))
+      .anyTimes()
 
     EasyMock.replay(metadataCache)
 
@@ -200,14 +197,14 @@ class TransactionMarkerChannelManagerTest {
     val txnMetadata2 = new TransactionMetadata(producerId2, producerEpoch, txnTimeoutMs, PrepareCommit, mutable.Set[TopicPartition](partition1), 0L, 0L)
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
-    assertEquals(2, txnMarkerPurgatory.watched)
+    assertEquals(2 * 2, txnMarkerPurgatory.watched)
     assertEquals(2, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition2))
 
     channelManager.removeMarkersForTxnTopicPartition(txnTopicPartition1)
 
-    assertEquals(1, txnMarkerPurgatory.watched)
+    assertEquals(1 * 2, txnMarkerPurgatory.watched)
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition2))

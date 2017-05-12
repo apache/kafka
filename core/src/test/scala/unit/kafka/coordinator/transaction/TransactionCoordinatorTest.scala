@@ -427,28 +427,6 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldAppendCompleteAbortToLogOnEndTxnWhenStatusIsOngoingAndResultIsAbort(): Unit = {
-    mockComplete(PrepareAbort)
-
-    EasyMock.replay(transactionManager, transactionMarkerChannelManager)
-
-    coordinator.handleEndTransaction(transactionalId, pid, epoch, TransactionResult.ABORT, errorsCallback)
-
-    EasyMock.verify(transactionManager)
-  }
-
-  @Test
-  def shouldAppendCompleteCommitToLogOnEndTxnWhenStatusIsOngoingAndResultIsCommit(): Unit = {
-    mockComplete(PrepareCommit)
-
-    EasyMock.replay(transactionManager, transactionMarkerChannelManager)
-
-    coordinator.handleEndTransaction(transactionalId, pid, epoch, TransactionResult.COMMIT, errorsCallback)
-
-    EasyMock.verify(transactionManager)
-  }
-
-  @Test
   def shouldRespondWithInvalidRequestOnEndTxnWhenTransactionalIdIsNull(): Unit = {
     coordinator.handleEndTransaction(null, 0, 0, TransactionResult.COMMIT, errorsCallback)
     assertEquals(Errors.INVALID_REQUEST, error)

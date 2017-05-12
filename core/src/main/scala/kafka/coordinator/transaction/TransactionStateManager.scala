@@ -143,6 +143,10 @@ class TransactionStateManager(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
+  def isCoordinatorFor(txnTopicPartitionId: Int): Boolean = inLock(stateLock) {
+    transactionMetadataCache.contains(txnTopicPartitionId)
+  }
+
   def isCoordinatorFor(transactionalId: String): Boolean = inLock(stateLock) {
     val partitionId = partitionFor(transactionalId)
     transactionMetadataCache.contains(partitionId)
@@ -228,7 +232,7 @@ class TransactionStateManager(brokerId: Int,
   /**
     * Add a transaction topic partition into the cache
     */
-  private def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
+  def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
     val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, metadataPerTransactionalId)
     val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
@@ -396,15 +400,17 @@ class TransactionStateManager(brokerId: Int,
             val metadata = epochAndMetadata.transactionMetadata
 
             metadata synchronized {
-              if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch && metadata.completeTransitionTo(newMetadata)) {
-                debug(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
-              } else {
+              if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
                 // the cache may have been changed due to txn topic partition emigration and immigration,
                 // in this case directly return NOT_COORDINATOR to client and let it to re-discover the transaction coordinator
                 info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
-                  s"has been appended to the log. The cached metadata have been changed to $epochAndMetadata since it was written to the log last time")
+                  s"has been appended to the log. The cached coordinator epoch has changed to ${epochAndMetadata.coordinatorEpoch}")
 
                 responseError = Errors.NOT_COORDINATOR
+              } else {
+                metadata.completeTransitionTo(newMetadata)
+
+                debug(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
               }
             }
 

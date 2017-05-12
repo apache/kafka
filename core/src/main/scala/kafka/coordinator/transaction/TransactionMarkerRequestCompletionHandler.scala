@@ -28,7 +28,6 @@ import scala.collection.mutable
 import collection.JavaConversions._
 
 class TransactionMarkerRequestCompletionHandler(brokerId: Int,
-                                                txnTopicPartition: Int,
                                                 txnStateManager: TransactionStateManager,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
                                                 txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {

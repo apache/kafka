@@ -50,7 +50,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
 
   private val txnStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
 
-  private val handler = new TransactionMarkerRequestCompletionHandler(brokerId, txnTopicPartition, txnStateManager, markerChannelManager, txnIdAndMarkers)
+  private val handler = new TransactionMarkerRequestCompletionHandler(brokerId, txnStateManager, markerChannelManager, txnIdAndMarkers)
 
   private def mockCache(): Unit = {
     EasyMock.expect(txnStateManager.partitionFor(transactionalId))
@@ -177,6 +177,8 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   private def verifyRetriesPartitionOnError(error: Errors) = {
+    mockCache()
+
     EasyMock.expect(markerChannelManager.addTxnMarkersToBrokerQueue(transactionalId,
       producerId, producerEpoch, txnResult, coordinatorEpoch, Set[TopicPartition](topicPartition)))
     EasyMock.replay(markerChannelManager)

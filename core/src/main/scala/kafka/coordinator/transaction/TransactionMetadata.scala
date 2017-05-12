@@ -208,8 +208,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
     }
   }
 
-  // TODO: instead of returning false, we could directly throw exception since it should never be expected
-  def completeTransitionTo(newMetadata: TransactionMetadataTransition): Boolean = {
+  def completeTransitionTo(newMetadata: TransactionMetadataTransition): Unit = {
     // metadata transition is valid only if all the following conditions are met:
     //
     // 1. the new state is already indicated in the pending state.
@@ -226,9 +225,9 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
     if (toState != newMetadata.txnState ||
       producerId != newMetadata.producerId ||
-      txnLastUpdateTimestamp < newMetadata.txnLastUpdateTimestamp) {
+      txnLastUpdateTimestamp > newMetadata.txnLastUpdateTimestamp) {
 
-      false
+      throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata state")
     } else {
       val updated = toState match {
         case Empty => // from initPid
@@ -237,26 +236,22 @@ private[transaction] class TransactionMetadata(val producerId: Long,
             newMetadata.topicPartitions.nonEmpty ||
             newMetadata.txnStartTimestamp != -1) {
 
-            false
+            throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata")
           } else {
             txnTimeoutMs = newMetadata.txnTimeoutMs
             producerEpoch = newMetadata.producerEpoch
-
-            true
           }
 
         case Ongoing => // from addPartitions
           if (producerEpoch != newMetadata.producerEpoch ||
             !topicPartitions.subsetOf(newMetadata.topicPartitions) ||
             txnTimeoutMs != newMetadata.txnTimeoutMs ||
-            txnStartTimestamp < newMetadata.txnStartTimestamp) {
+            txnStartTimestamp > newMetadata.txnStartTimestamp) {
 
-            false
+            throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata")
           } else {
             txnStartTimestamp = newMetadata.txnStartTimestamp
             addPartitions(newMetadata.topicPartitions)
-
-            true
           }
 
         case PrepareAbort | PrepareCommit => // from endTxn
@@ -265,10 +260,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
             txnTimeoutMs != newMetadata.txnTimeoutMs ||
             txnStartTimestamp != newMetadata.txnStartTimestamp) {
 
-            false
-          } else {
-
-            true
+            throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata")
           }
 
         case CompleteAbort | CompleteCommit => // from write markers
@@ -276,22 +268,16 @@ private[transaction] class TransactionMetadata(val producerId: Long,
             txnTimeoutMs != newMetadata.txnTimeoutMs ||
             newMetadata.txnStartTimestamp == -1) {
 
-            false
+            throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata")
           } else {
             txnStartTimestamp = newMetadata.txnStartTimestamp
             topicPartitions.clear()
-
-            true
           }
       }
 
-      if (updated) {
-        txnLastUpdateTimestamp = newMetadata.txnLastUpdateTimestamp
-        pendingState = None
-        state = toState
-      }
-
-      updated
+      txnLastUpdateTimestamp = newMetadata.txnLastUpdateTimestamp
+      pendingState = None
+      state = toState
     }
   }
 
