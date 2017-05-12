@@ -42,8 +42,7 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
 
     @Override
     public KeyValue<Windowed<K>, AGG> deserializeStorePair(KeyValue<Windowed<Bytes>, byte[]> pair) {
-        final K key = serdes.keyFrom(pair.key.key().get());
-        return KeyValue.pair(new Windowed<>(key, pair.key.window()), serdes.valueFrom(pair.value));
+        return KeyValue.pair(deserializeStoreKey(pair.key), serdes.valueFrom(pair.value));
     }
 
     @Override
@@ -53,7 +52,7 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
 
 
     @Override
-    AGG deserializeCacheValue(Bytes cacheKey, LRUCacheEntry cacheEntry) {
+    AGG deserializeCacheValue(LRUCacheEntry cacheEntry) {
         return serdes.valueFrom(cacheEntry.value);
     }
 

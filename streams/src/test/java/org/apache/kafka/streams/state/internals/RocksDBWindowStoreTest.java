@@ -25,11 +25,14 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -195,28 +198,35 @@ public class RocksDBWindowStoreTest {
 
         putFirstBatch(windowStore, startTime, context);
 
+        final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
+        final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
+        final KeyValue<Windowed<Integer>, String> two = windowedPair(2, "two", startTime + 2);
+        final KeyValue<Windowed<Integer>, String> four = windowedPair(4, "four", startTime + 4);
+        final KeyValue<Windowed<Integer>, String> five = windowedPair(5, "five", startTime + 5);
+
         assertEquals(
-            Utils.mkList(KeyValue.pair(0, "zero"), KeyValue.pair(1, "one")),
+            Utils.mkList(zero, one),
             toList(windowStore.fetch(0, 1, startTime + 0L - windowSize, startTime + 0L + windowSize))
         );
         assertEquals(
-            Utils.mkList(KeyValue.pair(1, "one")),
+            Utils.mkList(one),
             toList(windowStore.fetch(1, 1, startTime + 0L - windowSize, startTime + 0L + windowSize))
         );
         assertEquals(
-            Utils.mkList(KeyValue.pair(1, "one"), KeyValue.pair(2, "two")),
+            Utils.mkList(one, two),
             toList(windowStore.fetch(1, 3, startTime + 0L - windowSize, startTime + 0L + windowSize))
         );
         assertEquals(
-            Utils.mkList(KeyValue.pair(0, "zero"), KeyValue.pair(1, "one"), KeyValue.pair(2, "two")),
+            Utils.mkList(zero, one, two),
             toList(windowStore.fetch(0, 5, startTime + 0L - windowSize, startTime + 0L + windowSize))
         );
         assertEquals(
-            Utils.mkList(KeyValue.pair(0, "zero"), KeyValue.pair(1, "one"), KeyValue.pair(2, "two"), KeyValue.pair(4, "four"), KeyValue.pair(5, "five")),
+            Utils.mkList(zero, one, two,
+                         four, five),
             toList(windowStore.fetch(0, 5, startTime + 0L - windowSize, startTime + 0L + windowSize + 5L))
         );
         assertEquals(
-            Utils.mkList(KeyValue.pair(2, "two"), KeyValue.pair(4, "four"), KeyValue.pair(5, "five")),
+            Utils.mkList(two, four, five),
             toList(windowStore.fetch(0, 5, startTime + 2L, startTime + 0L + windowSize + 5L))
         );
         assertEquals(
@@ -764,6 +774,14 @@ public class RocksDBWindowStoreTest {
         return list;
     }
 
+    private <K, V> List<KeyValue<K, V>> toList(KeyValueIterator<K, V> iterator) {
+        ArrayList<KeyValue<K, V>> list = new ArrayList<>();
+        while (iterator.hasNext()) {
+            list.add(iterator.next());
+        }
+        return list;
+    }
+
     private Set<String> segmentDirs(File baseDir) {
         File windowDir = new File(baseDir, windowName);
 
@@ -787,5 +805,9 @@ public class RocksDBWindowStoreTest {
         }
 
         return entriesByKey;
+    }
+
+    private <K, V> KeyValue<Windowed<K>, V> windowedPair(K key, V value, long timestamp) {
+        return KeyValue.pair(new Windowed<>(key, new TimeWindow(timestamp, timestamp + windowSize)), value);
     }
 }

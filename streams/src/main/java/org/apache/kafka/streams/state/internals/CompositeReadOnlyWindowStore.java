@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -86,11 +88,11 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
-    public WindowStoreIterator<KeyValue<K, V>> fetch(K from, K to, long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
-                final WindowStoreIterator<KeyValue<K, V>> result = windowStore.fetch(from, to, timeFrom, timeTo);
+                final KeyValueIterator<Windowed<K>, V> result = windowStore.fetch(from, to, timeFrom, timeTo);
                 if (!result.hasNext()) {
                     result.close();
                 } else {
@@ -101,13 +103,13 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
             }
         }
 
-        return new WindowStoreIterator<KeyValue<K, V>>() {
+        return new KeyValueIterator<Windowed<K>, V>() {
             @Override
             public void close() {
             }
 
             @Override
-            public Long peekNextKey() {
+            public Windowed<K> peekNextKey() {
                 throw new NoSuchElementException();
             }
 
@@ -117,7 +119,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
             }
 
             @Override
-            public KeyValue<Long, KeyValue<K, V>> next() {
+            public KeyValue<Windowed<K>, V> next() {
                 throw new NoSuchElementException();
             }
 

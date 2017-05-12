@@ -46,7 +46,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
 
     abstract K deserializeCacheKey(final Bytes cacheKey);
 
-    abstract V deserializeCacheValue(Bytes cacheKey, LRUCacheEntry cacheEntry);
+    abstract V deserializeCacheValue(LRUCacheEntry cacheEntry);
 
     private boolean isDeletedCacheEntry(final KeyValue<Bytes, LRUCacheEntry> nextFromCache) {
         return nextFromCache.value.value == null;
@@ -115,7 +115,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V, VS> implements K
             throw new IllegalStateException("Next record key is not the peeked key value; this should not happen");
         }
 
-        return KeyValue.pair(deserializeCacheKey(next.key), deserializeCacheValue(next.key, next.value));
+        return KeyValue.pair(deserializeCacheKey(next.key), deserializeCacheValue(next.value));
     }
 
     @Override

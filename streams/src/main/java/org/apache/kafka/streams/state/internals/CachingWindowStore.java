@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -28,6 +27,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -168,7 +168,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     }
 
     @Override
-    public WindowStoreIterator<KeyValue<K, V>> fetch(K from, K to, long timeFrom, long timeTo) {
+    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -178,7 +178,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         final Bytes keyFromBytes = Bytes.wrap(serdes.rawKey(from));
         final Bytes keyToBytes = Bytes.wrap(serdes.rawKey(to));
-        final WindowStoreIterator<KeyValue<Bytes, byte[]>> underlyingIterator = underlying.fetch(keyFromBytes, keyToBytes, timeFrom, timeTo);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetch(keyFromBytes, keyToBytes, timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, fromBytes, toBytes);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFromBytes,
@@ -187,9 +187,11 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                                                                              timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
 
-        return new MergedSortedCacheWindowStoreKeyValueIterator(
+        return new MergedSortedCacheWindowStoreKeyValueIterator<>(
             filteredCacheIterator,
-            underlyingIterator
+            underlyingIterator,
+            serdes,
+            windowSize
         );
     }
 
@@ -203,44 +205,4 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         }
     }
 
-    private class MergedSortedCacheWindowStoreKeyValueIterator
-        extends AbstractMergedSortedCacheStoreIterator<Long, Long, KeyValue<K, V>, KeyValue<Bytes, byte[]>>
-        implements WindowStoreIterator<KeyValue<K, V>> {
-
-        public MergedSortedCacheWindowStoreKeyValueIterator(
-            PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator,
-            WindowStoreIterator<KeyValue<Bytes, byte[]>> underlyingIterator
-        ) {
-            super(filteredCacheIterator, underlyingIterator);
-        }
-
-        @Override
-        Long deserializeStoreKey(Long key) {
-            return key;
-        }
-
-        @Override
-        KeyValue<Long, KeyValue<K, V>> deserializeStorePair(KeyValue<Long, KeyValue<Bytes, byte[]>> pair) {
-            return KeyValue.pair(
-                pair.key,
-                KeyValue.pair(serdes.keyFrom(pair.value.key.get()), serdes.valueFrom(pair.value.value))
-            );
-        }
-
-        @Override
-        Long deserializeCacheKey(Bytes cacheKey) {
-            return WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
-        }
-
-        @Override
-        KeyValue<K, V> deserializeCacheValue(Bytes cacheKey, LRUCacheEntry cacheEntry) {
-            return KeyValue.pair(serdes.keyFrom(cacheKey.get()), serdes.valueFrom(cacheEntry.value));
-        }
-
-        @Override
-        int compare(Bytes cacheKey, Long storeKey) {
-            final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
-            return cacheTimestamp.compareTo(storeKey);
-        }
-    }
 }
