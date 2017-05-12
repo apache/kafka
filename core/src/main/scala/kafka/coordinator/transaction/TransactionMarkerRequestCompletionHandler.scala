@@ -69,14 +69,15 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
           case Some(epochAndMetadata) =>
             val txnMetadata = epochAndMetadata.transactionMetadata
             val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
+            var abortSending: Boolean = false
 
-            val abortSending: Boolean = if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
+            if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
               // coordinator epoch has changed, just cancel it from the purgatory
               info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
                 s"${epochAndMetadata.coordinatorEpoch}; cancel sending transaction markers $txnMarker to the brokers")
 
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
-              true
+              abortSending = true
             } else {
               txnMetadata synchronized {
                 for ((topicPartition: TopicPartition, error: Errors) <- errors) {
@@ -84,7 +85,6 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                     case Errors.NONE =>
 
                       txnMetadata.removePartition(topicPartition)
-                      false
 
                     case Errors.CORRUPT_MESSAGE |
                          Errors.MESSAGE_TOO_LARGE |
@@ -102,7 +102,6 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                         s"with current coordinator epoch ${epochAndMetadata.coordinatorEpoch}")
 
                       retryPartitions += topicPartition
-                      false
 
                     case Errors.INVALID_PRODUCER_EPOCH |
                          Errors.TRANSACTION_COORDINATOR_FENCED => // producer or coordinator epoch has changed, this txn can now be ignored
@@ -111,7 +110,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                         s"with the current coordinator epoch ${epochAndMetadata.coordinatorEpoch}; cancel sending any more transaction markers $txnMarker to the brokers")
 
                       txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
-                      true
+                      abortSending = true
 
                     case other =>
                       throw new IllegalStateException(s"Unexpected error ${other.exceptionName} while sending txn marker for $transactionalId")

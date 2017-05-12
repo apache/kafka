@@ -256,7 +256,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
         case PrepareAbort | PrepareCommit => // from endTxn
           if (producerEpoch != newMetadata.producerEpoch ||
-            !topicPartitions.equals(newMetadata.topicPartitions) ||
+            !topicPartitions.toSet.equals(newMetadata.topicPartitions) ||
             txnTimeoutMs != newMetadata.txnTimeoutMs ||
             txnStartTimestamp != newMetadata.txnStartTimestamp) {
 
