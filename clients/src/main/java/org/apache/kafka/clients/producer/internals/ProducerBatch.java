@@ -165,7 +165,7 @@ public final class ProducerBatch {
 
         boolean expired = expiryErrorMessage != null;
         if (expired)
-            close();
+            close(false);
         return expired;
     }
 
@@ -243,8 +243,8 @@ public final class ProducerBatch {
         recordsBuilder.closeForRecordAppends();
     }
 
-    public void close() {
-        recordsBuilder.close();
+    public void close(final boolean aborted) {
+        recordsBuilder.close(aborted);
     }
 
     public boolean isClosed() {

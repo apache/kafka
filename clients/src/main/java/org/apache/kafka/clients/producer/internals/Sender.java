@@ -199,6 +199,12 @@ public class Sender implements Runnable {
         Cluster cluster = metadata.fetch();
         maybeWaitForPid();
 
+        if (transactionManager != null && transactionManager.isInErrorState()) {
+            final RuntimeException exception = transactionManager.lastError() instanceof RuntimeException
+                    ? (RuntimeException) transactionManager.lastError()
+                    : new KafkaException(transactionManager.lastError());
+            this.accumulator.abortBatches(exception);
+        }
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -370,11 +376,11 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private boolean maybeWaitForPid() {
+    private void maybeWaitForPid() {
         // If this is a transactional producer, the PID will be received when recovering transactions in the
         // initTransactions() method of the producer.
         if (transactionManager == null || transactionManager.isTransactional())
-            return true;
+            return;
 
         while (!transactionManager.hasPid() && !transactionManager.isInErrorState()) {
             try {
@@ -386,7 +392,6 @@ public class Sender implements Runnable {
                         Errors error = initPidResponse.error();
                         if (error == Errors.PRODUCER_ID_AUTHORIZATION_FAILED) {
                             transactionManager.setError(error.exception());
-                            return false;
                         } else {
                             PidAndEpoch pidAndEpoch = new PidAndEpoch(
                                     initPidResponse.producerId(), initPidResponse.epoch());
@@ -407,7 +412,7 @@ public class Sender implements Runnable {
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
-        return true;
+
     }
 
     /**

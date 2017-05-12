@@ -338,19 +338,19 @@ public class FileRecordsTest {
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 0; i < 2; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
-        builder.close();
+        builder.close(false);
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 2; i < 4; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
-        builder.close();
+        builder.close(false);
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
                 TimestampType.CREATE_TIME, 0L);
         for (int i = 4; i < 6; i++)
             builder.appendWithOffset(offsets.get(i), records.get(i));
-        builder.close();
+        builder.close(false);
 
         buffer.flip();
 

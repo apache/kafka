@@ -139,7 +139,7 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
                 0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
-        builder.close();
+        builder.close(false);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -153,7 +153,7 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
                 0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
-        builder.close();
+        builder.close(false);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -167,7 +167,7 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, compressionType, TimestampType.CREATE_TIME,
                 0L, 0L, pid, epoch, sequence, true, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
-        builder.close();
+        builder.close(false);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -398,7 +398,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2,
                 compressionType, TimestampType.LOG_APPEND_TIME, 0L);
         builder.append(10L, "1".getBytes(), "a".getBytes());
-        builder.close();
+        builder.close(false);
 
         MemoryRecords.writeEndTransactionalMarker(buffer, 1L, 15L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
@@ -407,7 +407,7 @@ public class MemoryRecordsBuilderTest {
                 TimestampType.CREATE_TIME, 1L);
         builder.append(12L, "2".getBytes(), "b".getBytes());
         builder.append(13L, "3".getBytes(), "c".getBytes());
-        builder.close();
+        builder.close(false);
 
         MemoryRecords.writeEndTransactionalMarker(buffer, 14L, 1L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
@@ -441,13 +441,13 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V0,
                 compressionType, TimestampType.NO_TIMESTAMP_TYPE, 0L);
         builder.append(RecordBatch.NO_TIMESTAMP, "1".getBytes(), "a".getBytes());
-        builder.close();
+        builder.close(false);
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
                 TimestampType.CREATE_TIME, 1L);
         builder.append(11L, "2".getBytes(), "b".getBytes());
         builder.append(12L, "3".getBytes(), "c".getBytes());
-        builder.close();
+        builder.close(false);
 
         buffer.flip();
 

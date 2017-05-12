@@ -100,7 +100,7 @@ public abstract class AbstractRecords implements Records {
         for (Record record : recordBatchAndRecords.records)
             builder.append(record);
 
-        builder.close();
+        builder.close(false);
         return builder.buffer();
     }
 

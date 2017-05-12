@@ -465,7 +465,7 @@ public final class RecordAccumulator {
                                                     batch.topicPartition, sequenceNumber);
                                             batch.setProducerState(pidAndEpoch, sequenceNumber);
                                         }
-                                        batch.close();
+                                        batch.close(false);
                                         size += batch.sizeInBytes();
                                         ready.add(batch);
                                         batch.drained(now);
@@ -580,14 +580,18 @@ public final class RecordAccumulator {
      * Go through incomplete batches and abort them.
      */
     private void abortBatches() {
+        abortBatches(new IllegalStateException("Producer is closed forcefully."));
+    }
+
+    void abortBatches(final RuntimeException reason) {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             // Close the batch before aborting
             synchronized (dq) {
-                batch.close();
+                batch.close(true);
                 dq.remove(batch);
             }
-            batch.done(-1L, RecordBatch.NO_TIMESTAMP, new IllegalStateException("Producer is closed forcefully."));
+            batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
             deallocate(batch);
         }
     }

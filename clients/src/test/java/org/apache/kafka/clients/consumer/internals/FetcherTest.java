@@ -191,7 +191,7 @@ public class FetcherTest {
         MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, CompressionType.NONE, 0L, producerId,
                 epoch, baseSequence);
         builder.append(0L, "key".getBytes(), null);
-        builder.close();
+        builder.close(false);
 
         MemoryRecords.writeEndTransactionalMarker(buffer, 1L, producerId, epoch, new EndTransactionMarker(ControlRecordType.ABORT, 0)
         );

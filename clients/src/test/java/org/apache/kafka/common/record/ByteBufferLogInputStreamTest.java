@@ -36,12 +36,12 @@ public class ByteBufferLogInputStreamTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
         builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        builder.close(false);
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
         builder.append(30L, "c".getBytes(), "3".getBytes());
         builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        builder.close(false);
 
         buffer.flip();
         buffer.limit(buffer.limit() - 5);
@@ -61,14 +61,14 @@ public class ByteBufferLogInputStreamTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
         builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        builder.close(false);
 
         int position = buffer.position();
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
         builder.append(30L, "c".getBytes(), "3".getBytes());
         builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        builder.close(false);
 
         buffer.flip();
         buffer.putInt(position + DefaultRecordBatch.LENGTH_OFFSET, 9);
@@ -84,14 +84,14 @@ public class ByteBufferLogInputStreamTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
         builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        builder.close(false);
 
         int position = buffer.position();
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
         builder.append(30L, "c".getBytes(), "3".getBytes());
         builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        builder.close(false);
 
         buffer.flip();
         buffer.put(position + DefaultRecordBatch.MAGIC_OFFSET, (byte) 37);
@@ -107,12 +107,12 @@ public class ByteBufferLogInputStreamTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(15L, "a".getBytes(), "1".getBytes());
         builder.append(20L, "b".getBytes(), "2".getBytes());
-        builder.close();
+        builder.close(false);
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 2L);
         builder.append(30L, "c".getBytes(), "3".getBytes());
         builder.append(40L, "d".getBytes(), "4".getBytes());
-        builder.close();
+        builder.close(false);
 
         buffer.flip();
 
