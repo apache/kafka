@@ -408,23 +408,23 @@ private[log] class Cleaner(val id: Int,
     try {
       // clean segments into the new destination segment
       val iter = segments.iterator
-      var current: Option[LogSegment] = Some(iter.next())
-      while (current.isDefined) {
-        val old = current.get
-        val next = if (iter.hasNext) Some(iter.next()) else None
+      var currentSegmentOpt: Option[LogSegment] = Some(iter.next())
+      while (currentSegmentOpt.isDefined) {
+        val oldSegmentOpt = currentSegmentOpt.get
+        val nextSegmentOpt = if (iter.hasNext) Some(iter.next()) else None
 
-        val startOffset = old.baseOffset
-        val upperBoundOffset = next.map(_.baseOffset).getOrElse(map.latestOffset + 1)
+        val startOffset = oldSegmentOpt.baseOffset
+        val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(map.latestOffset + 1)
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
         val transactionMetadata = CleanedTransactionMetadata(abortedTransactions, Some(txnIndex))
 
-        val retainDeletes = old.lastModified > deleteHorizonMs
+        val retainDeletes = oldSegmentOpt.lastModified > deleteHorizonMs
         info("Cleaning segment %s in log %s (largest timestamp %s) into %s, %s deletes."
-          .format(startOffset, log.name, new Date(old.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
-        cleanInto(log.topicPartition, old, cleaned, map, retainDeletes, log.config.maxMessageSize, transactionMetadata,
+          .format(startOffset, log.name, new Date(oldSegmentOpt.largestTimestamp), cleaned.baseOffset, if(retainDeletes) "retaining" else "discarding"))
+        cleanInto(log.topicPartition, oldSegmentOpt, cleaned, map, retainDeletes, log.config.maxMessageSize, transactionMetadata,
           log.activePids, stats)
 
-        current = next
+        currentSegmentOpt = nextSegmentOpt
       }
 
       // trim excess index
@@ -858,6 +858,10 @@ private[log] class CleanedTransactionMetadata(val abortedTransactions: mutable.P
     }
   }
 
+  /**
+   * Update the transactional state for the incoming non-control batch. If the batch is part of
+   * an aborted transaction, return true to indicate that it is safe to discard.
+   */
   def onBatchRead(batch: RecordBatch): Boolean = {
     consumeAbortedTxnsUpTo(batch.lastOffset)
     if (batch.isTransactional) {
