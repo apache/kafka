@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.{KafkaException, Topic}
 import kafka.log.LogConfig
-import kafka.message.{NoCompressionCodec, UncompressedCodec}
+import kafka.message.UncompressedCodec
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}

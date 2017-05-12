@@ -27,7 +27,6 @@ import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -95,10 +94,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     producer.close()
-    for (server <- servers) {
-      server.shutdown()
-      Utils.delete(new File(server.config.logDirs.head))
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 

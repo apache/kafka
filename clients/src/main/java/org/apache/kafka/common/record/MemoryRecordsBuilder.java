@@ -664,7 +664,7 @@ public class MemoryRecordsBuilder {
     public boolean isFull() {
         // note that the write limit is respected only after the first record is added which ensures we can always
         // create non-empty batches (this is used to disable batching when the producer's batch size is set to 0).
-        return isClosed() || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
+        return appendStreamIsClosed || (this.numRecords > 0 && this.writeLimit <= estimatedBytesWritten());
     }
 
     public int sizeInBytes() {

@@ -169,13 +169,13 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String]) {
 
   def getNode(listenerName: ListenerName): Node = {
     val endpoint = endPointsMap.getOrElse(listenerName,
-      throw new BrokerEndPointNotAvailableException(s"End point with protocol label $listenerName not found for broker $id"))
+      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
     new Node(id, endpoint.host, endpoint.port, rack.orNull)
   }
 
   def getBrokerEndPoint(listenerName: ListenerName): BrokerEndPoint = {
     val endpoint = endPointsMap.getOrElse(listenerName,
-      throw new BrokerEndPointNotAvailableException(s"End point with security protocol $listenerName not found for broker $id"))
+      throw new BrokerEndPointNotAvailableException(s"End point with listener name ${listenerName.value} not found for broker $id"))
     new BrokerEndPoint(id, endpoint.host, endpoint.port)
   }
 
