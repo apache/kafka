@@ -200,7 +200,8 @@ object GetOffsetShell extends Logging {
   }
 
   /**
-    * Extracts existing topic partitions, putting them aside of non-existing partitions.
+    * Extracts existing topic partitions from the given set of requested partitions,
+    * putting existing partitions aside of non-existing partitions.
     * @param requestedPartitions The set of requested partitions. Some of them may not exist.
     * @param availableTopics The map of available topics as received from [[KafkaConsumer.listTopics KafkaConsumer.listTopics()]].
     * @return A tuple: (non-existing partitions, existing partitions). Non-existing partitions is a map,
