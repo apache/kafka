@@ -81,7 +81,7 @@ class LogCleanerTest extends JUnitSuite {
     val segments = log.logSegments.take(3).toSeq
     val stats = new CleanerStats()
     val expectedBytesRead = segments.map(_.size).sum
-    cleaner.cleanSegments(log, segments, map, 0L, CleanedTransactionMetadata.Empty, stats)
+    cleaner.cleanSegments(log, segments, map, 0L, stats)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
     assertEquals(expectedBytesRead, stats.bytesRead)
@@ -91,7 +91,7 @@ class LogCleanerTest extends JUnitSuite {
   def testBasicTransactionAwareCleaning(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
@@ -106,13 +106,15 @@ class LogCleanerTest extends JUnitSuite {
     appendProducer1(Seq(3, 4))
     log.appendAsLeader(abortMarker(pid1, producerEpoch), leaderEpoch = 0, isFromClient = false)
     log.appendAsLeader(commitMarker(pid2, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    appendProducer1(Seq(2))
+    log.appendAsLeader(commitMarker(pid1, producerEpoch), leaderEpoch = 0, isFromClient = false)
 
     val abortedTransactions = log.collectAbortedTransactions(log.logStartOffset, log.logEndOffset)
 
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3), keysInLog(log))
-    assertEquals(List(2, 3, 6, 7), offsetsInLog(log))
+    assertEquals(List(3, 2), keysInLog(log))
+    assertEquals(List(3, 6, 7, 8, 9), offsetsInLog(log))
 
     // ensure the transaction index is still correct
     assertEquals(abortedTransactions, log.collectAbortedTransactions(log.logStartOffset, log.logEndOffset))
@@ -155,9 +157,13 @@ class LogCleanerTest extends JUnitSuite {
 
     log.roll()
 
+    // append a couple extra segments in the new segment to ensure we have sequence numbers
+    appendProducer2(Seq(11))
+    appendProducer1(Seq(12))
+
     // finally only the keys from pid3 should remain
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, dirtyOffset, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3, 6, 7, 8, 9), keysInLog(log))
+    assertEquals(List(2, 3, 6, 7, 8, 9, 11, 12), keysInLog(log))
   }
 
   @Test
@@ -260,7 +266,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // clean the log
     val stats = new CleanerStats()
-    cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, CleanedTransactionMetadata.Empty, stats)
+    cleaner.cleanSegments(log, Seq(log.logSegments.head), map, 0L, stats)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
   }
@@ -321,7 +327,7 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   @Test
-  def testLogCleanerRetainsLastWrittenRecordForEachPid(): Unit = {
+  def testLogCleanerRetainsProducerLastSequence(): Unit = {
     val cleaner = makeCleaner(10)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
@@ -336,9 +342,30 @@ class LogCleanerTest extends JUnitSuite {
     // roll the segment, so we can clean the messages already appended
     log.roll()
 
-    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
     assertEquals(List(0, 0, 1), keysInLog(log))
     assertEquals(List(1, 3, 4), offsetsInLog(log))
+  }
+
+  @Test
+  def testLogCleanerRetainsLastSequenceEvenIfTransactionAborted(): Unit = {
+    val cleaner = makeCleaner(10)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val appendProducer = appendTransactionalAsLeader(log, producerId, producerEpoch)
+
+    appendProducer(Seq(1))
+    appendProducer(Seq(2, 3))
+    log.appendAsLeader(abortMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(3), keysInLog(log))
+    assertEquals(List(2, 3), offsetsInLog(log))
   }
 
   @Test
@@ -530,8 +557,7 @@ class LogCleanerTest extends JUnitSuite {
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
     intercept[LogCleaningAbortedException] {
-      cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L, CleanedTransactionMetadata.Empty,
-        new CleanerStats())
+      cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L, new CleanerStats())
     }
   }
 
@@ -718,8 +744,7 @@ class LogCleanerTest extends JUnitSuite {
       offsetMap.put(key(k), Long.MaxValue)
 
     // clean the log
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, CleanedTransactionMetadata.Empty,
-      new CleanerStats())
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     var cleanedKeys = keysInLog(log)
 
     // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
@@ -731,8 +756,7 @@ class LogCleanerTest extends JUnitSuite {
     log = recoverAndCheck(config, allKeys)
 
     // clean again
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, CleanedTransactionMetadata.Empty,
-      new CleanerStats())
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     cleanedKeys = keysInLog(log)
 
     // 2) Simulate recovery just after swap file is created, before old segment files are
@@ -750,8 +774,7 @@ class LogCleanerTest extends JUnitSuite {
     }
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, CleanedTransactionMetadata.Empty,
-      new CleanerStats())
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     cleanedKeys = keysInLog(log)
 
     // 3) Simulate recovery after swap file is created and old segments files are renamed
@@ -766,8 +789,7 @@ class LogCleanerTest extends JUnitSuite {
     }
     for (k <- 1 until messageCount by 2)
       offsetMap.put(key(k), Long.MaxValue)
-    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, CleanedTransactionMetadata.Empty,
-      new CleanerStats())
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
     cleanedKeys = keysInLog(log)
 
     // 4) Simulate recovery after swap is complete, but async deletion
@@ -951,12 +973,12 @@ class LogCleanerTest extends JUnitSuite {
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
-  def makeLog(dir: File = dir, config: LogConfig = logConfig) =
+  private def makeLog(dir: File = dir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
-  def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
+  private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
 
-  def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = noOpCheckDone, maxMessageSize: Int = 64*1024) =
+  private def makeCleaner(capacity: Int, checkDone: TopicPartition => Unit = noOpCheckDone, maxMessageSize: Int = 64*1024) =
     new Cleaner(id = 0,
                 offsetMap = new FakeOffsetMap(capacity),
                 ioBufferSize = maxMessageSize,
@@ -966,14 +988,14 @@ class LogCleanerTest extends JUnitSuite {
                 time = time,
                 checkDone = checkDone)
 
-  def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
+  private def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for((key, value) <- seq)
       yield log.appendAsLeader(record(key, value), leaderEpoch = 0).firstOffset
   }
 
-  def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
+  private def key(id: Int) = ByteBuffer.wrap(id.toString.getBytes)
 
-  def record(key: Int, value: Int,
+  private def record(key: Int, value: Int,
              producerId: Long = RecordBatch.NO_PRODUCER_ID,
              producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
              sequence: Int = RecordBatch.NO_SEQUENCE,
@@ -982,7 +1004,7 @@ class LogCleanerTest extends JUnitSuite {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  def transactionalRecords(records: Seq[SimpleRecord],
+  private def transactionalRecords(records: Seq[SimpleRecord],
                            producerId: Long,
                            producerEpoch: Short,
                            sequence: Int): MemoryRecords = {
@@ -1002,26 +1024,26 @@ class LogCleanerTest extends JUnitSuite {
     }
   }
 
-  def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+  private def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
     endTxnMarker(producerId, producerEpoch, ControlRecordType.COMMIT, 0L, timestamp)
 
-  def abortMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+  private def abortMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
     endTxnMarker(producerId, producerEpoch, ControlRecordType.ABORT, 0L, timestamp)
 
-  def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType,
+  private def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType,
                    offset: Long, timestamp: Long): MemoryRecords = {
     val endTxnMarker = new EndTransactionMarker(controlRecordType, 0)
     MemoryRecords.withEndTransactionMarker(offset, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH,
       producerId, producerEpoch, endTxnMarker)
   }
 
-  def record(key: Int, value: Array[Byte]): MemoryRecords =
+  private def record(key: Int, value: Array[Byte]): MemoryRecords =
     TestUtils.singletonRecords(key = key.toString.getBytes, value = value)
 
-  def unkeyedRecord(value: Int): MemoryRecords =
+  private def unkeyedRecord(value: Int): MemoryRecords =
     TestUtils.singletonRecords(value = value.toString.getBytes)
 
-  def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
+  private def tombstoneRecord(key: Int): MemoryRecords = record(key, null)
 
 }
 

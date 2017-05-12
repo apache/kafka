@@ -1488,30 +1488,30 @@ public class FetcherTest {
         long pid3 = 3L;
 
         appendTransactionalRecords(buffer, pid3, 3L,
-                new SimpleRecord("3".getBytes(), null),
-                new SimpleRecord("4".getBytes(), null));
+                new SimpleRecord("3".getBytes(), "value".getBytes()),
+                new SimpleRecord("4".getBytes(), "value".getBytes()));
 
         appendTransactionalRecords(buffer, pid2, 15L,
-                new SimpleRecord("15".getBytes(), null),
-                new SimpleRecord("16".getBytes(), null),
-                new SimpleRecord("17".getBytes(), null));
+                new SimpleRecord("15".getBytes(), "value".getBytes()),
+                new SimpleRecord("16".getBytes(), "value".getBytes()),
+                new SimpleRecord("17".getBytes(), "value".getBytes()));
 
         appendTransactionalRecords(buffer, pid1, 22L,
-                new SimpleRecord("22".getBytes(), null),
-                new SimpleRecord("23".getBytes(), null));
+                new SimpleRecord("22".getBytes(), "value".getBytes()),
+                new SimpleRecord("23".getBytes(), "value".getBytes()));
 
         abortTransaction(buffer, pid2, 28L);
 
         appendTransactionalRecords(buffer, pid3, 30L,
-                new SimpleRecord("30".getBytes(), null),
-                new SimpleRecord("31".getBytes(), null),
-                new SimpleRecord("32".getBytes(), null));
+                new SimpleRecord("30".getBytes(), "value".getBytes()),
+                new SimpleRecord("31".getBytes(), "value".getBytes()),
+                new SimpleRecord("32".getBytes(), "value".getBytes()));
 
         commitTransaction(buffer, pid3, 35L);
 
         appendTransactionalRecords(buffer, pid1, 39L,
-                new SimpleRecord("39".getBytes(), null),
-                new SimpleRecord("40".getBytes(), null));
+                new SimpleRecord("39".getBytes(), "value".getBytes()),
+                new SimpleRecord("40".getBytes(), "value".getBytes()));
 
         // transaction from pid1 is aborted, but the marker is not included in the fetch
 

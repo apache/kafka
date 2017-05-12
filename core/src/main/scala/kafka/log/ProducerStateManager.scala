@@ -165,7 +165,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     }
 
     val firstOffset = currentTxnFirstOffset match {
-      case Some(firstOffset) => firstOffset
+      case Some(txnFirstOffset) => txnFirstOffset
       case None =>
         transactions += new TxnMetadata(producerId, offset)
         offset
