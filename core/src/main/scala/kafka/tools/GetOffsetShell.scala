@@ -19,18 +19,9 @@
 package kafka.tools
 
 import joptsimple._
-import kafka.api.{OffsetRequest, OffsetResponse, PartitionOffsetRequestInfo}
-import kafka.client.ClientUtils
-import kafka.cluster.BrokerEndPoint
-import kafka.common.TopicAndPartition
-import kafka.consumer._
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ToolsUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.errors.InvalidTopicException
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-
-import scala.collection.Seq
 
 
 object GetOffsetShell extends Logging {
@@ -116,62 +107,6 @@ object GetOffsetShell extends Logging {
       }
       .mkString("\n")
     println(report)
-  }
-
-  /**
-    * TODO Complete the doc
-    * TODO Cover with tests
-    *
-    * @param topic
-    * @param brokers
-    * @param timeoutMs
-    * @throws InvalidTopicException
-    */
-  def getTopicPartitionsFromMetadata(topic: String, brokers: Seq[BrokerEndPoint], timeoutMs: Int): Set[Int] = {
-    require(topic != null, "Topic name cannot be null")
-    require(!topic.isEmpty, "Topic name cannot be an empty string")
-    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokers, CLIENT_ID, timeoutMs).topicsMetadata
-    if (topicsMetadata.size != 1 || !topic.equals(topicsMetadata.head.topic)) {
-      throw new InvalidTopicException(("Error: no valid topic metadata for topic: %s, " + " probably the topic does not exist, run ").format(topic) +
-        "kafka-list-topic.sh to verify")
-    }
-    topicsMetadata.head.partitionsMetadata.map(_.partitionId).toSet
-  }
-
-  /**
-    * XXX Makes no sense to ask a leader of each partition. We are interested in offsets that we can read.
-    * If a message is not replicated yet from the leader to replicas, we don't count it.
-    * Just one request for all topics and partitions - it should be much faster.
-    *
-    * TODO Implement and test corner cases.
-    * TODO Complete the doc.
-    *
-    * @param host
-    * @param port
-    * @param topicPartitions
-    * @param time
-    * @param maxNumOffsets
-    * @return
-    */
-  def getOffsets(host: String,
-                 port: Int,
-                 topicPartitions: Set[TopicPartition],
-                 time: Long,
-                 maxNumOffsets: Int): Map[TopicPartition, Either[Errors, Seq[Long]]] = {
-    //TODO Eliminate magic constants
-    val consumer = new SimpleConsumer(host, port, 10000, 100000, CLIENT_ID)
-    val partitionOffsetRequestInfo = PartitionOffsetRequestInfo(time, maxNumOffsets)
-    val requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo] = topicPartitions
-      .map(tp => TopicAndPartition(tp.topic, tp.partition) -> partitionOffsetRequestInfo)
-      .toMap
-    val request = OffsetRequest(requestInfo)
-    val offsetResponse: OffsetResponse = consumer.getOffsetsBefore(request)
-    offsetResponse.partitionErrorAndOffsets
-      .map { case (tp, partitionOffsetsResponse) => partitionOffsetsResponse.error match {
-        case Errors.NONE => new TopicPartition(tp.topic, tp.partition) -> Right(partitionOffsetsResponse.offsets)
-        case _ => new TopicPartition(tp.topic, tp.partition) -> Left(partitionOffsetsResponse.error)
-      }
-      }
   }
 
   /**
