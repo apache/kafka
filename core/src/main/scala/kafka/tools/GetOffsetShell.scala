@@ -29,8 +29,6 @@ import scala.collection.JavaConversions._
 
 object GetOffsetShell extends Logging {
 
-  private val CLIENT_ID = "GetOffsetShell"
-
   def main(args: Array[String]): Unit = {
     //TODO Check ConsoleConsumer on where to add logging statements
     val parser = new OptionParser
@@ -209,11 +207,11 @@ object GetOffsetShell extends Logging {
   }
 
   private def missingPartitions(partitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
-    partitions.map(tp => tp -> Left(s"Partition for topic not found: ${tp.topic()}:${tp.partition()}")).toMap
+    partitions.map(tp => tp -> Left("Partition for topic not found")).toMap
   }
 
   private def missingTopics(topics: Set[String]): Map[TopicPartition, Either[String, Long]] = {
-    topics.map(topic => new TopicPartition(topic, 0) -> Left(s"Topic not found: $topic")).toMap
+    topics.map(topic => new TopicPartition(topic, 0) -> Left("Topic not found")).toMap
   }
 
   private def getEndOffsets(consumer: Consumer[Array[Byte], Array[Byte]],
