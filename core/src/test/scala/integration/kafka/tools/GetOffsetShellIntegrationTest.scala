@@ -223,7 +223,7 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
     val partitions = 0 to 2
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getLastOffsets(brokerList, Set(), false)
+    val offsets = GetOffsetShell.getLastOffsets(brokerList, Set(), true)
 
     assertTrue(s"Must have offset entries for user topics plus internal topics: $offsets", offsets.size > topics.size * partitions.size)
 
