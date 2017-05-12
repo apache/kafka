@@ -294,8 +294,12 @@ class TransactionStateManagerTest {
 
   @Test
   def shouldOnlyConsiderTransactionsInTheOngoingStateForExpiry(): Unit = {
+    for (partitionId <- 0 until numPartitions) {
+      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
+    }
+
     txnMetadata1.state = Ongoing
-    txnMetadata1.transactionStartTime = time.milliseconds()
+    txnMetadata1.txnStartTimestamp = time.milliseconds()
     transactionManager.addTransaction(txnId1, txnMetadata1)
     transactionManager.addTransaction(txnId2, txnMetadata2)
 
@@ -321,7 +325,7 @@ class TransactionStateManagerTest {
 
     time.sleep(2000)
     val expiring = transactionManager.transactionsToExpire()
-    assertEquals(List(TransactionalIdAndProducerIdEpoch(txnId1, txnMetadata1)), expiring)
+    assertEquals(List(TransactionalIdAndProducerIdEpoch(txnId1, txnMetadata1.producerId, txnMetadata1.producerEpoch)), expiring)
   }
 
   @Test
