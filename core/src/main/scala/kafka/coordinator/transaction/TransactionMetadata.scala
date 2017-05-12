@@ -161,8 +161,8 @@ private[coordinator] class TransactionMetadata(val pid: Long,
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
       topicPartitions.equals(other.topicPartitions) &&
-      transactionStartTime.equals(other.transactionStartTime) &&
-      lastUpdateTimestamp.equals(other.lastUpdateTimestamp)
+      transactionStartTime == other.transactionStartTime &&
+      lastUpdateTimestamp == other.lastUpdateTimestamp
     case _ => false
   }
 

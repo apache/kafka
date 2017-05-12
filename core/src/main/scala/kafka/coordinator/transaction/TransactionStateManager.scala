@@ -43,6 +43,7 @@ object TransactionManager {
   // default transaction management config values
   val DefaultTransactionalIdExpirationMs = TimeUnit.DAYS.toMillis(7).toInt
   val DefaultTransactionsMaxTimeoutMs = TimeUnit.MINUTES.toMillis(15).toInt
+  val DefaultRemoveExpiredTransactionsIntervalMs = TimeUnit.MINUTES.toMillis(1).toInt
 }
 
 /**
@@ -82,9 +83,9 @@ class TransactionStateManager(brokerId: Int,
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
   def enablePidExpiration() {
-    scheduler.startup()
-
-    // TODO: add transaction and pid expiration logic
+    if (!scheduler.isStarted)
+      scheduler.startup()
+    // TODO: add pid expiration logic
   }
 
   /**
@@ -142,6 +143,19 @@ class TransactionStateManager(brokerId: Int,
     loadingPartitions.contains(partitionId)
   }
 
+
+  def transactionsToExpire(): Iterable[TransactionalIdAndMetadata] = {
+    val now = time.milliseconds()
+    transactionMetadataCache.filter { case (_, metadata) =>
+      metadata.state match {
+        case Ongoing =>
+          metadata.transactionStartTime + metadata.txnTimeoutMs < now
+        case _ => false
+      }
+    }.map {case (id, metadata) =>
+      TransactionalIdAndMetadata(id, metadata)
+    }
+  }
   /**
    * Gets the partition count of the transaction log topic from ZooKeeper.
    * If the topic does not exist, the default partition count is returned.
@@ -445,4 +459,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
                                                   transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
                                                   transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas)
+                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
+                                                  removeExpiredTransactionsIntervalMs: Int = TransactionManager.DefaultRemoveExpiredTransactionsIntervalMs)
+
+case class TransactionalIdAndMetadata(transactionalId: String, metadata: TransactionMetadata)

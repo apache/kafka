@@ -107,7 +107,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   def shutdown(): Unit = {
     interBrokerSendThread.shutdown()
-    transactionMarkerChannel.clear()
+    transactionMarkerChannel.close()
   }
 
 
