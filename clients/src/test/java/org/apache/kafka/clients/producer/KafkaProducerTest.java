@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ExtendedSerializer;
@@ -53,6 +54,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -87,9 +89,9 @@ public class KafkaProducerTest {
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
                     props, new ByteArraySerializer(), new ByteArraySerializer());
         } catch (KafkaException e) {
-            Assert.assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            Assert.assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
-            Assert.assertEquals("Failed to construct kafka producer", e.getMessage());
+            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
+            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
+            assertEquals("Failed to construct kafka producer", e.getMessage());
             return;
         }
         fail("should have caught an exception and returned");
@@ -107,12 +109,12 @@ public class KafkaProducerTest {
 
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
                 configs, new MockSerializer(), new MockSerializer());
-        Assert.assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
-        Assert.assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
+        assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
+        assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
 
         producer.close();
-        Assert.assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
-        Assert.assertEquals(oldCloseCount + 2, MockSerializer.CLOSE_COUNT.get());
+        assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
+        assertEquals(oldCloseCount + 2, MockSerializer.CLOSE_COUNT.get());
     }
 
     @Test
@@ -126,15 +128,15 @@ public class KafkaProducerTest {
 
             KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
                     props, new StringSerializer(), new StringSerializer());
-            Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
 
             // Cluster metadata will only be updated on calling onSend.
             Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get());
 
             producer.close();
-            Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
@@ -150,12 +152,12 @@ public class KafkaProducerTest {
 
             KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
                     props, new StringSerializer(), new StringSerializer());
-            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
-            Assert.assertEquals(0, MockPartitioner.CLOSE_COUNT.get());
+            assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            assertEquals(0, MockPartitioner.CLOSE_COUNT.get());
 
             producer.close();
-            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
-            Assert.assertEquals(1, MockPartitioner.CLOSE_COUNT.get());
+            assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            assertEquals(1, MockPartitioner.CLOSE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockPartitioner
             MockPartitioner.resetCounters();
@@ -416,6 +418,20 @@ public class KafkaProducerTest {
         Producer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
         producer.close();
         producer.close();
+    }
+
+    @Test
+    public void testMetricConfigRecordingLevel() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        try (KafkaProducer producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertEquals(Sensor.RecordingLevel.INFO, producer.metrics.config().recordLevel());
+        }
+
+        props.put(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+        try (KafkaProducer producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertEquals(Sensor.RecordingLevel.DEBUG, producer.metrics.config().recordLevel());
+        }
     }
 
 }
