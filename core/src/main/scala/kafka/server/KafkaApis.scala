@@ -1440,7 +1440,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         partitionResponse.error == Errors.NONE
       }.keys.toSeq
 
-      groupCoordinator.handleTxnCompletion(producerId = pid, topicPartitions = successfulPartitions, transactionResult = result)
+      try {
+        groupCoordinator.handleTxnCompletion(producerId = pid, topicPartitions = successfulPartitions, transactionResult = result)
+      } catch {
+        case e: Exception =>
+          error(s"Received an exception while trying to update the offsets cache on transaction completion: $e")
+          val producerIdErrors = errors.getOrDefault(pid, new util.HashMap[TopicPartition, Errors]())
+          responseStatus.foreach { case(topicPartition, _) =>
+            producerIdErrors.put(topicPartition, Errors.UNKNOWN)
+          }
+          errors.put(pid, producerIdErrors)
+      }
+
 
       if (numAppends.decrementAndGet() == 0)
         sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))

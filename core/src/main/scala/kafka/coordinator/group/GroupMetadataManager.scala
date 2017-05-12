@@ -258,10 +258,12 @@ class GroupMetadataManager(brokerId: Int,
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
 
-    if (!group.hasReceivedConsistentOffsetCommits)
-      warn(s"group: ${group.groupId} with leader: ${group.leaderId} has received offset commits from consumers as well" +
-        s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
-        s"should be avoided.")
+    group synchronized {
+      if (!group.hasReceivedConsistentOffsetCommits)
+        warn(s"group: ${group.groupId} with leader: ${group.leaderId} has received offset commits from consumers as well " +
+          s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
+          s"should be avoided.")
+    }
 
     val isTxnOffsetCommit = producerId != RecordBatch.NO_PRODUCER_ID
     // construct the message set to append
@@ -644,9 +646,9 @@ class GroupMetadataManager(brokerId: Int,
 
         for (group <- groupMetadataCache.values) {
           if (partitionFor(group.groupId) == offsetsPartition) {
-            group.activeProducers.foreach(removeProducerGroup(_, group.groupId))
             onGroupUnloaded(group)
             groupMetadataCache.remove(group.groupId, group)
+            removeGroupFromAllProducers(group.groupId)
             numGroupsRemoved += 1
             numOffsetsRemoved += group.numOffsets
           }
@@ -745,9 +747,11 @@ class GroupMetadataManager(brokerId: Int,
     pendingGroups.foreach { case (groupId) =>
       getGroup(groupId) match {
         case Some(group) => group synchronized {
-          group.completePendingTxnOffsetCommit(producerId, isCommit)
-          removeProducerGroup(producerId, groupId)
-        }
+          if (!group.is(Dead)) {
+            group.completePendingTxnOffsetCommit(producerId, isCommit)
+            removeProducerGroup(producerId, groupId)
+          }
+       }
         case _ =>
           info(s"Group $groupId has moved away from $brokerId after transaction marker was written but before the " +
             s"cache was updated. The cache on the new group owner will be updated instead.")
@@ -770,6 +774,13 @@ class GroupMetadataManager(brokerId: Int,
       .partition { case (group) => partitions.contains(partitionFor(group)) }
     ownedGroups
   }
+
+  private def removeGroupFromAllProducers(groupId: String) = openGroupsForProducer synchronized {
+    openGroupsForProducer.foreach { case (_, groups) =>
+      groups.remove(groupId)
+    }
+  }
+
   /*
    * Check if the offset metadata length is valid
    */
