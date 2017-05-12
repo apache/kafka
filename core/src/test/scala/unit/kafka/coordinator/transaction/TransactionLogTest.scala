@@ -43,7 +43,7 @@ class TransactionLogTest extends JUnitSuite {
     txnMetadata.addPartitions(topicPartitions)
 
     intercept[IllegalStateException] {
-      TransactionLog.valueToBytes(txnMetadata)
+      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
     }
   }
 
@@ -71,7 +71,7 @@ class TransactionLogTest extends JUnitSuite {
         txnMetadata.addPartitions(topicPartitions)
 
       val keyBytes = TransactionLog.keyToBytes(transactionalId)
-      val valueBytes = TransactionLog.valueToBytes(txnMetadata)
+      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
 
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
@@ -87,10 +87,10 @@ class TransactionLogTest extends JUnitSuite {
           val transactionalId = pidKey.transactionalId
           val txnMetadata = TransactionLog.readMessageValue(record.value())
 
-          assertEquals(pidMappings(transactionalId), txnMetadata.pid)
+          assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
           assertEquals(epoch, txnMetadata.producerEpoch)
           assertEquals(transactionTimeoutMs, txnMetadata.txnTimeoutMs)
-          assertEquals(transactionStates(txnMetadata.pid), txnMetadata.state)
+          assertEquals(transactionStates(txnMetadata.producerId), txnMetadata.state)
 
           if (txnMetadata.state.equals(Empty))
             assertEquals(Set.empty[TopicPartition], txnMetadata.topicPartitions)

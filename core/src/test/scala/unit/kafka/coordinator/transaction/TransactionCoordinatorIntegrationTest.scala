@@ -55,6 +55,12 @@ class TransactionCoordinatorIntegrationTest extends KafkaServerTestHarness {
     val txnId = "txn"
     tc.handleInitPid(txnId, 900000, callback)
 
+    while(initPidResult == null) {
+      Utils.sleep(1)
+    }
+
+    Assert.assertEquals(Errors.NONE, initPidResult.error)
+
     @volatile var addPartitionErrors: Errors = null
     def addPartitionsCallback(errors: Errors): Unit = {
         addPartitionErrors = errors
