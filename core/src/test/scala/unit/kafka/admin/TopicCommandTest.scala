@@ -27,7 +27,6 @@ import kafka.utils.ZkUtils._
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
 
-
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   @Test
@@ -190,10 +189,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
-  def testDescribeTopicsMarkedForDeletion() {
+  def testDescribeAndListTopicsMarkedForDeletion() {
     val brokers = List(0)
     val topic = "testtopic"
-    val markedForDeletion = "MarkedForDeletion"
+    val markedForDeletionDescribe = "MarkedForDeletion"
+    val markedForDeletionList = "marked for deletion"
     TestUtils.createBrokersInZk(zkUtils, brokers)
 
     val createOpts = new TopicCommandOptions(Array("--partitions", "1",
@@ -207,45 +207,28 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val deleteOpts = new TopicCommandOptions(Array("--topic", topic))
     TopicCommand.deleteTopic(zkUtils, deleteOpts)
 
-    def unitDescribeConfig() {
+    // Test describe topics
+    def describeTopicsWithConfig() {
       val describeOpts = new TopicCommandOptions(Array("--describe"))
       TopicCommand.describeTopic(zkUtils, describeOpts)
     }
-    val outputConfig = TestUtils.grabConsoleOutput(unitDescribeConfig)
-    assertTrue(outputConfig.contains(topic) && outputConfig.contains(markedForDeletion))
+    val outputConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig)
+    assertTrue(outputConfig.contains(topic) && outputConfig.contains(markedForDeletionDescribe))
 
-    def unitDescribeNoConfig() {
+    def describeTopicsNoConfig() {
       val describeOpts = new TopicCommandOptions(Array("--describe", "--unavailable-partitions"))
       TopicCommand.describeTopic(zkUtils, describeOpts)
     }
-    val outputNoConfig = TestUtils.grabConsoleOutput(unitDescribeNoConfig)
-    assertTrue(outputNoConfig.contains(topic) && outputNoConfig.contains(markedForDeletion))
-  }
+    val outputNoConfig = TestUtils.grabConsoleOutput(describeTopicsNoConfig)
+    assertTrue(outputNoConfig.contains(topic) && outputNoConfig.contains(markedForDeletionDescribe))
 
-  @Test
-  def testListTopicsMarkedForDeletion() {
-    val brokers = List(0)
-    val topic = "testtopic"
-    val markedForDeletion = "marked for deletion"
-    TestUtils.createBrokersInZk(zkUtils, brokers)
-
-    val createOpts = new TopicCommandOptions(Array("--partitions", "1",
-      "--replication-factor", "1",
-      "--topic", topic))
-    TopicCommand.createTopic(zkUtils, createOpts)
-
-    // delete the broker first, so when we attempt to delete the topic it gets into
-    // "marked for deletion"
-    TestUtils.deleteBrokersInZk(zkUtils, brokers)
-    val deleteOpts = new TopicCommandOptions(Array("--topic", topic))
-    TopicCommand.deleteTopic(zkUtils, deleteOpts)
-
-    def unit() {
+    // Test list topics
+    def listTopics() {
       val listOpts = new TopicCommandOptions(Array("--list"))
       TopicCommand.listTopics(zkUtils, listOpts)
     }
-    val output = TestUtils.grabConsoleOutput(unit)
-    assertTrue(output.contains(topic) && output.contains(markedForDeletion))
+    val output = TestUtils.grabConsoleOutput(listTopics)
+    assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
   }
 
 }

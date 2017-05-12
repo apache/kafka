@@ -1416,14 +1416,14 @@ object TestUtils extends Logging {
   /**
    * Utility to run a Scala Unit can capture its Console.out
    */
-  def grabConsoleOutput(unit: () => Unit) : String = {
-    val baos = new ByteArrayOutputStream();
+  def grabConsoleOutput(f: () => Unit) : String = {
+    val baos = new ByteArrayOutputStream
     try {
-      scala.Console.withOut(baos)(unit());
+      scala.Console.withOut(baos)(f())
     } finally {
-      scala.Console.out.flush();
+      scala.Console.out.flush
     }
-    return baos.toString()
+    return baos.toString
   }
 }
 
