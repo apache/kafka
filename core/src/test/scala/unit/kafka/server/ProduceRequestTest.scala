@@ -88,6 +88,19 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(-1, partitionResponse.logAppendTime)
   }
 
+  @Test
+  def shouldBeTransactionalWhenRecordsAreTransactional(): Unit = {
+    val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
+    val memoryRecords = MemoryRecords.withTransactionalRecords(0, CompressionType.NONE, 1L, 1.toShort, 1,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
+
+    val topicPartition = new TopicPartition("topic", partition)
+    val partitionRecords = Map(topicPartition -> memoryRecords)
+
+    val request = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE, -1, 3000, partitionRecords.asJava).build()
+    assertTrue(request.isTransactional)
+  }
+
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {
     val response = connectAndSend(request, ApiKeys.PRODUCE, destination = brokerSocketServer(leaderId))
     ProduceResponse.parse(response, request.version)

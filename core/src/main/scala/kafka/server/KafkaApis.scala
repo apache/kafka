@@ -363,8 +363,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.bodyAndSize.size
 
-    val transactionalIdAuthorized = if(produceRequest.transactionalId() != null)
+    val transactionalIdAuthorized = if(produceRequest.isTransactional)
       authorize(request.session, Write, new Resource(ProducerTransactionalId, produceRequest.transactionalId()))
+    else
+      true
+
+    val producerIdAuthorized = if (produceRequest.isIdempotent)
+      // TODO: What are we authorizing? "" won't work and pids change
+      authorize(request.session, Write, new Resource(ProducerIdResource, ""))
     else
       true
 
@@ -381,8 +387,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
       val mergedResponseStatus = if (!transactionalIdAuthorized) {
-         responseStatus ++
-           produceRequest.partitionRecordsOrFail().asScala.mapValues(_ => new PartitionResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+        responseStatus ++
+          produceRequest.partitionRecordsOrFail().asScala.mapValues(_ => new PartitionResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+      }
+      else if (!producerIdAuthorized) {
+        responseStatus ++
+          produceRequest.partitionRecordsOrFail().asScala.mapValues(_ => new PartitionResponse(Errors.PRODUCER_ID_AUTHORIZATION_FAILED))
       } else {
         responseStatus ++
           unauthorizedForWriteRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
