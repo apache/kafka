@@ -778,7 +778,8 @@ class Log(@volatile var dir: File,
                               loadingFromLog: Boolean): Unit = {
     val pid = batch.producerId
     val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
-    val maybeCompletedTxn = appendInfo.append(batch)
+    val shouldValidateSequenceNumbers = topicPartition.topic() != Topic.GroupMetadataTopicName
+    val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 
