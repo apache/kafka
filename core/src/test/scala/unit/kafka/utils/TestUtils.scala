@@ -173,6 +173,13 @@ object TestUtils extends Logging {
     }.mkString(",")
   }
 
+  def shutdownServers(servers: Seq[KafkaServer]) {
+    servers.par.foreach { s =>
+      s.shutdown()
+      CoreUtils.delete(s.config.logDirs)
+    }
+  }
+
   /**
     * Create a test config for the provided parameters.
     *

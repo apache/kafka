@@ -26,7 +26,7 @@ import kafka.api.SaslSetup
 import kafka.common.Topic
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -133,10 +133,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   override def tearDown() {
     producers.values.foreach(_.close())
     consumers.values.foreach(_.close())
-    servers.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
     closeSasl()
   }

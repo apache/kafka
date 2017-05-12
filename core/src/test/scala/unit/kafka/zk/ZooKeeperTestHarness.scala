@@ -21,10 +21,13 @@ import javax.security.auth.login.Configuration
 
 import kafka.utils.{CoreUtils, Logging, ZkUtils}
 import org.junit.{After, Before}
+import org.junit.Assert.assertEquals
 import org.scalatest.junit.JUnitSuite
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.test.IntegrationTest
 import org.junit.experimental.categories.Category
+
+import scala.collection.JavaConverters._
 
 @Category(Array(classOf[IntegrationTest]))
 abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
@@ -41,6 +44,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   
   @Before
   def setUp() {
+    assertNoBrokerControllersRunning()
     zookeeper = new EmbeddedZookeeper()
     zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
   }
@@ -52,6 +56,22 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown())
     Configuration.setConfiguration(null)
+    assertNoBrokerControllersRunning()
   }
 
+  // Tests using this class start ZooKeeper before starting any brokers and shutdown ZK after
+  // shutting down brokers. If tests leave broker controllers running, subsequent tests may fail in
+  // unexpected ways if ZK port is reused. This method ensures that there is no Controller event thread
+  // since the controller loads default JAAS configuration to make connections to brokers on this thread.
+  //
+  // Any tests that use this class and invoke ZooKeeperTestHarness#tearDown() will be failed in the tearDown()
+  // if controller event thread is found. Tests with missing broker shutdown which don't use ZooKeeperTestHarness
+  // or its tearDown() will cause an assertion failure in the subsequent test that invokes ZooKeeperTestHarness#setUp(),
+  // making it easier to identify the test with missing shutdown from the test sequence.
+  private def assertNoBrokerControllersRunning() {
+    val threads = Thread.getAllStackTraces.keySet.asScala
+      .map(t => t.getName())
+      .filter(n => n.contains("controller-event-thread"))
+    assertEquals(Set(), threads)
+  }
 }

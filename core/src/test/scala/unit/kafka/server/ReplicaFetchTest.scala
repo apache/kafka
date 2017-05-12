@@ -42,7 +42,7 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
 
   @After
   override def tearDown() {
-    brokers.foreach(_.shutdown())
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
