@@ -278,7 +278,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 subscriptions.seek(tp, committed);
             }
         }
-        
+
         if (!needsOffsetReset.isEmpty()) {
             resetOffsets(needsOffsetReset);
         }
@@ -559,6 +559,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+            // To be thrown in the next call of this method
             nextInLineExceptionMetadata = new ExceptionMetadata(fetchedPartition, fetchedOffset, e);
         }
         return fetched;
@@ -944,6 +945,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
+        private KafkaException nextInlineException;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -954,12 +956,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.nextFetchOffset = completedFetch.fetchedOffset;
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
+            this.nextInlineException = null;
         }
 
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-
+                nextInlineException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1043,16 +1046,28 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             if (isFetched)
                 return Collections.emptyList();
+            if (nextInlineException != null) {
+                KafkaException e = nextInlineException;
+                nextInlineException = null;
+                throw e;
+            }
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
-            for (int i = 0; i < maxRecords; i++) {
-                Record record = nextFetchedRecord();
-                if (record == null)
-                    break;
+            try {
+                for (int i = 0; i < maxRecords; i++) {
+                    Record record = nextFetchedRecord();
+                    if (record == null)
+                        break;
 
-                recordsRead++;
-                bytesRead += record.sizeInBytes();
-                records.add(parseRecord(partition, currentBatch, record));
+                    recordsRead++;
+                    bytesRead += record.sizeInBytes();
+                    records.add(parseRecord(partition, currentBatch, record));
+                }
+            } catch (KafkaException e) {
+                if (records.isEmpty())
+                    throw e;
+                // To be thrown in the next call of this method
+                nextInlineException = e;
             }
             return records;
         }

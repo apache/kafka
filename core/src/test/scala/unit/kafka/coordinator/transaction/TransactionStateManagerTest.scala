@@ -293,6 +293,38 @@ class TransactionStateManagerTest {
   }
 
   @Test
+  def shouldOnlyConsiderTransactionsInTheOngoingStateForExpiry(): Unit = {
+    txnMetadata1.state = Ongoing
+    txnMetadata1.transactionStartTime = time.milliseconds()
+    transactionManager.addTransaction(txnId1, txnMetadata1)
+    transactionManager.addTransaction(txnId2, txnMetadata2)
+
+    val ongoingButNotExpiring = txnMetadata1.copy()
+    ongoingButNotExpiring.txnTimeoutMs = 10000
+    transactionManager.addTransaction("not-expiring", ongoingButNotExpiring)
+
+    val prepareCommit = txnMetadata1.copy()
+    prepareCommit.state = PrepareCommit
+    transactionManager.addTransaction("pc", prepareCommit)
+
+    val prepareAbort = txnMetadata1.copy()
+    prepareAbort.state = PrepareAbort
+    transactionManager.addTransaction("pa", prepareAbort)
+
+    val committed = txnMetadata1.copy()
+    committed.state = CompleteCommit
+    transactionManager.addTransaction("cc", committed)
+
+    val aborted = txnMetadata1.copy()
+    aborted.state = CompleteAbort
+    transactionManager.addTransaction("ca", aborted)
+
+    time.sleep(2000)
+    val expiring = transactionManager.transactionsToExpire()
+    assertEquals(List(TransactionalIdAndProducerIdEpoch(txnId1, txnMetadata1)), expiring)
+  }
+
+  @Test
   def shouldWriteTxnMarkersForTransactionInPreparedCommitState(): Unit = {
     verifyWritesTxnMarkersInPrepareState(PrepareCommit)
   }

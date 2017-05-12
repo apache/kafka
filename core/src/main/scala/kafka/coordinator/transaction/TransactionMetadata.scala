@@ -292,9 +292,8 @@ private[transaction] class TransactionMetadata(val producerId: Long,
       txnTimeoutMs == other.txnTimeoutMs &&
       state.equals(other.state) &&
       topicPartitions.equals(other.topicPartitions) &&
-      txnStartTimestamp.equals(other.txnStartTimestamp) &&
-      txnLastUpdateTimestamp.equals(other.txnLastUpdateTimestamp)
-
+      txnStartTimestamp == other.txnStartTimestamp &&
+      txnLastUpdateTimestamp == other.txnLastUpdateTimestamp
     case _ => false
   }
 

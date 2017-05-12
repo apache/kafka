@@ -44,14 +44,15 @@ object TransactionCoordinator {
       config.transactionTopicReplicationFactor,
       config.transactionTopicSegmentBytes,
       config.transactionsLoadBufferSize,
-      config.transactionTopicMinISR)
+      config.transactionTopicMinISR,
+      config.transactionTransactionsExpiredTransactionCleanupIntervalMs)
 
     val pidManager = new ProducerIdManager(config.brokerId, zkUtils)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
     val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false)
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, pidManager, txnStateManager, txnMarkerChannelManager, txnMarkerPurgatory, time)
+    new TransactionCoordinator(config.brokerId, scheduler, pidManager, txnStateManager, txnMarkerChannelManager, txnMarkerPurgatory, time)
   }
 
   private def initTransactionError(error: Errors): InitPidResult = {
@@ -72,6 +73,7 @@ object TransactionCoordinator {
  * Producers with no specific transactional id may talk to a random broker as their coordinators.
  */
 class TransactionCoordinator(brokerId: Int,
+                             scheduler: Scheduler,
                              pidManager: ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
@@ -409,11 +411,30 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
+  private def expireTransactions(): Unit = {
+    txnManager.transactionsToExpire().foreach { txnIdAndPidEpoch =>
+      handleEndTransaction(txnIdAndPidEpoch.transactionalId,
+        txnIdAndPidEpoch.producerId,
+        txnIdAndPidEpoch.producerEpoch,
+        TransactionResult.ABORT,
+        (error: Errors) => {
+          if (error != Errors.NONE)
+            warn(s"Rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} aborted due to ${error.exceptionName()}")
+        })
+    }
+  }
+
   /**
    * Startup logic executed at the same time when the server starts up.
    */
   def startup(enablePidExpiration: Boolean = true) {
     info("Starting up.")
+    scheduler.startup()
+    scheduler.schedule("transaction-expiration",
+      expireTransactions,
+      TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs,
+      TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs
+    )
     if (enablePidExpiration)
       txnManager.enablePidExpiration()
     txnMarkerChannelManager.start()
@@ -429,6 +450,8 @@ class TransactionCoordinator(brokerId: Int,
   def shutdown() {
     info("Shutting down.")
     isActive.set(false)
+    scheduler.shutdown()
+    txnMarkerPurgatory.shutdown()
     pidManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()

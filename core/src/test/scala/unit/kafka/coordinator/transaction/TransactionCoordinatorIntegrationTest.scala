@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.coordinator.transaction
+package kafka.coordinator.transaction
 
 import java.util.Properties
 
 import kafka.common.Topic
-import kafka.coordinator.transaction.InitPidResult
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils

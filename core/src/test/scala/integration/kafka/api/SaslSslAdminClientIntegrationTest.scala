@@ -16,11 +16,24 @@ import java.io.File
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 import kafka.server.KafkaConfig
+import kafka.utils.JaasTestUtils
+import org.junit.{After, Before}
 
-class SaslSslAdminClientIntegrationTest extends KafkaAdminClientIntegrationTest with SaslTestHarness {
-  override protected val zkSaslEnabled = true
+class SaslSslAdminClientIntegrationTest extends KafkaAdminClientIntegrationTest with SaslSetup {
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
+
+  @Before
+  override def setUp(): Unit = {
+    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), Both, JaasTestUtils.KafkaServerContextName))
+    super.setUp()
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    super.tearDown()
+    closeSasl()
+  }
   
 }

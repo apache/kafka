@@ -19,6 +19,8 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.api.Both
+import kafka.utils.JaasTestUtils.JaasSection
 import org.apache.kafka.common.network.ListenerName
 
 
@@ -26,12 +28,10 @@ class MultipleListenersWithDefaultJaasContextTest extends MultipleListenersWithS
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
-  override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
-    val plainSaslProperties = kafkaClientSaslProperties(Plain, dynamicJaasConfig = true)
+  override def saslProperties(listenerName: ListenerName): Properties =
+    kafkaClientSaslProperties(Plain, dynamicJaasConfig = true)
 
-    listenerName.value match {
-      case SecureExternal | SecureInternal => Some(plainSaslProperties)
-      case _ => None
-    }
-  }
+  override def jaasSections: Seq[JaasSection] =
+    jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), Both)
+
 }

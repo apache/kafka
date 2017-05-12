@@ -30,8 +30,9 @@ trait LeaderEpochCache {
   def assign(leaderEpoch: Int, offset: Long)
   def latestEpoch(): Int
   def endOffsetFor(epoch: Int): Long
-  def clearLatest(offset: Long)
-  def clearEarliest(offset: Long)
+  def clearAndFlushLatest(offset: Long)
+  def clearAndFlushEarliest(offset: Long)
+  def clearAndFlush()
   def clear()
 }
 
@@ -111,7 +112,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @param offset
     */
-  override def clearLatest(offset: Long): Unit = {
+  override def clearAndFlushLatest(offset: Long): Unit = {
     inWriteLock(lock) {
       val before = epochs
       if (offset >= 0 && offset <= latestOffset()) {
@@ -130,7 +131,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
     *
     * @param offset the offset to clear up to
     */
-  override def clearEarliest(offset: Long): Unit = {
+  override def clearAndFlushEarliest(offset: Long): Unit = {
     inWriteLock(lock) {
       val before = epochs
       if (offset >= 0 && earliestOffset() < offset) {
@@ -150,10 +151,16 @@ class LeaderEpochFileCache(topicPartition: TopicPartition, leo: () => LogOffsetM
   /**
     * Delete all entries.
     */
-  override def clear() = {
+  override def clearAndFlush() = {
     inWriteLock(lock) {
       epochs.clear()
       flush()
+    }
+  }
+
+  override def clear() = {
+    inWriteLock(lock) {
+      epochs.clear()
     }
   }
 

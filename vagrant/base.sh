@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -ex
 
 if [ -z `which javac` ]; then
     apt-get -y update
@@ -65,9 +65,10 @@ fi
 
 get_kafka() {
     version=$1
+    scala_version=$2
 
     kafka_dir=/opt/kafka-$version
-    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_2.10-$version.tgz
+    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_$scala_version-$version.tgz
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url
@@ -81,13 +82,14 @@ get_kafka() {
     fi
 }
 
-get_kafka 0.8.2.2
+# Test multiple Scala versions
+get_kafka 0.8.2.2 2.10
 chmod a+rw /opt/kafka-0.8.2.2
-get_kafka 0.9.0.1
+get_kafka 0.9.0.1 2.11
 chmod a+rw /opt/kafka-0.9.0.1
-get_kafka 0.10.0.1
+get_kafka 0.10.0.1 2.11
 chmod a+rw /opt/kafka-0.10.0.1
-get_kafka 0.10.1.1
+get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
 
 

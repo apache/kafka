@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.{KafkaException, Topic}
 import kafka.log.LogConfig
-import kafka.message.NoCompressionCodec
+import kafka.message.UncompressedCodec
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
@@ -43,8 +43,9 @@ import scala.collection.JavaConverters._
 object TransactionStateManager {
   // default transaction management config values
   // TODO: this needs to be replaces by the config values
-  val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
   val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
+  val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
+  val DefaultRemoveExpiredTransactionsIntervalMs: Int = TimeUnit.MINUTES.toMillis(1).toInt
 }
 
 /**
@@ -80,10 +81,29 @@ class TransactionStateManager(brokerId: Int,
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
-  def enablePidExpiration() {
-    scheduler.startup()
+  // this is best-effort expiration and hence not grabing the lock on metadata upon checking its state
+  // we will get the lock when actually trying to transit the transaction metadata to abort later.
+  def transactionsToExpire(): Iterable[TransactionalIdAndProducerIdEpoch] = {
+    val now = time.milliseconds()
+    transactionMetadataCache.flatMap { case (_, entry) =>
+        entry.metadataPerTransactionalId.filter { case (txnId, txnMetadata) =>
+          if (isCoordinatorLoadingInProgress(txnId) || txnMetadata.pendingTransitionInProgress) {
+            false
+          } else {
+            txnMetadata.state match {
+              case Ongoing =>
+                txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now
+              case _ => false
+            }
+          }
+        }.map { case (txnId, txnMetadata) =>
+          TransactionalIdAndProducerIdEpoch(txnId, txnMetadata.producerId, txnMetadata.producerEpoch)
+        }
+    }
+  }
 
-    // TODO: add transaction and pid expiration logic
+  def enablePidExpiration() {
+    // TODO: add pid expiration logic
   }
 
   /**
@@ -132,7 +152,7 @@ class TransactionStateManager(brokerId: Int,
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
     props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, NoCompressionCodec)
+    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
 
     props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
@@ -290,7 +310,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(topicPartition.toString, loadTransactions _)
+    scheduler.schedule(s"load-txns-for-partition-$topicPartition", loadTransactions _)
   }
 
   /**
@@ -317,7 +337,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(topicPartition.toString, removeTransactions _)
+    scheduler.schedule(s"remove-txns-for-partition-$topicPartition", removeTransactions _)
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
@@ -438,9 +458,6 @@ class TransactionStateManager(brokerId: Int,
 
   def shutdown() {
     shuttingDown.set(true)
-    if (scheduler.isStarted)
-      scheduler.shutdown()
-
     loadingPartitions.clear()
     transactionMetadataCache.clear()
 
@@ -459,4 +476,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
                                                   transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
                                                   transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas)
+                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
+                                                  removeExpiredTransactionsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
+
+case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short)

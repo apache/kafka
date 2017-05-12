@@ -44,3 +44,5 @@ tests/venv
 .cache
 
 docs/generated/
+
+.release-settings.json

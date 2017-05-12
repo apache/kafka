@@ -20,8 +20,8 @@ package kafka.metrics
 import java.util.Properties
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Metric, MetricName, MetricPredicate}
-import org.junit.{After, Test}
+import com.yammer.metrics.core.{Meter, MetricPredicate}
+import org.junit.Test
 import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
@@ -34,6 +34,7 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 import kafka.consumer.{ConsumerConfig, ZookeeperConsumerConnector}
+import kafka.log.LogConfig
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
@@ -47,11 +48,6 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     TestUtils.createBrokerConfigs(numNodes, zkConnect, enableDeleteTopic=true).map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
-
-  @After
-  override def tearDown() {
-    super.tearDown()
-  }
 
   @Test
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
@@ -93,10 +89,10 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   }
 
   @Test
-  def testClusterIdMetric(): Unit ={
+  def testClusterIdMetric(): Unit = {
     // Check if clusterId metric exists.
     val metrics = Metrics.defaultRegistry().allMetrics
-    assertEquals(metrics.keySet.asScala.count(_.getMBeanName().equals("kafka.server:type=KafkaServer,name=ClusterId")), 1)
+    assertEquals(metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=KafkaServer,name=ClusterId"), 1)
   }
 
   @deprecated("This test has been deprecated and it will be removed in a future release", "0.10.0.0")
@@ -111,10 +107,53 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     zkConsumerConnector1.shutdown()
   }
 
+  @Test
+  def testBrokerTopicMetricsBytesInOut(): Unit = {
+    val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
+    val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
+    val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic"
+    val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
+
+    val topicConfig = new Properties()
+    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
+    createTopic(zkUtils, topic, 1, numNodes, servers, topicConfig)
+    // Produce a few messages to create the metrics
+    TestUtils.produceMessages(servers, topic, nMessages)
+
+    val initialReplicationBytesIn = meterCount(replicationBytesIn)
+    val initialReplicationBytesOut = meterCount(replicationBytesOut)
+    val initialBytesIn = meterCount(bytesIn)
+    val initialBytesOut = meterCount(bytesOut)
+
+    // Produce a few messages to make the metrics tick
+    TestUtils.produceMessages(servers, topic, nMessages)
+
+    assertTrue(meterCount(replicationBytesIn) > initialReplicationBytesIn)
+    assertTrue(meterCount(replicationBytesOut) > initialReplicationBytesOut)
+    assertTrue(meterCount(bytesIn) > initialBytesIn)
+    // BytesOut doesn't include replication, so it shouldn't have changed
+    assertEquals(initialBytesOut, meterCount(bytesOut))
+
+    // Consume messages to make bytesOut tick
+    TestUtils.consumeTopicRecords(servers, topic, nMessages * 2)
+
+    assertTrue(meterCount(bytesOut) > initialBytesOut)
+  }
+
+  private def meterCount(metricName: String): Long = {
+    Metrics.defaultRegistry.allMetrics.asScala
+      .filterKeys(_.getMBeanName.endsWith(metricName))
+      .values
+      .headOption
+      .getOrElse(fail(s"Unable to find metric $metricName"))
+      .asInstanceOf[Meter]
+      .count
+  }
+
   private def checkTopicMetricsExists(topic: String): Boolean = {
     val topicMetricRegex = new Regex(".*("+topic+")$")
     val metricGroups = Metrics.defaultRegistry().groupedMetrics(MetricPredicate.ALL).entrySet()
-    for(metricGroup <- metricGroups.asScala) {
+    for (metricGroup <- metricGroups.asScala) {
       if (topicMetricRegex.pattern.matcher(metricGroup.getKey()).matches)
         return true
     }
