@@ -1433,8 +1433,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    def sendResponseCallback(pid: Long)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+    def sendResponseCallback(pid: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       errors.put(pid, responseStatus.mapValues(_.error).asJava)
+
+      val successfulPartitions = responseStatus.filter { case (_, partitionResponse) =>
+        partitionResponse.error == Errors.NONE
+      }.keys.toSeq
+
+      groupCoordinator.handleTxnCompletion(producerId = pid, topicPartitions = successfulPartitions, transactionResult = result)
+
       if (numAppends.decrementAndGet() == 0)
         sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))
     }
@@ -1460,7 +1467,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         internalTopicsAllowed = true,
         isFromClient = false,
         entriesPerPartition = controlRecords,
-        sendResponseCallback(producerId))
+        sendResponseCallback(producerId, marker.transactionResult))
     }
   }
 

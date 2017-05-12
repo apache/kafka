@@ -119,6 +119,13 @@ class GroupMetadataManager(brokerId: Int,
 
   def isLoading(): Boolean = inLock(partitionLock) { loadingPartitions.nonEmpty }
 
+  // visible for testing
+  private[group] def isGroupOpenForProducer(producerId: Long, groupId: String) = openGroupsForProducer.get(producerId) match {
+    case Some(groups) =>
+      groups.contains(groupId)
+    case None =>
+      false
+  }
   /**
    * Get the group associated with the given groupId, or null if not found
    */
@@ -479,7 +486,7 @@ class GroupMetadataManager(brokerId: Int,
 
         while (currOffset < highWaterMark && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None, minOneMessage = true,
-            isolationLevel = IsolationLevel.READ_COMMITTED)
+            isolationLevel = IsolationLevel.READ_UNCOMMITTED)
 
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
@@ -495,16 +502,14 @@ class GroupMetadataManager(brokerId: Int,
               val record = batch.iterator.next()
               val controlRecord = ControlRecordType.parse(record.key)
               if (controlRecord == ControlRecordType.COMMIT) {
-                val pendingOffsetsFromProducer = pendingOffsets.getOrElse(batch.producerId, null)
-                if (pendingOffsetsFromProducer != null) {
-                  pendingOffsetsFromProducer.foreach { case (groupTopicPartition, offsetAndMetadata) =>
-                    loadedOffsets.put(groupTopicPartition, offsetAndMetadata)
+                pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, OffsetAndMetadata]())
+                  .foreach {
+                    case (groupTopicPartition, offsetAndMetadata) =>
+                      loadedOffsets.put(groupTopicPartition, offsetAndMetadata)
                   }
-                 pendingOffsets.remove(batch.producerId)
-                }
-              } else {
-                pendingOffsets.remove(batch.producerId)
               }
+              producerGroups.remove(batch.producerId)
+              pendingOffsets.remove(batch.producerId)
             } else {
               for (record <- batch.asScala) {
                 require(record.hasKey, "Group metadata/offset entry key should not be null")
@@ -586,8 +591,9 @@ class GroupMetadataManager(brokerId: Int,
 
           // load groups which store offsets in kafka, but which have no active members and thus no group
           // metadata stored in the log
-          emptyGroupOffsets.foreach { case (groupId, offsets) =>
+          (emptyGroupOffsets.keySet ++ pendingEmptyGroupOffsets.keySet).foreach { case(groupId) =>
             val group = new GroupMetadata(groupId)
+            val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, OffsetAndMetadata])
             val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, OffsetAndMetadata]])
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
@@ -776,7 +782,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private def removeProducerGroupsBelongingToPartitions(producerId: Long, partitions: Set[Int]) = openGroupsForProducer synchronized {
-    val (ownedGroups, remainingGroups) = openGroupsForProducer.getOrElse(producerId, mutable.Set.empty[String])
+    val (ownedGroups, _) = openGroupsForProducer.getOrElse(producerId, mutable.Set.empty[String])
       .partition { case (group) => partitions.contains(partitionFor(group)) }
     if (ownedGroups.nonEmpty) {
       openGroupsForProducer(producerId) --= ownedGroups

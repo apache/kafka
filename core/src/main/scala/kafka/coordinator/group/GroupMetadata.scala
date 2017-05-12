@@ -357,7 +357,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def numOffsets = offsets.size
 
-  def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty
+  def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty
 
   private def assertValidTransition(targetState: GroupState) {
     if (!GroupMetadata.validPreviousStates(targetState).contains(state))
