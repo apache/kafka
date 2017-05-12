@@ -63,25 +63,40 @@ class TransactionsTest extends KafkaServerTestHarness {
   def testBasicTransactions() = {
     val producer = transactionalProducer("my-hello-world-transactional-id")
     val consumer = transactionalConsumer()
+    val unCommittedConsumer = nonTransactionalConsumer()
     try {
+      error("initing transactinos")
       producer.initTransactions()
-
-      producer.beginTransaction()
-      producer.send(producerRecord(topic1, "1", "1", willBeCommitted = true))
-      producer.send(producerRecord(topic2, "3", "3", willBeCommitted = true))
-      producer.commitTransaction()
+      error("inited transactions")
 
       producer.beginTransaction()
       producer.send(producerRecord(topic2, "2", "2", willBeCommitted = false))
       producer.send(producerRecord(topic1, "4", "4", willBeCommitted = false))
       producer.abortTransaction()
 
-      consumer.subscribe(List(topic1, topic2))
+      producer.beginTransaction()
+      producer.send(producerRecord(topic1, "1", "1", willBeCommitted = true))
+      producer.send(producerRecord(topic2, "3", "3", willBeCommitted = true))
+      producer.commitTransaction()
+      error("produced messages and ended transactinos")
 
+      consumer.subscribe(List(topic1, topic2))
+      unCommittedConsumer.subscribe(List(topic1, topic2))
+
+      error("consuming committed records")
       val records = pollUntilExactlyNumRecords(consumer, 2)
       records.zipWithIndex.foreach { case (record, i) =>
         assertCommittedAndGetValue(record)
       }
+
+      error("consuming all records")
+      val allRecords = pollUntilExactlyNumRecords(unCommittedConsumer, 4)
+      val expectedValues = List("1", "2", "3", "4").toSet
+      allRecords.zipWithIndex.foreach { case (record, i) =>
+        assertTrue(expectedValues.contains(recordValue(record)))
+      }
+
+
     } catch {
       case e @ (_ : KafkaException | _ : ProducerFencedException) =>
         fail("Did not expect exception", e)
@@ -218,6 +233,12 @@ class TransactionsTest extends KafkaServerTestHarness {
     recordValue.replace("-committed", "")
   }
 
+  private def recordValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+    val recordValue = new String(record.value(), "UTF-8")
+    recordValue.replace("-committed", "")
+    recordValue.replace("-aborted", "")
+  }
+
   private def producerRecord(topic: String, key: String, value: String, willBeCommitted: Boolean) = {
     val suffixedValue = if (willBeCommitted)
       value + "-committed"
@@ -252,6 +273,14 @@ class TransactionsTest extends KafkaServerTestHarness {
   private def transactionalConsumer(group: String = "group") = {
     val props = new Properties()
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
+      groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+  }
+
+  private def nonTransactionalConsumer(group: String = "group") = {
+    val props = new Properties()
+    props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_uncommitted")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
       groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
