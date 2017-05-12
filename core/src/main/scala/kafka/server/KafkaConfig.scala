@@ -411,8 +411,8 @@ object KafkaConfig {
   val MessageMaxBytesDoc = "The maximum message size that the server can receive. Note that this limit also applies " +
     "to the total size of a compressed batch of messages (when compression is enabled). Additionally, in versions " +
     "0.11 and later, all messages are written as batches and this setting applies to the total size of the batch."
-  val NumNetworkThreadsDoc = "the number of network threads that the server uses for handling network requests"
-  val NumIoThreadsDoc = "The number of io threads that the server uses for carrying out network requests"
+  val NumNetworkThreadsDoc = "The number of threads that the server uses for receiving requests from the network and sending responses to the network"
+  val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
   val QueuedMaxRequestsDoc = "The number of queued requests allowed before blocking the network threads"
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
