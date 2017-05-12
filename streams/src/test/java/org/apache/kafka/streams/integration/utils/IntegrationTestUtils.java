@@ -55,6 +55,7 @@ public class IntegrationTestUtils {
 
     public static final int UNLIMITED_MESSAGES = -1;
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
+    public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
 
     /**
      * Returns up to `maxMessages` message-values from the topic.
