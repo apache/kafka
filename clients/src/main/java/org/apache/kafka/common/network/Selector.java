@@ -519,6 +519,8 @@ public class Selector implements Selectable, AutoCloseable {
     public void close(String id) {
         KafkaChannel channel = this.channels.get(id);
         if (channel != null) {
+            // There is no disconnect notification for local close, but updating
+            // channel state here anyway to avoid confusion.
             channel.state(ChannelState.LOCAL_CLOSE);
             close(channel, false);
         }
