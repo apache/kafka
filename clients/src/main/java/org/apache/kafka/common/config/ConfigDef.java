@@ -124,7 +124,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender));
+        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false));
     }
 
     /**
@@ -371,6 +371,19 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation) {
         return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation);
+    }
+
+    /**
+     * Define a new internal configuration. Internal configuration won't show up in the docs and aren't
+     * intended for general use.
+     * @param name              The name of the config parameter
+     * @param type              The type of the config
+     * @param defaultValue      The default value to use if this config isn't present
+     * @param importance
+     * @return This ConfigDef so you can chain calls
+     */
+    public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
+        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
     }
 
     /**
@@ -890,11 +903,13 @@ public class ConfigDef {
         public final String displayName;
         public final List<String> dependents;
         public final Recommender recommender;
+        public final boolean internalConfig;
 
         public ConfigKey(String name, Type type, Object defaultValue, Validator validator,
                          Importance importance, String documentation, String group,
                          int orderInGroup, Width width, String displayName,
-                         List<String> dependents, Recommender recommender) {
+                         List<String> dependents, Recommender recommender,
+                         boolean internalConfig) {
             this.name = name;
             this.type = type;
             this.defaultValue = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
@@ -909,6 +924,7 @@ public class ConfigDef {
             this.width = width;
             this.displayName = displayName;
             this.recommender = recommender;
+            this.internalConfig = internalConfig;
         }
 
         public boolean hasDefault() {
@@ -961,6 +977,10 @@ public class ConfigDef {
         }
         b.append("</tr>\n");
         for (ConfigKey def : configs) {
+            if (def.internalConfig) {
+                continue;
+            }
+
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
@@ -981,6 +1001,9 @@ public class ConfigDef {
     public String toRst() {
         StringBuilder b = new StringBuilder();
         for (ConfigKey def : sortedConfigs()) {
+            if (def.internalConfig) {
+                continue;
+            }
             getConfigKeyRst(def, b);
             b.append("\n");
         }
@@ -996,10 +1019,12 @@ public class ConfigDef {
 
         String lastKeyGroupName = "";
         for (ConfigKey def : sortedConfigs()) {
+            if (def.internalConfig) {
+                continue;
+            }
             if (def.group != null) {
                 if (!lastKeyGroupName.equalsIgnoreCase(def.group)) {
                     b.append(def.group).append("\n");
-
                     char[] underLine = new char[def.group.length()];
                     Arrays.fill(underLine, '^');
                     b.append(new String(underLine)).append("\n\n");
@@ -1104,8 +1129,8 @@ public class ConfigDef {
                     key.width,
                     key.displayName,
                     embeddedDependents(keyPrefix, key.dependents),
-                    embeddedRecommender(keyPrefix, key.recommender)
-            ));
+                    embeddedRecommender(keyPrefix, key.recommender),
+                    key.internalConfig));
         }
     }
 
