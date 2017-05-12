@@ -19,29 +19,27 @@ package kafka.server
 
 import java.util.Properties
 
-import kafka.api.CustomKafkaServerSasl
+import kafka.utils.JaasTestUtils
+import kafka.utils.JaasTestUtils.JaasSection
 import org.apache.kafka.common.network.ListenerName
 
-
-class MultipleListenersWithAdditionalJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest{
+class MultipleListenersWithAdditionalJaasContextTest extends MultipleListenersWithSameSecurityProtocolBaseTest {
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
-  override def setSaslProperties(listenerName: ListenerName): Option[Properties] = {
-
-    val gssapiSaslProperties = kafkaClientSaslProperties(GssApi, dynamicJaasConfig = true)
-    val plainSaslProperties = kafkaClientSaslProperties(Plain, dynamicJaasConfig = true)
-
+  override def saslProperties(listenerName: ListenerName): Properties = {
     listenerName.value match {
-      case SecureInternal => Some(plainSaslProperties)
-      case SecureExternal => Some(gssapiSaslProperties)
-      case _ => None
+      case SecureInternal => kafkaClientSaslProperties(Plain, dynamicJaasConfig = true)
+      case SecureExternal => kafkaClientSaslProperties(GssApi, dynamicJaasConfig = true)
+      case _ => throw new IllegalArgumentException(s"Unexpected listener name $listenerName")
     }
   }
 
-  override def addJaasSection(): Unit = {
-    setJaasConfiguration(CustomKafkaServerSasl, "secure_external.KafkaServer", List(GssApi), None)
-    setJaasConfiguration(CustomKafkaServerSasl, "secure_internal.KafkaServer", List(Plain), None)
-    removeJaasSection("KafkaServer")
+  override def jaasSections: Seq[JaasSection] = {
+    val (serverKeytabFile, _) = maybeCreateEmptyKeytabFiles()
+    JaasTestUtils.zkSections ++ Seq(
+      JaasTestUtils.kafkaServerSection("secure_external.KafkaServer", Seq(GssApi), Some(serverKeytabFile)),
+      JaasTestUtils.kafkaServerSection("secure_internal.KafkaServer", Seq(Plain), None)
+    )
   }
 }

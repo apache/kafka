@@ -23,9 +23,8 @@ import org.apache.kafka.clients.producer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{Before, Test}
 import kafka.server.QuotaType
 import org.apache.kafka.common.metrics.KafkaMetric
 
@@ -79,11 +78,6 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     leaderNode = if (leaders(0).get == servers.head.config.brokerId) servers.head else servers(1)
     followerNode = if (leaders(0).get != servers.head.config.brokerId) servers.head else servers(1)
     assertTrue("Leader of all partitions of the topic should exist", leaders.values.forall(leader => leader.isDefined))
-  }
-
-  @After
-  override def tearDown() {
-    super.tearDown()
   }
 
   @Test

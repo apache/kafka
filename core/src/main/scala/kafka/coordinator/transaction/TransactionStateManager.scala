@@ -24,7 +24,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.{KafkaException, Topic}
 import kafka.log.LogConfig
-import kafka.message.NoCompressionCodec
+import kafka.message.UncompressedCodec
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
@@ -118,7 +118,7 @@ class TransactionStateManager(brokerId: Int,
 
     // enforce disabled unclean leader election, no compression types, and compact cleanup policy
     props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
-    props.put(LogConfig.CompressionTypeProp, NoCompressionCodec)
+    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
 
     props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)

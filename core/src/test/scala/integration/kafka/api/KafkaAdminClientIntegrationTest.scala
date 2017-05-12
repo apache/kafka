@@ -55,9 +55,10 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   }
 
   @After
-  def closeClient(): Unit = {
+  override def tearDown(): Unit = {
     if (client != null)
       Utils.closeQuietly(client, "AdminClient")
+    super.tearDown()
   }
 
   val brokerCount = 3

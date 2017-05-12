@@ -293,9 +293,14 @@ public class FetcherTest {
         LegacyRecord.write(out, magic, crc, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
 
         // and one invalid record (note the crc)
-        out.writeLong(offset);
+        out.writeLong(offset + 1);
         out.writeInt(size);
         LegacyRecord.write(out, magic, crc + 1, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
+
+        // write one valid record
+        out.writeLong(offset + 2);
+        out.writeInt(size);
+        LegacyRecord.write(out, magic, crc, LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME), timestamp, key, value);
 
         buffer.flip();
 
@@ -306,13 +311,22 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
         consumerClient.poll(0);
+
+        // the first fetchedRecords() should return the first valid message
+        assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
+        assertEquals(1, subscriptions.position(tp1).longValue());
+
+        // the second fetchedRecords() should throw exception due to the second invalid message
         try {
             fetcher.fetchedRecords();
-            fail("fetchedRecords should have raised");
+            fail("fetchedRecords should have raised KafkaException");
         } catch (KafkaException e) {
-            // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp1).longValue());
+            assertEquals(1, subscriptions.position(tp1).longValue());
         }
+
+        // the third fetchedRecords() should return the third valid message
+        assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
+        assertEquals(3, subscriptions.position(tp1).longValue());
     }
 
     @Test

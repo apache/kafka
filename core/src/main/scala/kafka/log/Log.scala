@@ -162,12 +162,12 @@ class Log(@volatile var dir: File,
     nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset, activeSegment.baseOffset,
       activeSegment.size.toInt)
 
-    leaderEpochCache.clearLatest(nextOffsetMetadata.messageOffset)
+    leaderEpochCache.clearAndFlushLatest(nextOffsetMetadata.messageOffset)
 
     logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-    leaderEpochCache.clearEarliest(logStartOffset)
+    leaderEpochCache.clearAndFlushEarliest(logStartOffset)
 
     loadProducerState(logEndOffset)
 
@@ -997,7 +997,7 @@ class Log(@volatile var dir: File,
         // remove the segments for lookups
         deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
-        leaderEpochCache.clearEarliest(logStartOffset)
+        leaderEpochCache.clearAndFlushEarliest(logStartOffset)
         producerStateManager.evictUnretainedProducers(logStartOffset)
         updateFirstUnstableOffset()
       }
@@ -1282,7 +1282,7 @@ class Log(@volatile var dir: File,
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
         this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-        leaderEpochCache.clearLatest(targetOffset)
+        leaderEpochCache.clearAndFlushLatest(targetOffset)
         loadProducerState(targetOffset)
       }
     }
@@ -1308,7 +1308,7 @@ class Log(@volatile var dir: File,
                                 initFileSize = initFileSize,
                                 preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
-      leaderEpochCache.clear()
+      leaderEpochCache.clearAndFlush()
 
       producerStateManager.truncate()
       producerStateManager.updateMapEndOffset(newOffset)
