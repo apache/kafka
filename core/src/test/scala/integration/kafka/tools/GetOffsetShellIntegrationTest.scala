@@ -120,8 +120,8 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
   @Test
   def manyTopicsSomeNonExisting: Unit = {
     val topics = Set(topic1, "topic999")
-    val partitions = Set(0, 1, 2)
-    val producerOffsets = (0 to 2).map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
+    val partitions = 0 to 2
+    val producerOffsets = partitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
     val topicPartitions = for {
       topic <- topics
       partition <- partitions
@@ -130,12 +130,12 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
-    for (p <- 0 to 2) {
+    for (p <- partitions) {
       val actualOffset = offsets(new TopicPartition(topic1, p)).right.get
       assertEquals(s"Actual offset for partition $topic1:$p must be equal to producer offset plus 1", producerOffsets(p) + 1, actualOffset)
     }
 
-    for (p <- 0 to 2) {
+    for (p <- partitions) {
       val error = offsets(new TopicPartition("topic999", p)).left.get
       assertTrue(s"Must return an error about non-existing partition: topic999:$p",
         error.toLowerCase.contains("topic not found")
@@ -145,18 +145,20 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
 
   @Test
   def oneTopicSomePartitionsExistingSomeNonExisting: Unit = {
-    val partitions = Set(10, 0, 11, 1, 12, 2, 13)
-    val producerOffsets = (0 to 2).map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
+    val existingPartitions = 0 to 2
+    val nonExistingPartitions = 10 to 13
+    val partitions = existingPartitions.toSet ++ nonExistingPartitions
+    val producerOffsets = existingPartitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
     val offsets = GetOffsetShell.getLastOffsets(brokerList,
       partitions.map(new TopicPartition(topic1, _)))
     assertEquals(s"Must have all offset entries: $offsets", partitions.size, offsets.size)
 
-    for (p <- 0 to 2) {
+    for (p <- existingPartitions) {
       val actualOffset = offsets(new TopicPartition(topic1, p)).right.get
       assertEquals(s"Actual offset for partition $topic1:$p must be equal to producer offset plus 1", producerOffsets(p) + 1, actualOffset)
     }
 
-    for (p <- 10 to 13) {
+    for (p <- nonExistingPartitions) {
       val error = offsets(new TopicPartition(topic1, p)).left.get
       assertTrue(s"Must return an error about non-existing partition: $topic1:$p",
         error.toLowerCase.contains("partition for topic not found")
@@ -168,9 +170,11 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
   @Test
   def manyTopicsSomePartitionsExistingSomeNonExisting: Unit = {
     val topics = Set(topic1, topic2)
-    val partitions = Set(10, 0, 11, 1, 12, 2, 13)
+    val existingPartitions = 0 to 2
+    val nonExistingPartitions = 10 to 13
+    val partitions = existingPartitions.toSet ++ nonExistingPartitions
     val producerOffsets: Map[String, IndexedSeq[Long]] =
-      topics.map(topic => topic -> (0 to 2).map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
+      topics.map(topic => topic -> existingPartitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
     val topicPartitions = for {
       topic <- topics
       partition <- partitions
@@ -180,12 +184,12 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
     for (topic <- topics) {
-      for (p <- 0 to 2) {
+      for (p <- existingPartitions) {
         val actualOffset = offsets(new TopicPartition(topic, p)).right.get
         assertEquals(s"Actual offset for partition $topic:$p must be equal to producer offset plus 1", producerOffsets(topic)(p) + 1, actualOffset)
       }
 
-      for (p <- 10 to 13) {
+      for (p <- nonExistingPartitions) {
         val error = offsets(new TopicPartition(topic, p)).left.get
         assertTrue(s"Must return an error about non-existing partition: $topic:$p",
           error.toLowerCase.contains("partition for topic not found")
@@ -193,6 +197,44 @@ class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
             && error.contains(p.toString))
       }
     }
+  }
+
+  @Test
+  def noTopicsSpecified: Unit = {
+    val topics = Set(topic1, topic2)
+    val partitions = 0 to 2
+    val producerOffsets: Map[String, IndexedSeq[Long]] =
+      topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
+    val offsets = GetOffsetShell.getLastOffsets(brokerList, Set())
+
+    assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
+
+    for (topic <- topics) {
+      for (p <- partitions) {
+        val actualOffset = offsets(new TopicPartition(topic, p)).right.get
+        assertEquals(s"Actual offset for partition $topic:$p must be equal to producer offset plus 1", producerOffsets(topic)(p) + 1, actualOffset)
+      }
+    }
+  }
+
+  @Test
+  def noTopicsSpecifiedIncludeInternalTopics: Unit = {
+    val topics = Set(topic1, topic2)
+    val partitions = 0 to 2
+    val producerOffsets: Map[String, IndexedSeq[Long]] =
+      topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
+    val offsets = GetOffsetShell.getLastOffsets(brokerList, Set(), false)
+
+    assertTrue(s"Must have offset entries for user topics plus internal topics: $offsets", offsets.size > topics.size * partitions.size)
+
+    for (topic <- topics) {
+      for (p <- partitions) {
+        val actualOffset = offsets(new TopicPartition(topic, p)).right.get
+        assertEquals(s"Actual offset for partition $topic:$p must be equal to producer offset plus 1", producerOffsets(topic)(p) + 1, actualOffset)
+      }
+    }
+
+    assertTrue("Contains an entry for consumer offsets topic partition 0", offsets.contains(new TopicPartition("__consumer_offsets", 0)))
   }
 
   private def sendRecordsLastOffsets(topic: String, partition: Int, number: Int): Long = {

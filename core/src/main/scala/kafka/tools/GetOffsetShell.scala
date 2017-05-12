@@ -177,11 +177,15 @@ object GetOffsetShell extends Logging {
     * no matter how many topics and partitions are given in the argument:
     * get available partitions and get last offsets for partitions.
     * @param bootstrapServers Bootstrap Kafka servers - a comma separated list as KafkaConsumer accepts.
-    * @param topicPartitions A set of topic partitions.
+    * @param topicPartitions A set of topic partitions. If empty, then offsets for all partitions of all available topics will be retrieved.
+    * @param excludeInternalTopics When the topic partitions argument is empty, exclude internal topics (like consumer offsets) from consideration.
     * @return A map of Either objects per each topic partition. If partition exists, then the Either Right entry contains a long offset.
     *         For a non-existing partition, the Either Left entry contains a string with the problem description.
+    * @throws IllegalArgumentException Bootstraps server is null, topic partitions is null.
     */
-  def getLastOffsets(bootstrapServers: String, topicPartitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
+  def getLastOffsets(bootstrapServers: String,
+                     topicPartitions: Set[TopicPartition],
+                     excludeInternalTopics: Boolean = true): Map[TopicPartition, Either[String, Long]] = {
     import collection.JavaConversions._
 
     require(bootstrapServers != null, "Bootstrap servers cannot be null")
@@ -194,7 +198,11 @@ object GetOffsetShell extends Logging {
     )
     val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(consumerConfig)
     val availableTopics: Map[String, List[PartitionInfo]] = consumer.listTopics().toMap.mapValues(asScalaBuffer(_).toList)
-    val (nonExistingPartitions,  existingPartitions) = extractExistingPartitions(topicPartitions, availableTopics)
+    val (nonExistingPartitions,  existingPartitions) =
+      if (topicPartitions.isEmpty)
+        (Map.empty, availablePartitions(availableTopics, excludeInternalTopics))
+      else
+        extractExistingPartitions(topicPartitions, availableTopics)
     val offsets: Map[TopicPartition, Long] = consumer.endOffsets(existingPartitions).mapValues(Long2long).toMap
     nonExistingPartitions ++ offsets.map { case (tp, offset) => tp -> Right(offset) }
   }
@@ -215,5 +223,19 @@ object GetOffsetShell extends Logging {
     val partitionsPair = topicsPair._2.partition(tp => !availableTopics(tp.topic()).exists(p => p.partition() == tp.partition()))
     val nonExistingPartitions = partitionsPair._1.map(tp => tp -> Left(s"Partition for topic not found: ${tp.topic()}:${tp.partition()}")).toMap
     (nonExistingTopics ++ nonExistingPartitions, partitionsPair._2)
+  }
+
+  private def availablePartitions(availableTopics: Map[String, List[PartitionInfo]],
+                                  excludeInternalTopics: Boolean): Set[TopicPartition] = {
+    val availablePartitions = (for {
+      (topic, pinfos) <- availableTopics
+      pinfo <- pinfos
+    } yield (new TopicPartition(topic, pinfo.partition()))).toSet
+
+    import kafka.common.Topic.InternalTopics
+    if (excludeInternalTopics)
+      availablePartitions.filterNot(tp => InternalTopics.contains(tp.topic()))
+    else
+      availablePartitions
   }
 }
