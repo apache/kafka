@@ -369,8 +369,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       true
 
     val producerIdAuthorized = if (produceRequest.isIdempotent)
-      // TODO: What are we authorizing? "" won't work and pids change
-      authorize(request.session, Write, new Resource(ProducerIdResource, ""))
+      authorize(request.session, Write, Resource.ProducerIdResource)
     else
       true
 
@@ -1411,7 +1410,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val initPidRequest = request.body[InitPidRequest]
     val transactionalId = initPidRequest.transactionalId
 
-    if (transactionalId == null || authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+    if (!authorize(request.session, Write, Resource.ProducerIdResource)) {
+      sendResponseMaybeThrottle(request, (throttleTime: Int) => new InitPidResponse(throttleTime, Errors.PRODUCER_ID_AUTHORIZATION_FAILED))
+    } else if (transactionalId == null || authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
       // Send response callback
       def sendResponseCallback(result: InitPidResult): Unit = {
         def createResponse(throttleTimeMs: Int): AbstractResponse = {
