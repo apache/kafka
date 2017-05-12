@@ -398,9 +398,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  val metricTags = Map(
-    "protocol" -> securityProtocol.name, "listener" -> listenerName.value, "networkProcessor" -> id.toString
-    ).asJava
+  val metricTags = SortedMap("listener" -> listenerName.value, "networkProcessor" -> id.toString).asJava
 
   newGauge("IdlePercent",
     new Gauge[Double] {
@@ -408,7 +406,8 @@ private[kafka] class Processor(val id: Int,
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
       }
     },
-    metricTags.asScala
+    // for compatibility, leaving this legacy metric tagged by networkProcessor only 
+    Map("networkProcessor" -> id.toString)
   )
 
   private val selector = new KSelector(

@@ -420,16 +420,33 @@ class SocketServerTest extends JUnitSuite {
   }
 
   @Test
-  def testProcessorMetricTags(): Unit = {
-    val metricsNames = YammerMetrics
+  def testProcessorMetricsTags(): Unit = {
+    // KafkaMetric metrics tagged with listener
+    val kafkaMetricNames = metrics
+      .metrics
+      .keySet.asScala
+      .filter(m => !m.tags.isEmpty)
+
+    assertFalse(kafkaMetricNames.isEmpty)
+    val expectedListeners = Set("PLAINTEXT","TRACE")
+    kafkaMetricNames.foreach { kafkaMetricName => {
+        System.err.println(kafkaMetricName.tags)
+        assert(expectedListeners.contains(kafkaMetricName.tags.get("listener")))
+      }
+    }
+
+    // legacy metrics not tagged
+    val yammerMetricsNames = YammerMetrics
       .defaultRegistry
       .allMetrics.asScala
       .filterKeys(k => k.getType.equals("Processor"))
       .collect { case (k, metric: Gauge[_]) => k }
 
-    assertEquals(2, metricsNames.size)
-    assert(metricsNames.head.getMBeanName.endsWith("protocol=PLAINTEXT,listener=PLAINTEXT,networkProcessor=0"))
-    assert(metricsNames.last.getMBeanName.endsWith("protocol=TRACE,listener=TRACE,networkProcessor=1"))
+    assertFalse(yammerMetricsNames.isEmpty)
+    yammerMetricsNames.foreach { yammerMetricName => {
+        assertFalse(yammerMetricName.getMBeanName.contains("listener="))
+      }
+    }
   }
 
 }
