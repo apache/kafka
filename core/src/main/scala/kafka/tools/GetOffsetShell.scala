@@ -36,15 +36,15 @@ object GetOffsetShell extends Logging {
                            .withRequiredArg
                            .describedAs("hostname:port,...,hostname:port")
                            .ofType(classOf[String])
-    //TODO Rename to 'topics' to be consistent with 'partitions'
-    val topicOpt = parser.accepts("topic", "The list of topics to get offsets from. If not specified, it will find offsets for all topics.")
+    //TODO Rename to 'topics' to be consistent with 'partitions'. Keep 'topic' for backward compatibility, but display a warning when user specified it.
+    val topicOpt = parser.accepts("topic", "The list of topics to get offsets from. If not specified, GetOffsetShell will find offsets for all topics.")
                            .withRequiredArg
                            .describedAs("topic1,...,topicN")
                            .ofType(classOf[String])
                            .defaultsTo("")
     //TODO Don't hardcode the tool name
     val includeInternalTopicsOpt = parser.accepts("include-internal-topics", "By default, when the list if topics is not given, GetOffsetShell excludes internal topics like consumer offsets. This options forces GetOffsetShell to include them.")
-    val partitionOpt = parser.accepts("partitions", "The list of partition ids. If not specified, it will find offsets for all partitions.")
+    val partitionOpt = parser.accepts("partitions", "The list of partition ids. If not specified, GetOffsetShell will find offsets for all partitions.")
                            .withRequiredArg
                            .describedAs("p1,...pM")
                            .ofType(classOf[String])
@@ -58,11 +58,13 @@ object GetOffsetShell extends Logging {
                            .withRequiredArg
                            .describedAs("property1=value1,...")
                            .ofType(classOf[String])
+    //TODO Display a warning when user specified it
     val nOffsetsOpt = parser.accepts("offsets", "DEPRECATED AND IGNORED: Always one offset is returned for each partition. Number of offsets returned")
                            .withRequiredArg
                            .describedAs("count")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
+    //TODO Display a warning when user specified it
     val maxWaitMsOpt = parser.accepts("max-wait-ms", s"DEPRECATED AND IGNORED: Use ${consumerPropertyOpt} and pass ${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG} instead. The max amount of time each fetch request waits.")
                            .withRequiredArg
                            .describedAs("ms")
