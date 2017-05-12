@@ -182,6 +182,10 @@ public class StreamsConfig extends AbstractConfig {
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
     private static final String RECONNECT_BACKOFF_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC;
 
+    /** {@code reconnect.backoff.max} */
+    public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
+    private static final String RECONNECT_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC;
+
     /** {@code replication.factor} */
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "The replication factor for change log topics and repartition topics created by the stream processing application.";
@@ -387,6 +391,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     RECONNECT_BACKOFF_MS_DOC)
+            .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    50L,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    RECONNECT_BACKOFF_MAX_MS_DOC)
             .define(SEND_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     128 * 1024,

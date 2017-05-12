@@ -126,6 +126,7 @@ public class StreamsKafkaClient {
             streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
             MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
             streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
+            streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
             streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
             streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
             streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),

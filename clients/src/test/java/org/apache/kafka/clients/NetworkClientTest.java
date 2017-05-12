@@ -54,6 +54,7 @@ public class NetworkClientTest {
     protected final Cluster cluster = TestUtils.singletonCluster("test", nodeId);
     protected final Node node = cluster.nodes().get(0);
     protected final long reconnectBackoffMsTest = 10 * 1000;
+    protected final long reconnectBackoffMaxTest = 10 * 1000;
     protected final NetworkClient client = createNetworkClient();
 
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
@@ -61,18 +62,20 @@ public class NetworkClientTest {
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient() {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, true, new ApiVersions());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
-                "mock-static", Integer.MAX_VALUE, 0, 64 * 1024, 64 * 1024, requestTimeoutMs,
+                "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, requestTimeoutMs,
                 time, true, new ApiVersions());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE, reconnectBackoffMsTest,
+        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+                reconnectBackoffMsTest, reconnectBackoffMaxTest,
                 64 * 1024, 64 * 1024, requestTimeoutMs, time, false, new ApiVersions());
     }
 
