@@ -338,7 +338,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def activeProducers = pendingTransactionalOffsetCommits.keySet
 
   def hasPendingOffsetCommitsFromProducer(producerId: Long) =
-    pendingTransactionalOffsetCommits.getOrElse(producerId, Map.empty[TopicPartition, OffsetAndMetadata]).nonEmpty
+    pendingTransactionalOffsetCommits.contains(producerId)
 
   def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
