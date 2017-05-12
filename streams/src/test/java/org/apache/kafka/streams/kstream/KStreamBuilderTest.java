@@ -139,6 +139,19 @@ public class KStreamBuilderTest {
     }
 
     @Test
+    public void testNewStoreName() {
+        assertEquals("X-STATE-STORE-0000000000", builder.newStoreName("X-"));
+        assertEquals("Y-STATE-STORE-0000000001", builder.newStoreName("Y-"));
+        assertEquals("Z-STATE-STORE-0000000002", builder.newStoreName("Z-"));
+
+        KStreamBuilder newBuilder = new KStreamBuilder();
+
+        assertEquals("X-STATE-STORE-0000000000", newBuilder.newStoreName("X-"));
+        assertEquals("Y-STATE-STORE-0000000001", newBuilder.newStoreName("Y-"));
+        assertEquals("Z-STATE-STORE-0000000002", newBuilder.newStoreName("Z-"));
+    }
+
+    @Test
     public void testMerge() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";
