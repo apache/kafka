@@ -27,7 +27,7 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
     assertEquals("Size of leaders map", 2, leaders.size)
     val p0Leader = leaders(0)
     val p1Leader = leaders(1)
-    assertNotEquals("Partitions 0 and 1 must have different leaders", p0Leader, p1Leader)
+    assertNotEquals("Partitions 0 and 1 are supposed to have different leaders", p0Leader, p1Leader)
   }
 
   @After
@@ -37,8 +37,8 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
 
   @Test
   def twoReplicatedPartitions: Unit = {
-    val producerP0Offset = sendRecords(topic1, 0, 10).last.offset
-    val producerP1Offset = sendRecords(topic1, 1, 20).last.offset
+    val producerP0Offset = sendRecordsLastOffsets(topic1, 0, 10)
+    val producerP1Offset = sendRecordsLastOffsets(topic1, 1, 20)
     val offsets = GetOffsetShell.getLastOffsets(brokerList,
       Set(
         new TopicPartition(topic1, 0),
@@ -49,6 +49,10 @@ class GetOffsetShellReplIntegrationTest extends IntegrationTestHarness {
     assertEquals("Actual offset for partition 0 must be equal to producer offset plus 1", producerP0Offset + 1, actualP0Offset)
     val actualP1Offset = offsets(new TopicPartition(topic1, 1)).right.get
     assertEquals("Actual offset for partition 1 must be equal to producer offset plus 1", producerP1Offset + 1, actualP1Offset)
+  }
+
+  private def sendRecordsLastOffsets(topic: String, partition: Int, number: Int): Long = {
+    sendRecords(topic, partition, number).last.offset()
   }
 
   private def sendRecords(topic: String, partition: Int, number: Int): Seq[RecordMetadata] = {
