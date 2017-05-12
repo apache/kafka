@@ -613,8 +613,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           CoreUtils.swallow(zkUtils.close())
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
-        if (transactionCoordinator != null)
-          CoreUtils.swallow(transactionCoordinator.shutdown())
 
         brokerState.newState(NotRunning)
 
