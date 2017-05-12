@@ -444,7 +444,6 @@ class TransactionCoordinator(brokerId: Int,
     pidManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
-    txnMarkerPurgatory.shutdown()
     info("Shutdown complete.")
   }
 }
