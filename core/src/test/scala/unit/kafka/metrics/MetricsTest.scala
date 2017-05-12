@@ -34,6 +34,7 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import scala.util.matching.Regex
 import kafka.consumer.{ConsumerConfig, ZookeeperConsumerConnector}
+import kafka.log.LogConfig
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
@@ -113,7 +114,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val bytesIn = s"${BrokerTopicStats.BytesInPerSec},topic=$topic"
     val bytesOut = s"${BrokerTopicStats.BytesOutPerSec},topic=$topic"
 
-    createTopic(zkUtils, topic, 1, numNodes, servers)
+    val topicConfig = new Properties()
+    topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
+    createTopic(zkUtils, topic, 1, numNodes, servers, topicConfig)
     // Produce a few messages to create the metrics
     TestUtils.produceMessages(servers, topic, nMessages)
 
