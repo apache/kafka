@@ -89,7 +89,7 @@ private[transaction] object TransactionMetadata {
   def isValidTransition(oldState: TransactionState, newState: TransactionState): Boolean = TransactionMetadata.validPreviousStates(newState).contains(oldState)
 
   private val validPreviousStates: Map[TransactionState, Set[TransactionState]] =
-    Map(Empty -> Set(Empty),
+    Map(Empty -> Set(Empty, CompleteCommit, CompleteAbort),
       Ongoing -> Set(Ongoing, Empty, CompleteCommit, CompleteAbort),
       PrepareCommit -> Set(Ongoing),
       PrepareAbort -> Set(Ongoing),
@@ -143,7 +143,8 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   }
 
   def prepareNoTransit(): TransactionMetadataTransition =
-    prepareTransitionTo(state, producerEpoch, txnTimeoutMs, immutable.Set.empty[TopicPartition], txnStartTimestamp, txnLastUpdateTimestamp)
+    // do not call transitTo as it will set the pending state
+    TransactionMetadataTransition(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
 
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
                                     updateTimestamp: Long): TransactionMetadataTransition = {
@@ -175,6 +176,15 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   def prepareComplete(updateTimestamp: Long): TransactionMetadataTransition = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
     prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, topicPartitions.toSet, txnStartTimestamp, updateTimestamp)
+  }
+
+  // visible for testing only
+  def copy(): TransactionMetadata = {
+    val cloned = new TransactionMetadata(producerId, producerEpoch, txnTimeoutMs, state,
+      mutable.Set.empty ++ topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
+    cloned.pendingState = pendingState
+
+    cloned
   }
 
   private def prepareTransitionTo(newState: TransactionState,
@@ -216,7 +226,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
     if (toState != newMetadata.txnState ||
       producerId != newMetadata.producerId ||
-      txnLastUpdateTimestamp <= newMetadata.txnLastUpdateTimestamp) {
+      txnLastUpdateTimestamp < newMetadata.txnLastUpdateTimestamp) {
 
       false
     } else {
@@ -263,7 +273,6 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
         case CompleteAbort | CompleteCommit => // from write markers
           if (producerEpoch != newMetadata.producerEpoch ||
-            newMetadata.topicPartitions.nonEmpty ||
             txnTimeoutMs != newMetadata.txnTimeoutMs ||
             newMetadata.txnStartTimestamp == -1) {
 

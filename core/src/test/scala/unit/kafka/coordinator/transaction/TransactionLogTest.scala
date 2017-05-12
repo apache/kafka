@@ -43,7 +43,7 @@ class TransactionLogTest extends JUnitSuite {
     txnMetadata.addPartitions(topicPartitions)
 
     intercept[IllegalStateException] {
-      TransactionLog.valueToBytes(txnMetadata)
+      TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
     }
   }
 
@@ -71,7 +71,7 @@ class TransactionLogTest extends JUnitSuite {
         txnMetadata.addPartitions(topicPartitions)
 
       val keyBytes = TransactionLog.keyToBytes(transactionalId)
-      val valueBytes = TransactionLog.valueToBytes(txnMetadata)
+      val valueBytes = TransactionLog.valueToBytes(txnMetadata.prepareNoTransit())
 
       new SimpleRecord(keyBytes, valueBytes)
     }.toSeq
