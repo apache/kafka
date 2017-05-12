@@ -20,7 +20,7 @@ package kafka.metrics
 import java.util.Properties
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Metric, MetricName, MetricPredicate}
+import com.yammer.metrics.core.{Meter, Metric, MetricName, MetricPredicate}
 import org.junit.{After, Test}
 import org.junit.Assert._
 import kafka.integration.KafkaServerTestHarness
@@ -109,6 +109,46 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     getMessages(topicMessageStreams1, nMessages)
 
     zkConsumerConnector1.shutdown()
+  }
+
+  @Test
+  def testBrokerTopicMetricsBytesInOut() {
+    val replicationBytesIn = BrokerTopicStats.ReplicationBytesInPerSec
+    val replicationBytesOut = BrokerTopicStats.ReplicationBytesOutPerSec
+    val bytesIn = BrokerTopicStats.BytesInPerSec + ",topic=" + topic
+    val bytesOut = BrokerTopicStats.BytesOutPerSec + ",topic=" + topic
+
+    createTopic(zkUtils, topic, 1, numNodes, servers)
+    // Produce a few messages to create the metrics
+    TestUtils.produceMessages(servers, topic, nMessages)
+
+    val initialReplicationBytesIn = getMeterCount(replicationBytesIn)
+    val initialReplicationBytesOut = getMeterCount(replicationBytesOut)
+    val initialBytesIn = getMeterCount(bytesIn)
+    val initialBytesOut = getMeterCount(bytesOut)
+
+    // Produce a few messages to make the metrics tick
+    TestUtils.produceMessages(servers, topic, nMessages)
+
+    assertTrue(getMeterCount(replicationBytesIn) > initialReplicationBytesIn)
+    assertTrue(getMeterCount(replicationBytesOut) > initialReplicationBytesOut)
+    assertTrue(getMeterCount(bytesIn) > initialBytesIn)
+    // BytesOut doesn't include replication, so it shouldn't have changed
+    assertEquals(initialBytesOut, getMeterCount(bytesOut))
+
+    // Consume messages to make bytesOut tick
+    TestUtils.consumeMessages(servers, topic, nMessages)
+
+    assertTrue(getMeterCount(bytesOut) > initialBytesOut)
+  }
+
+  private def getMeterCount(metricName: String): Long = {
+    Metrics.defaultRegistry.allMetrics.asScala
+      .filterKeys(k => k.getMBeanName.endsWith(metricName))
+      .headOption
+      .getOrElse(fail(s"Unable to find metric ${metricName}"))
+      ._2.asInstanceOf[Meter]
+      .count
   }
 
   private def checkTopicMetricsExists(topic: String): Boolean = {
