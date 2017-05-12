@@ -251,7 +251,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId, txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
   }
 
-  def addTxnMarkersToBrokerQueue(transactionalId: String, pid: Long, epoch: Short, result: TransactionResult, coordinatorEpoch: Int, topicPartitions: immutable.Set[TopicPartition]): Unit = {
+  def addTxnMarkersToBrokerQueue(transactionalId: String, producerId: Long, producerEpoch: Short,
+                                 result: TransactionResult, coordinatorEpoch: Int,
+                                 topicPartitions: immutable.Set[TopicPartition]): Unit = {
     val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
     val partitionsByDestination: immutable.Map[Node, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
       var brokerNode: Option[Node] = None
@@ -269,7 +271,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     }
 
     for ((broker: Node, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
-      val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, new TxnMarkerEntry(pid, epoch, coordinatorEpoch, result, topicPartitions.toList.asJava))
+      val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
+      val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
       addMarkersForBroker(broker, txnTopicPartition, txnIdAndMarker)
     }
 

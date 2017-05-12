@@ -95,8 +95,8 @@ class TransactionCoordinator(brokerId: Int,
                            responseCallback: InitProducerIdCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty) {
       // if the transactional id is not specified, then always blindly accept the request
-      // and return a new pid from the pid manager
-      val producerId = producerIdManager.nextProducerId()
+      // and return a new producerId from the producerId manager
+      val producerId = producerIdManager.generateNextProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
     } else if (!txnManager.isCoordinatorFor(transactionalId)) {
       // check if it is the assigned coordinator for the transactional id
@@ -107,10 +107,10 @@ class TransactionCoordinator(brokerId: Int,
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
-      // only try to get a new pid and update the cache if the transactional id is unknown
+      // only try to get a new producerId and update the cache if the transactional id is unknown
       val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
         case None =>
-          val producerId = producerIdManager.nextProducerId()
+          val producerId = producerIdManager.generateNextProducerId()
           val now = time.milliseconds()
           val createdMetadata = new TransactionMetadata(producerId = producerId,
             producerEpoch = 0,
@@ -144,8 +144,8 @@ class TransactionCoordinator(brokerId: Int,
       }
 
       result match {
-        case Left(pidResult) =>
-          responseCallback(pidResult)
+        case Left(producerIdResult) =>
+          responseCallback(producerIdResult)
 
         case Right((coordinatorEpoch, newMetadata)) =>
           if (newMetadata.txnState == Ongoing) {
@@ -214,8 +214,8 @@ class TransactionCoordinator(brokerId: Int,
 
 
   def handleAddPartitionsToTransaction(transactionalId: String,
-                                       pid: Long,
-                                       epoch: Short,
+                                       producerId: Long,
+                                       producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback): Unit = {
     val error = validateTransactionalId(transactionalId)
@@ -223,10 +223,10 @@ class TransactionCoordinator(brokerId: Int,
       responseCallback(error)
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
-      // if there is no such metadata treat it as invalid pid mapping error.
+      // if there is no such metadata treat it as invalid producerId mapping error.
       val result: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
         case None =>
-          Left(Errors.INVALID_PID_MAPPING)
+          Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
         case Some(epochAndMetadata) =>
           val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
@@ -234,9 +234,9 @@ class TransactionCoordinator(brokerId: Int,
 
           // generate the new transaction metadata with added partitions
           txnMetadata synchronized {
-            if (txnMetadata.producerId != pid) {
-              Left(Errors.INVALID_PID_MAPPING)
-            } else if (txnMetadata.producerEpoch != epoch) {
+            if (txnMetadata.producerId != producerId) {
+              Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+            } else if (txnMetadata.producerEpoch != producerEpoch) {
               Left(Errors.INVALID_PRODUCER_EPOCH)
             } else if (txnMetadata.pendingTransitionInProgress) {
               // return a retriable exception to let the client backoff and retry
@@ -272,8 +272,8 @@ class TransactionCoordinator(brokerId: Int,
   }
 
   def handleEndTransaction(transactionalId: String,
-                           pid: Long,
-                           epoch: Short,
+                           producerId: Long,
+                           producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback): Unit = {
     val error = validateTransactionalId(transactionalId)
@@ -282,16 +282,16 @@ class TransactionCoordinator(brokerId: Int,
     else {
       val preAppendResult: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
         case None =>
-          Left(Errors.INVALID_PID_MAPPING)
+          Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
         case Some(epochAndTxnMetadata) =>
           val txnMetadata = epochAndTxnMetadata.transactionMetadata
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
           txnMetadata synchronized {
-            if (txnMetadata.producerId != pid)
-              Left(Errors.INVALID_PID_MAPPING)
-            else if (txnMetadata.producerEpoch != epoch)
+            if (txnMetadata.producerId != producerId)
+              Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+            else if (txnMetadata.producerEpoch != producerEpoch)
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress)
               Left(Errors.CONCURRENT_TRANSACTIONS)
@@ -341,9 +341,9 @@ class TransactionCoordinator(brokerId: Int,
 
                     val txnMetadata = epochAndMetadata.transactionMetadata
                     txnMetadata synchronized {
-                      if (txnMetadata.producerId != pid)
-                        Left(Errors.INVALID_PID_MAPPING)
-                      else if (txnMetadata.producerEpoch != epoch)
+                      if (txnMetadata.producerId != producerId)
+                        Left(Errors.INVALID_PRODUCER_ID_MAPPING)
+                      else if (txnMetadata.producerEpoch != producerEpoch)
                         Left(Errors.INVALID_PRODUCER_EPOCH)
                       else if (txnMetadata.pendingTransitionInProgress)
                         Left(Errors.CONCURRENT_TRANSACTIONS)

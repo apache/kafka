@@ -616,7 +616,7 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
-            } else if (error == Errors.INVALID_PID_MAPPING) {
+            } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING) {
                 fatal(new KafkaException(error.exception()));
             } else if (error == Errors.INVALID_TXN_STATE) {
                 fatal(new KafkaException(error.exception()));
