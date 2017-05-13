@@ -91,14 +91,33 @@ public class Worker {
         this.time = time;
         this.modules = modules;
         this.config = config;
-        this.defaultKeyConverter = config.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
+        // Converters are required properties, thus getClass won't return null.
+        this.defaultKeyConverter = modules.newConverter(
+                config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
         this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.defaultValueConverter = config.getConfiguredInstance(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
+        this.defaultValueConverter = modules.newConverter(
+                config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
         this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
-        this.internalKeyConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.internalKeyConverter.configure(config.originalsWithPrefix("internal.key.converter."), true);
-        this.internalValueConverter = config.getConfiguredInstance(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Converter.class);
-        this.internalValueConverter.configure(config.originalsWithPrefix("internal.value.converter."), false);
+        // Same, internal converters are required properties, thus getClass won't return null.
+        this.internalKeyConverter = modules.newConverter(
+                config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
+        this.internalKeyConverter.configure(
+                config.originalsWithPrefix("internal.key.converter."),
+                true);
+        this.internalValueConverter = modules.newConverter(
+                config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName(),
+                config
+        );
+        this.internalValueConverter.configure(
+                config.originalsWithPrefix("internal.value.converter."),
+                false
+        );
 
         this.offsetBackingStore = offsetBackingStore;
         this.offsetBackingStore.configure(config);
@@ -185,11 +204,10 @@ public class Worker {
             final Connector connector = modules.newConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
-            ClassLoader connectorLoader = modules.getDelegatingLoader().connectorLoader(connector);
-            ClassLoader save = compareAndSwapLoaders(connectorLoader);
+            ClassLoader save = modules.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
             workerConnector.transitionTo(initialState);
-            compareAndSwapLoaders(save);
+            Modules.compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start connector {}", connName, t);
             statusListener.onFailure(connName, t);
@@ -320,13 +338,16 @@ public class Worker {
         try {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            ClassLoader connectorLoader = modules.getDelegatingLoader().connectorLoader(connType);
-            ClassLoader save = compareAndSwapLoaders(connectorLoader);
+            ClassLoader connectorLoader = modules.delegatingLoader().connectorLoader(connType);
+            ClassLoader save = Modules.compareAndSwapLoaders(connectorLoader);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
             final Task task = modules.newTask(taskClass);
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
+            // By maintaining connector's specific class loader for this thread here, we first
+            // search for converters within the connector dependencies, and if not found the
+            // module class loader delegates loading to the delegating classloader.
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
             if (keyConverter != null)
                 keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
@@ -340,7 +361,7 @@ public class Worker {
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
             workerTask.initialize(taskConfig);
-            compareAndSwapLoaders(save);
+            Modules.compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
             statusListener.onFailure(id, t);
@@ -471,7 +492,7 @@ public class Worker {
         return internalValueConverter;
     }
 
-    public Modules getConnectorFactory() {
+    public Modules getModules() {
         return modules;
     }
 
@@ -485,10 +506,9 @@ public class Worker {
         WorkerConnector connector = connectors.get(connName);
 
         Connector connectorObject = connector.connector();
-        ClassLoader connectorLoader = modules.getDelegatingLoader()
-                .connectorLoader(connectorObject);
-
-        ClassLoader save = compareAndSwapLoaders(connectorLoader);
+        ClassLoader save = modules.compareAndSwapLoaders(connectorObject);
+        // The following branches imply that connector object might be null but its tasks might
+        // be still around. TODO: Reconsider this assumption and refactor.
         if (connector != null)
             connector.transitionTo(state);
 
@@ -496,16 +516,7 @@ public class Worker {
             if (taskEntry.getKey().connector().equals(connName))
                 taskEntry.getValue().transitionTo(state);
         }
-
-        compareAndSwapLoaders(save);
-    }
-
-    private ClassLoader compareAndSwapLoaders(ClassLoader loader) {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (!current.equals(loader)) {
-            Thread.currentThread().setContextClassLoader(loader);
-        }
-        return current;
+        Modules.compareAndSwapLoaders(save);
     }
 
 }

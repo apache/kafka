@@ -60,8 +60,8 @@ public class ConnectDistributed {
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
         Time time = Time.SYSTEM;
+        Modules modules = new Modules(workerProps);
         DistributedConfig config = new DistributedConfig(workerProps);
-        Modules modules = new Modules(config);
         modules.init();
 
         RestServer rest = new RestServer(config);

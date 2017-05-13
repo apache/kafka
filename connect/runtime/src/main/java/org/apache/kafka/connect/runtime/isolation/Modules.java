@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
@@ -29,6 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -41,10 +44,12 @@ public class Modules {
     private final Map<ModuleClassLoader, URL[]> loaders;
     private final DelegatingClassLoader delegatingLoader;
 
-    public Modules(WorkerConfig workerConfig) {
+    public Modules(Map<String, String> props) {
         loaders = new HashMap<>();
-        List<String> paths = workerConfig.getList(WorkerConfig.MODULE_PATH_CONFIG);
-        moduleTopPaths = paths == null ? new ArrayList<String>() : paths;
+        String pathList = props.get(WorkerConfig.MODULE_PATH_CONFIG);
+        moduleTopPaths = pathList == null
+                         ? new ArrayList<String>()
+                         : Arrays.asList(pathList.trim().split("\\s*,\\s*", -1));
         delegatingLoader = new DelegatingClassLoader(moduleTopPaths);
     }
 
@@ -52,7 +57,7 @@ public class Modules {
         delegatingLoader.initLoaders();
     }
 
-    public DelegatingClassLoader getDelegatingLoader() {
+    public DelegatingClassLoader delegatingLoader() {
         return delegatingLoader;
     }
 
@@ -121,7 +126,26 @@ public class Modules {
     }
 
     public Converter newConverter(String converterClassOrAlias) {
-        return null;
+        return newConverter(converterClassOrAlias, null);
+    }
+
+    public Converter newConverter(String converterClassOrAlias, AbstractConfig config) {
+        Class<? extends Converter> klass;
+        try {
+            klass = moduleClass(
+                    delegatingLoader,
+                    converterClassOrAlias,
+                    Converter.class
+            );
+        } catch (ClassNotFoundException e) {
+            throw new ConnectException(
+                    "Failed to find any class that implements Converter and which name matches "
+                            + converterClassOrAlias
+                            + ", available connectors are: "
+                            + moduleNames(delegatingLoader.converters())
+            );
+        }
+        return config != null ? newConfiguredModule(config, klass) : newModule(klass);
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
@@ -136,6 +160,14 @@ public class Modules {
         } catch (Throwable t) {
             throw new ConnectException("Instantiation error", t);
         }
+    }
+
+    protected static <T> T newConfiguredModule(AbstractConfig config, Class<T> klass) {
+        T module = Utils.newInstance(klass);
+        if (module instanceof Configurable) {
+            ((Configurable) module).configure(config.originals());
+        }
+        return module;
     }
 
     @SuppressWarnings("unchecked")
@@ -155,4 +187,26 @@ public class Modules {
                 + " does not extend " + moduleClass.getSimpleName()
         );
     }
+
+    public ClassLoader compareAndSwapWithDelegatingLoader() {
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+        if (!current.equals(delegatingLoader)) {
+            Thread.currentThread().setContextClassLoader(delegatingLoader);
+        }
+        return current;
+    }
+
+    public ClassLoader compareAndSwapLoaders(Connector connector) {
+        ClassLoader connectorLoader = delegatingLoader.connectorLoader(connector);
+        return compareAndSwapLoaders(connectorLoader);
+    }
+
+    public static final ClassLoader compareAndSwapLoaders(ClassLoader loader) {
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+        if (!current.equals(loader)) {
+            Thread.currentThread().setContextClassLoader(loader);
+        }
+        return current;
+    }
+
 }

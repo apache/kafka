@@ -66,9 +66,13 @@ public class ConnectStandalone {
                 Utils.propsToStringMap(Utils.loadProps(workerPropsFile)) : Collections.<String, String>emptyMap();
 
         Time time = Time.SYSTEM;
-        StandaloneConfig config = new StandaloneConfig(workerProps);
-        Modules modules = new Modules(config);
+        Modules modules = new Modules(workerProps);
         modules.init();
+        ClassLoader save = Thread.currentThread().getContextClassLoader();
+        DelegatingClassLoader loader = modules.delegatingLoader();
+        Thread.currentThread().setContextClassLoader(loader);
+        StandaloneConfig config = new StandaloneConfig(workerProps);
+        Thread.currentThread().setContextClassLoader(save);
 
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();
@@ -92,8 +96,8 @@ public class ConnectStandalone {
                             log.info("Created connector {}", info.result().name());
                     }
                 });
-                DelegatingClassLoader loader = modules.getDelegatingLoader();
-                ClassLoader save = Thread.currentThread().getContextClassLoader();
+                loader = modules.delegatingLoader();
+                save = Thread.currentThread().getContextClassLoader();
                 Thread.currentThread().setContextClassLoader(loader);
                 herder.putConnectorConfig(
                         connectorProps.get(ConnectorConfig.NAME_CONFIG),
