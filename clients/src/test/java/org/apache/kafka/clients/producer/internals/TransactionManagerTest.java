@@ -552,7 +552,6 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // get pid.
 
         assertTrue(transactionManager.hasProducerId());
-
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
