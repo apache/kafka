@@ -32,7 +32,6 @@ object GetOffsetShell extends Logging {
   private final val TOOL_NAME = this.getClass.getSimpleName.replace("$", "")
 
   def main(args: Array[String]): Unit = {
-    //TODO Check ConsoleConsumer on where to add logging statements
     val parser = new OptionParser
     val bootstrapServersOpt = parser.accepts("bootstrap-servers", "REQUIRED: The list of servers to connect to.")
       .withRequiredArg
@@ -103,8 +102,8 @@ object GetOffsetShell extends Logging {
       System.err.println(s"Warning: option $maxWaitMsOpt is deprecated and ignored. It may be removed in the future. As a replacement, use $consumerPropertyOpt option and pass '${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG}' property.")
     }
 
-    val brokerList = if (options.has(bootstrapServersOpt)) options.valueOf(bootstrapServersOpt) else options.valueOf(brokerListOpt)
-    ToolsUtils.validatePortOrDie(parser, brokerList)
+    val bootstrapServers = if (options.has(bootstrapServersOpt)) options.valueOf(bootstrapServersOpt) else options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser, bootstrapServers)
     val topicList = if (options.has(topicsOpt)) options.valueOf(topicsOpt) else options.valueOf(topicOpt)
     val includeInternalTopics = options.has(includeInternalTopicsOpt)
     val partitionList = options.valueOf(partitionsOpt)
@@ -116,8 +115,18 @@ object GetOffsetShell extends Logging {
 
     val topics = CoreUtils.parseCsvList(topicList).toSet
     val partitions = CoreUtils.parseCsvList(partitionList).map(_.toInt).toSet
+
+    if (isDebugEnabled) {
+      debug(s"Bootstrap servers: $bootstrapServers")
+      debug(s"Topics: $topics")
+      debug(s"Include internal topics: $includeInternalTopics")
+      debug(s"Partitions: $partitions")
+      debug(s"Timestamp: $timestamp")
+      debug(s"Extra consumer properties: $extraConsumerProps")
+    }
+
    //TODO Add support for -2(earliest) and other time values
-    val offsets = getOffsets(brokerList, topics, partitions, timestamp, includeInternalTopics)
+    val offsets = getOffsets(bootstrapServers, topics, partitions, timestamp, includeInternalTopics)
     val report = offsets
       .toList.sortBy { case (tp, _) => (tp.topic, tp.partition) }
       .map {
