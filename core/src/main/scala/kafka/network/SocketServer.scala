@@ -68,12 +68,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
 
-  private val allMetricNames = (0 until totalProcessorThreads).map { i =>
-    val tags = new util.HashMap[String, String]()
-    tags.put("networkProcessor", i.toString)
-    metrics.metricName("io-wait-ratio", "socket-server-metrics", tags)
-  }
-
   /**
    * Start the socket server
    */
@@ -107,7 +101,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        def value = allMetricNames.map { metricName =>
+        val allIoWaitRatioMetricNames = processors.map { p => 
+          metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+        }
+
+        def value = allIoWaitRatioMetricNames.map { metricName =>
           Option(metrics.metric(metricName)).fold(0.0)(_.value)
         }.sum / totalProcessorThreads
       }
@@ -400,7 +398,7 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val metricTags = Map("networkProcessor" -> id.toString).asJava
+  val metricTags = SortedMap("listener" -> listenerName.value, "networkProcessor" -> id.toString).asJava
 
   newGauge("IdlePercent",
     new Gauge[Double] {
@@ -408,7 +406,8 @@ private[kafka] class Processor(val id: Int,
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
       }
     },
-    metricTags.asScala
+    // for compatibility, leaving this legacy metric tagged by networkProcessor only 
+    Map("networkProcessor" -> id.toString)
   )
 
   private val selector = new KSelector(
