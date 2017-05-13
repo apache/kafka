@@ -688,7 +688,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (transactionManager == null)
             return;
 
-        if (transactionManager.isTransactional() && !transactionManager.hasPid())
+        if (transactionManager.isTransactional() && !transactionManager.hasProducerId())
             throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions when transactions are enabled.");
 
         if (transactionManager.isFenced())

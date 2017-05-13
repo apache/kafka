@@ -879,12 +879,12 @@ public class RequestResponseTest {
         return new DeleteTopicsResponse(errors);
     }
 
-    private InitPidRequest createInitPidRequest() {
-        return new InitPidRequest.Builder(null, 100).build();
+    private InitProducerIdRequest createInitPidRequest() {
+        return new InitProducerIdRequest.Builder(null, 100).build();
     }
 
-    private InitPidResponse createInitPidResponse() {
-        return new InitPidResponse(0, Errors.NONE, 3332, (short) 3);
+    private InitProducerIdResponse createInitPidResponse() {
+        return new InitProducerIdResponse(0, Errors.NONE, 3332, (short) 3);
     }
 
 

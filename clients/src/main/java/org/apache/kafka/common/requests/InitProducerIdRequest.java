@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class InitPidRequest extends AbstractRequest {
+public class InitProducerIdRequest extends AbstractRequest {
     public static final int NO_TRANSACTION_TIMEOUT_MS = Integer.MAX_VALUE;
 
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
@@ -31,7 +31,7 @@ public class InitPidRequest extends AbstractRequest {
     private final String transactionalId;
     private final int transactionTimeoutMs;
 
-    public static class Builder extends AbstractRequest.Builder<InitPidRequest> {
+    public static class Builder extends AbstractRequest.Builder<InitProducerIdRequest> {
         private final String transactionalId;
         private final int transactionTimeoutMs;
 
@@ -53,24 +53,24 @@ public class InitPidRequest extends AbstractRequest {
         }
 
         @Override
-        public InitPidRequest build(short version) {
-            return new InitPidRequest(version, transactionalId, transactionTimeoutMs);
+        public InitProducerIdRequest build(short version) {
+            return new InitProducerIdRequest(version, transactionalId, transactionTimeoutMs);
         }
 
         @Override
         public String toString() {
-            return "(type=InitPidRequest, transactionalId=" + transactionalId + ", transactionTimeoutMs=" +
+            return "(type=InitProducerIdRequest, transactionalId=" + transactionalId + ", transactionTimeoutMs=" +
                     transactionTimeoutMs + ")";
         }
     }
 
-    public InitPidRequest(Struct struct, short version) {
+    public InitProducerIdRequest(Struct struct, short version) {
         super(version);
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
         this.transactionTimeoutMs = struct.getInt(TRANSACTION_TIMEOUT_KEY_NAME);
     }
 
-    private InitPidRequest(short version, String transactionalId, int transactionTimeoutMs) {
+    private InitProducerIdRequest(short version, String transactionalId, int transactionTimeoutMs) {
         super(version);
         this.transactionalId = transactionalId;
         this.transactionTimeoutMs = transactionTimeoutMs;
@@ -78,11 +78,11 @@ public class InitPidRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new InitPidResponse(throttleTimeMs, Errors.forException(e));
+        return new InitProducerIdResponse(throttleTimeMs, Errors.forException(e));
     }
 
-    public static InitPidRequest parse(ByteBuffer buffer, short version) {
-        return new InitPidRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
+    public static InitProducerIdRequest parse(ByteBuffer buffer, short version) {
+        return new InitProducerIdRequest(ApiKeys.INIT_PRODUCER_ID.parseRequest(version, buffer), version);
     }
 
     public String transactionalId() {
