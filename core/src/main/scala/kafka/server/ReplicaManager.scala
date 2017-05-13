@@ -46,7 +46,8 @@ import scala.collection._
 import scala.collection.JavaConverters._
 import java.util.{Map => JMap}
 
-import kafka.common.{KafkaStorageException, Topic}
+import kafka.common.KafkaStorageException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
 

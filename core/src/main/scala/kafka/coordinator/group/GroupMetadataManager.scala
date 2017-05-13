@@ -27,13 +27,13 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0}
 import kafka.common.{MessageFormatter, _}
-import kafka.coordinator.group._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types.{ArrayOf, Field, Schema, Struct}
@@ -171,7 +171,7 @@ class GroupMetadataManager(brokerId: Int,
           builder.build()
         }
 
-        val groupMetadataPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
+        val groupMetadataPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
         val groupMetadataRecords = Map(groupMetadataPartition -> records)
         val generationId = group.generationId
 
@@ -284,7 +284,7 @@ class GroupMetadataManager(brokerId: Int,
             val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata)
             new SimpleRecord(timestamp, key, value)
           }
-          val offsetTopicPartition = new TopicPartition(Topic.GroupMetadataTopicName, partitionFor(group.groupId))
+          val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
           val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType, records.asJava))
 
           if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
@@ -431,7 +431,7 @@ class GroupMetadataManager(brokerId: Int,
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
   def loadGroupsForPartition(offsetsPartition: Int, onGroupLoaded: GroupMetadata => Unit) {
-    val topicPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+    val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
 
     def doLoadGroupsAndOffsets() {
       info(s"Loading offsets and group metadata from $topicPartition")
@@ -632,7 +632,7 @@ class GroupMetadataManager(brokerId: Int,
    */
   def removeGroupsForPartition(offsetsPartition: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
-    val topicPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+    val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets _)
 
     def removeGroupsAndOffsets() {
@@ -687,7 +687,7 @@ class GroupMetadataManager(brokerId: Int,
       }
 
       val offsetsPartition = partitionFor(groupId)
-      val appendPartition = new TopicPartition(Topic.GroupMetadataTopicName, offsetsPartition)
+      val appendPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
       getMagic(offsetsPartition) match {
         case Some(magicValue) =>
           // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
@@ -802,7 +802,7 @@ class GroupMetadataManager(brokerId: Int,
    * If the topic does not exist, the configured partition count is returned.
    */
   private def getGroupMetadataTopicPartitionCount: Int = {
-    zkUtils.getTopicPartitionCount(Topic.GroupMetadataTopicName).getOrElse(config.offsetsTopicNumPartitions)
+    zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicNumPartitions)
   }
 
   /**
@@ -812,7 +812,7 @@ class GroupMetadataManager(brokerId: Int,
    * @return  Some(MessageFormatVersion) if replica is local, None otherwise
    */
   private def getMagic(partition: Int): Option[Byte] =
-    replicaManager.getMagic(new TopicPartition(Topic.GroupMetadataTopicName, partition))
+    replicaManager.getMagic(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))
 
   /**
    * Add the partition into the owned list
