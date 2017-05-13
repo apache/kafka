@@ -33,6 +33,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.BloomFilter;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 import org.rocksdb.FlushOptions;
@@ -112,11 +113,14 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     @SuppressWarnings("unchecked")
     public void openDB(ProcessorContext context) {
         // initialize the default rocksdb options
+
+        options = new Options();
+
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
+        tableConfig.setFilter(new BloomFilter(10));
 
-        options = new Options();
         options.setTableFormatConfig(tableConfig);
         options.setWriteBufferSize(WRITE_BUFFER_SIZE);
         options.setCompressionType(COMPRESSION_TYPE);
