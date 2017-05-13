@@ -17,12 +17,22 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 public class ModuleUtils {
-    private static final String BLACKLIST = "^(?:java|javax|org\\.apache\\.kafka\\.common|org\\"
-            + ".apache\\.kafka\\.connect|org\\.apache\\.log4j)\\..*$";
+    private static final String BLACKLIST = "^(?:"
+            + "java\\."
+            + "|javax\\."
+            + "|org\\.w3c\\.dom"
+            + "|org\\.apache\\.kafka\\.common"
+            + "|org\\.apache\\.kafka\\.connect"
+            + "|org\\.apache\\.log4j"
+            + ")\\..*$";
 
-    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\."
-            + "(?:transforms\\.(?!Transformation$).*|json\\..*|file\\..*|converters\\..*"
-            + "|storage\\.StringConverter)$";
+    private static final String WHITELIST = "^org\\.apache\\.kafka\\.connect\\.(?:"
+            + "transforms\\.(?!Transformation$).*"
+            + "|json\\..*"
+            + "|file\\..*"
+            + "|converters\\..*"
+            + "|storage\\.StringConverter"
+            + ")$";
 
     public static boolean validate(String name) {
         //boolean result = name.matches(BLACKLIST) && !name.matches(WHITELIST);
