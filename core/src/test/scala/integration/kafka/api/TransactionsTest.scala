@@ -101,7 +101,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Ignore @Test
+  @Test
   def testSendOffsets() = {
     // The basic plan for the test is as follows:
     //  1. Seed topic1 with 1000 unique, numbered, messages.
@@ -114,23 +114,24 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     val transactionalId = "foobar-id"
     val consumerGroupId = "foobar-consumer-group"
-    seedTopicWithRecords(topic1, 1000)
+    val numSeedMessages = 500
+    seedTopicWithRecords(topic1, numSeedMessages)
 
     val producer = transactionalProducer(transactionalId)
 
-    var consumer = transactionalConsumer(consumerGroupId, maxPollRecords = 50)
+    var consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1))
     producer.initTransactions()
 
     val random = new Random()
-    var shouldCommit = true
+    var shouldCommit = false
     var recordsProcessed = 0
     try {
-      while (recordsProcessed < 1000) {
+      while (recordsProcessed < numSeedMessages) {
         producer.beginTransaction()
         shouldCommit = !shouldCommit
 
-        val records = pollUntilAtLeastNumRecords(consumer, Math.min(10, 1000 - recordsProcessed))
+        val records = pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
         records.zipWithIndex.foreach { case (record, i) =>
           val key = new String(record.key(), "UTF-8")
           val value = new String(record.value(), "UTF-8")
@@ -141,17 +142,15 @@ class TransactionsTest extends KafkaServerTestHarness {
         if (shouldCommit) {
           producer.commitTransaction()
           recordsProcessed += records.size
-          error(s"committed transaction.. Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
             s"records written to $topic2: $recordsProcessed")
         } else {
           producer.abortTransaction()
-          error("aborted transaction")
-          // reset the subscription. Practically, we will have a new consumer instance when transactions are aborted
-          // (like during a streams re balance). But we need to do this manually for this test, otherwise the consumer
-          // will continue to fetch from the cached fetch position and the test will fail because it will fail to
-          // produce the expected number of messages to the destination topic since some of the aborted transactions
-          // will not result in offset resets.
-          resetToLastCommittedPosition(consumer)
+          debug(s"aborted transaction Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+            s"records written to $topic2: $recordsProcessed")
+          consumer.close()
+          consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
+          consumer.subscribe(List(topic1))
         }
       }
     } catch {
@@ -166,12 +165,12 @@ class TransactionsTest extends KafkaServerTestHarness {
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumer("foobargroup")
     verifyingConsumer.subscribe(List(topic2))
-    val valueSeq = pollUntilAtLeastNumRecords(verifyingConsumer, 1000).map { record =>
+    val valueSeq = pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
       assertCommittedAndGetValue(record).toInt
     }
     verifyingConsumer.close()
     val valueSet = valueSeq.toSet
-    assertEquals(s"Expected 1000 values in $topic2.", 1000, valueSeq.size)
+    assertEquals(s"Expected $numSeedMessages values in $topic2.", numSeedMessages, valueSeq.size)
     assertEquals(s"Expected ${valueSeq.size} unique messages in $topic2.", valueSeq.size, valueSet.size)
   }
 
