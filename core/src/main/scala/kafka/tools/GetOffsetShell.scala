@@ -18,6 +18,8 @@
  */
 package kafka.tools
 
+import java.util.Properties
+
 import joptsimple._
 import kafka.common.Topic.InternalTopics
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ToolsUtils}
@@ -110,7 +112,6 @@ object GetOffsetShell extends Logging {
     //TODO Add support for -2(earliest) and other time values.
     //TODO Return error message when no offset for this timestamp.
     val timestamp = options.valueOf(timeOpt).longValue
-    //TODO Pass props to KafkaConsumer
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
 
     val topics = CoreUtils.parseCsvList(topicList).toSet
@@ -126,7 +127,12 @@ object GetOffsetShell extends Logging {
     }
 
    //TODO Add support for -2(earliest) and other time values
-    val offsets = getOffsets(bootstrapServers, topics, partitions, timestamp, includeInternalTopics)
+    val offsets = getOffsets(bootstrapServers,
+      topics,
+      partitions,
+      timestamp,
+      includeInternalTopics,
+      extraConsumerProps)
     val report = offsets
       .toList.sortBy { case (tp, _) => (tp.topic, tp.partition) }
       .map {
@@ -152,6 +158,7 @@ object GetOffsetShell extends Logging {
     * @param timestamp             Get the earliest offset whose timestamp is greater than or equal to this timestamp value.
     *                              Special values are: -1 (the latest offsets), -2 (the earliest offsets).
     * @param includeInternalTopics When the topic partitions argument is empty, exclude internal topics (like consumer offsets) from consideration.
+    * @param extraConsumerProps    Extra properties for Kafka consumer that will be created to get offsets.
     * @return A map of entries per each topic partition, each entry contains either the offset or an error message.
     * @throws IllegalArgumentException Bootstrap servers is null, topics is null, partitions is null.
     */
@@ -159,17 +166,21 @@ object GetOffsetShell extends Logging {
                  topics: Set[String],
                  partitions: Set[Int],
                  timestamp: Long,
-                 includeInternalTopics: Boolean): Map[TopicPartition, Either[String, Long]] = {
+                 includeInternalTopics: Boolean,
+                 extraConsumerProps: Properties = new Properties): Map[TopicPartition, Either[String, Long]] = {
     require(bootstrapServers != null, "Bootstrap servers cannot be null")
     require(topics != null, "Topics cannot be null")
     require(partitions != null, "Partitions cannot be null")
 
+    val props = new Properties
+    props.putAll(extraConsumerProps)
     val consumerConfig = Map(
       ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers,
       ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer",
       ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG -> "org.apache.kafka.common.serialization.ByteArrayDeserializer"
     )
-    val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(consumerConfig)
+    props.putAll(consumerConfig)
+    val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(props)
 
     val available = consumer.listTopics()
       .map { case (topic, pInfos) => topic -> pInfos.map(_.partition()).toSet }
