@@ -1213,11 +1213,7 @@ public class StreamThread extends Thread {
                         it.remove();
                     } catch (final LockException e) {
                         // ignore and retry
-                        if (log.isDebugEnabled() || log.isTraceEnabled()) {
-                            log.warn("Could not create task {}. Will retry: {}", taskId, e);
-                        } else {
-                            log.warn("Could not create task {}. Will retry: {}", taskId, e.getMessage());
-                        }
+                        log.warn("Could not create task {}. Will retry: {}", taskId, e.getMessage());
                     }
                 }
 
