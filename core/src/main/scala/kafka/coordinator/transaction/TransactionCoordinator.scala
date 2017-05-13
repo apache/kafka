@@ -390,6 +390,7 @@ class TransactionCoordinator(brokerId: Int,
                   // the log append was successful
                   responseCallback(Errors.NONE)
 
+
                   txnMarkerChannelManager.addTxnMarkersToSend(transactionalId, coordinatorEpoch, txnMarkerResult, txnMetadata, newPreSendMetadata)
               }
             } else {
