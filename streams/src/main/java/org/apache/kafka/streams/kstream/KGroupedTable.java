@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -149,6 +150,12 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys and {@link Long} values that
      * represent the latest (rolling) count (i.e., number of records) for each key
      */
+    KTable<K, Long> count(final TypedStateStoreSupplier<KeyValueStore<K, Long>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedTable#count(TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier);
 
     /**
@@ -343,6 +350,14 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
+    KTable<K, V> reduce(final Reducer<V> adder,
+                        final Reducer<V> subtractor,
+                        final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedTable#reduce(Reducer, Reducer, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     KTable<K, V> reduce(final Reducer<V> adder,
                         final Reducer<V> subtractor,
                         final StateStoreSupplier<KeyValueStore> storeSupplier);
@@ -733,6 +748,15 @@ public interface KGroupedTable<K, V> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
+    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
+                                 final Aggregator<? super K, ? super V, VR> adder,
+                                 final Aggregator<? super K, ? super V, VR> subtractor,
+                                 final TypedStateStoreSupplier<KeyValueStore<K, VR>> storeSupplier);
+
+    /**
+     * Please use {@link KGroupedTable#aggregate(Initializer, Aggregator, Aggregator, TypedStateStoreSupplier)}
+     */
+    @Deprecated
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> adder,
                                  final Aggregator<? super K, ? super V, VR> subtractor,

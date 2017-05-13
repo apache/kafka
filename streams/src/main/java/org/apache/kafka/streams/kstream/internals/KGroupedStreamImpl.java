@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.SessionStore;
@@ -80,6 +81,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return reduce(reducer, (String) null);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> reduce(final Reducer<V> reducer,
+                               final TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return reduce(reducer, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<K, V> reduce(final Reducer<V> reducer,
                                final StateStoreSupplier<KeyValueStore> storeSupplier) {
@@ -91,8 +99,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 storeSupplier);
     }
 
-
-    @SuppressWarnings("unchecked")
     @Override
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows,
@@ -106,6 +112,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                                             final Windows<W> windows) {
         return reduce(reducer, windows, (String) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window> KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                                            final Windows<W> windows,
+                                                            final TypedStateStoreSupplier<WindowStore<K, V>> storeSupplier) {
+        return reduce(reducer, windows, (StateStoreSupplier) storeSupplier);
     }
 
     @SuppressWarnings("unchecked")
@@ -139,6 +153,14 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return aggregate(initializer, aggregator, aggValueSerde, null);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
+                                      final Aggregator<? super K, ? super V, T> aggregator,
+                                      final TypedStateStoreSupplier<KeyValueStore<K, T>> storeSupplier) {
+        return aggregate(initializer, aggregator, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public <T> KTable<K, T> aggregate(final Initializer<T> initializer,
                                       final Aggregator<? super K, ? super V, T> aggregator,
@@ -152,7 +174,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 storeSupplier);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
                                                                   final Aggregator<? super K, ? super V, T> aggregator,
@@ -170,6 +191,15 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                                   final Windows<W> windows,
                                                                   final Serde<T> aggValueSerde) {
         return aggregate(initializer, aggregator, windows, aggValueSerde, null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window, T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                                                  final Aggregator<? super K, ? super V, T> aggregator,
+                                                                  final Windows<W> windows,
+                                                                  final TypedStateStoreSupplier<WindowStore<K, T>> storeSupplier) {
+        return aggregate(initializer, aggregator, windows, (StateStoreSupplier) storeSupplier);
     }
 
     @SuppressWarnings("unchecked")
@@ -200,6 +230,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
         return count((String) null);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, Long> count(final TypedStateStoreSupplier<KeyValueStore<K, Long>> storeSupplier) {
+        return count((StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<K, Long> count(final StateStoreSupplier<KeyValueStore> storeSupplier) {
         return aggregate(new Initializer<Long>() {
@@ -225,6 +261,13 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     @Override
     public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows) {
         return count(windows, (String) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <W extends Window> KTable<Windowed<K>, Long> count(final Windows<W> windows,
+                                                              final TypedStateStoreSupplier<WindowStore<K, Long>> storeSupplier) {
+        return count(windows, (StateStoreSupplier) storeSupplier);
     }
 
     @Override
@@ -283,6 +326,24 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                                                 final Merger<? super K, T> sessionMerger,
                                                 final SessionWindows sessionWindows,
                                                 final Serde<T> aggValueSerde,
+                                                final TypedStateStoreSupplier<SessionStore<K, T>> storeSupplier) {
+        Objects.requireNonNull(initializer, "initializer can't be null");
+        Objects.requireNonNull(aggregator, "aggregator can't be null");
+        Objects.requireNonNull(sessionWindows, "sessionWindows can't be null");
+        Objects.requireNonNull(sessionMerger, "sessionMerger can't be null");
+        Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
+
+        return aggregate(initializer, aggregator, sessionMerger, sessionWindows, aggValueSerde, (StateStoreSupplier) storeSupplier);
+
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> KTable<Windowed<K>, T> aggregate(final Initializer<T> initializer,
+                                                final Aggregator<? super K, ? super V, T> aggregator,
+                                                final Merger<? super K, T> sessionMerger,
+                                                final SessionWindows sessionWindows,
+                                                final Serde<T> aggValueSerde,
                                                 final StateStoreSupplier<SessionStore> storeSupplier) {
         Objects.requireNonNull(initializer, "initializer can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
@@ -294,7 +355,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                 new KStreamSessionWindowAggregate<>(sessionWindows, storeSupplier.name(), initializer, aggregator, sessionMerger),
                 AGGREGATE_NAME,
                 storeSupplier);
-
     }
 
     @SuppressWarnings("unchecked")
@@ -310,6 +370,12 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
     }
 
     @SuppressWarnings("unchecked")
+    @Override
+    public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
+                                           final TypedStateStoreSupplier<SessionStore<K, Long>> storeSupplier) {
+        return count(sessionWindows, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<Windowed<K>, Long> count(final SessionWindows sessionWindows,
                                            final StateStoreSupplier<SessionStore> storeSupplier) {
@@ -350,12 +416,19 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K> implements KGroupedStre
                               .sessionWindowed(sessionWindows.maintainMs()).build());
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
                                          final SessionWindows sessionWindows) {
 
         return reduce(reducer, sessionWindows, (String) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<Windowed<K>, V> reduce(final Reducer<V> reducer,
+                                         final SessionWindows sessionWindows,
+                                         final TypedStateStoreSupplier<SessionStore<K, V>> storeSupplier) {
+        return reduce(reducer, sessionWindows, (StateStoreSupplier) storeSupplier);
     }
 
     @Override

@@ -29,10 +29,10 @@ import java.util.Map;
  * @param <K> the type of keys
  * @param <V> the type of values
  *
- * @see org.apache.kafka.streams.state.Stores#create(String)
+ * @see org.apache.kafka.streams.state.TypedStores#create(String)
  */
 
-public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore> implements WindowStoreSupplier<WindowStore> {
+public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, WindowStore<K, V>> implements WindowStoreSupplier<WindowStore<K, V>> {
 
     private final long retentionPeriod;
     private final boolean retainDuplicates;

@@ -32,9 +32,9 @@ import java.util.Map;
  * @param <K> The key type
  * @param <V> The value type
  *
- * @see org.apache.kafka.streams.state.Stores#create(String)
+ * @see org.apache.kafka.streams.state.TypedStores#create(String)
  */
-public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore> {
+public class InMemoryKeyValueStoreSupplier<K, V> extends AbstractStoreSupplier<K, V, KeyValueStore<K, V>> {
 
     public InMemoryKeyValueStoreSupplier(String name, Serde<K> keySerde, Serde<V> valueSerde, boolean logged, Map<String, String> logConfig) {
         this(name, keySerde, valueSerde, null, logged, logConfig);

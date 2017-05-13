@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
@@ -45,15 +46,16 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    protected final Serde<? extends K> keySerde;
-    protected final Serde<? extends V> valSerde;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valSerde;
+
     private boolean isQueryable = true;
 
     public KGroupedTableImpl(final KStreamBuilder topology,
                              final String name,
                              final String sourceName,
-                             final Serde<? extends K> keySerde,
-                             final Serde<? extends V> valSerde) {
+                             final Serde<K> keySerde,
+                             final Serde<V> valSerde) {
         super(topology, name, Collections.singleton(sourceName));
         this.keySerde = keySerde;
         this.valSerde = valSerde;
@@ -98,6 +100,15 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
                                       final Aggregator<? super K, ? super V, T> adder,
                                       final Aggregator<? super K, ? super V, T> subtractor) {
         return aggregate(initializer, adder, subtractor, (String) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> KTable<K, T> aggregate(Initializer<T> initializer,
+                                      Aggregator<? super K, ? super V, T> adder,
+                                      Aggregator<? super K, ? super V, T> subtractor,
+                                      TypedStateStoreSupplier<KeyValueStore<K, T>> storeSupplier) {
+        return aggregate(initializer, adder, subtractor, (StateStoreSupplier) storeSupplier);
     }
 
     @Override
@@ -159,6 +170,14 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
         return reduce(adder, subtractor, (String) null);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, V> reduce(Reducer<V> adder,
+                               Reducer<V> subtractor,
+                               TypedStateStoreSupplier<KeyValueStore<K, V>> storeSupplier) {
+        return reduce(adder, subtractor, (StateStoreSupplier) storeSupplier);
+    }
+
     @Override
     public KTable<K, V> reduce(final Reducer<V> adder,
                                final Reducer<V> subtractor,
@@ -179,6 +198,12 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K> implements KGroup
     @Override
     public KTable<K, Long> count() {
         return count((String) null);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public KTable<K, Long> count(TypedStateStoreSupplier<KeyValueStore<K, Long>> storeSupplier) {
+        return count((StateStoreSupplier) storeSupplier);
     }
 
     @Override

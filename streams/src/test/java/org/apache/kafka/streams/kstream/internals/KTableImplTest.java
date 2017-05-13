@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -447,17 +447,17 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInJoin() throws Exception {
-        table.join(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+        table.join(table, MockValueJoiner.TOSTRING_JOINER, (TypedStateStoreSupplier<KeyValueStore<String, String>>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInLeftJoin() throws Exception {
-        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+        table.leftJoin(table, MockValueJoiner.TOSTRING_JOINER, (TypedStateStoreSupplier<KeyValueStore<String, String>>) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullStoreSupplierInOuterJoin() throws Exception {
-        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (StateStoreSupplier<KeyValueStore>) null);
+        table.outerJoin(table, MockValueJoiner.TOSTRING_JOINER, (TypedStateStoreSupplier<KeyValueStore<String, String>>) null);
     }
 
     @Test(expected = NullPointerException.class)

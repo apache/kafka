@@ -37,7 +37,9 @@ import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
-import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.processor.TypedStateStoreSupplier;
+import org.apache.kafka.streams.state.TypedStores;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.io.FileNotFoundException;
 import java.io.PrintWriter;
@@ -679,11 +681,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
 
-    private static <K, V> StateStoreSupplier createWindowedStateStore(final JoinWindows windows,
-                                                                     final Serde<K> keySerde,
-                                                                     final Serde<V> valueSerde,
-                                                                     final String storeName) {
-        return Stores.create(storeName)
+    private static <K, V> TypedStateStoreSupplier<WindowStore<K, V>> createWindowedStateStore(final JoinWindows windows,
+                                                                                             final Serde<K> keySerde,
+                                                                                             final Serde<V> valueSerde,
+                                                                                             final String storeName) {
+        return TypedStores.create(storeName)
             .withKeys(keySerde)
             .withValues(valueSerde)
             .persistent()
