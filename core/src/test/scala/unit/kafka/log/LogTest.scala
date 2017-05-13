@@ -2270,7 +2270,7 @@ class LogTest {
   }
 
   @Test
-  def testRecoverTransactionIndex(): Unit = {
+  def testFullTransactionIndexRecovery(): Unit = {
     val log = createLog(128)
     val epoch = 0.toShort
 
@@ -2589,7 +2589,7 @@ class LogTest {
     new Log(logDir,
       config,
       logStartOffset = 0L,
-      recoveryPoint = 0L,
+      recoveryPoint = recoveryPoint,
       scheduler = time.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,

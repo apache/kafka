@@ -26,6 +26,7 @@ import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
@@ -63,7 +64,10 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  * sequence numbers and epochs of each new record. Additionally, this class accumulates transaction metadata
  * as the incoming records are validated.
  */
-private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
+private[log] class ProducerAppendInfo(val producerId: Long,
+                                      initialEntry: ProducerIdEntry,
+                                      validateSequenceNumbers: Boolean = true,
+                                      loadingFromLog: Boolean = false) {
   private var producerEpoch = initialEntry.producerEpoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
@@ -73,14 +77,14 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   private var coordinatorEpoch = initialEntry.coordinatorEpoch
   private val transactions = ListBuffer.empty[TxnMetadata]
 
-  def this(producerId: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
-    this(producerId, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
+  def this(producerId: Long, initialEntry: Option[ProducerIdEntry], validateSequenceNumbers: Boolean, loadingFromLog: Boolean) =
+    this(producerId, initialEntry.getOrElse(ProducerIdEntry.Empty), validateSequenceNumbers, loadingFromLog)
 
-  private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int, shouldValidateSequenceNumbers: Boolean) = {
+  private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
     if (this.producerEpoch > producerEpoch) {
       throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
         s"with a newer epoch. $producerEpoch (request epoch), ${this.producerEpoch} (server epoch)")
-    } else if (shouldValidateSequenceNumbers) {
+    } else if (validateSequenceNumbers) {
       if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < producerEpoch) {
         if (firstSeq != 0)
           throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
@@ -100,7 +104,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     }
   }
 
-  def append(batch: RecordBatch, shouldValidateSequenceNumbers: Boolean = true): Option[CompletedTxn] = {
+  def append(batch: RecordBatch): Option[CompletedTxn] = {
     if (batch.isControlBatch) {
       val record = batch.iterator.next()
       val endTxnMarker = EndTransactionMarker.deserialize(record)
@@ -108,7 +112,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
       Some(completedTxn)
     } else {
       append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
-        batch.isTransactional, shouldValidateSequenceNumbers)
+        batch.isTransactional)
       None
     }
   }
@@ -118,12 +122,11 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
              lastSeq: Int,
              lastTimestamp: Long,
              lastOffset: Long,
-             isTransactional: Boolean,
-             shouldValidateSequenceNumbers: Boolean): Unit = {
+             isTransactional: Boolean): Unit = {
     if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
       // skip validation if this is the first entry when loading from the log. Log retention
       // will generally have removed the beginning entries from each producer id
-      validateAppend(epoch, firstSeq, lastSeq, shouldValidateSequenceNumbers)
+      validateAppend(epoch, firstSeq, lastSeq)
 
     this.producerEpoch = epoch
     this.firstSeq = firstSeq
@@ -325,6 +328,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   import ProducerStateManager._
   import java.util
 
+  private val validateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
@@ -446,6 +450,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     } else {
       evictUnretainedProducers(logStartOffset)
     }
+  }
+
+  def prepareUpdate(producerId: Long, loadingFromLog: Boolean): ProducerAppendInfo = {
+    new ProducerAppendInfo(producerId, lastEntry(producerId), validateSequenceNumbers, loadingFromLog)
   }
 
   /**

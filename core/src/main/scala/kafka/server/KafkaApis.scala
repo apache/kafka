@@ -39,7 +39,7 @@ import kafka.security.auth._
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.internals.Topic.{isInternal, GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
+import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
@@ -1454,17 +1454,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       errors.put(producerId, responseStatus.mapValues(_.error).asJava)
 
-      val successfulPartitions = responseStatus.filter { case (_, partitionResponse) =>
-        partitionResponse.error == Errors.NONE
-      }.keys.toSeq
+      val offsetsPartitions = responseStatus.filterKeys(_.topic == GROUP_METADATA_TOPIC_NAME)
+      if (offsetsPartitions.nonEmpty) {
+        val successfulOffsetsPartitions = offsetsPartitions.filter { case (_, partitionResponse) =>
+          partitionResponse.error == Errors.NONE
+        }.keys
 
-      try {
-        groupCoordinator.handleTxnCompletion(producerId = producerId, topicPartitions = successfulPartitions, transactionResult = result)
-      } catch {
-        case e: Exception =>
-          error(s"Received an exception while trying to update the offsets cache on transaction completion: $e")
-          val producerIdErrors = errors.get(producerId)
-          successfulPartitions.foreach(producerIdErrors.put(_, Errors.UNKNOWN))
+        try {
+          groupCoordinator.handleTxnCompletion(producerId, successfulOffsetsPartitions, result)
+        } catch {
+          case e: Exception =>
+            error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
+            val partitionErrors = errors.get(producerId)
+            successfulOffsetsPartitions.foreach(partitionErrors.put(_, Errors.UNKNOWN))
+        }
       }
 
       if (numAppends.decrementAndGet() == 0)
@@ -1597,8 +1600,9 @@ class KafkaApis(val requestChannel: RequestChannel,
           val authorizedForDescribe = authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
           val exists = metadataCache.contains(topicPartition.topic)
           if (!authorizedForDescribe && exists)
-              debug(s"Transaction Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
-                s"on partition $topicPartition failing due to user not having DESCRIBE authorization, but returning UNKNOWN_TOPIC_OR_PARTITION")
+              debug(s"TxnOffsetCommit with correlation id ${header.correlationId} from client ${header.clientId} " +
+                s"on partition $topicPartition failing due to user not having DESCRIBE authorization, but returning " +
+                s"UNKNOWN_TOPIC_OR_PARTITION")
           authorizedForDescribe && exists
       }
 
@@ -1607,7 +1611,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // the callback for sending an offset commit response
-      def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Errors]) {
+      def sendResponseCallback(commitStatus: Map[TopicPartition, Errors]) {
         val combinedCommitStatus = commitStatus ++
           unauthorizedForReadTopics.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED) ++
           nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -1615,7 +1619,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (isDebugEnabled)
           combinedCommitStatus.foreach { case (topicPartition, error) =>
             if (error != Errors.NONE) {
-              debug(s"TxnOffsetCommit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+              debug(s"TxnOffsetCommit with correlation id ${header.correlationId} from client ${header.clientId} " +
                 s"on partition $topicPartition failed due to ${error.exceptionName}")
             }
           }
@@ -1626,33 +1630,29 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (authorizedTopics.isEmpty)
         sendResponseCallback(Map.empty)
       else {
-        val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
-
-        // commit timestamp is always set to now.
-        // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
-        val currentTimestamp = time.milliseconds
-        val defaultExpireTimestamp = offsetRetention + currentTimestamp
-        val partitionData = authorizedTopics.mapValues { partitionData =>
-          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
-          new OffsetAndMetadata(
-            offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
-            commitTimestamp = currentTimestamp,
-            expireTimestamp = defaultExpireTimestamp
-          )
-        }
-
-        // call coordinator to handle commit offset
-        groupCoordinator.handleCommitOffsets(
+        val offsetMetadata = convertTxnOffsets(authorizedTopics)
+        groupCoordinator.handleTxnCommitOffsets(
           txnOffsetCommitRequest.consumerGroupId,
-          null,
-          -1,
-          partitionData,
-          sendResponseCallback,
           txnOffsetCommitRequest.producerId,
-          txnOffsetCommitRequest.producerEpoch)
+          txnOffsetCommitRequest.producerEpoch,
+          offsetMetadata,
+          sendResponseCallback)
       }
     }
+  }
 
+  private def convertTxnOffsets(offsetsMap: immutable.Map[TopicPartition, TxnOffsetCommitRequest.CommittedOffset]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
+    val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
+    val currentTimestamp = time.milliseconds
+    val defaultExpireTimestamp = offsetRetention + currentTimestamp
+    offsetsMap.mapValues { partitionData =>
+      val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
+      new OffsetAndMetadata(
+        offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
+        commitTimestamp = currentTimestamp,
+        expireTimestamp = defaultExpireTimestamp
+      )
+    }
   }
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
