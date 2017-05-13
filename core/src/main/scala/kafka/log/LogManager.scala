@@ -407,20 +407,15 @@ class LogManager(val logDirs: Array[File],
     */
   def asyncDelete(topicPartition: TopicPartition) = {
     val removedLog: Log = logCreationOrDeletionLock synchronized {
-                            logs.remove(topicPartition)
-                          }
+        logs.remove(topicPartition)
+    }
     if (removedLog != null) {
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
       if (cleaner != null) {
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
-      // renaming the directory to topic-partition.uniqueId-delete
-      val dirName = new StringBuilder(removedLog.name)
-                        .append(".")
-                        .append(java.util.UUID.randomUUID.toString.replaceAll("-",""))
-                        .append(Log.DeleteDirSuffix)
-                        .toString()
+      val dirName = Log.logDeleteDirName(removedLog.name)
       removedLog.close()
       val renamedDir = new File(removedLog.dir.getParent, dirName)
       val renameSuccessful = removedLog.dir.renameTo(renamedDir)
