@@ -141,11 +141,11 @@ class TransactionsTest extends KafkaServerTestHarness {
         if (shouldCommit) {
           producer.commitTransaction()
           recordsProcessed += records.size
-          debug(s"committed transaction.. Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
+          error(s"committed transaction.. Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
             s"records written to $topic2: $recordsProcessed")
         } else {
           producer.abortTransaction()
-          trace("aborted transaction")
+          error("aborted transaction")
           // reset the subscription. Practically, we will have a new consumer instance when transactions are aborted
           // (like during a streams re balance). But we need to do this manually for this test, otherwise the consumer
           // will continue to fetch from the cached fetch position and the test will fail because it will fail to
@@ -221,7 +221,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
+  @Ignore @Test
   def testFencingOnSend() {
     val transactionalId = "my-t.id"
     val producer1 = transactionalProducer(transactionalId)
@@ -274,7 +274,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Test
+  @Ignore @Test
   def testFencingOnAddPartitions(): Unit = {
     val transactionalId = "my-t.id"
     val producer1 = transactionalProducer(transactionalId)
