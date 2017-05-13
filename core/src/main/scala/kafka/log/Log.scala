@@ -1571,7 +1571,7 @@ object Log {
       throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.indexOf('.'))
+      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')
