@@ -439,8 +439,8 @@ public enum Errors {
                 return new InvalidTxnStateException(message);
             }
         }),
-    INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producerId which is not currently assigned to " +
-            "its transactionalId",
+    INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producer id which is not currently assigned to " +
+            "its transactional id",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {

@@ -286,8 +286,8 @@ public class TransactionManagerTest {
 
         assertTrue(initPidResult.isCompleted()); // The future should only return after the second round of retries succeed.
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(pid, transactionManager.pidAndEpoch().producerId);
-        assertEquals(epoch, transactionManager.pidAndEpoch().epoch);
+        assertEquals(pid, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test

@@ -28,8 +28,8 @@ import java.util.Map;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
     private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
-    private static final String PID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_EPOCH_KEY_NAME = "producer_epoch";
     private static final String RETENTION_TIME_KEY_NAME = "retention_time";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
@@ -84,8 +84,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     public TxnOffsetCommitRequest(Struct struct, short version) {
         super(version);
         this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
-        this.producerId = struct.getLong(PID_KEY_NAME);
-        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
+        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
+        this.producerEpoch = struct.getShort(PRODUCER_EPOCH_KEY_NAME);
         this.retentionTimeMs = struct.getLong(RETENTION_TIME_KEY_NAME);
 
         Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
@@ -128,8 +128,8 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.TXN_OFFSET_COMMIT.requestSchema(version()));
         struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
-        struct.set(PID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, producerEpoch);
+        struct.set(PRODUCER_ID_KEY_NAME, producerId);
+        struct.set(PRODUCER_EPOCH_KEY_NAME, producerEpoch);
         struct.set(RETENTION_TIME_KEY_NAME, retentionTimeMs);
 
         Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupDataByTopic(offsets);

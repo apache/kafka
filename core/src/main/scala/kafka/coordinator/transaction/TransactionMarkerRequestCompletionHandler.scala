@@ -56,7 +56,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         val errors = writeTxnMarkerResponse.errors(txnMarker.producerId)
 
         if (errors == null)
-          throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for pid ${txnMarker.producerId}")
+          throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
 
         txnStateManager.getTransactionState(transactionalId) match {
           case None =>

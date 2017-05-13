@@ -104,7 +104,7 @@ class TransactionStateManager(brokerId: Int,
   }
 
   def enablePidExpiration() {
-    // TODO: add pid expiration logic
+    // TODO: add producer id expiration logic
   }
 
   /**

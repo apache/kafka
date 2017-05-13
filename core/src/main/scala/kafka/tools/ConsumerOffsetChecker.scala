@@ -54,36 +54,36 @@ object ConsumerOffsetChecker extends Logging {
   }
 
   private def processPartition(zkUtils: ZkUtils,
-                               group: String, topic: String, pid: Int) {
-    val topicPartition = TopicAndPartition(topic, pid)
+                               group: String, topic: String, producerId: Int) {
+    val topicPartition = TopicAndPartition(topic, producerId)
     val offsetOpt = offsetMap.get(topicPartition)
     val groupDirs = new ZKGroupTopicDirs(group, topic)
-    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(pid))._1
-    zkUtils.getLeaderForPartition(topic, pid) match {
+    val owner = zkUtils.readDataMaybeNull(groupDirs.consumerOwnerDir + "/%s".format(producerId))._1
+    zkUtils.getLeaderForPartition(topic, producerId) match {
       case Some(bid) =>
         val consumerOpt = consumerMap.getOrElseUpdate(bid, getConsumer(zkUtils, bid))
         consumerOpt match {
           case Some(consumer) =>
-            val topicAndPartition = TopicAndPartition(topic, pid)
+            val topicAndPartition = TopicAndPartition(topic, producerId)
             val request =
               OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
             val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
             val lagString = offsetOpt.map(o => if (o == -1) "unknown" else (logSize - o).toString)
-            println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, pid, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
+            println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, producerId, offsetOpt.getOrElse("unknown"), logSize, lagString.getOrElse("unknown"),
                                                                    owner match {case Some(ownerStr) => ownerStr case None => "none"}))
           case None => // ignore
         }
       case None =>
-        println("No broker for partition %s - %s".format(topic, pid))
+        println("No broker for partition %s - %s".format(topic, producerId))
     }
   }
 
   private def processTopic(zkUtils: ZkUtils, group: String, topic: String) {
     topicPidMap.get(topic) match {
-      case Some(pids) =>
-        pids.sorted.foreach {
-          pid => processPartition(zkUtils, group, topic, pid)
+      case Some(producerIds) =>
+        producerIds.sorted.foreach {
+          producerId => processPartition(zkUtils, group, topic, producerId)
         }
       case None => // ignore
     }

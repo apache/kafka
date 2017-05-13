@@ -122,7 +122,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
              shouldValidateSequenceNumbers: Boolean): Unit = {
     if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
       // skip validation if this is the first entry when loading from the log. Log retention
-      // will generally have removed the beginning entries from each PID
+      // will generally have removed the beginning entries from each producer id
       validateAppend(epoch, firstSeq, lastSeq, shouldValidateSequenceNumbers)
 
     this.producerEpoch = epoch
@@ -303,18 +303,18 @@ object ProducerStateManager {
 }
 
 /**
- * Maintains a mapping from ProducerIds (PIDs) to metadata about the last appended entries (e.g.
+ * Maintains a mapping from ProducerIds to metadata about the last appended entries (e.g.
  * epoch, sequence number, last offset, etc.)
  *
  * The sequence number is the last number successfully appended to the partition for the given identifier.
  * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
  * appended to the partition.
  *
- * As long as a PID is contained in the map, the corresponding producer can continue to write data.
- * However, PIDs can be expired due to lack of recent use or if the last written entry has been deleted from
+ * As long as a producer id is contained in the map, the corresponding producer can continue to write data.
+ * However, producer ids can be expired due to lack of recent use or if the last written entry has been deleted from
  * the log (e.g. if the retention policy is "delete"). For compacted topics, the log cleaner will ensure
- * that the most recent entry from a given PID is retained in the log provided it hasn't expired due to
- * age. This ensures that PIDs will not be expired until either the max expiration time has been reached,
+ * that the most recent entry from a given producer id is retained in the log provided it hasn't expired due to
+ * age. This ensures that producer ids will not be expired until either the max expiration time has been reached,
  * or if the topic also is configured for deletion, the segment containing the last written offset has
  * been deleted.
  */
@@ -415,7 +415,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
 
   /**
-   * Expire any PIDs which have been idle longer than the configured maximum expiration timeout.
+   * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
    */
   def removeExpiredProducers(currentTimeMs: Long) {
     producers.retain { case (producerId, lastEntry) =>
@@ -424,7 +424,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Truncate the PID mapping to the given offset range and reload the entries from the most recent
+   * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
    * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
    * or equal to the high watermark.
    */
@@ -451,7 +451,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    */
   def update(appendInfo: ProducerAppendInfo): Unit = {
     if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
-      throw new IllegalArgumentException("Invalid PID passed to update")
+      throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId} passed to update")
 
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)
@@ -465,7 +465,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Get the last written entry for the given PID.
+   * Get the last written entry for the given producer id.
    */
   def lastEntry(producerId: Long): Option[ProducerIdEntry] = producers.get(producerId)
 
@@ -532,7 +532,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Truncate the PID mapping and remove all snapshots. This resets the state of the mapping.
+   * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
    */
   def truncate() {
     producers.clear()
