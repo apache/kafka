@@ -26,6 +26,7 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.runtime.isolation.Modules;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -69,7 +70,7 @@ public class WorkerTest extends ThreadedTest {
 
     private WorkerConfig config;
     private Worker worker;
-    private ConnectorFactory connectorFactory = PowerMock.createMock(ConnectorFactory.class);
+    private Modules modules = PowerMock.createMock(Modules.class);
     private OffsetBackingStore offsetBackingStore = PowerMock.createMock(OffsetBackingStore.class);
     private TaskStatus.Listener taskStatusListener = PowerMock.createStrictMock(TaskStatus.Listener.class);
     private ConnectorStatus.Listener connectorStatusListener = PowerMock.createStrictMock(ConnectorStatus.Listener.class);
@@ -97,7 +98,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        EasyMock.expect(connectorFactory.newConnector(WorkerTestConnector.class.getName())).andReturn(connector);
+        EasyMock.expect(modules.newConnector(WorkerTestConnector.class.getName()))
+                .andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -125,7 +127,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -149,7 +151,7 @@ public class WorkerTest extends ThreadedTest {
     public void testStartConnectorFailure() throws Exception {
         expectStartStorage();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         Map<String, String> props = new HashMap<>();
@@ -176,7 +178,7 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        EasyMock.expect(connectorFactory.newConnector("WorkerTestConnector")).andReturn(connector);
+        EasyMock.expect(modules.newConnector("WorkerTestConnector")).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -204,7 +206,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -227,7 +229,7 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        EasyMock.expect(connectorFactory.newConnector("WorkerTest")).andReturn(connector);
+        EasyMock.expect(modules.newConnector("WorkerTest")).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -255,7 +257,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -276,7 +278,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         worker.stopConnector(CONNECTOR_ID);
@@ -290,7 +292,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        EasyMock.expect(connectorFactory.newConnector(WorkerTestConnector.class.getName())).andReturn(connector);
+        EasyMock.expect(modules.newConnector(WorkerTestConnector.class.getName()))
+                .andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
         Map<String, String> props = new HashMap<>();
@@ -324,7 +327,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
@@ -362,7 +365,7 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        EasyMock.expect(connectorFactory.newTask(TestSourceTask.class)).andReturn(task);
+        EasyMock.expect(modules.newTask(TestSourceTask.class)).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
 
         PowerMock.expectNew(
@@ -396,7 +399,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
         assertEquals(Collections.emptySet(), worker.taskIds());
         worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
@@ -413,7 +416,7 @@ public class WorkerTest extends ThreadedTest {
     public void testStartTaskFailure() throws Exception {
         expectStartStorage();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
 
         Map<String, String> origProps = new HashMap<>();
@@ -436,7 +439,7 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        EasyMock.expect(connectorFactory.newTask(TestSourceTask.class)).andReturn(task);
+        EasyMock.expect(modules.newTask(TestSourceTask.class)).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
         
         PowerMock.expectNew(
@@ -472,7 +475,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
         worker.startTask(TASK_ID, anyConnectorConfigMap(), origProps, taskStatusListener, TargetState.STARTED);
         worker.stop();
@@ -488,7 +491,7 @@ public class WorkerTest extends ThreadedTest {
         WorkerSourceTask workerTask = PowerMock.createMock(WorkerSourceTask.class);
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
 
-        EasyMock.expect(connectorFactory.newTask(TestSourceTask.class)).andReturn(task);
+        EasyMock.expect(modules.newTask(TestSourceTask.class)).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
 
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
@@ -525,7 +528,7 @@ public class WorkerTest extends ThreadedTest {
 
         PowerMock.replayAll();
 
-        worker = new Worker(WORKER_ID, new MockTime(), connectorFactory, config, offsetBackingStore);
+        worker = new Worker(WORKER_ID, new MockTime(), modules, config, offsetBackingStore);
         worker.start();
         assertEquals(Collections.emptySet(), worker.taskIds());
         Map<String, String> connProps = anyConnectorConfigMap();
