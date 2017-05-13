@@ -45,6 +45,7 @@ import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
@@ -80,7 +81,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
     private final String name;
     private final String parentDir;
-    private final Set<KeyValueIterator> openIterators = new HashSet<>();
+    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
 
     File dbDir;
     private StateSerdes<K, V> serdes;
@@ -379,10 +380,13 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void closeOpenIterators() {
-        for (KeyValueIterator iterator : new HashSet<>(openIterators)) {
+        HashSet<KeyValueIterator> iterators = null;
+        synchronized (openIterators) {
+            iterators = new HashSet<>(openIterators);
+        }
+        for (KeyValueIterator iterator : iterators) {
             iterator.close();
         }
-        openIterators.clear();
     }
 
 
