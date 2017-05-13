@@ -23,7 +23,7 @@ import java.util.Properties
 import joptsimple._
 import kafka.common.Topic.InternalTopics
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ToolsUtils}
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, OffsetAndTimestamp}
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConversions._
@@ -109,8 +109,6 @@ object GetOffsetShell extends Logging {
     val topicList = if (options.has(topicsOpt)) options.valueOf(topicsOpt) else options.valueOf(topicOpt)
     val includeInternalTopics = options.has(includeInternalTopicsOpt)
     val partitionList = options.valueOf(partitionsOpt)
-    //TODO Add support for -2(earliest) and other time values.
-    //TODO Return error message when no offset for this timestamp.
     val timestamp = options.valueOf(timeOpt).longValue
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
 
@@ -126,7 +124,6 @@ object GetOffsetShell extends Logging {
       debug(s"Extra consumer properties: $extraConsumerProps")
     }
 
-   //TODO Add support for -2(earliest) and other time values
     val offsets = getOffsets(bootstrapServers,
       topics,
       partitions,
@@ -186,7 +183,11 @@ object GetOffsetShell extends Logging {
       .map { case (topic, pInfos) => topic -> pInfos.map(_.partition()).toSet }
       .toMap
     val (toError, toRequest) = extractExistingPartitions(topics, partitions, available, includeInternalTopics)
-    val offsets = getEndOffsets(consumer, toRequest)
+    val offsets = timestamp match {
+      case -1 => getEndOffsets(consumer, toRequest)
+      case -2 => getBeginOffsets(consumer, toRequest)
+      case _ => getOffsetsForTimestamp(consumer, toRequest, timestamp)
+    }
     toError ++ offsets
   }
 
@@ -276,6 +277,13 @@ object GetOffsetShell extends Logging {
                                      timestamp: Long): Map[TopicPartition, Either[String, Long]] = {
     val timestamps = partitions.map(_ -> long2Long(timestamp)).toMap
     consumer.offsetsForTimes(timestamps)
-      .map { case (tp, offsetTimestamp) => tp -> Right(offsetTimestamp.offset()) }.toMap
+      .map { case (tp, offsetTimestamp) => tp -> offsetTimestampToResult(offsetTimestamp) }
+      .toMap
+  }
+
+  private def offsetTimestampToResult(offsetTimestamp: OffsetAndTimestamp): Either[String, Long] = {
+    Option(offsetTimestamp)
+      .map(ot => Right(ot.offset()))
+      .getOrElse(Left("Offset for the specified timestamp not found"))
   }
 }
