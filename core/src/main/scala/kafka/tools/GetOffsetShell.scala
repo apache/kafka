@@ -34,23 +34,24 @@ object GetOffsetShell extends Logging {
   def main(args: Array[String]): Unit = {
     //TODO Check ConsoleConsumer on where to add logging statements
     val parser = new OptionParser
-    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
+    val bootstrapServersOpt = parser.accepts("bootstrap-servers", "REQUIRED: The list of servers to connect to.")
       .withRequiredArg
       .describedAs("hostname:port,...,hostname:port")
       .ofType(classOf[String])
-    //TODO Rename to 'topics' to be consistent with 'partitions'. Keep 'topic' for backward compatibility, but display a warning when user specified it.
-    val topicOpt = parser.accepts("topic", s"The list of topics to get offsets from. If not specified, $TOOL_NAME will find offsets for all topics.")
+      /* We must allow default value here to preserve backward compatibility - old users may still have brokerListOpt. */
+      .defaultsTo("")
+    val topicsOpt = parser.accepts("topics", s"The list of topics to get offsets from. If not specified, $TOOL_NAME will get offsets for all topics.")
       .withRequiredArg
       .describedAs("topic1,...,topicN")
       .ofType(classOf[String])
       .defaultsTo("")
     val includeInternalTopicsOpt = parser.accepts("include-internal-topics", s"By default, when the list if topics is not given, $TOOL_NAME excludes internal topics like consumer offsets. This options forces $TOOL_NAME to include them.")
-    val partitionOpt = parser.accepts("partitions", s"The list of partition ids. If not specified, $TOOL_NAME will find offsets for all partitions.")
+    val partitionsOpt = parser.accepts("partitions", s"The list of integers - partition identifiers. If not specified, $TOOL_NAME will get offsets for all partitions.")
       .withRequiredArg
       .describedAs("p1,...pM")
       .ofType(classOf[String])
       .defaultsTo("")
-    val timeOpt = parser.accepts("time", "timestamp of the offsets before that")
+    val timeOpt = parser.accepts("time", s"$TOOL_NAME will get the earliest offset whose timestamp is greater than or equal to this timestamp. Special values: -1 (the latest offset in the partition), -2 (the earliest offset in the partition)")
       .withRequiredArg
       .describedAs("timestamp/-1(latest)/-2(earliest)")
       .ofType(classOf[java.lang.Long])
@@ -59,31 +60,54 @@ object GetOffsetShell extends Logging {
       .withRequiredArg
       .describedAs("property1=value1,...")
       .ofType(classOf[String])
-    //TODO Display a warning when user specified it
-    val nOffsetsOpt = parser.accepts("offsets", "DEPRECATED AND IGNORED: Always one offset is returned for each partition. Number of offsets returned")
+    val brokerListOpt = parser.accepts("broker-list", s"DEPRECATED. Left for backward compatibility but may be removed in the future. Same as $bootstrapServersOpt. When both specified, $bootstrapServersOpt is used.")
+      .withRequiredArg
+      .describedAs("hostname:port,...,hostname:port")
+      .ofType(classOf[String])
+      .defaultsTo("")
+    val topicOpt = parser.accepts("topic", s"DEPRECATED. Left for backward compatibility but may be removed in the future. Same as $topicsOpt. When both specified, $topicsOpt is used.")
+      .withRequiredArg
+      .describedAs("topic1,...,topicN")
+      .ofType(classOf[String])
+      .defaultsTo("")
+    val nOffsetsOpt = parser.accepts("offsets", "DEPRECATED AND IGNORED: Always one offset is returned for each partition.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1)
-    //TODO Display a warning when user specified it
-    val maxWaitMsOpt = parser.accepts("max-wait-ms", s"DEPRECATED AND IGNORED: Use ${consumerPropertyOpt} and pass ${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG} instead. The max amount of time each fetch request waits.")
+    val maxWaitMsOpt = parser.accepts("max-wait-ms", s"DEPRECATED AND IGNORED: Use $consumerPropertyOpt and pass '${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG}' property instead.")
       .withRequiredArg
       .describedAs("ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1000)
 
-    if(args.length == 0)
+    if(args.length == 0) {
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
+    }
 
     val options = parser.parse(args : _*)
+    if (!options.has(bootstrapServersOpt) && !options.has(brokerListOpt)) {
+      CommandLineUtils.printUsageAndDie(parser, "Please specify at least one Kafka server to connect to")
+    }
 
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt)
+    if (options.has(brokerListOpt)) {
+      System.err.println(s"Warning: option $brokerListOpt is deprecated and may be removed in the future. Use $bootstrapServersOpt instead")
+    }
+    if (options.has(topicOpt)) {
+      System.err.println(s"Warning: option $topicOpt is deprecated and may be removed in the future. Use $topicsOpt instead")
+    }
+    if (options.has(nOffsetsOpt)) {
+      System.err.println(s"Warning: option $nOffsetsOpt is deprecated and ignored. It may be removed in the future. This implementation returns one offset per partition.")
+    }
+    if (options.has(maxWaitMsOpt)) {
+      System.err.println(s"Warning: option $maxWaitMsOpt is deprecated and ignored. It may be removed in the future. As a replacement, use $consumerPropertyOpt option and pass '${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG}' property.")
+    }
 
-    val brokerList = options.valueOf(brokerListOpt)
+    val brokerList = if (options.has(bootstrapServersOpt)) options.valueOf(bootstrapServersOpt) else options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser, brokerList)
-    val topicList = options.valueOf(topicOpt)
+    val topicList = if (options.has(topicsOpt)) options.valueOf(topicsOpt) else options.valueOf(topicOpt)
     val includeInternalTopics = options.has(includeInternalTopicsOpt)
-    val partitionList = options.valueOf(partitionOpt)
+    val partitionList = options.valueOf(partitionsOpt)
     //TODO Add support for -2(earliest) and other time values.
     //TODO Return error message when no offset for this timestamp.
     val timestamp = options.valueOf(timeOpt).longValue
