@@ -8,7 +8,7 @@ import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-class GetOffsetShellIntegrationTest extends IntegrationTestHarness {
+class GetOffsetShellLatestTest extends IntegrationTestHarness {
 
   val producerCount = 1
   val consumerCount = 0
