@@ -899,6 +899,7 @@ public class StreamThread extends Thread {
                 } catch (Exception e) {
                     log.error("{} Failed to remove suspended task {}", logPrefix, next.getKey(), e);
                 } finally {
+                    task.closeStateManager(false);
                     suspendedTaskIterator.remove();
                 }
             }
@@ -907,11 +908,11 @@ public class StreamThread extends Thread {
     }
 
     private void closeNonAssignedSuspendedStandbyTasks() {
-        final Set<TaskId> currentSuspendedTaskIds = partitionAssignor.standbyTasks().keySet();
+        final Set<TaskId> currentStandbyTaskIds = partitionAssignor.standbyTasks().keySet();
         final Iterator<Map.Entry<TaskId, StandbyTask>> standByTaskIterator = suspendedStandbyTasks.entrySet().iterator();
         while (standByTaskIterator.hasNext()) {
             final Map.Entry<TaskId, StandbyTask> suspendedTask = standByTaskIterator.next();
-            if (!currentSuspendedTaskIds.contains(suspendedTask.getKey())) {
+            if (!currentStandbyTaskIds.contains(suspendedTask.getKey())) {
                 log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, suspendedTask.getKey());
                 final StandbyTask task = suspendedTask.getValue();
                 try {
@@ -920,6 +921,7 @@ public class StreamThread extends Thread {
                 } catch (Exception e) {
                     log.error("{} Failed to remove suspended task standby {}", logPrefix, suspendedTask.getKey(), e);
                 } finally {
+                    task.closeStateManager(false);
                     standByTaskIterator.remove();
                 }
             }
@@ -1211,7 +1213,7 @@ public class StreamThread extends Thread {
                         it.remove();
                     } catch (final LockException e) {
                         // ignore and retry
-                        log.warn("Could not create task {}. Will retry.", taskId, e);
+                        log.warn("Could not create task {}. Will retry: {}", taskId, e.getMessage());
                     }
                 }
 
