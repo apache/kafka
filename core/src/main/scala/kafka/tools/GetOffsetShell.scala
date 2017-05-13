@@ -29,6 +29,8 @@ import scala.collection.JavaConversions._
 
 object GetOffsetShell extends Logging {
 
+  private final val TOOL_NAME = this.getClass.getSimpleName.replace("$", "")
+
   def main(args: Array[String]): Unit = {
     //TODO Check ConsoleConsumer on where to add logging statements
     val parser = new OptionParser
@@ -37,14 +39,13 @@ object GetOffsetShell extends Logging {
                            .describedAs("hostname:port,...,hostname:port")
                            .ofType(classOf[String])
     //TODO Rename to 'topics' to be consistent with 'partitions'. Keep 'topic' for backward compatibility, but display a warning when user specified it.
-    val topicOpt = parser.accepts("topic", "The list of topics to get offsets from. If not specified, GetOffsetShell will find offsets for all topics.")
+    val topicOpt = parser.accepts("topic", s"The list of topics to get offsets from. If not specified, $TOOL_NAME will find offsets for all topics.")
                            .withRequiredArg
                            .describedAs("topic1,...,topicN")
                            .ofType(classOf[String])
                            .defaultsTo("")
-    //TODO Don't hardcode the tool name
-    val includeInternalTopicsOpt = parser.accepts("include-internal-topics", "By default, when the list if topics is not given, GetOffsetShell excludes internal topics like consumer offsets. This options forces GetOffsetShell to include them.")
-    val partitionOpt = parser.accepts("partitions", "The list of partition ids. If not specified, GetOffsetShell will find offsets for all partitions.")
+    val includeInternalTopicsOpt = parser.accepts("include-internal-topics", s"By default, when the list if topics is not given, $TOOL_NAME excludes internal topics like consumer offsets. This options forces $TOOL_NAME to include them.")
+    val partitionOpt = parser.accepts("partitions", s"The list of partition ids. If not specified, $TOOL_NAME will find offsets for all partitions.")
                            .withRequiredArg
                            .describedAs("p1,...pM")
                            .ofType(classOf[String])
