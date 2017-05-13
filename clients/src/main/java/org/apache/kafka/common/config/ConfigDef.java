@@ -735,7 +735,7 @@ public class ConfigDef {
                 return Utils.join(valueList, ",");
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
-                return clazz.getCanonicalName();
+                return clazz.getName();
             default:
                 throw new IllegalStateException("Unknown type.");
         }
