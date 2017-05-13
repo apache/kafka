@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -41,9 +40,9 @@ public enum ModuleType {
 
     public static ModuleType from(Class<?> klass) {
         for (ModuleType type : ModuleType.values()) {
-           if (type.klass.isAssignableFrom(klass)) {
-               return type;
-           }
+            if (type.klass.isAssignableFrom(klass)) {
+                return type;
+            }
         }
         return UNKNOWN;
     }
@@ -51,10 +50,5 @@ public enum ModuleType {
     @Override
     public String toString() {
         return super.toString().toLowerCase(Locale.ROOT);
-    }
-
-    @JsonCreator
-    public static ModuleType forValue(String value) {
-        return ModuleType.valueOf(value.toUpperCase(Locale.ROOT));
     }
 }

@@ -119,7 +119,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         modules = new Modules(workerProps);
-        modules.init();
         config = new StandaloneConfig(workerProps);
         producerCallbacks = EasyMock.newCapture();
     }

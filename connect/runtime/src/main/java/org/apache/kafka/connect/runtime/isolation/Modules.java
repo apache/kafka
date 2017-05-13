@@ -30,6 +30,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URL;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -50,11 +52,19 @@ public class Modules {
         moduleTopPaths = pathList == null
                          ? new ArrayList<String>()
                          : Arrays.asList(pathList.trim().split("\\s*,\\s*", -1));
-        delegatingLoader = new DelegatingClassLoader(moduleTopPaths);
+        delegatingLoader = newDelegatingClassLoader(moduleTopPaths);
+        delegatingLoader.initLoaders();
     }
 
-    public void init() {
-        delegatingLoader.initLoaders();
+    private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
+        return (DelegatingClassLoader) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    @Override
+                    public Object run() {
+                        return new DelegatingClassLoader(paths);
+                    }
+                }
+        );
     }
 
     public DelegatingClassLoader delegatingLoader() {

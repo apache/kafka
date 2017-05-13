@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.runtime.isolation.ModuleClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Modules;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;

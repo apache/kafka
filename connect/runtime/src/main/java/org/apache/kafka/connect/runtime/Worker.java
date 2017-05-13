@@ -503,20 +503,18 @@ public class Worker {
     public void setTargetState(String connName, TargetState state) {
         log.info("Setting connector {} state to {}", connName, state);
 
-        WorkerConnector connector = connectors.get(connName);
+        WorkerConnector workerConnector = connectors.get(connName);
+        // TODO: Make sure that tasks can't be around while connector a object is null
+        if (workerConnector != null) {
+            ClassLoader save = modules.compareAndSwapLoaders(workerConnector.connector());
+            workerConnector.transitionTo(state);
 
-        Connector connectorObject = connector.connector();
-        ClassLoader save = modules.compareAndSwapLoaders(connectorObject);
-        // The following branches imply that connector object might be null but its tasks might
-        // be still around. TODO: Reconsider this assumption and refactor.
-        if (connector != null)
-            connector.transitionTo(state);
-
-        for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
-            if (taskEntry.getKey().connector().equals(connName))
-                taskEntry.getValue().transitionTo(state);
+            for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
+                if (taskEntry.getKey().connector().equals(connName))
+                    taskEntry.getValue().transitionTo(state);
+            }
+            Modules.compareAndSwapLoaders(save);
         }
-        Modules.compareAndSwapLoaders(save);
     }
 
 }

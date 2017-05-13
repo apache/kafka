@@ -40,7 +40,7 @@ public class ModuleUtils {
             boolean yeap = true;
         }
         boolean result = name.matches(BLACKLIST);
-        if(result) {
+        if (result) {
             result = !name.matches(WHITELIST);
         }
         return !result;

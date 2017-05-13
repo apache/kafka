@@ -67,7 +67,6 @@ public class ConnectStandalone {
 
         Time time = Time.SYSTEM;
         Modules modules = new Modules(workerProps);
-        modules.init();
         ClassLoader save = Thread.currentThread().getContextClassLoader();
         DelegatingClassLoader loader = modules.delegatingLoader();
         Thread.currentThread().setContextClassLoader(loader);

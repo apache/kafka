@@ -34,10 +34,13 @@ import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -98,7 +101,7 @@ public class DelegatingClassLoader extends URLClassLoader {
     private static List<URL> jarPaths(Path moduleDir) throws IOException {
         DirectoryStream.Filter<Path> jarFilter = new DirectoryStream.Filter<Path>() {
             public boolean accept(Path file) throws IOException {
-                return file.toString().toLowerCase().endsWith(".jar");
+                return file.toString().toLowerCase(Locale.ROOT).endsWith(".jar");
             }
         };
 
@@ -139,7 +142,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                         log.info("Loading dir: {}", dir);
                         URL[] jars = jarPaths(dir).toArray(new URL[0]);
                         // log.info("Loading jars: " + Arrays.toString(jars));
-                        ModuleClassLoader loader = new ModuleClassLoader(jars);
+                        ModuleClassLoader loader = newModuleClassLoader(jars);
                         log.info("Using loader: {}", loader);
                         ModuleScanResult modules = scanModulePath(loader, jars);
 
@@ -167,6 +170,17 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
+    private static ModuleClassLoader newModuleClassLoader(final URL[] jars) {
+        return (ModuleClassLoader) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    @Override
+                    public Object run() {
+                        return new ModuleClassLoader(jars);
+                    }
+                }
+        );
+    }
+
     public Set<ModuleDesc<Connector>> connectors() {
         return connectors;
     }
@@ -188,12 +202,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         builder.setClassLoaders(new ModuleClassLoader[]{loader});
         builder.addUrls(urls);
         Reflections reflections = new Reflections(builder);
-
-        List<ModuleDesc> modules = new ArrayList<>();
-        Class<?>[] moduleClasses = {Connector.class, Converter.class, Transformation.class};
-        for (Class<?> moduleClass : moduleClasses) {
-            modules.addAll(getModuleDesc(reflections, moduleClass, loader));
-        }
 
         return new ModuleScanResult(
                 getModuleDesc(reflections, Connector.class, loader),
