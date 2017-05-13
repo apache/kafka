@@ -35,44 +35,44 @@ object GetOffsetShell extends Logging {
     //TODO Check ConsoleConsumer on where to add logging statements
     val parser = new OptionParser
     val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
-                           .withRequiredArg
-                           .describedAs("hostname:port,...,hostname:port")
-                           .ofType(classOf[String])
+      .withRequiredArg
+      .describedAs("hostname:port,...,hostname:port")
+      .ofType(classOf[String])
     //TODO Rename to 'topics' to be consistent with 'partitions'. Keep 'topic' for backward compatibility, but display a warning when user specified it.
     val topicOpt = parser.accepts("topic", s"The list of topics to get offsets from. If not specified, $TOOL_NAME will find offsets for all topics.")
-                           .withRequiredArg
-                           .describedAs("topic1,...,topicN")
-                           .ofType(classOf[String])
-                           .defaultsTo("")
+      .withRequiredArg
+      .describedAs("topic1,...,topicN")
+      .ofType(classOf[String])
+      .defaultsTo("")
     val includeInternalTopicsOpt = parser.accepts("include-internal-topics", s"By default, when the list if topics is not given, $TOOL_NAME excludes internal topics like consumer offsets. This options forces $TOOL_NAME to include them.")
     val partitionOpt = parser.accepts("partitions", s"The list of partition ids. If not specified, $TOOL_NAME will find offsets for all partitions.")
-                           .withRequiredArg
-                           .describedAs("p1,...pM")
-                           .ofType(classOf[String])
-                           .defaultsTo("")
+      .withRequiredArg
+      .describedAs("p1,...pM")
+      .ofType(classOf[String])
+      .defaultsTo("")
     val timeOpt = parser.accepts("time", "timestamp of the offsets before that")
-                           .withRequiredArg
-                           .describedAs("timestamp/-1(latest)/-2(earliest)")
-                           .ofType(classOf[java.lang.Long])
-                           .defaultsTo(-1L)
+      .withRequiredArg
+      .describedAs("timestamp/-1(latest)/-2(earliest)")
+      .ofType(classOf[java.lang.Long])
+      .defaultsTo(-1L)
     val consumerPropertyOpt = parser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer.")
-                           .withRequiredArg
-                           .describedAs("property1=value1,...")
-                           .ofType(classOf[String])
+      .withRequiredArg
+      .describedAs("property1=value1,...")
+      .ofType(classOf[String])
     //TODO Display a warning when user specified it
     val nOffsetsOpt = parser.accepts("offsets", "DEPRECATED AND IGNORED: Always one offset is returned for each partition. Number of offsets returned")
-                           .withRequiredArg
-                           .describedAs("count")
-                           .ofType(classOf[java.lang.Integer])
-                           .defaultsTo(1)
+      .withRequiredArg
+      .describedAs("count")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(1)
     //TODO Display a warning when user specified it
     val maxWaitMsOpt = parser.accepts("max-wait-ms", s"DEPRECATED AND IGNORED: Use ${consumerPropertyOpt} and pass ${ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG} instead. The max amount of time each fetch request waits.")
-                           .withRequiredArg
-                           .describedAs("ms")
-                           .ofType(classOf[java.lang.Integer])
-                           .defaultsTo(1000)
+      .withRequiredArg
+      .describedAs("ms")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(1000)
 
-   if(args.length == 0)
+    if(args.length == 0)
       CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
 
     val options = parser.parse(args : _*)
