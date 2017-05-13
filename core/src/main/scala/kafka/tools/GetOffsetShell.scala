@@ -89,9 +89,7 @@ object GetOffsetShell extends Logging {
     //TODO Pass props to KafkaConsumer
     val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
 
-    //TODO Add support for non-provided topics
     val topics = CoreUtils.parseCsvList(topicList).toSet
-    //TODO Add support for non-provided partitions
     val partitions = CoreUtils.parseCsvList(partitionList).map(_.toInt).toSet
    //TODO Add support for -2(earliest) and other time values
     val offsets = getOffsets(brokerList, topics, partitions, timestamp, includeInternalTopics)
