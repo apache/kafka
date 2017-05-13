@@ -1,7 +1,7 @@
 package integration.kafka.tools
 
 import kafka.api.IntegrationTestHarness
-import kafka.tools.GetOffsetShell
+import kafka.tools.GetOffsetShell.getOffsets
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -39,7 +39,7 @@ class GetOffsetShellReplicatedTest extends IntegrationTestHarness {
   def twoReplicatedPartitions: Unit = {
     val partitions = 0 to 1
     val producerOffsets = partitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(topic1),
       partitions.toSet,
       -1,

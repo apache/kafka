@@ -1,7 +1,7 @@
 package integration.kafka.tools
 
 import kafka.api.IntegrationTestHarness
-import kafka.tools.GetOffsetShell
+import kafka.tools.GetOffsetShell.getOffsets
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -38,7 +38,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
   @Test
   def oneTopicOnePartitionOneMessage: Unit = {
     val producerOffset = sendRecordsLastOffsets(topic1, 0, 1)
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(topic1),
       Set(0),
       -1,
@@ -53,7 +53,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
   @Test
   def oneTopicOnePartitionManyMessages: Unit = {
     val producerOffset = sendRecordsLastOffsets(topic1, 0, 10)
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(topic1),
       Set(0),
       -1,
@@ -69,7 +69,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
   def oneTopicManyPartitions: Unit = {
     val partitions = 0 to 2
     val producerOffsets = partitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(topic1),
       partitions.toSet,
       -1,
@@ -89,7 +89,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = 0 to 2
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       topics,
       partitions.toSet,
       -1,
@@ -108,7 +108,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
   @Test
   def nonExistingTopic: Unit = {
     sendRecords(topic1, 0, 1)
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set("topic999"),
       Set(0),
       -1,
@@ -124,7 +124,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
   @Test
   def nonExistingPartition: Unit = {
     sendRecords(topic1, 0, 1)
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(topic1),
       Set(9999),
       -1,
@@ -142,7 +142,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val topics = Set(topic1, "topic999")
     val partitions = 0 to 2
     val producerOffsets = partitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       topics,
       partitions.toSet,
       -1,
@@ -168,7 +168,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val nonExistingPartitions = 10 to 13
     val partitions = existingPartitions.toSet ++ nonExistingPartitions
     val producerOffsets = existingPartitions.map(p => sendRecordsLastOffsets(topic1, p, 10 + 10 * p))
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(topic1),
       partitions,
       -1,
@@ -196,7 +196,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = existingPartitions.toSet ++ nonExistingPartitions
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> existingPartitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       topics,
       partitions,
       -1,
@@ -224,7 +224,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = 0 to 2
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(),
       Set(),
       -1,
@@ -246,7 +246,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = 0 to 1
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(),
       partitions.toSet,
       -1,
@@ -270,7 +270,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = existingPartitions.toSet ++ nonExistingPartitions
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> existingPartitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(),
       partitions,
       -1,
@@ -298,7 +298,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = 0 to 2
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(),
       Set(),
       -1,
@@ -322,7 +322,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = 0 to 1
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       Set(),
       partitions.toSet,
       -1,
@@ -346,7 +346,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val partitions = 0 to 2
     val producerOffsets: Map[String, IndexedSeq[Long]] =
       topics.map(topic => topic -> partitions.map(p => sendRecordsLastOffsets(topic, p, 10 + 10 * p))).toMap
-    val offsets = GetOffsetShell.getOffsets(brokerList,
+    val offsets = getOffsets(brokerList,
       topics,
       Set(),
       -1,
