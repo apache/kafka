@@ -74,7 +74,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     AdminUtils.createTopic(zkUtils, topic, 1, 1)
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
-    assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
+    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
   }
 
   @Test
@@ -82,11 +82,11 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topic = "test-broker-topic-metric"
     AdminUtils.createTopic(zkUtils, topic, 2, 1)
     createAndShutdownStep(topic, "group0", "consumer0", "producer0")
-    assertTrue("Topic metrics don't exist", checkTopicMetricsExists(topic))
+    assertTrue("Topic metrics don't exist", topicMetricGroups(topic).nonEmpty)
     assertNotNull(BrokerTopicStats.getBrokerTopicStats(topic))
     AdminUtils.deleteTopic(zkUtils, topic)
     TestUtils.verifyTopicDeletion(zkUtils, topic, 1, servers)
-    assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
+    assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
   }
 
   @Test
@@ -151,13 +151,9 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       .count
   }
 
-  private def checkTopicMetricsExists(topic: String): Boolean = {
+  private def topicMetricGroups(topic: String): Set[String] = {
     val topicMetricRegex = new Regex(".*BrokerTopicMetrics.*("+topic+")$")
-    val metricGroups = Metrics.defaultRegistry.groupedMetrics(MetricPredicate.ALL).entrySet
-    for (metricGroup <- metricGroups.asScala) {
-      if (topicMetricRegex.pattern.matcher(metricGroup.getKey).matches)
-        return true
-    }
-    false
+    val metricGroups = Metrics.defaultRegistry.groupedMetrics(MetricPredicate.ALL).keySet.asScala
+    metricGroups.filter(topicMetricRegex.pattern.matcher(_).matches)
   }
 }
