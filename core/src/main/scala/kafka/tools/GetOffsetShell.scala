@@ -217,14 +217,15 @@ object GetOffsetShell extends Logging {
         toPartitions(toRequest)
       )
     } else {
+      val (nonExistingTopics, existingTopics) = topics.partition(topic => !available.contains(topic))
       val requestedPartitions = for {
-        topic <- topics
+        topic <- existingTopics
         partition <- partitions
       } yield new TopicPartition(topic, partition)
       val availablePartitions = toPartitions(available)
       val (toError, toRequest) = requestedPartitions.partition(tp => !availablePartitions.contains(tp))
       (
-        missingPartitions(toError),
+        missingTopics(nonExistingTopics) ++ missingPartitions(toError),
         toRequest
       )
     }
@@ -253,7 +254,7 @@ object GetOffsetShell extends Logging {
   }
 
   private def missingPartitions(partitions: Set[TopicPartition]): Map[TopicPartition, Either[String, Long]] = {
-    partitions.map(tp => tp -> Left("Partition for topic not found")).toMap
+    partitions.map(tp => tp -> Left("Partition not found")).toMap
   }
 
   private def missingTopics(topics: Set[String]): Map[TopicPartition, Either[String, Long]] = {

@@ -117,7 +117,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
     val error = offsets(new TopicPartition("topic999", 0)).left.get
-    assertTrue("Must return an error about non-existing topic",
+    assertTrue(s"Must return an error about non-existing topic: $error",
       error.toLowerCase.contains("topic not found"))
   }
 
@@ -133,8 +133,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
     val error = offsets(new TopicPartition(topic1, 9999)).left.get
-    assertTrue("Must return an error about non-existing partition",
-      error.toLowerCase.contains("partition for topic not found"))
+    assertTrue(s"Must return an error about non-existing partition: $error",
+      error.toLowerCase.contains("partition not found"))
   }
 
   @Test
@@ -148,18 +148,16 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
       -1,
       false)
 
-    assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
+    assertEquals(s"Must have ${partitions.size} offset entries for existing topic and one offset entry for non-existing topic: $offsets", partitions.size + 1, offsets.size)
 
     for (p <- partitions) {
       val actualOffset = offsets(new TopicPartition(topic1, p)).right.get
       assertEquals(s"Actual offset for partition $topic1:$p must be equal to producer offset plus 1", producerOffsets(p) + 1, actualOffset)
     }
 
-    for (p <- partitions) {
-      val error = offsets(new TopicPartition("topic999", p)).left.get
-      assertTrue(s"Must return an error about non-existing partition: topic999:$p",
-        error.toLowerCase.contains("topic not found"))
-    }
+    val error = offsets(new TopicPartition("topic999", 0)).left.get
+    assertTrue(s"Must return an error about non-existing topic: $error",
+      error.toLowerCase.contains("topic not found"))
   }
 
   @Test
@@ -183,8 +181,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
 
     for (p <- nonExistingPartitions) {
       val error = offsets(new TopicPartition(topic1, p)).left.get
-      assertTrue(s"Must return an error about non-existing partition: $topic1:$p",
-        error.toLowerCase.contains("partition for topic not found"))
+      assertTrue(s"Must return an error about non-existing partition: $error",
+        error.toLowerCase.contains("partition not found"))
     }
   }
 
@@ -212,8 +210,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
 
       for (p <- nonExistingPartitions) {
         val error = offsets(new TopicPartition(topic, p)).left.get
-        assertTrue(s"Must return an error about non-existing partition: $topic:$p",
-          error.toLowerCase.contains("partition for topic not found"))
+        assertTrue(s"Must return an error about non-existing partition: $error",
+          error.toLowerCase.contains("partition not found"))
       }
     }
   }
@@ -286,8 +284,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
 
       for (p <- nonExistingPartitions) {
         val error = offsets(new TopicPartition(topic, p)).left.get
-        assertTrue(s"Must return an error about non-existing partition: $topic:$p",
-          error.toLowerCase.contains("partition for topic not found"))
+        assertTrue(s"Must return an error about non-existing partition: $error",
+          error.toLowerCase.contains("partition not found"))
       }
     }
   }
