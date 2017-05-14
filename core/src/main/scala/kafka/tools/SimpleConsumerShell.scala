@@ -211,7 +211,7 @@ object SimpleConsumerShell extends Logging {
             val fetchResponse = simpleConsumer.fetch(fetchRequest)
             val messageSet = fetchResponse.messageSet(topic, partitionId)
             if (messageSet.validBytes <= 0 && noWaitAtEndOfLog) {
-              println("Terminating. Reached the end of partition (%s, %d) at offset %d".format(topic, partitionId, offset))
+              System.err.println("Terminating. Reached the end of partition (%s, %d) at offset %d".format(topic, partitionId, offset))
               return
             }
             debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
