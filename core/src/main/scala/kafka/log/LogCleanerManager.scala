@@ -304,19 +304,22 @@ private[log] object LogCleanerManager extends Logging {
     // may be cleaned
     val firstUncleanableDirtyOffset: Long = Seq (
 
-        // the active segment is always uncleanable
-        Option(log.activeSegment.baseOffset),
+      // we do not clean beyond the first unstable offset
+      log.firstUnstableOffset.map(_.messageOffset),
 
-        // the first segment whose largest message timestamp is within a minimum time lag from now
-        if (compactionLagMs > 0) {
-          dirtyNonActiveSegments.find {
-            s =>
-              val isUncleanable = s.largestTimestamp > now - compactionLagMs
-              debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
-              isUncleanable
-          } map(_.baseOffset)
-        } else None
-      ).flatten.min
+      // the active segment is always uncleanable
+      Option(log.activeSegment.baseOffset),
+
+      // the first segment whose largest message timestamp is within a minimum time lag from now
+      if (compactionLagMs > 0) {
+        dirtyNonActiveSegments.find {
+          s =>
+            val isUncleanable = s.largestTimestamp > now - compactionLagMs
+            debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
+            isUncleanable
+        } map(_.baseOffset)
+      } else None
+    ).flatten.min
 
     debug(s"Finding range of cleanable offsets for log=${log.name} topicPartition=$topicPartition. Last clean offset=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegment.baseOffset=${log.activeSegment.baseOffset}")
 

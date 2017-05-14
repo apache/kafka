@@ -85,15 +85,13 @@ class TransactionIndexTest extends JUnitSuite {
 
   @Test
   def testCollectAbortedTransactions(): Unit = {
-    val abortedTxns = List(
+    val abortedTransactions = List(
       new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 11),
       new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 13),
       new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
       new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
 
-    abortedTxns.foreach(index.append)
-
-    val abortedTransactions = abortedTxns.map(_.asAbortedTransaction)
+    abortedTransactions.foreach(index.append)
 
     var result = index.collectAbortedTxns(0L, 100L)
     assertEquals(abortedTransactions, result.abortedTransactions)
@@ -122,14 +120,13 @@ class TransactionIndexTest extends JUnitSuite {
 
   @Test
   def testTruncate(): Unit = {
-    val abortedTxns = List(
+    val abortedTransactions = List(
       new AbortedTxn(producerId = 0L, firstOffset = 0, lastOffset = 10, lastStableOffset = 2),
       new AbortedTxn(producerId = 1L, firstOffset = 5, lastOffset = 15, lastStableOffset = 16),
       new AbortedTxn(producerId = 2L, firstOffset = 18, lastOffset = 35, lastStableOffset = 25),
       new AbortedTxn(producerId = 3L, firstOffset = 32, lastOffset = 50, lastStableOffset = 40))
-    val abortedTransactions = abortedTxns.map(_.asAbortedTransaction)
 
-    abortedTxns.foreach(index.append)
+    abortedTransactions.foreach(index.append)
 
     index.truncateTo(51)
     assertEquals(abortedTransactions, index.collectAbortedTxns(0L, 100L).abortedTransactions)

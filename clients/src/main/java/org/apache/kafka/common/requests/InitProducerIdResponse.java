@@ -23,7 +23,7 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 
-public class InitPidResponse extends AbstractResponse {
+public class InitProducerIdResponse extends AbstractResponse {
     /**
      * Possible Error codes:
      * OK
@@ -38,21 +38,21 @@ public class InitPidResponse extends AbstractResponse {
     private final long producerId;
     private final short epoch;
 
-    public InitPidResponse(int throttleTimeMs, Errors error, long producerId, short epoch) {
+    public InitProducerIdResponse(int throttleTimeMs, Errors error, long producerId, short epoch) {
         this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.producerId = producerId;
         this.epoch = epoch;
     }
 
-    public InitPidResponse(Struct struct) {
+    public InitProducerIdResponse(Struct struct) {
         this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
         this.epoch = struct.getShort(EPOCH_KEY_NAME);
     }
 
-    public InitPidResponse(int throttleTimeMs, Errors errors) {
+    public InitProducerIdResponse(int throttleTimeMs, Errors errors) {
         this(throttleTimeMs, errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
     }
 
@@ -82,8 +82,8 @@ public class InitPidResponse extends AbstractResponse {
         return struct;
     }
 
-    public static InitPidResponse parse(ByteBuffer buffer, short version) {
-        return new InitPidResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
+    public static InitProducerIdResponse parse(ByteBuffer buffer, short version) {
+        return new InitProducerIdResponse(ApiKeys.INIT_PRODUCER_ID.parseResponse(version, buffer));
     }
 
 }

@@ -20,7 +20,31 @@
 ext {
   versions = [:]
   libs = [:]
+  
+  // Enabled by default when commands like `testAll` are invoked
+  defaultScalaVersions = [ '2.11' ]
+  // Available if -PscalaVersion is used, this is necessary because Scala 2.12 requires Java 8 while Kafka is usually
+  // built with Java 7
+  availableScalaVersions = [ '2.11', '2.12' ]
 }
+
+// Add Scala version
+def defaultScala211Version = '2.11.11'
+def defaultScala212Version = '2.12.2'
+if (hasProperty('scalaVersion')) {
+  if (scalaVersion == '2.11') {
+    versions["scala"] = defaultScala211Version
+  } else if (scalaVersion == '2.12') {
+    versions["scala"] = defaultScala212Version
+  } else {
+    versions["scala"] = scalaVersion
+  }
+} else {
+  versions["scala"] = defaultScala211Version
+}
+
+// Add base Scala version
+versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("."))
 
 versions += [
   apacheda: "1.0.0-M33",
@@ -48,27 +72,6 @@ versions += [
   zookeeper: "3.4.10",
   jfreechart: "1.0.0",
 ]
-
-// Add Scala version
-def defaultScala210Version = '2.10.6'
-def defaultScala211Version = '2.11.11'
-def defaultScala212Version = '2.12.2'
-if (hasProperty('scalaVersion')) {
-  if (scalaVersion == '2.10') {
-    versions["scala"] = defaultScala210Version
-  } else if (scalaVersion == '2.11') {
-    versions["scala"] = defaultScala211Version
-  } else if (scalaVersion == '2.12') {
-    versions["scala"] = defaultScala212Version
-  } else {
-    versions["scala"] = scalaVersion
-  }
-} else {
-  versions["scala"] = defaultScala210Version
-}
-
-// Add base Scala version
-versions["baseScala"] = versions.scala.substring(0, versions.scala.lastIndexOf("."))
 
 libs += [
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",

@@ -159,15 +159,14 @@ class Log(@volatile var dir: File,
     loadSegments()
 
     /* Calculate the offset of the next message */
-    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset, activeSegment.baseOffset,
-      activeSegment.size.toInt)
+    nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset, activeSegment.baseOffset, activeSegment.size)
 
-    leaderEpochCache.clearLatest(nextOffsetMetadata.messageOffset)
+    leaderEpochCache.clearAndFlushLatest(nextOffsetMetadata.messageOffset)
 
     logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-    leaderEpochCache.clearEarliest(logStartOffset)
+    leaderEpochCache.clearAndFlushEarliest(logStartOffset)
 
     loadProducerState(logEndOffset)
 
@@ -779,7 +778,8 @@ class Log(@volatile var dir: File,
                               loadingFromLog: Boolean): Unit = {
     val pid = batch.producerId
     val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
-    val maybeCompletedTxn = appendInfo.append(batch)
+    val shouldValidateSequenceNumbers = topicPartition.topic() != Topic.GroupMetadataTopicName
+    val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 
@@ -879,6 +879,14 @@ class Log(@volatile var dir: File,
     FetchDataInfo(nextOffsetMetadata, MemoryRecords.EMPTY)
   }
 
+  private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
+    val segmentEntry = segments.floorEntry(startOffset)
+    val allAbortedTxns = ListBuffer.empty[AbortedTxn]
+    def accumulator(abortedTxns: List[AbortedTxn]): Unit = allAbortedTxns ++= abortedTxns
+    collectAbortedTransactions(logStartOffset, upperBoundOffset, segmentEntry, accumulator)
+    allAbortedTxns.toList
+  }
+
   private def addAbortedTransactions(startOffset: Long, segmentEntry: JEntry[JLong, LogSegment],
                                      fetchInfo: FetchDataInfo): FetchDataInfo = {
     val fetchSize = fetchInfo.records.sizeInBytes
@@ -891,27 +899,28 @@ class Log(@volatile var dir: File,
       else
         logEndOffset
     }
-    val abortedTransactions = collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry)
+
+    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
+    def accumulator(abortedTxns: List[AbortedTxn]): Unit = abortedTransactions ++= abortedTxns.map(_.asAbortedTransaction)
+    collectAbortedTransactions(startOffset, upperBoundOffset, segmentEntry, accumulator)
+
     FetchDataInfo(fetchOffsetMetadata = fetchInfo.fetchOffsetMetadata,
       records = fetchInfo.records,
       firstEntryIncomplete = fetchInfo.firstEntryIncomplete,
-      abortedTransactions = Some(abortedTransactions))
+      abortedTransactions = Some(abortedTransactions.toList))
   }
 
   private def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long,
-                                         startingSegmentEntry: JEntry[JLong, LogSegment]): List[AbortedTransaction] = {
+                                         startingSegmentEntry: JEntry[JLong, LogSegment],
+                                         accumulator: List[AbortedTxn] => Unit): Unit = {
     var segmentEntry = startingSegmentEntry
-    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
-
     while (segmentEntry != null) {
       val searchResult = segmentEntry.getValue.collectAbortedTxns(startOffset, upperBoundOffset)
-      abortedTransactions ++= searchResult.abortedTransactions
+      accumulator(searchResult.abortedTransactions)
       if (searchResult.isComplete)
-        return abortedTransactions.toList
-
+        return
       segmentEntry = segments.higherEntry(segmentEntry.getKey)
     }
-    abortedTransactions.toList
   }
 
   /**
@@ -997,7 +1006,7 @@ class Log(@volatile var dir: File,
         // remove the segments for lookups
         deletable.foreach(deleteSegment)
         logStartOffset = math.max(logStartOffset, segments.firstEntry().getValue.baseOffset)
-        leaderEpochCache.clearEarliest(logStartOffset)
+        leaderEpochCache.clearAndFlushEarliest(logStartOffset)
         producerStateManager.evictUnretainedProducers(logStartOffset)
         updateFirstUnstableOffset()
       }
@@ -1282,7 +1291,7 @@ class Log(@volatile var dir: File,
         updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
         this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-        leaderEpochCache.clearLatest(targetOffset)
+        leaderEpochCache.clearAndFlushLatest(targetOffset)
         loadProducerState(targetOffset)
       }
     }
@@ -1308,7 +1317,7 @@ class Log(@volatile var dir: File,
                                 initFileSize = initFileSize,
                                 preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
-      leaderEpochCache.clear()
+      leaderEpochCache.clearAndFlush()
 
       producerStateManager.truncate()
       producerStateManager.updateMapEndOffset(newOffset)

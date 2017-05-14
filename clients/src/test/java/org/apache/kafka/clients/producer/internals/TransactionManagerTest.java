@@ -44,8 +44,8 @@ import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.InitPidRequest;
-import org.apache.kafka.common.requests.InitPidResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -163,7 +163,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // get pid.
 
-        assertTrue(transactionManager.hasPid());
+        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -275,7 +275,7 @@ public class TransactionManagerTest {
 
         assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isCompleted());
-        assertFalse(transactionManager.hasPid());
+        assertFalse(transactionManager.hasProducerId());
 
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());
@@ -285,7 +285,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());  // get pid and epoch
 
         assertTrue(initPidResult.isCompleted()); // The future should only return after the second round of retries succeed.
-        assertTrue(transactionManager.hasPid());
+        assertTrue(transactionManager.hasProducerId());
         assertEquals(pid, transactionManager.pidAndEpoch().producerId);
         assertEquals(epoch, transactionManager.pidAndEpoch().epoch);
     }
@@ -308,7 +308,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // get pid.
 
-        assertTrue(transactionManager.hasPid());
+        assertTrue(transactionManager.hasProducerId());
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
@@ -365,7 +365,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // get pid.
 
-        assertTrue(transactionManager.hasPid());
+        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         // User does one producer.sed
         transactionManager.maybeAddPartitionToTransaction(tp0);
@@ -428,7 +428,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // get pid.
 
-        assertTrue(transactionManager.hasPid());
+        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -463,7 +463,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // get pid.
 
-        assertTrue(transactionManager.hasPid());
+        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -530,12 +530,12 @@ public class TransactionManagerTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                InitPidRequest initPidRequest = (InitPidRequest) body;
-                assertEquals(initPidRequest.transactionalId(), transactionalId);
-                assertEquals(initPidRequest.transactionTimeoutMs(), transactionTimeoutMs);
+                InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
+                assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
+                assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
                 return true;
             }
-        }, new InitPidResponse(0, error, pid, epoch), shouldDisconnect);
+        }, new InitProducerIdResponse(0, error, pid, epoch), shouldDisconnect);
     }
 
     private void prepareProduceResponse(Errors error, final long pid, final short epoch) {

@@ -28,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 
 import scala.collection.mutable.ListBuffer
 
-private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTransaction], isComplete: Boolean)
+private[log] case class TxnIndexSearchResult(abortedTransactions: List[AbortedTxn], isComplete: Boolean)
 
 /**
  * The transaction index maintains metadata about the aborted transactions for each segment. This includes
@@ -114,7 +114,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
     }
   }
 
-  private def iterator(allocate: () => ByteBuffer): Iterator[(AbortedTxn, Int)] = {
+  private def iterator(allocate: () => ByteBuffer = () => ByteBuffer.allocate(AbortedTxn.TotalSize)): Iterator[(AbortedTxn, Int)] = {
     maybeChannel match {
       case None => Iterator.empty
       case Some(channel) =>
@@ -148,7 +148,7 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   }
 
   def allAbortedTxns: List[AbortedTxn] = {
-    iterator(() => ByteBuffer.allocate(AbortedTxn.TotalSize)).map(_._1).toList
+    iterator().map(_._1).toList
   }
 
   /**
@@ -160,11 +160,10 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
    *         into the next log segment.
    */
   def collectAbortedTxns(fetchOffset: Long, upperBoundOffset: Long): TxnIndexSearchResult = {
-    val abortedTransactions = ListBuffer.empty[AbortedTransaction]
-    val buffer = ByteBuffer.allocate(AbortedTxn.TotalSize)
-    for ((abortedTxn, _) <- iterator(() => buffer)) {
+    val abortedTransactions = ListBuffer.empty[AbortedTxn]
+    for ((abortedTxn, _) <- iterator()) {
       if (abortedTxn.lastOffset >= fetchOffset && abortedTxn.firstOffset < upperBoundOffset)
-        abortedTransactions += abortedTxn.asAbortedTransaction
+        abortedTransactions += abortedTxn
 
       if (abortedTxn.lastStableOffset >= upperBoundOffset)
         return TxnIndexSearchResult(abortedTransactions.toList, isComplete = true)

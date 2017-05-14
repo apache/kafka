@@ -14,21 +14,31 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.connect.runtime.rest.entities;
 
-/**
- * The transaction coordinator returns this error code if the timeout received via the InitProducerIdRequest is larger than
- * the `max.transaction.timeout.ms` config value.
- */
-public class InvalidTxnTimeoutException extends ApiException {
-    private static final long serialVersionUID = 1L;
+import org.junit.Test;
 
-    public InvalidTxnTimeoutException(String message, Throwable cause) {
-        super(message, cause);
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+public class ConnectorTypeTest {
+
+    @Test
+    public void testToStringIsLowerCase() {
+        for (ConnectorType ct : ConnectorType.values()) {
+            String shouldBeLower = ct.toString();
+            assertFalse(shouldBeLower.isEmpty());
+            for (Character c : shouldBeLower.toCharArray()) {
+                assertTrue(Character.isLowerCase(c));
+            }
+        }
     }
 
-    public InvalidTxnTimeoutException(String message) {
-        super(message);
+    @Test
+    public void testForValue() {
+        for (ConnectorType ct : ConnectorType.values()) {
+            assertEquals(ct, ConnectorType.forValue(ct.toString()));
+        }
     }
 }
-

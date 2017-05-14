@@ -90,7 +90,8 @@ public class JoinGroupRequest extends AbstractRequest {
         @Override
         public JoinGroupRequest build(short version) {
             if (version < 1) {
-                rebalanceTimeout = -1;
+                // v0 had no rebalance timeout but used session timeout implicitly
+                rebalanceTimeout = sessionTimeout;
             }
             return new JoinGroupRequest(version, groupId, sessionTimeout,
                     rebalanceTimeout, memberId, protocolType, groupProtocols);

@@ -118,7 +118,8 @@ object DelayedOperationPurgatory {
 
   def apply[T <: DelayedOperation](purgatoryName: String,
                                    brokerId: Int = 0,
-                                   purgeInterval: Int = 1000): DelayedOperationPurgatory[T] = {
+                                   purgeInterval: Int = 1000,
+                                   reaperEnabled: Boolean = true): DelayedOperationPurgatory[T] = {
     val timer = new SystemTimer(purgatoryName)
     new DelayedOperationPurgatory[T](purgatoryName, timer, brokerId, purgeInterval)
   }
@@ -393,7 +394,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * A background reaper to expire delayed operations that have timed out
    */
   private class ExpiredOperationReaper extends ShutdownableThread(
-    "ExpirationReaper-%d".format(brokerId),
+    "ExpirationReaper-%d-%s".format(brokerId, purgatoryName),
     false) {
 
     override def doWork() {

@@ -28,26 +28,21 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
 
-abstract class BaseReplicaFetchTest extends ZooKeeperTestHarness  {
+class ReplicaFetchTest extends ZooKeeperTestHarness  {
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
 
-  // This should be defined if `securityProtocol` uses SSL (eg SSL, SASL_SSL)
-  protected def trustStoreFile: Option[File]
-  protected def securityProtocol: SecurityProtocol
-
   @Before
   override def setUp() {
     super.setUp()
-    val props = createBrokerConfigs(2, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile)
+    val props = createBrokerConfigs(2, zkConnect)
     brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
   }
 
   @After
   override def tearDown() {
-    brokers.foreach(_.shutdown())
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 

@@ -179,7 +179,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 request = new DeleteRecordsRequest(struct, version);
                 break;
             case INIT_PRODUCER_ID:
-                request = new InitPidRequest(struct, version);
+                request = new InitProducerIdRequest(struct, version);
                 break;
             case OFFSET_FOR_LEADER_EPOCH:
                 request = new OffsetsForLeaderEpochRequest(struct, version);

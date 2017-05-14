@@ -32,7 +32,7 @@ import kafka.common.Topic.{GroupMetadataTopicName, TransactionStateTopicName, is
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
-import kafka.coordinator.transaction.{InitPidResult, TransactionCoordinator}
+import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.{Log, LogManager, TimestampOffset}
 import kafka.network.{RequestChannel, RequestOrResponseSend}
 import kafka.network.RequestChannel.{Response, Session}
@@ -110,7 +110,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
-        case ApiKeys.INIT_PRODUCER_ID => handleInitPidRequest(request)
+        case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
         case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
         case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
@@ -516,8 +516,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         fetchedPartitionData.put(topicPartition, data)
 
         // record the bytes out metrics only when the response is being sent
-        BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesOutRate.mark(data.records.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.records.sizeInBytes)
+        BrokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
       }
 
       val response = new FetchResponse(fetchedPartitionData, 0)
@@ -1387,20 +1386,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleInitPidRequest(request: RequestChannel.Request): Unit = {
-    val initPidRequest = request.body[InitPidRequest]
-    val transactionalId = initPidRequest.transactionalId
+  def handleInitProducerIdRequest(request: RequestChannel.Request): Unit = {
+    val initProducerIdRequest = request.body[InitProducerIdRequest]
+    val transactionalId = initProducerIdRequest.transactionalId
 
     // Send response callback
-    def sendResponseCallback(result: InitPidResult): Unit = {
+    def sendResponseCallback(result: InitProducerIdResult): Unit = {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
-        val responseBody: InitPidResponse = new InitPidResponse(throttleTimeMs, result.error, result.pid, result.epoch)
-        trace(s"InitPidRequest: Completed $transactionalId's InitPidRequest with result $result from client ${request.header.clientId}.")
+        val responseBody = new InitProducerIdResponse(throttleTimeMs, result.error, result.producerId, result.producerEpoch)
+        trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
-    txnCoordinator.handleInitPid(transactionalId, initPidRequest.transactionTimeoutMs, sendResponseCallback)
+    txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.transactionTimeoutMs, sendResponseCallback)
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
@@ -1409,7 +1408,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(error: Errors) {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
         val responseBody = new EndTxnResponse(throttleTimeMs, error)
-        trace(s"Completed ${endTxnRequest.transactionalId()}'s EndTxnRequest with command: ${endTxnRequest.command()}, errors: $error from client ${request.header.clientId}.")
+        trace(s"Completed ${endTxnRequest.transactionalId}'s EndTxnRequest with command: ${endTxnRequest.command}, errors: $error from client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
@@ -1434,8 +1433,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
-    def sendResponseCallback(pid: Long)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
-      errors.put(pid, responseStatus.mapValues(_.error).asJava)
+    def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+      errors.put(producerId, responseStatus.mapValues(_.error).asJava)
+
+      val successfulPartitions = responseStatus.filter { case (_, partitionResponse) =>
+        partitionResponse.error == Errors.NONE
+      }.keys.toSeq
+
+      try {
+        groupCoordinator.handleTxnCompletion(producerId = producerId, topicPartitions = successfulPartitions, transactionResult = result)
+      } catch {
+        case e: Exception =>
+          error(s"Received an exception while trying to update the offsets cache on transaction completion: $e")
+          val producerIdErrors = errors.get(producerId)
+          successfulPartitions.foreach(producerIdErrors.put(_, Errors.UNKNOWN))
+      }
+
       if (numAppends.decrementAndGet() == 0)
         sendResponseExemptThrottle(request, new RequestChannel.Response(request, new WriteTxnMarkersResponse(errors)))
     }
@@ -1461,7 +1474,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         internalTopicsAllowed = true,
         isFromClient = false,
         entriesPerPartition = controlRecords,
-        sendResponseCallback(producerId))
+        sendResponseCallback(producerId, marker.transactionResult))
     }
   }
 
@@ -1511,9 +1524,78 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
-    val emptyResponse = new java.util.HashMap[TopicPartition, Errors]()
-    def createResponse(throttleTimeMs: Int): AbstractResponse = new TxnOffsetCommitResponse(throttleTimeMs, emptyResponse)
-    sendResponseMaybeThrottle(request, createResponse)
+    val header = request.header
+    val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
+    // reject the request if not authorized to the group
+    if (!authorize(request.session, Read, new Resource(Group, txnOffsetCommitRequest.consumerGroupId))) {
+      val error = Errors.GROUP_AUTHORIZATION_FAILED
+      val results = txnOffsetCommitRequest.offsets.keySet.asScala.map { topicPartition =>
+        (topicPartition, error)
+      }.toMap
+      def createResponse(throttleTimeMs: Int): AbstractResponse = new TxnOffsetCommitResponse(throttleTimeMs, results.asJava)
+      sendResponseMaybeThrottle(request, createResponse)
+    } else {
+      val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = txnOffsetCommitRequest.offsets.asScala.toMap.partition {
+        case (topicPartition, _) =>
+          val authorizedForDescribe = authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))
+          val exists = metadataCache.contains(topicPartition.topic)
+          if (!authorizedForDescribe && exists)
+              debug(s"Transaction Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+                s"on partition $topicPartition failing due to user not having DESCRIBE authorization, but returning UNKNOWN_TOPIC_OR_PARTITION")
+          authorizedForDescribe && exists
+      }
+
+      val (authorizedTopics, unauthorizedForReadTopics) = existingAndAuthorizedForDescribeTopics.partition {
+        case (topicPartition, _) => authorize(request.session, Read, new Resource(Topic, topicPartition.topic))
+      }
+
+      // the callback for sending an offset commit response
+      def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Errors]) {
+        val combinedCommitStatus = commitStatus ++
+          unauthorizedForReadTopics.mapValues(_ => Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => Errors.UNKNOWN_TOPIC_OR_PARTITION)
+
+        if (isDebugEnabled)
+          combinedCommitStatus.foreach { case (topicPartition, error) =>
+            if (error != Errors.NONE) {
+              debug(s"TxnOffsetCommit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+                s"on partition $topicPartition failed due to ${error.exceptionName}")
+            }
+          }
+        def createResponse(throttleTimeMs: Int): AbstractResponse = new TxnOffsetCommitResponse(throttleTimeMs, combinedCommitStatus.asJava)
+        sendResponseMaybeThrottle(request, createResponse)
+      }
+
+      if (authorizedTopics.isEmpty)
+        sendResponseCallback(Map.empty)
+      else {
+        val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
+
+        // commit timestamp is always set to now.
+        // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
+        val currentTimestamp = time.milliseconds
+        val defaultExpireTimestamp = offsetRetention + currentTimestamp
+        val partitionData = authorizedTopics.mapValues { partitionData =>
+          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
+          new OffsetAndMetadata(
+            offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
+            commitTimestamp = currentTimestamp,
+            expireTimestamp = defaultExpireTimestamp
+          )
+        }
+
+        // call coordinator to handle commit offset
+        groupCoordinator.handleCommitOffsets(
+          txnOffsetCommitRequest.consumerGroupId,
+          null,
+          -1,
+          partitionData,
+          sendResponseCallback,
+          txnOffsetCommitRequest.producerId,
+          txnOffsetCommitRequest.producerEpoch)
+      }
+    }
+
   }
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
