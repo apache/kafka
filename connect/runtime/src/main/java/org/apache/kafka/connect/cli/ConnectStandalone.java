@@ -67,11 +67,8 @@ public class ConnectStandalone {
 
         Time time = Time.SYSTEM;
         Modules modules = new Modules(workerProps);
-        ClassLoader save = Thread.currentThread().getContextClassLoader();
-        DelegatingClassLoader loader = modules.delegatingLoader();
-        Thread.currentThread().setContextClassLoader(loader);
+        modules.compareAndSwapWithDelegatingLoader();
         StandaloneConfig config = new StandaloneConfig(workerProps);
-        Thread.currentThread().setContextClassLoader(save);
 
         RestServer rest = new RestServer(config);
         URI advertisedUrl = rest.advertisedUrl();
@@ -95,13 +92,9 @@ public class ConnectStandalone {
                             log.info("Created connector {}", info.result().name());
                     }
                 });
-                loader = modules.delegatingLoader();
-                save = Thread.currentThread().getContextClassLoader();
-                Thread.currentThread().setContextClassLoader(loader);
                 herder.putConnectorConfig(
                         connectorProps.get(ConnectorConfig.NAME_CONFIG),
                         connectorProps, false, cb);
-                Thread.currentThread().setContextClassLoader(save);
                 cb.get();
             }
         } catch (Throwable t) {
