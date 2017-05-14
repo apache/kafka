@@ -23,8 +23,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
-import java.util.List;
-
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
 
