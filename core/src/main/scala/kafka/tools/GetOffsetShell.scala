@@ -179,8 +179,8 @@ object GetOffsetShell extends Logging {
     props.putAll(consumerConfig)
     val consumer: Consumer[Array[Byte], Array[Byte]] = new KafkaConsumer(props)
 
-    val available = consumer.listTopics()
-      .map { case (topic, pInfos) => topic -> pInfos.map(_.partition()).toSet }
+    val available = consumer.listTopics
+      .map { case (topic, pInfos) => topic -> pInfos.map(_.partition).toSet }
       .toMap
     val (toError, toRequest) = extractExistingPartitions(topics, partitions, available, includeInternalTopics)
     val offsets = timestamp match {
@@ -203,7 +203,7 @@ object GetOffsetShell extends Logging {
         checkIncludeInternalTopics(availablePartitions, includeInternalTopics)
       )
     } else if (topics.isEmpty) {
-      val toRequest = toPartitions(available).filter(tp => partitions.contains(tp.partition()))
+      val toRequest = toPartitions(available).filter(tp => partitions.contains(tp.partition))
       val toError = getNonExistingPartitions(partitions, available)
       (
         missingPartitions(checkIncludeInternalTopics(toError, includeInternalTopics)),
@@ -242,7 +242,7 @@ object GetOffsetShell extends Logging {
     if (includeInternalTopics)
       partitions
     else
-      partitions.filterNot(tp => InternalTopics.contains(tp.topic()))
+      partitions.filterNot(tp => InternalTopics.contains(tp.topic))
   }
 
   private def getNonExistingPartitions(partitions: Set[Int],
@@ -284,7 +284,7 @@ object GetOffsetShell extends Logging {
 
   private def offsetTimestampToResult(offsetTimestamp: OffsetAndTimestamp): Either[String, Long] = {
     Option(offsetTimestamp)
-      .map(ot => Right(ot.offset()))
+      .map(ot => Right(ot.offset))
       .getOrElse(Left("Offset for the specified timestamp not found"))
   }
 }
