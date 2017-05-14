@@ -16,23 +16,25 @@
  */
 package org.apache.kafka.connect.transforms.util;
 
-import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.junit.Test;
 
-import java.util.List;
+import java.util.Collections;
 
-public class NonEmptyListValidator implements ConfigDef.Validator {
+public class NonEmptyListValidatorTest {
 
-    @Override
-    public void ensureValid(String name, Object value) {
-        if (value == null || ((List) value).isEmpty()) {
-            throw new ConfigException(name, value, "Empty list");
-        }
+    @Test(expected = ConfigException.class)
+    public void testNullList() {
+        new NonEmptyListValidator().ensureValid("foo", null);
     }
 
-    @Override
-    public String toString() {
-        return "non-empty list";
+    @Test(expected = ConfigException.class)
+    public void testEmptyList() {
+        new NonEmptyListValidator().ensureValid("foo", Collections.emptyList());
     }
 
+    @Test
+    public void testValidList() {
+        new NonEmptyListValidator().ensureValid("foo", Collections.singletonList("foo"));
+    }
 }
