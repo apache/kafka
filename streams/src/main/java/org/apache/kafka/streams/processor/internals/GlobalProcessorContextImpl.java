@@ -43,20 +43,6 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         return stateManager.getGlobalStore(name);
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
-    public <K, V> void forward(K key, V value) {
-        final ProcessorNode previousNode = currentNode();
-        try {
-            for (ProcessorNode child : (List<ProcessorNode>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
-            }
-        } finally {
-            setCurrentNode(previousNode);
-        }
-    }
-
     @Override
     public <K, V> void forward(K key, V value, int childIndex) {
         throw new UnsupportedOperationException();
