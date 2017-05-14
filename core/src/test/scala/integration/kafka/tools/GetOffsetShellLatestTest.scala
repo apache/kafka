@@ -361,7 +361,7 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
   }
 
   private def sendRecordsLastOffsets(topic: String, partition: Int, number: Int): Long = {
-    sendRecords(topic, partition, number).last.offset()
+    sendRecords(topic, partition, number).last.offset
   }
 
   private def sendRecords(topic: String, partition: Int, number: Int): Seq[RecordMetadata] = {
