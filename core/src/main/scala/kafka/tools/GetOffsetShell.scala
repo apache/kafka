@@ -134,8 +134,8 @@ object GetOffsetShell extends Logging {
       .toList.sortBy { case (tp, _) => (tp.topic, tp.partition) }
       .map {
         case (tp, reply) => reply match {
-          case Right(offset) => "%s:%d: %d".format(tp.topic, tp.partition, offset)
-          case Left(error) => "%s:%d: %s".format(tp.topic, tp.partition, error)
+          case Right(offset) => "%s:%d:%d".format(tp.topic, tp.partition, offset)
+          case Left(error) => "%s:%d:%s".format(tp.topic, tp.partition, error)
         }
       }
       .mkString("\n")
