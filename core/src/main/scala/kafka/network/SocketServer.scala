@@ -544,7 +544,11 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def processDisconnected() {
-    selector.disconnected.asScala.foreach { connectionId =>
+    // Duplicate connectionId entries could lead to a double decrement of the connection quota which is keyed by host address
+    val distinct = selector.disconnected.asScala.distinct
+    if (distinct.size != selector.disconnected.size)
+      warn(s"disconnected list contains duplicates: $distinct")
+    distinct.foreach { connectionId =>
       val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
         throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
       }.remoteHost
