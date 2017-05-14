@@ -1,19 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
+ */
 
 package org.apache.kafka.connect.transforms;
 
@@ -27,7 +27,7 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
-import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.transforms.util.SchemaUtil;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
@@ -43,8 +43,8 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
             "Flatten a nested data structure, generating names for each field by concatenating the field names at each "
                     + "level with a configurable delimiter character. Applies to Struct when schema present, or a Map "
                     + "in the case of schemaless data. The default delimiter is '.'."
-                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getCanonicalName() + "</code>) "
-                    + "or value (<code>" + Value.class.getCanonicalName() + "</code>).";
+                    + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
+                    + "or value (<code>" + Value.class.getName() + "</code>).";
 
     private static final String DELIMITER_CONFIG = "delimiter";
     private static final String DELIMITER_DEFAULT = ".";
@@ -106,7 +106,13 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                 newRecord.put(fieldName(fieldNamePrefix, entry.getKey()), null);
                 return;
             }
-            switch (ConnectSchema.schemaType(value.getClass())) {
+
+            Schema.Type inferredType = ConnectSchema.schemaType(value.getClass());
+            if (inferredType == null) {
+                throw new DataException("Flatten transformation was passed a value of type " + value.getClass()
+                        + " which is not supported by Connect's data API");
+            }
+            switch (inferredType) {
                 case INT8:
                 case INT16:
                 case INT32:
@@ -123,7 +129,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     applySchemaless(fieldValue, fieldName, newRecord);
                     break;
                 default:
-                    throw new ConnectException("Flatten transformation does not support " + entry.getValue().getClass()
+                    throw new DataException("Flatten transformation does not support " + entry.getValue().getClass()
                             + " for record without schemas (for field " + fieldName + ").");
             }
         }
@@ -143,7 +149,6 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
         final Struct updatedValue = new Struct(updatedSchema);
         buildWithSchema(value, "", updatedValue);
         return newRecord(record, updatedSchema, updatedValue);
-
     }
 
     private void buildUpdatedSchema(Schema schema, String fieldNamePrefix, SchemaBuilder newSchema) {
@@ -165,7 +170,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     buildUpdatedSchema(field.schema(), fieldName, newSchema);
                     break;
                 default:
-                    throw new ConnectException("Flatten transformation does not support " + field.schema().type()
+                    throw new DataException("Flatten transformation does not support " + field.schema().type()
                             + " for record without schemas (for field " + fieldName + ").");
             }
         }
@@ -190,7 +195,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                     buildWithSchema(record.getStruct(field.name()), fieldName, newRecord);
                     break;
                 default:
-                    throw new ConnectException("Flatten transformation does not support " + field.schema().type()
+                    throw new DataException("Flatten transformation does not support " + field.schema().type()
                             + " for record without schemas (for field " + fieldName + ").");
             }
         }
