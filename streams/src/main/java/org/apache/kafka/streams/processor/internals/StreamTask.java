@@ -115,15 +115,15 @@ public class StreamTask extends AbstractTask implements Punctuator {
         // to corresponding source nodes in the processor topology
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
-        final TimestampExtractor timestampExtractor = config.getConfiguredInstance(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, TimestampExtractor.class);
-
+        final TimestampExtractor defaultTimestampExtractor  = config.defaultTimestampExtractor();
         for (final TopicPartition partition : partitions) {
             final SourceNode source = topology.source(partition.topic());
-            final RecordQueue queue = new RecordQueue(partition, source, timestampExtractor);
+            final TimestampExtractor sourceTimestampExtractor = source.getTimestampExtractor() != null ? source.getTimestampExtractor() : defaultTimestampExtractor;
+            final RecordQueue queue = new RecordQueue(partition, source, sourceTimestampExtractor);
             partitionQueues.put(partition, queue);
         }
 
-        partitionGroup = new PartitionGroup(partitionQueues, timestampExtractor);
+        partitionGroup = new PartitionGroup(partitionQueues);
 
         // initialize the consumed offset cache
         consumedOffsets = new HashMap<>();
@@ -380,7 +380,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      */
     @SuppressWarnings("unchecked")
     public int addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
-        final int oldQueueSize = partitionGroup.numBuffered();
+        final int oldQueueSize = partitionGroup.numBuffered(partition);
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         log.trace("{} Added records into the buffered queue of partition {}, new queue size is {}", logPrefix, partition, newQueueSize);

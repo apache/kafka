@@ -94,6 +94,9 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(1));
         checkErrorResponse(createListOffsetRequest(1), new UnknownServerException());
         checkResponse(createListOffsetResponse(1), 1);
+        checkRequest(createListOffsetRequest(2));
+        checkErrorResponse(createListOffsetRequest(2), new UnknownServerException());
+        checkResponse(createListOffsetResponse(2), 2);
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2));
         checkRequest(createMetadataRequest(1, asList("topic1")));
         checkErrorResponse(createMetadataRequest(1, asList("topic1")), new UnknownServerException());
@@ -495,7 +498,28 @@ public class RequestResponseTest {
         FetchRequest fr2 = new FetchRequest(fr.toStruct(), version);
         assertEquals(fr2.maxBytes(), fr.maxBytes());
     }
-    
+
+    @Test
+    public void testFetchRequestIsolationLevel() throws Exception {
+        FetchRequest request = createFetchRequest(4, IsolationLevel.READ_COMMITTED);
+        Struct struct = request.toStruct();
+        FetchRequest deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+
+        request = createFetchRequest(4, IsolationLevel.READ_UNCOMMITTED);
+        struct = request.toStruct();
+        deserialized = (FetchRequest) deserialize(request, struct, request.version());
+        assertEquals(request.isolationLevel(), deserialized.isolationLevel());
+    }
+
+    @Test
+    public void testJoinGroupRequestVersion0RebalanceTimeout() throws Exception {
+        final short version = 0;
+        JoinGroupRequest jgr = createJoinGroupRequest(version);
+        JoinGroupRequest jgr2 = new JoinGroupRequest(jgr.toStruct(), version);
+        assertEquals(jgr2.rebalanceTimeout(), jgr.rebalanceTimeout());
+    }
+
     private RequestHeader createRequestHeader() {
         return new RequestHeader((short) 10, (short) 1, "", 10);
     }
@@ -511,6 +535,13 @@ public class RequestResponseTest {
 
     private FindCoordinatorResponse createFindCoordinatorResponse() {
         return new FindCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
+    }
+
+    private FetchRequest createFetchRequest(int version, IsolationLevel isolationLevel) {
+        LinkedHashMap<TopicPartition, FetchRequest.PartitionData> fetchData = new LinkedHashMap<>();
+        fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 0L, 1000000));
+        fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 0L, 1000000));
+        return FetchRequest.Builder.forConsumer(100, 100000, fetchData, isolationLevel).setMaxBytes(1000).build((short) version);
     }
 
     private FetchRequest createFetchRequest(int version) {
@@ -542,7 +573,6 @@ public class RequestResponseTest {
         return new HeartbeatResponse(Errors.NONE);
     }
 
-    @SuppressWarnings("deprecation")
     private JoinGroupRequest createJoinGroupRequest(int version) {
         ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
         List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
@@ -601,11 +631,24 @@ public class RequestResponseTest {
             Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0),
                     new ListOffsetRequest.PartitionData(1000000L, 10));
-            return ListOffsetRequest.Builder.forConsumer(false).setOffsetData(offsetData).build((short) version);
+            return ListOffsetRequest.Builder
+                    .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+                    .setOffsetData(offsetData)
+                    .build((short) version);
         } else if (version == 1) {
             Map<TopicPartition, Long> offsetData = Collections.singletonMap(
                     new TopicPartition("test", 0), 1000000L);
-            return ListOffsetRequest.Builder.forConsumer(true).setTargetTimes(offsetData).build((short) version);
+            return ListOffsetRequest.Builder
+                    .forConsumer(true, IsolationLevel.READ_UNCOMMITTED)
+                    .setTargetTimes(offsetData)
+                    .build((short) version);
+        } else if (version == 2) {
+            Map<TopicPartition, Long> offsetData = Collections.singletonMap(
+                    new TopicPartition("test", 0), 1000000L);
+            return ListOffsetRequest.Builder
+                    .forConsumer(true, IsolationLevel.READ_COMMITTED)
+                    .setTargetTimes(offsetData)
+                    .build((short) version);
         } else {
             throw new IllegalArgumentException("Illegal ListOffsetRequest version " + version);
         }
@@ -618,7 +661,7 @@ public class RequestResponseTest {
             responseData.put(new TopicPartition("test", 0),
                     new ListOffsetResponse.PartitionData(Errors.NONE, asList(100L)));
             return new ListOffsetResponse(responseData);
-        } else if (version == 1) {
+        } else if (version == 1 || version == 2) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
             responseData.put(new TopicPartition("test", 0),
                     new ListOffsetResponse.PartitionData(Errors.NONE, 10000L, 100L));
@@ -836,12 +879,12 @@ public class RequestResponseTest {
         return new DeleteTopicsResponse(errors);
     }
 
-    private InitPidRequest createInitPidRequest() {
-        return new InitPidRequest.Builder(null, 100).build();
+    private InitProducerIdRequest createInitPidRequest() {
+        return new InitProducerIdRequest.Builder(null, 100).build();
     }
 
-    private InitPidResponse createInitPidResponse() {
-        return new InitPidResponse(Errors.NONE, 3332, (short) 3);
+    private InitProducerIdResponse createInitPidResponse() {
+        return new InitProducerIdResponse(0, Errors.NONE, 3332, (short) 3);
     }
 
 
@@ -871,7 +914,7 @@ public class RequestResponseTest {
     }
 
     private AddPartitionsToTxnResponse createAddPartitionsToTxnResponse() {
-        return new AddPartitionsToTxnResponse(Errors.NONE);
+        return new AddPartitionsToTxnResponse(0, Errors.NONE);
     }
 
     private AddOffsetsToTxnRequest createAddOffsetsToTxnRequest() {
@@ -879,7 +922,7 @@ public class RequestResponseTest {
     }
 
     private AddOffsetsToTxnResponse createAddOffsetsToTxnResponse() {
-        return new AddOffsetsToTxnResponse(Errors.NONE);
+        return new AddOffsetsToTxnResponse(0, Errors.NONE);
     }
 
     private EndTxnRequest createEndTxnRequest() {
@@ -887,13 +930,13 @@ public class RequestResponseTest {
     }
 
     private EndTxnResponse createEndTxnResponse() {
-        return new EndTxnResponse(Errors.NONE);
+        return new EndTxnResponse(0, Errors.NONE);
     }
 
     private WriteTxnMarkersRequest createWriteTxnMarkersRequest() {
-        return new WriteTxnMarkersRequest.Builder(73,
-            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, TransactionResult.ABORT,
-                Collections.singletonList(new TopicPartition("topic", 73))))).build();
+        return new WriteTxnMarkersRequest.Builder(
+            Collections.singletonList(new WriteTxnMarkersRequest.TxnMarkerEntry(21L, (short) 42, 73, TransactionResult.ABORT,
+                                                                                Collections.singletonList(new TopicPartition("topic", 73))))).build();
     }
 
     private WriteTxnMarkersResponse createWriteTxnMarkersResponse() {
@@ -914,7 +957,7 @@ public class RequestResponseTest {
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {
         final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
         errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
-        return new TxnOffsetCommitResponse(errorPerPartitions);
+        return new TxnOffsetCommitResponse(0, errorPerPartitions);
     }
 
     private static class ByteBufferChannel implements GatheringByteChannel {

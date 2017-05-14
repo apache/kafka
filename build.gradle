@@ -416,48 +416,48 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
 
 task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
-for ( sv in ['2_10', '2_11', '2_12'] ) {
-  String svInDot = sv.replaceAll( "_", ".")
+for ( sv in availableScalaVersions ) {
+  String taskSuffix = sv.replaceAll("\\.", "_")
 
-  tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
+  tasks.create(name: "jar_core_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:jar']
   }
 
-  tasks.create(name: "test_core_${sv}", type: GradleBuild) {
+  tasks.create(name: "test_core_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:test']
   }
 
-  tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
+  tasks.create(name: "srcJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:srcJar']
   }
 
-  tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
+  tasks.create(name: "docsJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:docsJar']
   }
 
-  tasks.create(name: "install_${sv}", type: GradleBuild) {
+  tasks.create(name: "install_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['install']
   }
 
-  tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
+  tasks.create(name: "releaseTarGz_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['releaseTarGz']
   }
 
-  tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
+  tasks.create(name: "uploadCoreArchives_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:uploadArchives']
   }
 }
@@ -465,21 +465,26 @@ for ( sv in ['2_10', '2_11', '2_12'] ) {
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
+/** Create one task per default Scala version */
+def withDefScalaVersions(taskName) {
+  defaultScalaVersions.collect { taskName + '_' + it.replaceAll('\\.', '_') }
+}
+
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11'] + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jar_core') + pkgs.collect { it + ":jar" }) { }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10', 'srcJar_2_11'] + pkgs.collect { it + ":srcJar" }) { }
+tasks.create(name: "srcJarAll", dependsOn: withDefScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10', 'docsJar_2_11'] + pkgs.collect { it + ":docsJar" }) { }
+tasks.create(name: "docsJarAll", dependsOn: withDefScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: ['test_core_2_10', 'test_core_2_11'] + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: withDefScalaVersions('test_core') + pkgs.collect { it + ":test" }) { }
 
-tasks.create(name: "installAll", dependsOn: ['install_2_10', 'install_2_11'] + pkgs.collect { it + ":install" }) { }
+tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseTarGz_2_11']) { }
+tasks.create(name: "releaseTarGzAll", dependsOn: withDefScalaVersions('releaseTarGz')) { }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
+tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadCoreArchives') + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
@@ -496,10 +501,7 @@ project(':core') {
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    // These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
-    if (versions.baseScala != '2.10') {
-      compile libs.scalaParserCombinators
-    }
+    compile libs.scalaParserCombinators
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix

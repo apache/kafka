@@ -224,7 +224,7 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0)
             return null;
@@ -241,7 +241,7 @@ public class ProduceRequest extends AbstractRequest {
             case 1:
             case 2:
             case 3:
-                return new ProduceResponse(responseMap);
+                return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.PRODUCE.latestVersion()));

@@ -21,11 +21,11 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.internals.FutureTransactionalResult;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
+import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -64,7 +64,6 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -149,13 +148,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private static final String JMX_PREFIX = "kafka.producer";
 
     private String clientId;
+    // Visible for testing
+    final Metrics metrics;
     private final Partitioner partitioner;
     private final int maxRequestSize;
     private final long totalMemorySize;
     private final Metadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
-    private final Metrics metrics;
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
@@ -230,10 +230,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
             if (clientId.length() <= 0)
                 clientId = "producer-" + PRODUCER_CLIENT_ID_SEQUENCE.getAndIncrement();
-            Map<String, String> metricTags = new LinkedHashMap<String, String>();
-            metricTags.put("client-id", clientId);
+            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                    .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
             List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                     MetricsReporter.class);
@@ -270,8 +270,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
 
-            this.maxBlockTimeMs = configureMaxBlockTime(config, userProvidedConfigs);
-            this.requestTimeoutMs = configureRequestTimeout(config, userProvidedConfigs);
+            this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
+            this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.transactionManager = configureTransactionState(config);
             int retries = configureRetries(config, transactionManager != null);
             int maxInflightRequests = configureInflightRequests(config, transactionManager != null);
@@ -333,47 +333,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private <T> ExtendedSerializer<T> ensureExtended(Serializer<T> serializer) {
         return serializer instanceof ExtendedSerializer ? (ExtendedSerializer<T>) serializer : new ExtendedSerializer.Wrapper<>(serializer);
-    }
-
-    private static long configureMaxBlockTime(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
-        /* check for user defined settings.
-         * If the BLOCK_ON_BUFFER_FULL is set to true,we do not honor METADATA_FETCH_TIMEOUT_CONFIG.
-         * This should be removed with release 0.9 when the deprecated configs are removed.
-         */
-        if (userProvidedConfigs.containsKey(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG)) {
-            log.warn(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG + " config is deprecated and will be removed soon. " +
-                    "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-            boolean blockOnBufferFull = config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG);
-            if (blockOnBufferFull) {
-                return Long.MAX_VALUE;
-            } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
-                log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
-                        "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-                return config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
-            } else {
-                return config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
-            }
-        } else if (userProvidedConfigs.containsKey(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG)) {
-            log.warn(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG + " config is deprecated and will be removed soon. " +
-                    "Please use " + ProducerConfig.MAX_BLOCK_MS_CONFIG);
-            return config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
-        } else {
-            return config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
-        }
-    }
-
-    private static int configureRequestTimeout(ProducerConfig config, Map<String, Object> userProvidedConfigs) {
-        /* check for user defined settings.
-         * If the TIME_OUT config is set use that for request timeout.
-         * This should be removed with release 0.9
-         */
-        if (userProvidedConfigs.containsKey(ProducerConfig.TIMEOUT_CONFIG)) {
-            log.warn(ProducerConfig.TIMEOUT_CONFIG + " config is deprecated and will be removed soon. Please use " +
-                    ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-            return config.getInt(ProducerConfig.TIMEOUT_CONFIG);
-        } else {
-            return config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
-        }
     }
 
     private static TransactionManager configureTransactionState(ProducerConfig config) {
@@ -484,7 +443,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void initTransactions() {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot call initTransactions without setting a transactional id.");
-        transactionManager.initializeTransactions().get();
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        sender.wakeup();
+        result.await();
     }
 
     /**
@@ -515,9 +476,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                          String consumerGroupId) throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot send offsets to transaction since transactions are not enabled.");
-        FutureTransactionalResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
         sender.wakeup();
-        result.get();
+        result.await();
     }
 
     /**
@@ -529,9 +490,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void commitTransaction() throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot commit transaction since transactions are not enabled");
-        FutureTransactionalResult result = transactionManager.beginCommittingTransaction();
+        TransactionalRequestResult result = transactionManager.beginCommittingTransaction();
         sender.wakeup();
-        result.get();
+        result.await();
     }
 
     /**
@@ -543,9 +504,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void abortTransaction() throws ProducerFencedException {
         if (transactionManager == null)
             throw new IllegalStateException("Cannot abort transaction since transactions are not enabled.");
-        FutureTransactionalResult result = transactionManager.beginAbortingTransaction();
+        TransactionalRequestResult result = transactionManager.beginAbortingTransaction();
         sender.wakeup();
-        result.get();
+        result.await();
     }
 
     /**
@@ -727,7 +688,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (transactionManager == null)
             return;
 
-        if (transactionManager.isTransactional() && !transactionManager.hasPid())
+        if (transactionManager.isTransactional() && !transactionManager.hasProducerId())
             throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions when transactions are enabled.");
 
         if (transactionManager.isFenced())

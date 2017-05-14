@@ -159,6 +159,24 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
+    inReadLock(partitionMetadataLock) {
+      cache.get(topic).flatMap(_.get(partitionId)) match {
+        case Some(partitionInfo) =>
+          val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+          try {
+            getAliveEndpoint(leaderId, listenerName)
+          } catch {
+            case e: BrokerEndPointNotAvailableException =>
+              None
+          }
+
+        case None =>
+          None
+      }
+    }
+  }
+
   def getControllerId: Option[Int] = controllerId
 
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest

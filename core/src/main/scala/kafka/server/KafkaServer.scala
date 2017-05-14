@@ -458,7 +458,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
             catch {
               case ioe: IOException =>
                 ioException = true
-                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured socket.timeout.ms: %s".format(ioe.getMessage))
+                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured controller.socket.timeout.ms and/or request.timeout.ms: %s".format(ioe.getMessage))
                 // ignore and try again
             }
           }
@@ -532,7 +532,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
               case ioe: java.io.IOException =>
                 channel.disconnect()
                 channel = null
-                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured socket.timeout.ms: %s".format(ioe.getMessage))
+                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured controller.socket.timeout.ms and/or request.timeout.ms: %s".format(ioe.getMessage))
                 // ignore and try again
             }
           }
@@ -589,26 +589,35 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
       if (shutdownLatch.getCount > 0 && isShuttingDown.compareAndSet(false, true)) {
         CoreUtils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
-        if(socketServer != null)
+        
+        if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown())
-        if(requestHandlerPool != null)
+        if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
+
         CoreUtils.swallow(kafkaScheduler.shutdown())
-        if(apis != null)
+
+        if (apis != null)
           CoreUtils.swallow(apis.close())
         CoreUtils.swallow(authorizer.foreach(_.close()))
-        if(replicaManager != null)
-          CoreUtils.swallow(replicaManager.shutdown())
         if (adminManager != null)
           CoreUtils.swallow(adminManager.shutdown())
-        if(groupCoordinator != null)
+
+        if (transactionCoordinator != null)
+          CoreUtils.swallow(transactionCoordinator.shutdown())
+        if (groupCoordinator != null)
           CoreUtils.swallow(groupCoordinator.shutdown())
-        if(logManager != null)
+
+        if (replicaManager != null)
+          CoreUtils.swallow(replicaManager.shutdown())
+        if (logManager != null)
           CoreUtils.swallow(logManager.shutdown())
-        if(kafkaController != null)
+
+        if (kafkaController != null)
           CoreUtils.swallow(kafkaController.shutdown())
-        if(zkUtils != null)
+        if (zkUtils != null)
           CoreUtils.swallow(zkUtils.close())
+
         if (metrics != null)
           CoreUtils.swallow(metrics.close())
 

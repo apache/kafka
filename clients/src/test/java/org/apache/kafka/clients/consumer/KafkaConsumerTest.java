@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import java.util.concurrent.ScheduledExecutorService;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
@@ -36,6 +35,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -68,7 +68,9 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -84,6 +86,7 @@ import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -97,9 +100,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
-import org.junit.Rule;
-import org.junit.rules.ExpectedException;
 
 public class KafkaConsumerTest {
     private final String topic = "test";
@@ -1226,6 +1226,27 @@ public class KafkaConsumerTest {
     @Test
     public void testCloseInterrupt() throws Exception {
         consumerCloseTest(Long.MAX_VALUE, Collections.<AbstractResponse>emptyList(), 0, true);
+    }
+
+    @Test
+    public void closeShouldBeIdempotent() {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer();
+        consumer.close();
+        consumer.close();
+    }
+
+    @Test
+    public void testMetricConfigRecordingLevel() {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+            assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
+        }
+
+        props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+            assertEquals(Sensor.RecordingLevel.DEBUG, consumer.metrics.config().recordLevel());
+        }
     }
 
     private void consumerCloseTest(final long closeTimeoutMs,

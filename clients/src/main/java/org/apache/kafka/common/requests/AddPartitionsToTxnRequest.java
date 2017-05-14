@@ -125,8 +125,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    public AddPartitionsToTxnResponse getErrorResponse(Throwable e) {
-        return new AddPartitionsToTxnResponse(Errors.forException(e));
+    public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new AddPartitionsToTxnResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {

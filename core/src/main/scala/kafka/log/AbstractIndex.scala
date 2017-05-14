@@ -37,7 +37,7 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1)
+abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1, val writable: Boolean)
     extends Logging {
 
   protected def entrySize: Int
@@ -47,7 +47,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   @volatile
   protected var mmap: MappedByteBuffer = {
     val newlyCreated = file.createNewFile()
-    val raf = new RandomAccessFile(file, "rw")
+    val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
       /* pre-allocate the file if necessary */
       if(newlyCreated) {
@@ -58,8 +58,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* memory-map the file */
       val len = raf.length()
-      val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
-
+      val idx = {
+        if (writable)
+          raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+        else
+          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+      }
       /* set the position in the index for the next entry */
       if(newlyCreated)
         idx.position(0)
@@ -242,14 +246,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @param target The index key to look for
    * @return The slot found or -1 if the least entry in the index is larger than the target key or the index is empty
    */
-  protected def indexSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int = {
+  protected def largestLowerBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
+    indexSlotRangeFor(idx, target, searchEntity)._1
+
+  /**
+   * Find the smallest entry greater than or equal the target key or value. If none can be found, -1 is returned.
+   */
+  protected def smallestUpperBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
+    indexSlotRangeFor(idx, target, searchEntity)._2
+
+  /**
+   * Lookup lower and upper bounds for the given target.
+   */
+  private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): (Int, Int) = {
     // check if the index is empty
     if(_entries == 0)
-      return -1
+      return (-1, -1)
 
     // check if the target offset is smaller than the least offset
     if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
-      return -1
+      return (-1, 0)
 
     // binary search for the entry
     var lo = 0
@@ -263,9 +279,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       else if(compareResult < 0)
         lo = mid
       else
-        return mid
+        return (mid, mid)
     }
-    lo
+
+    (lo, if (lo == _entries - 1) -1 else lo + 1)
   }
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {

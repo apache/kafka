@@ -50,15 +50,10 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
   @After
   override def tearDown() {
-    brokers.par.foreach(_.shutdown())
     producer.close()
+    shutdownServers(brokers)
     super.tearDown()
   }
 

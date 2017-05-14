@@ -659,7 +659,7 @@ public class Utils {
     /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      */
-    public static void closeQuietly(Closeable closeable, String name) {
+    public static void closeQuietly(AutoCloseable closeable, String name) {
         if (closeable != null) {
             try {
                 closeable.close();
@@ -760,6 +760,11 @@ public class Utils {
             bytesRead = channel.read(destinationBuffer, currentPosition);
             currentPosition += bytesRead;
         } while (bytesRead != -1 && destinationBuffer.hasRemaining());
+    }
+
+    public static void writeFully(FileChannel channel, ByteBuffer sourceBuffer) throws IOException {
+        while (sourceBuffer.hasRemaining())
+            channel.write(sourceBuffer);
     }
 
     /**

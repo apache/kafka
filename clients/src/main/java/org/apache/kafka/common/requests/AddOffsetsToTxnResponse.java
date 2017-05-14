@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class AddOffsetsToTxnResponse extends AbstractResponse {
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     // Possible error codes:
@@ -35,13 +36,20 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     //   InvalidProducerEpoch
 
     private final Errors error;
+    private final int throttleTimeMs;
 
-    public AddOffsetsToTxnResponse(Errors error) {
+    public AddOffsetsToTxnResponse(int throttleTimeMs, Errors error) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
     }
 
     public AddOffsetsToTxnResponse(Struct struct) {
+        this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Errors error() {
@@ -51,6 +59,7 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.ADD_OFFSETS_TO_TXN.responseSchema(version));
+        struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         return struct;
     }

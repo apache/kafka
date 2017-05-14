@@ -36,11 +36,6 @@ public class CommonClientConfigs {
                                                        + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to "
                                                        + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
                                                        + "servers (you may want more than one, though, in case a server is down).";
-    /**
-     * @deprecated This will be removed in a future release. Please use {@link #BOOTSTRAP_SERVERS_DOC}
-     */
-    @Deprecated
-    public static final String BOOSTRAP_SERVERS_DOC = BOOTSTRAP_SERVERS_DOC;
 
     public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
     public static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any partition leadership changes to proactively discover any new brokers or partitions.";

@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public abstract class AbstractResponse extends AbstractRequestResponse {
+    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     public Send toSend(String destination, RequestHeader requestHeader) {
         return toSend(destination, requestHeader.apiVersion(), requestHeader.toResponseHeader());
@@ -94,7 +95,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DELETE_RECORDS:
                 return new DeleteRecordsResponse(struct);
             case INIT_PRODUCER_ID:
-                return new InitPidResponse(struct);
+                return new InitProducerIdResponse(struct);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:

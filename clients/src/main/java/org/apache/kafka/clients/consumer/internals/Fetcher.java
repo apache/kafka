@@ -29,7 +29,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -279,7 +278,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 subscriptions.seek(tp, committed);
             }
         }
-        
+
         if (!needsOffsetReset.isEmpty()) {
             resetOffsets(needsOffsetReset);
         }
@@ -383,16 +382,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return client.send(node, request);
     }
 
-    private long offsetResetStrategyTimestamp(final TopicPartition partition) {
+    private void offsetResetStrategyTimestamp(
+            final TopicPartition partition,
+            final Map<TopicPartition, Long> output,
+            final Set<TopicPartition> partitionsWithNoOffsets) {
         OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
-        final long timestamp;
         if (strategy == OffsetResetStrategy.EARLIEST)
-            timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP;
+            output.put(partition, ListOffsetRequest.EARLIEST_TIMESTAMP);
         else if (strategy == OffsetResetStrategy.LATEST)
-            timestamp = endTimestamp();
+            output.put(partition, endTimestamp());
         else
-            throw new NoOffsetForPartitionException(partition);
-        return timestamp;
+            partitionsWithNoOffsets.add(partition);
     }
 
     /**
@@ -403,20 +403,25 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private void resetOffsets(final Set<TopicPartition> partitions) {
         final Map<TopicPartition, Long> offsetResets = new HashMap<>();
+        final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         for (final TopicPartition partition : partitions) {
-            offsetResets.put(partition, offsetResetStrategyTimestamp(partition));
+            offsetResetStrategyTimestamp(partition, offsetResets, partitionsWithNoOffsets);
         }
         final Map<TopicPartition, OffsetData> offsetsByTimes = retrieveOffsetsByTimes(offsetResets, Long.MAX_VALUE, false);
         for (final TopicPartition partition : partitions) {
             final OffsetData offsetData = offsetsByTimes.get(partition);
             if (offsetData == null) {
-                throw new NoOffsetForPartitionException(partition);
+                partitionsWithNoOffsets.add(partition);
+                continue;
             }
             // we might lose the assignment while fetching the offset, so check it is still active
             if (subscriptions.isAssigned(partition)) {
                 log.debug("Resetting offset for partition {} to {} offset.", partition, offsetData.offset);
                 this.subscriptions.seek(partition, offsetData.offset);
             }
+        }
+        if (!partitionsWithNoOffsets.isEmpty()) {
+            throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
         }
     }
 
@@ -554,6 +559,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+            // To be thrown in the next call of this method
             nextInLineExceptionMetadata = new ExceptionMetadata(fetchedPartition, fetchedOffset, e);
         }
         return fetched;
@@ -669,7 +675,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private RequestFuture<Map<TopicPartition, OffsetData>> sendListOffsetRequest(final Node node,
                                                                                  final Map<TopicPartition, Long> timestampsToSearch,
                                                                                  boolean requireTimestamp) {
-        ListOffsetRequest.Builder builder = ListOffsetRequest.Builder.forConsumer(requireTimestamp)
+        ListOffsetRequest.Builder builder = ListOffsetRequest.Builder
+                .forConsumer(requireTimestamp, isolationLevel)
                 .setTargetTimes(timestampsToSearch);
 
         log.trace("Sending ListOffsetRequest {} to broker {}", builder, node);
@@ -938,6 +945,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
+        private KafkaException nextInlineException;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -948,12 +956,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.nextFetchOffset = completedFetch.fetchedOffset;
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
+            this.nextInlineException = null;
         }
 
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-
+                nextInlineException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1003,12 +1012,23 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         return null;
                     }
                     currentBatch = batches.next();
-
                     maybeEnsureValid(currentBatch);
 
-                    if (isolationLevel == IsolationLevel.READ_COMMITTED && isBatchAborted(currentBatch)) {
-                        nextFetchOffset = currentBatch.lastOffset() + 1;
-                        continue;
+                    if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
+                        // remove from the aborted transaction queue all aborted transactions which have begun
+                        // before the current batch's last offset and add the associated producerIds to the
+                        // aborted producer set
+                        consumeAbortedTransactionsUpTo(currentBatch.lastOffset());
+
+                        long producerId = currentBatch.producerId();
+                        if (containsAbortMarker(currentBatch)) {
+                            abortedProducerIds.remove(producerId);
+                        } else if (isBatchAborted(currentBatch)) {
+                            log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition: {}",
+                                    producerId, currentBatch.baseOffset(), partition);
+                            nextFetchOffset = currentBatch.lastOffset() + 1;
+                            continue;
+                        }
                     }
 
                     records = currentBatch.streamingIterator();
@@ -1022,7 +1042,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     nextFetchOffset = record.offset() + 1;
 
                     // control records are not returned to the user
-                    if (!record.isControlRecord())
+                    if (!currentBatch.isControlBatch())
                          return record;
                 }
             }
@@ -1031,72 +1051,74 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             if (isFetched)
                 return Collections.emptyList();
+            if (nextInlineException != null) {
+                KafkaException e = nextInlineException;
+                nextInlineException = null;
+                throw e;
+            }
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
-            for (int i = 0; i < maxRecords; i++) {
-                Record record = nextFetchedRecord();
-                if (record == null)
-                    break;
+            try {
+                for (int i = 0; i < maxRecords; i++) {
+                    Record record = nextFetchedRecord();
+                    if (record == null)
+                        break;
 
-                recordsRead++;
-                bytesRead += record.sizeInBytes();
-                records.add(parseRecord(partition, currentBatch, record));
+                    recordsRead++;
+                    bytesRead += record.sizeInBytes();
+                    records.add(parseRecord(partition, currentBatch, record));
+                }
+            } catch (KafkaException e) {
+                if (records.isEmpty())
+                    throw e;
+                // To be thrown in the next call of this method
+                nextInlineException = e;
             }
             return records;
         }
 
-        private boolean isBatchAborted(RecordBatch batch) {
-           /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
-            *   0. Check whether the pid is in the 'abortedProducerIds' set && the entry does not include an abort marker.
-            *      If so, skip the entry.
-            *   1. If the pid is in aborted pids and the entry contains an abort marker, remove the pid from
-            *      aborted pids and skip the entry.
-            *   2. Check lowest offset entry in the abort index. If the PID of the current entry matches the
-            *      pid of the abort index entry, and the incoming offset is no smaller than the abort index offset,
-            *      this means that the entry has been aborted. Add the pid to the aborted pids set, and remove
-            *      the entry from the abort index.
-            */
-            FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
-            if (abortedProducerIds.contains(batch.producerId())
-                    || (nextAbortedTransaction != null && nextAbortedTransaction.producerId == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset())) {
-                if (abortedProducerIds.contains(batch.producerId()) && containsAbortMarker(batch)) {
-                    abortedProducerIds.remove(batch.producerId());
-                } else if (nextAbortedTransaction != null && nextAbortedTransaction.producerId == batch.producerId() && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
-                    abortedProducerIds.add(batch.producerId());
-                    abortedTransactions.poll();
-                }
-                log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition: {}", batch.producerId(), batch.baseOffset(), partition);
-                return true;
+        private void consumeAbortedTransactionsUpTo(long offset) {
+            if (abortedTransactions == null)
+                return;
+
+            while (!abortedTransactions.isEmpty() && abortedTransactions.peek().firstOffset <= offset) {
+                FetchResponse.AbortedTransaction abortedTransaction = abortedTransactions.poll();
+                abortedProducerIds.add(abortedTransaction.producerId);
             }
-            return false;
+        }
+
+        private boolean isBatchAborted(RecordBatch batch) {
+            return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
         }
 
         private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {
-            PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = null;
-            if (partition.abortedTransactions != null && !partition.abortedTransactions.isEmpty()) {
-                abortedTransactions = new PriorityQueue<>(
-                        partition.abortedTransactions.size(),
-                        new Comparator<FetchResponse.AbortedTransaction>() {
-                            @Override
-                            public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
-                                return Long.compare(o1.firstOffset, o2.firstOffset);
-                            }
+            if (partition.abortedTransactions == null || partition.abortedTransactions.isEmpty())
+                return null;
+
+            PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = new PriorityQueue<>(
+                    partition.abortedTransactions.size(),
+                    new Comparator<FetchResponse.AbortedTransaction>() {
+                        @Override
+                        public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
+                            return Long.compare(o1.firstOffset, o2.firstOffset);
                         }
-                );
-                abortedTransactions.addAll(partition.abortedTransactions);
-            } else {
-                abortedTransactions = new PriorityQueue<>();
-            }
+                    }
+            );
+            abortedTransactions.addAll(partition.abortedTransactions);
             return abortedTransactions;
         }
 
         private boolean containsAbortMarker(RecordBatch batch) {
+            if (!batch.isControlBatch())
+                return false;
+
             Iterator<Record> batchIterator = batch.iterator();
-            Record firstRecord = batchIterator.hasNext() ? batchIterator.next() : null;
-            boolean containsAbortMarker = firstRecord != null && firstRecord.isControlRecord() && ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
-            if (containsAbortMarker && batchIterator.hasNext())
-                throw new CorruptRecordException("A record batch containing a control message contained more than one record. partition: " + partition + ", offset: " + batch.baseOffset());
-            return containsAbortMarker;
+            if (!batchIterator.hasNext())
+                throw new InvalidRecordException("Invalid batch for partition " + partition + " at offset " +
+                        batch.baseOffset() + " with control sequence set, but no records");
+
+            Record firstRecord = batchIterator.next();
+            return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
         }
     }
 

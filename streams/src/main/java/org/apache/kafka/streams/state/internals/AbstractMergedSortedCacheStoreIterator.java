@@ -134,7 +134,7 @@ abstract class AbstractMergedSortedCacheStoreIterator<K, KS, V> implements KeyVa
         }
 
         if (nextStoreKey == null) {
-            return serdes.keyFrom(nextCacheKey.get());
+            return deserializeCacheKey(nextCacheKey);
         }
 
         final int comparison = compare(nextCacheKey, nextStoreKey);

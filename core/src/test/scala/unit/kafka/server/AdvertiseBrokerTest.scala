@@ -18,7 +18,7 @@
 package kafka.server
 
 import org.junit.Assert._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Test}
@@ -32,10 +32,7 @@ class AdvertiseBrokerTest extends ZooKeeperTestHarness {
 
   @After
   override def tearDown() {
-    servers.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 
