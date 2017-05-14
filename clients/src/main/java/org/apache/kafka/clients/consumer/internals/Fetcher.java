@@ -1215,12 +1215,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         private Set<TopicPartition> assignedPartitions;
         
-        private String metricGrpName;
-
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
             this.metricsRegistry = metricsRegistry;
-            this.metricGrpName = metricsRegistry.metricGrpName;
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricInstance(metricsRegistry.fetchSizeAvg), new Avg());
@@ -1295,14 +1292,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
                 recordsLag = this.metrics.sensor(name);
-                recordsLag.add(this.metrics.metricName(name, this.metricGrpName, "The latest lag of the partition"),
-                               new Value());
+                recordsLag.add(this.metrics.metricName(name, 
+                        metricsRegistry.partitionRecordsLag.group(), 
+                        metricsRegistry.partitionRecordsLag.description()), new Value());
                 recordsLag.add(this.metrics.metricName(name + "-max",
-                        this.metricGrpName,
-                        "The max lag of the partition"), new Max());
+                        metricsRegistry.partitionRecordsLagMax.group(),
+                        metricsRegistry.partitionRecordsLagMax.description()), new Max());
                 recordsLag.add(this.metrics.metricName(name + "-avg",
-                        this.metricGrpName,
-                        "The average lag of the partition"), new Avg());
+                        metricsRegistry.partitionRecordsLagAvg.group(),
+                        metricsRegistry.partitionRecordsLagAvg.description()), new Avg());
             }
             recordsLag.record(lag);
         }

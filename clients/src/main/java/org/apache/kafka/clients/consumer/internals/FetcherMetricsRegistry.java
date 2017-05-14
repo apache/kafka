@@ -41,9 +41,9 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate topicBytesConsumedRate;
     public MetricNameTemplate topicRecordsPerRequestAvg;
     public MetricNameTemplate topicRecordsConsumedRate;
-
-    // needed for legacy metrics, that do not use MetricNameTemplates
-    public String metricGrpName;
+    public MetricNameTemplate partitionRecordsLag;
+    public MetricNameTemplate partitionRecordsLagMax;
+    public MetricNameTemplate partitionRecordsLagAvg;
 
     public FetcherMetricsRegistry() {
         this(new HashSet<String>(), "");
@@ -57,8 +57,7 @@ public class FetcherMetricsRegistry {
         
         /***** Client level *****/
         String groupName = metricGrpPrefix + "-fetch-manager-metrics";
-        this.metricGrpName = groupName;
-        
+                
         this.fetchSizeAvg = new MetricNameTemplate("fetch-size-avg", groupName, 
                 "The average number of bytes fetched per request", tags);
 
@@ -103,6 +102,15 @@ public class FetcherMetricsRegistry {
         this.topicRecordsConsumedRate = new MetricNameTemplate("records-consumed-rate", groupName, 
                 "The average number of records consumed per second for a topic", topicTags);
         
+        /***** Partition level *****/
+        this.partitionRecordsLag = new MetricNameTemplate("{topic}-{partition}.records-lag", groupName, 
+                "The latest lag of the partition", tags);
+        this.partitionRecordsLagMax = new MetricNameTemplate("{topic}-{partition}.records-lag-max", groupName, 
+                "The max lag of the partition", tags);
+        this.partitionRecordsLagAvg = new MetricNameTemplate("{topic}-{partition}.records-lag-avg", groupName, 
+                "The average lag of the partition", tags);
+        
+    
     }
     
     public List<MetricNameTemplate> getAllTemplates() {
@@ -122,7 +130,10 @@ public class FetcherMetricsRegistry {
             topicFetchSizeMax,
             topicBytesConsumedRate,
             topicRecordsPerRequestAvg,
-            topicRecordsConsumedRate
+            topicRecordsConsumedRate,
+            partitionRecordsLag,
+            partitionRecordsLagAvg,
+            partitionRecordsLagMax
         );
     }
 
