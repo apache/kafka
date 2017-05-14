@@ -38,9 +38,6 @@ public class ModuleClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (name.startsWith("io.confluent.common")) {
-            log.debug("Loading class: " + name);
-        }
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
             if (ModuleUtils.validate(name)) {

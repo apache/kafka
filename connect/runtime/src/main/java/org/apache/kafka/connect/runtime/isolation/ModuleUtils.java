@@ -35,14 +35,6 @@ public class ModuleUtils {
             + ")$";
 
     public static boolean validate(String name) {
-        //boolean result = name.matches(BLACKLIST) && !name.matches(WHITELIST);
-        if (name.equals("org.apache.kafka.connect.transforms.Transformation")) {
-            boolean yeap = true;
-        }
-        boolean result = name.matches(BLACKLIST);
-        if (result) {
-            result = !name.matches(WHITELIST);
-        }
-        return !result;
+        return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
     }
 }

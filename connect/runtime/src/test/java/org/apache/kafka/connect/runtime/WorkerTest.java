@@ -657,7 +657,7 @@ public class WorkerTest extends ThreadedTest {
         );
         EasyMock.expectLastCall();
 
-        // Instantiate and configure default
+        // Instantiate and configure internal
         EasyMock.expect(modules.newConverter(JsonConverter.class.getName(), config))
                 .andReturn(internalKeyConverter);
         internalKeyConverter.configure(

@@ -249,10 +249,6 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (name.startsWith("io.confluent.common")) {
-            log.debug("Loading class: " + name);
-        }
-
         if (!ModuleUtils.validate(name)) {
             // There are no paths in this classloader, will attempt to load with the parent.
             return super.loadClass(name, resolve);

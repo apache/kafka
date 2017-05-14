@@ -504,7 +504,7 @@ public class Worker {
         log.info("Setting connector {} state to {}", connName, state);
 
         WorkerConnector workerConnector = connectors.get(connName);
-        // TODO: Make sure that tasks can't be around while connector a object is null
+        // TODO: Make sure that tasks can't be around while a connector object is null
         if (workerConnector != null) {
             ClassLoader save = modules.compareAndSwapLoaders(workerConnector.connector());
             workerConnector.transitionTo(state);
