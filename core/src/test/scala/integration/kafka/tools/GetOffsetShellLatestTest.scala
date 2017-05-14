@@ -41,8 +41,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(topic1),
       Set(0),
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
@@ -56,8 +56,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(topic1),
       Set(0),
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
@@ -72,8 +72,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(topic1),
       partitions.toSet,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", partitions.size, offsets.size)
 
@@ -92,8 +92,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       topics,
       partitions.toSet,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
@@ -111,8 +111,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set("topic999"),
       Set(0),
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
@@ -127,8 +127,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(topic1),
       Set(9999),
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
@@ -145,8 +145,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       topics,
       partitions.toSet,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have ${partitions.size} offset entries for existing topic and one offset entry for non-existing topic: $offsets", partitions.size + 1, offsets.size)
 
@@ -169,8 +169,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(topic1),
       partitions,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", partitions.size, offsets.size)
 
@@ -197,8 +197,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       topics,
       partitions,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
@@ -225,8 +225,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(),
       Set(),
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
@@ -247,8 +247,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(),
       partitions.toSet,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
@@ -271,8 +271,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(),
       partitions,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 
@@ -299,8 +299,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(),
       Set(),
-      -1,
-      true)
+      timestamp = -1,
+      includeInternalTopics = true)
 
     assertTrue(s"Must have offset entries for user topics plus internal topics: $offsets", offsets.size > topics.size * partitions.size)
 
@@ -323,8 +323,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(),
       partitions.toSet,
-      -1,
-      true)
+      timestamp = -1,
+      includeInternalTopics = true)
 
     assertTrue(s"Must have offset entries for user topics plus internal topics: $offsets", offsets.size > topics.size * partitions.size)
 
@@ -347,8 +347,8 @@ class GetOffsetShellLatestTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       topics,
       Set(),
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", topics.size * partitions.size, offsets.size)
 

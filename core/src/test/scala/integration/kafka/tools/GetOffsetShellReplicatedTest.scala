@@ -42,8 +42,8 @@ class GetOffsetShellReplicatedTest extends IntegrationTestHarness {
     val offsets = getOffsets(brokerList,
       Set(topic1),
       partitions.toSet,
-      -1,
-      false)
+      timestamp = -1,
+      includeInternalTopics = false)
 
     assertEquals(s"Must have all offset entries: $offsets", partitions.size, offsets.size)
 

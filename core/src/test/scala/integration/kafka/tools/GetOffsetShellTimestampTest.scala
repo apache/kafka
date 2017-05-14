@@ -39,7 +39,7 @@ class GetOffsetShellTimestampTest extends IntegrationTestHarness {
       Set(topic1),
       Set(0),
       requestedTimestamp,
-      false)
+      includeInternalTopics = false)
 
     assertEquals(s"Must not have an offset entry for non-existing timestamp: $offsets", 0, offsets.size)
   }
@@ -53,7 +53,7 @@ class GetOffsetShellTimestampTest extends IntegrationTestHarness {
       Set(topic1),
       Set(0),
       requestedTimestamp,
-      false)
+      includeInternalTopics = false)
 
     assertEquals(s"Must have 1 offset entry: $offsets", 1, offsets.size)
 
