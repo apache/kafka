@@ -31,7 +31,7 @@ import scala.collection.JavaConversions._
 
 object GetOffsetShell extends Logging {
 
-  private final val TOOL_NAME = this.getClass.getSimpleName.replace("$", "")
+  private final val ToolName = this.getClass.getSimpleName.replace("$", "")
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
@@ -41,18 +41,18 @@ object GetOffsetShell extends Logging {
       .ofType(classOf[String])
       /* We must allow default value here to preserve backward compatibility - old users may still have brokerListOpt. */
       .defaultsTo("")
-    val topicsOpt = parser.accepts("topics", s"The list of topics to get offsets from. If not specified, $TOOL_NAME will get offsets for all topics.")
+    val topicsOpt = parser.accepts("topics", s"The list of topics to get offsets from. If not specified, $ToolName will get offsets for all topics.")
       .withRequiredArg
       .describedAs("topic1,...,topicN")
       .ofType(classOf[String])
       .defaultsTo("")
-    val includeInternalTopicsOpt = parser.accepts("include-internal-topics", s"By default, when the list if topics is not given, $TOOL_NAME excludes internal topics like consumer offsets. This options forces $TOOL_NAME to include them.")
-    val partitionsOpt = parser.accepts("partitions", s"The list of integers - partition identifiers. If not specified, $TOOL_NAME will get offsets for all partitions.")
+    val includeInternalTopicsOpt = parser.accepts("include-internal-topics", s"By default, when the list if topics is not given, $ToolName excludes internal topics like consumer offsets. This options forces $ToolName to include them.")
+    val partitionsOpt = parser.accepts("partitions", s"The list of integers - partition identifiers. If not specified, $ToolName will get offsets for all partitions.")
       .withRequiredArg
       .describedAs("p1,...pM")
       .ofType(classOf[String])
       .defaultsTo("")
-    val timeOpt = parser.accepts("time", s"$TOOL_NAME will get the earliest offset whose timestamp is greater than or equal to this timestamp. Special values: -1 (the latest offset in the partition), -2 (the earliest offset in the partition)")
+    val timeOpt = parser.accepts("time", s"$ToolName will get the earliest offset whose timestamp is greater than or equal to this timestamp. Special values: -1 (the latest offset in the partition), -2 (the earliest offset in the partition)")
       .withRequiredArg
       .describedAs("timestamp/-1(latest)/-2(earliest)")
       .ofType(classOf[java.lang.Long])
