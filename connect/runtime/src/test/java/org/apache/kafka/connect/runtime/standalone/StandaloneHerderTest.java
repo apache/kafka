@@ -121,11 +121,15 @@ public class StandaloneHerderTest {
         config.remove(ConnectorConfig.NAME_CONFIG);
 
         Modules modulesMock = PowerMock.createMock(Modules.class);
-        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
+        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        EasyMock.expect(modulesMock.compareAndSwapLoaders(connectorMock))
+                .andStubReturn(currentLoaderMock);
         EasyMock.expect(modulesMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andStubReturn(new ConfigDef());
         EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
+        EasyMock.expect(Modules.compareAndSwapLoaders(currentLoaderMock));
 
         createCallback.onCompletion(EasyMock.<BadRequestException>anyObject(), EasyMock.<Herder.Created<ConnectorInfo>>isNull());
         PowerMock.expectLastCall();
@@ -142,8 +146,11 @@ public class StandaloneHerderTest {
         connector = PowerMock.createMock(BogusSourceConnector.class);
 
         Modules modulesMock = PowerMock.createMock(Modules.class);
-        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
+        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        EasyMock.expect(modulesMock.compareAndSwapLoaders(connectorMock))
+                .andStubReturn(currentLoaderMock);
         EasyMock.expect(modulesMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
 
         ConfigDef configDef = new ConfigDef();
@@ -154,6 +161,7 @@ public class StandaloneHerderTest {
         validatedValue.addErrorMessage("Failed foo.bar validation");
         Map<String, String> config = connectorConfig(SourceSink.SOURCE);
         EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(singletonList(validatedValue)));
+        EasyMock.expect(Modules.compareAndSwapLoaders(currentLoaderMock));
 
         createCallback.onCompletion(EasyMock.<BadRequestException>anyObject(), EasyMock.<Herder.Created<ConnectorInfo>>isNull());
         PowerMock.expectLastCall();
@@ -501,10 +509,15 @@ public class StandaloneHerderTest {
         );
         ConfigDef configDef = new ConfigDef();
         configDef.define(key, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "");
-        EasyMock.expect(connectorMock.config()).andStubReturn(configDef);
         Modules modulesMock = PowerMock.createMock(Modules.class);
+        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
+        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        EasyMock.expect(modulesMock.compareAndSwapLoaders(connectorMock))
+                .andStubReturn(currentLoaderMock);
         EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
         EasyMock.expect(modulesMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(connectorMock.config()).andStubReturn(configDef);
+        EasyMock.expect(Modules.compareAndSwapLoaders(currentLoaderMock));
         Callback<Herder.Created<ConnectorInfo>> callback = PowerMock.createMock(Callback.class);
         Capture<BadRequestException> capture = Capture.newInstance();
         callback.onCompletion(
@@ -589,13 +602,17 @@ public class StandaloneHerderTest {
     private void expectConfigValidation(Map<String, String> ... configs) {
         // config validation
         Modules modulesMock = PowerMock.createMock(Modules.class);
-        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
+        EasyMock.expect(worker.getModules()).andStubReturn(modulesMock);
+        EasyMock.expect(modulesMock.compareAndSwapLoaders(connectorMock))
+                .andStubReturn(currentLoaderMock);
         EasyMock.expect(modulesMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andStubReturn(new ConfigDef());
 
         for (Map<String, String> config : configs)
             EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
+        EasyMock.expect(Modules.compareAndSwapLoaders(currentLoaderMock));
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class

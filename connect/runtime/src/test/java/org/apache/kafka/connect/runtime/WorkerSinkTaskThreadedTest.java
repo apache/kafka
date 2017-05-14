@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.isolation.ModuleClassLoader;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -101,6 +102,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Mock private SinkTask sinkTask;
     private Capture<WorkerSinkTaskContext> sinkTaskContext = EasyMock.newCapture();
     private WorkerConfig workerConfig;
+    @Mock
+    private ModuleClassLoader moduleLoader;
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private TransformationChain transformationChain;
@@ -125,10 +128,12 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         workerProps.put("internal.key.converter.schemas.enable", "false");
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        moduleLoader = PowerMock.createMock(ModuleClassLoader.class);
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, TransformationChain.<SinkRecord>noOp(), time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter,
+                valueConverter, TransformationChain.<SinkRecord>noOp(), moduleLoader, time);
 
         recordsReturned = 0;
     }
