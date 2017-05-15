@@ -141,7 +141,8 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
         Schema updatedSchema = schemaUpdateCache.get(value.schema());
         if (updatedSchema == null) {
             final SchemaBuilder builder = SchemaUtil.copySchemaBasics(value.schema(), SchemaBuilder.struct());
-            buildUpdatedSchema(value.schema(), "", builder);
+            Struct defaultValue = (Struct) value.schema().defaultValue();
+            buildUpdatedSchema(value.schema(), "", builder, value.schema().isOptional(), defaultValue);
             updatedSchema = builder.build();
             schemaUpdateCache.put(value.schema(), updatedSchema);
         }
@@ -151,9 +152,27 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
         return newRecord(record, updatedSchema, updatedValue);
     }
 
-    private void buildUpdatedSchema(Schema schema, String fieldNamePrefix, SchemaBuilder newSchema) {
+    /**
+     * Build an updated Struct Schema which flattens all nested fields into a single struct, handling cases where
+     * optionality and default values of the flattened fields are affected by the optionality and default values of
+     * parent/ancestor schemas (e.g. flattened field is optional because the parent schema was optional, even if the
+     * schema itself is marked as required).
+     * @param schema the schema to translate
+     * @param fieldNamePrefix the prefix to use on field names, i.e. the delimiter-joined set of ancestor field names
+     * @param newSchema the flattened schema being built
+     * @param optional true if any ancestor schema is optional
+     * @param defaultFromParent the default value, if any, included via the parent/ancestor schemas
+     */
+    private void buildUpdatedSchema(Schema schema, String fieldNamePrefix, SchemaBuilder newSchema, boolean optional, Struct defaultFromParent) {
         for (Field field : schema.fields()) {
             final String fieldName = fieldName(fieldNamePrefix, field.name());
+            final boolean fieldIsOptional = optional || field.schema().isOptional();
+            Object fieldDefaultValue = null;
+            if (field.schema().defaultValue() != null) {
+                fieldDefaultValue = field.schema().defaultValue();
+            } else if (defaultFromParent != null) {
+                fieldDefaultValue = defaultFromParent.get(field);
+            }
             switch (field.schema().type()) {
                 case INT8:
                 case INT16:
@@ -164,16 +183,36 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                 case BOOLEAN:
                 case STRING:
                 case BYTES:
-                    newSchema.field(fieldName, field.schema());
+                    newSchema.field(fieldName, convertFieldSchema(field.schema(), fieldIsOptional, fieldDefaultValue));
                     break;
                 case STRUCT:
-                    buildUpdatedSchema(field.schema(), fieldName, newSchema);
+                    buildUpdatedSchema(field.schema(), fieldName, newSchema, fieldIsOptional, (Struct) fieldDefaultValue);
                     break;
                 default:
                     throw new DataException("Flatten transformation does not support " + field.schema().type()
                             + " for record without schemas (for field " + fieldName + ").");
             }
         }
+    }
+
+    /**
+     * Convert the schema for a field of a Struct with a primitive schema to the schema to be used for the flattened
+     * version, taking into account that we may need to override optionality and default values in the flattened version
+     * to take into account the optionality and default values of parent/ancestor schemas
+     * @param orig the original schema for the field
+     * @param optional whether the new flattened field should be optional
+     * @param defaultFromParent the default value either taken from the existing field or provided by the parent
+     */
+    private Schema convertFieldSchema(Schema orig, boolean optional, Object defaultFromParent) {
+        // Note that we don't use the schema translation cache here. It might save us a bit of effort, but we really
+        // only care about caching top-level schema translations.
+
+        final SchemaBuilder builder = SchemaUtil.copySchemaBasics(orig);
+        if (optional)
+            builder.optional();
+        if (defaultFromParent != null)
+            builder.defaultValue(defaultFromParent);
+        return builder.build();
     }
 
     private void buildWithSchema(Struct record, String fieldNamePrefix, Struct newRecord) {

@@ -31,6 +31,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -220,4 +221,37 @@ public class FlattenTest {
         xform.apply(new SourceRecord(null, null, "topic", 0, null, value));
     }
 
+    @Test
+    public void testOptionalAndDefaultValuesNested() {
+        // If we have a nested structure where an entire sub-Struct is optional, all flattened fields generated from its
+        // children should also be optional. Similarly, if the parent Struct has a default value, the default value for
+        // the flattened field
+
+        final Flatten<SourceRecord> xform = new Flatten.Value<>();
+        xform.configure(Collections.<String, String>emptyMap());
+
+        SchemaBuilder builder = SchemaBuilder.struct().optional();
+        builder.field("req_field", Schema.STRING_SCHEMA);
+        builder.field("opt_field", SchemaBuilder.string().optional().defaultValue("child_default").build());
+        Struct childDefaultValue = new Struct(builder);
+        childDefaultValue.put("req_field", "req_default");
+        builder.defaultValue(childDefaultValue);
+        Schema schema = builder.build();
+        // Intentionally leave this entire value empty since it is optional
+        Struct value = new Struct(schema);
+
+        SourceRecord transformed = xform.apply(new SourceRecord(null, null, "topic", 0, schema, value));
+
+        assertNotNull(transformed);
+        Schema transformedSchema = transformed.valueSchema();
+        assertEquals(Schema.Type.STRUCT, transformedSchema.type());
+        assertEquals(2, transformedSchema.fields().size());
+        // Required field should pick up both being optional and the default value from the parent
+        Schema transformedReqFieldSchema = SchemaBuilder.string().optional().defaultValue("req_default").build();
+        assertEquals(transformedReqFieldSchema, transformedSchema.field("req_field").schema());
+        // The optional field should still be optional but should have picked up the default value. However, since
+        // the parent didn't specify the default explicitly, we should still be using the field's normal default
+        Schema transformedOptFieldSchema = SchemaBuilder.string().optional().defaultValue("child_default").build();
+        assertEquals(transformedOptFieldSchema, transformedSchema.field("opt_field").schema());
+    }
 }
