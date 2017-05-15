@@ -16,14 +16,13 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.PluginDiscovery;
+import org.apache.kafka.connect.runtime.isolation.ModuleDesc;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
-
-import java.util.List;
-import java.util.Map;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
 
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -33,6 +32,9 @@ import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
@@ -67,7 +69,18 @@ public class ConnectorPluginsResource {
     @GET
     @Path("/")
     public List<ConnectorPluginInfo> listConnectorPlugins() {
-        return PluginDiscovery.connectorPlugins();
+        List<ConnectorPluginInfo> pluginList = new ArrayList<>();
+        // TODO: exclude dummy specific connectors.
+        // TODO: refactor to simplify ModuleDesc -> ConnectorPluginInfo
+        for (ModuleDesc<Connector> module : herder.modules().connectors()) {
+            pluginList.add(new ConnectorPluginInfo(
+                    module.className(),
+                    ConnectorType.from(module.moduleClass()),
+                    module.version())
+            );
+        }
+
+        return pluginList;
     }
 
     private String normalizedPluginName(String pluginName) {

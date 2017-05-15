@@ -206,7 +206,9 @@ public class ConnectorConfig extends AbstractConfig {
     static final class TransformationClassRecommender implements ConfigDef.Recommender {
         @Override
         public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            return (List) PluginDiscovery.transformationPlugins();
+            // TODO: disabled until a solid way to inject Modules object is selected.
+            // return (List) PluginDiscovery.transformationPlugins();
+            return Collections.emptyList();
         }
 
         @Override

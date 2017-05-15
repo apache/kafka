@@ -61,7 +61,7 @@ public class ConnectDistributed {
 
         Time time = Time.SYSTEM;
         Modules modules = new Modules(workerProps);
-        ClassLoader save = modules.compareAndSwapWithDelegatingLoader();
+        modules.compareAndSwapWithDelegatingLoader();
         DistributedConfig config = new DistributedConfig(workerProps);
 
         RestServer rest = new RestServer(config);

@@ -79,7 +79,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     protected final ConfigBackingStore configBackingStore;
 
     private Map<String, Connector> tempConnectors = new ConcurrentHashMap<>();
-    private Thread classPathTraverser;
 
     public AbstractHerder(Worker worker,
                           String workerId,
@@ -97,20 +96,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         this.worker.start();
         this.statusBackingStore.start();
         this.configBackingStore.start();
-        traverseClassPath();
     }
 
     protected void stopServices() {
         this.statusBackingStore.stop();
         this.configBackingStore.stop();
         this.worker.stop();
-        if (this.classPathTraverser != null) {
-            try {
-                this.classPathTraverser.join();
-            } catch (InterruptedException e) {
-                // ignore as it can only happen during shutdown
-            }
-        }
     }
 
     @Override
@@ -187,6 +178,11 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (!configBackingStore.contains(connector))
             throw new NotFoundException("Unknown connector " + connector);
         configBackingStore.putTargetState(connector, TargetState.STARTED);
+    }
+
+    @Override
+    public Modules modules() {
+        return worker.getModules();
     }
 
     @Override
@@ -384,15 +380,5 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         } catch (UnsupportedEncodingException e) {
             return null;
         }
-    }
-
-    private void traverseClassPath() {
-        classPathTraverser = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                PluginDiscovery.scanClasspathForPlugins();
-            }
-        }, "CLASSPATH traversal thread.");
-        classPathTraverser.start();
     }
 }

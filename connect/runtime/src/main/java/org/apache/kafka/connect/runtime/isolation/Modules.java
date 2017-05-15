@@ -38,6 +38,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class Modules {
     private static final Logger log = LoggerFactory.getLogger(Modules.class);
@@ -73,6 +74,18 @@ public class Modules {
 
     public Map<ModuleClassLoader, URL[]> getLoaders() {
         return loaders;
+    }
+
+    public Set<ModuleDesc<Connector>> connectors() {
+        return delegatingLoader.connectors();
+    }
+
+    public Set<ModuleDesc<Converter>> converters() {
+        return delegatingLoader.converters();
+    }
+
+    public Set<ModuleDesc<Transformation>> transformations() {
+        return delegatingLoader.transformations();
     }
 
     @SuppressWarnings("unchecked")
