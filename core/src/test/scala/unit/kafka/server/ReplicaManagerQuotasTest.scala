@@ -175,7 +175,8 @@ class ReplicaManagerQuotasTest {
     replay(logManager)
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkUtils, scheduler, logManager,
-      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower, new MetadataCache(configs.head.brokerId))
+      new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time).follower,
+      new BrokerTopicStats, new MetadataCache(configs.head.brokerId))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {

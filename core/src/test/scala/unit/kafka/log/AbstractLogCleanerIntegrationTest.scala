@@ -20,6 +20,7 @@ import java.io.File
 import java.nio.file.Files
 import java.util.Properties
 
+import kafka.server.BrokerTopicStats
 import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
@@ -95,7 +96,8 @@ abstract class AbstractLogCleanerIntegrationTest {
         logStartOffset = 0L,
         recoveryPoint = 0L,
         scheduler = time.scheduler,
-        time = time)
+        time = time,
+        brokerTopicStats = new BrokerTopicStats)
       logMap.put(partition, log)
       this.logs += log
     }

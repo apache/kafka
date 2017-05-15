@@ -23,6 +23,7 @@ import java.nio.file.Paths
 import java.util.Properties
 
 import kafka.common._
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -974,7 +975,8 @@ class LogCleanerTest extends JUnitSuite {
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
   private def makeLog(dir: File = dir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+      time = time, brokerTopicStats = new BrokerTopicStats)
 
   private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
 

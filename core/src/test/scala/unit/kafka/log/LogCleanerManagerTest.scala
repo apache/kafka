@@ -20,6 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -234,12 +235,14 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      brokerTopicStats = new BrokerTopicStats)
     log
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+      time = time, brokerTopicStats = new BrokerTopicStats)
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

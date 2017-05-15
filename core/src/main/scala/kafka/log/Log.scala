@@ -113,6 +113,7 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
  *                       Other activities such as log cleaning are not affected by logStartOffset.
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
+ * @param brokerTopicStats Container for Broker Topic Yammer Metrics
  * @param time The time instance used for checking the clock
  * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
  * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
@@ -123,6 +124,7 @@ class Log(@volatile var dir: File,
           @volatile var logStartOffset: Long = 0L,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
+          brokerTopicStats: BrokerTopicStats,
           time: Time = Time.SYSTEM,
           val maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
           val producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
@@ -560,8 +562,8 @@ class Log(@volatile var dir: File,
               if (batch.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
-                BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-                BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+                brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+                brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
                 throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
                   .format(batch.sizeInBytes, config.maxMessageSize))
               }
@@ -746,8 +748,8 @@ class Log(@volatile var dir: File,
       // Check if the message sizes are valid.
       val batchSize = batch.sizeInBytes
       if (batchSize > config.maxMessageSize) {
-        BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+        brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+        brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
         throw new RecordTooLargeException(s"The record batch size is $batchSize bytes which exceeds the maximum configured " +
           s"value of ${config.maxMessageSize}.")
       }

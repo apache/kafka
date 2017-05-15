@@ -55,6 +55,7 @@ class LogManager(val logDirs: Array[File],
                  val maxPidExpirationMs: Int,
                  scheduler: Scheduler,
                  val brokerState: BrokerState,
+                 brokerTopicStats: BrokerTopicStats,
                  time: Time) extends Logging {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LogStartOffsetCheckpointFile = "log-start-offset-checkpoint"
@@ -175,7 +176,8 @@ class LogManager(val logDirs: Array[File],
             recoveryPoint = logRecoveryPoint,
             maxProducerIdExpirationMs = maxPidExpirationMs,
             scheduler = scheduler,
-            time = time)
+            time = time,
+            brokerTopicStats = brokerTopicStats)
           if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
             this.logsToBeDeleted.add(current)
           } else {
@@ -416,7 +418,8 @@ class LogManager(val logDirs: Array[File],
           recoveryPoint = 0L,
           maxProducerIdExpirationMs = maxPidExpirationMs,
           scheduler = scheduler,
-          time = time)
+          time = time,
+          brokerTopicStats = brokerTopicStats)
         logs.put(topicPartition, log)
         info("Created log for partition [%s,%d] in %s with properties {%s}."
           .format(topicPartition.topic,
@@ -572,7 +575,8 @@ object LogManager {
             zkUtils: ZkUtils,
             brokerState: BrokerState,
             kafkaScheduler: KafkaScheduler,
-            time: Time): LogManager = {
+            time: Time,
+            brokerTopicStats: BrokerTopicStats): LogManager = {
     val defaultProps = KafkaServer.copyKafkaConfigToLog(config)
     val defaultLogConfig = LogConfig(defaultProps)
 
@@ -602,6 +606,7 @@ object LogManager {
       maxPidExpirationMs = config.transactionIdExpirationMs,
       scheduler = kafkaScheduler,
       brokerState = brokerState,
-      time = time)
+      time = time,
+      brokerTopicStats = brokerTopicStats)
   }
 }
