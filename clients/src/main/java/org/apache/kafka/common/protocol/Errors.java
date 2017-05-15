@@ -479,7 +479,7 @@ public enum Errors {
             return new TransactionalIdAuthorizationException(message);
         }
     }),
-    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer Id authorization failed",
+    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer is not authorized to use producer Ids",
                                              new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {

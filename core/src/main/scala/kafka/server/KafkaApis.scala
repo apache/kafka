@@ -368,7 +368,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     else
       true
 
-    val producerIdAuthorized = if (produceRequest.isIdempotent)
+    val producerIdAuthorized = if (!transactionalIdAuthorized && produceRequest.isIdempotent)
       authorize(request.session, Write, Resource.ProducerIdResource)
     else
       true
@@ -447,7 +447,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceResponseCallback)
     }
 
-    if (authorizedRequestInfo.isEmpty || !transactionalIdAuthorized)
+    if (authorizedRequestInfo.isEmpty || !transactionalIdAuthorized || !producerIdAuthorized)
       sendResponseCallback(Map.empty)
     else {
       val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
@@ -1452,7 +1452,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         endTxnRequest.command(),
         sendResponseCallback)
     } else
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new EndTxnResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
@@ -1504,7 +1504,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
 
     if(!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     else {
       val internalTopics = partitionsToAdd.asScala.filter {tp => kafka.common.Topic.InternalTopics.contains(tp.topic())}
 
@@ -1518,9 +1518,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (nonExistingOrUnauthorizedForDescribeTopics.nonEmpty)
-        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION))
+        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION))
       else if (unauthorizedForWriteRequestInfo.nonEmpty || internalTopics.nonEmpty)
-        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TOPIC_AUTHORIZATION_FAILED))
+        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, Errors.TOPIC_AUTHORIZATION_FAILED))
       else {
         // Send response callback
         def sendResponseCallback(error: Errors): Unit = {
@@ -1551,9 +1551,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetTopicPartition = new TopicPartition(GroupMetadataTopicName, groupCoordinator.partitionFor(groupId))
 
     if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddOffsetsToTxnResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     else if (!authorize(request.session, Read, new Resource(Group, groupId)))
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new InitPidResponse(throttleTimeMs, Errors.GROUP_AUTHORIZATION_FAILED))
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddOffsetsToTxnResponse(throttleTimeMs, Errors.GROUP_AUTHORIZATION_FAILED))
     else {
         // Send response callback
         def sendResponseCallback(error: Errors): Unit = {
