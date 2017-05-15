@@ -126,7 +126,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
-        return task.schedule(interval, callback);
+        return task.schedule(interval, type, callback);
     }
 
     @Override

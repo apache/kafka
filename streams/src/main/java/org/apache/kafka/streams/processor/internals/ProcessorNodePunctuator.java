@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.PunctuationType;
+
 public interface ProcessorNodePunctuator {
 
-    void punctuate(ProcessorNode node, long streamTime, Runnable punctuateDelegate);
+    void punctuate (ProcessorNode node, long streamTime, PunctuationType type, Runnable punctuateDelegate);
 
 }

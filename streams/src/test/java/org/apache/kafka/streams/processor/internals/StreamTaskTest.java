@@ -421,7 +421,7 @@ public class StreamTaskTest {
         punctuator.init(new NoOpProcessorContext());
 
         try {
-            task.punctuate(punctuator, 1, new Runnable() {
+            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Runnable() {
                 @Override
                 public void run () {
                     processor.punctuate(task.context().timestamp());
@@ -459,7 +459,7 @@ public class StreamTaskTest {
         punctuator.init(new NoOpProcessorContext());
 
         try {
-            task.punctuate(punctuator, 1, new Runnable() {
+            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Runnable() {
                 @Override
                 public void run () {
                     processor.punctuate(task.context().timestamp());
@@ -625,7 +625,7 @@ public class StreamTaskTest {
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
         try {
-            task.punctuate(processor, 10, punctuateDelegate);
+            task.punctuate(processor, 10, PunctuationType.STREAM_TIME, punctuateDelegate);
             fail("Should throw illegal state exception as current node is not null");
         } catch (final IllegalStateException e) {
             // pass
@@ -634,21 +634,21 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() throws Exception {
-        task.punctuate(processor, 5, punctuateDelegate);
+        task.punctuate(processor, 5, PunctuationType.STREAM_TIME, punctuateDelegate);
         assertThat(punctuatedAt, equalTo(5L));
-        task.punctuate(processor, 10, punctuateDelegate);
+        task.punctuate(processor, 10, PunctuationType.STREAM_TIME, punctuateDelegate);
         assertThat(punctuatedAt, equalTo(10L));
     }
 
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccesfullPunctuate() throws Exception {
-        task.punctuate(processor, 5, punctuateDelegate);
+        task.punctuate(processor, 5, PunctuationType.STREAM_TIME, punctuateDelegate);
         assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() throws Exception {
-        task.schedule(1, new Punctuator() {
+        task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
             public void punctuate (long timestamp) {
                 // no-op
@@ -659,7 +659,17 @@ public class StreamTaskTest {
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
-        task.schedule(1, new Punctuator() {
+        task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
+            @Override
+            public void punctuate (long timestamp) {
+                // no-op
+            }
+        });
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIllegalArgumentExceptionOnScheduleIfPunctuationTypeIsInvalid() throws Exception {
+        task.schedule(1, null, new Punctuator() {
             @Override
             public void punctuate (long timestamp) {
                 // no-op

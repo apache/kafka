@@ -31,6 +31,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -56,7 +57,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     private final PartitionGroup partitionGroup;
     private final PartitionGroup.RecordInfo recordInfo = new PartitionGroup.RecordInfo();
-    private final PunctuationQueue punctuationQueue;
+    private final PunctuationQueue streamTimePunctuationQueue;
+    private final PunctuationQueue systemTimePunctuationQueue;
 
     private final Map<TopicPartition, Long> consumedOffsets;
     private final RecordCollector recordCollector;
@@ -111,7 +113,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final Time time,
                       final Producer<byte[], byte[]> producer) {
         super(id, applicationId, partitions, topology, consumer, changelogReader, false, stateDirectory, cache, config);
-        punctuationQueue = new PunctuationQueue();
+        streamTimePunctuationQueue = new PunctuationQueue();
+        systemTimePunctuationQueue = new PunctuationQueue();
         maxBufferedSize = config.getInt(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.metrics = new TaskMetrics(metrics);
 
@@ -221,7 +224,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws IllegalStateException if the current node is not null
      */
     @Override
-    public void punctuate(final ProcessorNode node, final long timestamp, Runnable punctuateDelegate) {
+    public void punctuate (final ProcessorNode node, final long timestamp, PunctuationType type, Runnable punctuateDelegate) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
         }
@@ -229,7 +232,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         updateProcessorContext(new StampedRecord(DUMMY_RECORD, timestamp), node);
 
         if (log.isTraceEnabled()) {
-            log.trace("{} Punctuating processor {} with timestamp {}", logPrefix, node.name(), timestamp);
+            log.trace("{} Punctuating processor {} with timestamp {} {}", logPrefix, node.name(), timestamp, type);
         }
 
         try {
@@ -486,9 +489,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * Schedules a punctuation for the processor
      *
      * @param interval  the interval in milliseconds
+     * @param type
      * @throws IllegalStateException if the current node is not null
      */
-    public Cancellable schedule(final long interval, final Punctuator punctuator) {
+    public Cancellable schedule (final long interval, PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() == null) {
             throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
         }
@@ -500,7 +504,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         });
 
-        punctuationQueue.schedule(schedule);
+        switch(type) {
+        case STREAM_TIME:
+            streamTimePunctuationQueue.schedule(schedule);
+            break;
+        case SYSTEM_TIME:
+            systemTimePunctuationQueue.schedule(schedule);
+            break;
+        default:
+            throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
+        }
 
         return new Cancellable() {
             @Override
@@ -524,12 +537,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     boolean maybePunctuate() {
         final long timestamp = partitionGroup.timestamp();
 
+        boolean punctuated = systemTimePunctuationQueue.mayPunctuate(System.currentTimeMillis(), PunctuationType.SYSTEM_TIME, this);
+
         // if the timestamp is not known yet, meaning there is not enough data accumulated
         // to reason stream partition time, then skip.
         if (timestamp == TimestampTracker.NOT_KNOWN) {
-            return false;
+            return punctuated;
         } else {
-            return punctuationQueue.mayPunctuate(timestamp, this);
+            return punctuated || streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
         }
     }
 

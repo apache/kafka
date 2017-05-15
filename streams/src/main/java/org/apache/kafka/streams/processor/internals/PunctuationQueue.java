@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.processor.PunctuationType;
+
 import java.util.PriorityQueue;
 
 public class PunctuationQueue {
@@ -34,14 +36,14 @@ public class PunctuationQueue {
         }
     }
 
-    public boolean mayPunctuate(long timestamp, ProcessorNodePunctuator punctuator) {
+    public boolean mayPunctuate(long timestamp, PunctuationType type, ProcessorNodePunctuator punctuator) {
         synchronized (pq) {
             boolean punctuated = false;
             PunctuationSchedule top = pq.peek();
             while (top != null && top.timestamp <= timestamp && !top.isCancelled) {
                 PunctuationSchedule sched = top;
                 pq.poll();
-                punctuator.punctuate(sched.node(), timestamp, sched.punctuateDelegate());
+                punctuator.punctuate(sched.node(), timestamp, type, sched.punctuateDelegate());
                 pq.add(sched.next(timestamp));
                 punctuated = true;
 
