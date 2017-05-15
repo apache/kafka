@@ -1266,7 +1266,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
     val createTopicsRequest = request.body[CreateTopicsRequest]
 
-    def sendResponseCallback(results: Map[String, CreateTopicsResponse.Error]): Unit = {
+    def sendResponseCallback(results: Map[String, ApiError]): Unit = {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
         val responseBody = new CreateTopicsResponse(throttleTimeMs, results.asJava)
         trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
@@ -1277,12 +1277,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!controller.isActive) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new CreateTopicsResponse.Error(Errors.NOT_CONTROLLER, null))
+        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
       }
       sendResponseCallback(results)
     } else if (!authorize(request.session, Create, Resource.ClusterResource)) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new CreateTopicsResponse.Error(Errors.CLUSTER_AUTHORIZATION_FAILED, null))
+        (topic, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null))
       }
       sendResponseCallback(results)
     } else {
@@ -1291,7 +1291,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // Special handling to add duplicate topics to the response
-      def sendResponseWithDuplicatesCallback(results: Map[String, CreateTopicsResponse.Error]): Unit = {
+      def sendResponseWithDuplicatesCallback(results: Map[String, ApiError]): Unit = {
 
         val duplicatedTopicsResults =
           if (duplicateTopics.nonEmpty) {
@@ -1300,7 +1300,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // We can send the error message in the response for version 1, so we don't have to log it any more
             if (request.header.apiVersion == 0)
               warn(errorMessage)
-            duplicateTopics.keySet.map((_, new CreateTopicsResponse.Error(Errors.INVALID_REQUEST, errorMessage))).toMap
+            duplicateTopics.keySet.map((_, new ApiError(Errors.INVALID_REQUEST, errorMessage))).toMap
           } else Map.empty
 
         val completeResults = results ++ duplicatedTopicsResults

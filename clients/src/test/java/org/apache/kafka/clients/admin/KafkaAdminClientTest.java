@@ -27,9 +27,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
-import org.apache.kafka.common.requests.CreateTopicsResponse.Error;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
@@ -186,8 +186,8 @@ public class KafkaAdminClientTest {
             AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
             ctx.mockClient.setNodeApiVersions(NodeApiVersions.create());
             ctx.mockClient.setNode(new Node(0, "localhost", 8121));
-            ctx.mockClient.prepareResponse(new CreateTopicsResponse(new HashMap<String, Error>() {{
-                    put("myTopic", new Error(Errors.NONE, ""));
+            ctx.mockClient.prepareResponse(new CreateTopicsResponse(new HashMap<String, ApiError>() {{
+                    put("myTopic", new ApiError(Errors.NONE, ""));
                 }}));
             KafkaFuture<Void> future = ctx.client.
                 createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
@@ -203,8 +203,8 @@ public class KafkaAdminClientTest {
             ctx.mockClient.setNodeApiVersions(NodeApiVersions.create());
             ctx.mockClient.prepareMetadataUpdate(ctx.cluster, Collections.<String>emptySet());
             ctx.mockClient.setNode(ctx.nodes.get(0));
-            ctx.mockClient.prepareResponse(new CreateTopicsResponse(new HashMap<String, Error>() {{
-                    put("myTopic", new Error(Errors.NONE, ""));
+            ctx.mockClient.prepareResponse(new CreateTopicsResponse(new HashMap<String, ApiError>() {{
+                    put("myTopic", new ApiError(Errors.NONE, ""));
                 }}));
             KafkaFuture<Void> future = ctx.client.
                 createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{

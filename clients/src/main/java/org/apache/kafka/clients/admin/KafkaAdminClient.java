@@ -69,6 +69,7 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -853,7 +854,7 @@ public class KafkaAdminClient extends AdminClient {
             public void handleResponse(AbstractResponse abstractResponse) {
                 CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, CreateTopicsResponse.Error> entry : response.errors().entrySet()) {
+                for (Map.Entry<String, ApiError> entry : response.errors().entrySet()) {
                     KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());

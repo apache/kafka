@@ -27,7 +27,7 @@ import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, Po
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
-import org.apache.kafka.common.requests.CreateTopicsResponse
+import org.apache.kafka.common.requests.{ApiError, CreateTopicsResponse}
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
@@ -63,7 +63,7 @@ class AdminManager(val config: KafkaConfig,
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
                    createInfo: Map[String, TopicDetails],
-                   responseCallback: Map[String, CreateTopicsResponse.Error] => Unit) {
+                   responseCallback: Map[String, ApiError] => Unit) {
 
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
@@ -114,15 +114,15 @@ class AdminManager(val config: KafkaConfig,
             else
               AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
         }
-        CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
+        CreateTopicMetadata(topic, assignments, new ApiError(Errors.NONE, null))
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e@ (_: PolicyViolationException | _: ApiException) =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
+          CreateTopicMetadata(topic, Map(), new ApiError(Errors.forException(e), e.getMessage))
         case e: Throwable =>
           error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
+          CreateTopicMetadata(topic, Map(), new ApiError(Errors.forException(e), e.getMessage))
       }
     }
 
@@ -131,7 +131,7 @@ class AdminManager(val config: KafkaConfig,
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
         if (createTopicMetadata.error.is(Errors.NONE) && !validateOnly) {
-          (createTopicMetadata.topic, new CreateTopicsResponse.Error(Errors.REQUEST_TIMED_OUT, null))
+          (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)
         }

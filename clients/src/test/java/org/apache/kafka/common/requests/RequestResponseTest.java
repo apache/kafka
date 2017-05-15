@@ -887,9 +887,9 @@ public class RequestResponseTest {
     }
 
     private CreateTopicsResponse createCreateTopicResponse() {
-        Map<String, CreateTopicsResponse.Error> errors = new HashMap<>();
-        errors.put("t1", new CreateTopicsResponse.Error(Errors.INVALID_TOPIC_EXCEPTION, null));
-        errors.put("t2", new CreateTopicsResponse.Error(Errors.LEADER_NOT_AVAILABLE, "Leader with id 5 is not available."));
+        Map<String, ApiError> errors = new HashMap<>();
+        errors.put("t1", new ApiError(Errors.INVALID_TOPIC_EXCEPTION, null));
+        errors.put("t2", new ApiError(Errors.LEADER_NOT_AVAILABLE, "Leader with id 5 is not available."));
         return new CreateTopicsResponse(errors);
     }
 

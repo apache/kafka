@@ -210,12 +210,12 @@ public class CreateTopicsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Map<String, CreateTopicsResponse.Error> topicErrors = new HashMap<>();
+        Map<String, ApiError> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
             Errors error = Errors.forException(e);
             // Avoid populating the error message if it's a generic one
             String message = error.message().equals(e.getMessage()) ? null : e.getMessage();
-            topicErrors.put(topic, new CreateTopicsResponse.Error(error, message));
+            topicErrors.put(topic, new ApiError(error, message));
         }
 
         short versionId = version();
