@@ -486,7 +486,7 @@ public class MemoryRecords extends AbstractRecords {
                 RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, RecordBatch.NO_PARTITION_LEADER_EPOCH,
                 buffer.capacity());
         builder.appendEndTxnMarker(System.currentTimeMillis(), marker);
-        builder.close(false);
+        builder.close();
     }
 
 }

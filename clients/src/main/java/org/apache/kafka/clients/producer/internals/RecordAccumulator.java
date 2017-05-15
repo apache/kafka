@@ -465,7 +465,7 @@ public final class RecordAccumulator {
                                                     batch.topicPartition, sequenceNumber);
                                             batch.setProducerState(pidAndEpoch, sequenceNumber);
                                         }
-                                        batch.close(false);
+                                        batch.close();
                                         size += batch.sizeInBytes();
                                         ready.add(batch);
                                         batch.drained(now);
@@ -588,7 +588,7 @@ public final class RecordAccumulator {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             // Close the batch before aborting
             synchronized (dq) {
-                batch.close(true);
+                batch.abort();
                 dq.remove(batch);
             }
             batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);

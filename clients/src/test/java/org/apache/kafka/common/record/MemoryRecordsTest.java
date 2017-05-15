@@ -149,7 +149,7 @@ public class MemoryRecordsTest {
                 TimestampType.CREATE_TIME, 0L);
         builder.append(0L, "a".getBytes(), "1".getBytes());
         assertTrue(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
-        builder.close(false);
+        builder.close();
         assertFalse(builder.hasRoomFor(1L, "b".getBytes(), "2".getBytes()));
     }
 
@@ -259,7 +259,7 @@ public class MemoryRecordsTest {
             builder.append(11L, "1".getBytes(), "b".getBytes());
             builder.append(12L, null, "c".getBytes());
 
-            builder.close(false);
+            builder.close();
 
             // idempotent
             long pid1 = 23L;
@@ -270,7 +270,7 @@ public class MemoryRecordsTest {
             builder.append(13L, null, "d".getBytes());
             builder.append(14L, "4".getBytes(), "e".getBytes());
             builder.append(15L, "5".getBytes(), "f".getBytes());
-            builder.close(false);
+            builder.close();
 
             // transactional
             long pid2 = 99384L;
@@ -281,7 +281,7 @@ public class MemoryRecordsTest {
             builder.append(16L, "6".getBytes(), "g".getBytes());
             builder.append(17L, null, "h".getBytes());
             builder.append(18L, "8".getBytes(), "i".getBytes());
-            builder.close(false);
+            builder.close();
 
             buffer.flip();
 
@@ -331,22 +331,22 @@ public class MemoryRecordsTest {
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
-        builder.close(false);
+        builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
         builder.append(11L, "1".getBytes(), "b".getBytes());
         builder.append(12L, null, "c".getBytes());
-        builder.close(false);
+        builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
         builder.append(13L, null, "d".getBytes());
         builder.append(20L, "4".getBytes(), "e".getBytes());
         builder.append(15L, "5".getBytes(), "f".getBytes());
-        builder.close(false);
+        builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
         builder.append(16L, "6".getBytes(), "g".getBytes());
-        builder.close(false);
+        builder.close();
 
         buffer.flip();
 
@@ -445,20 +445,20 @@ public class MemoryRecordsTest {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
                 TimestampType.LOG_APPEND_TIME, 0L, logAppendTime, pid, epoch, firstSequence);
         builder.append(10L, null, "a".getBytes());
-        builder.close(false);
+        builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 1L, logAppendTime,
                 pid, epoch, firstSequence);
         builder.append(11L, "1".getBytes(), "b".getBytes());
         builder.append(12L, null, "c".getBytes());
-        builder.close(false);
+        builder.close();
 
         builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.LOG_APPEND_TIME, 3L, logAppendTime,
                 pid, epoch, firstSequence);
         builder.append(13L, null, "d".getBytes());
         builder.append(14L, "4".getBytes(), "e".getBytes());
         builder.append(15L, "5".getBytes(), "f".getBytes());
-        builder.close(false);
+        builder.close();
 
         buffer.flip();
 

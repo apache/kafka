@@ -348,12 +348,12 @@ public class RequestResponseTest {
         ByteBuffer buffer = ByteBuffer.allocate(256);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
         builder.append(10L, null, "a".getBytes());
-        builder.close(false);
+        builder.close();
 
         builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
         builder.append(11L, "1".getBytes(), "b".getBytes());
         builder.append(12L, null, "c".getBytes());
-        builder.close(false);
+        builder.close();
 
         buffer.flip();
 

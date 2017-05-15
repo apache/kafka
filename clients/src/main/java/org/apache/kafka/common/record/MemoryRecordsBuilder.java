@@ -84,6 +84,7 @@ public class MemoryRecordsBuilder {
     private Long baseTimestamp = null;
 
     private MemoryRecords builtRecords;
+    private boolean aborted = false;
 
     /**
      * Construct a new builder.
@@ -175,7 +176,10 @@ public class MemoryRecordsBuilder {
      * @return The built log buffer
      */
     public MemoryRecords build() {
-        close(false);
+        if (aborted) {
+            throw new KafkaException("Attempting to build an aborted record batch");
+        }
+        close();
         return builtRecords;
     }
 
@@ -246,24 +250,28 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public void close(final boolean aborted) {
+    public void abort() {
+        closeForRecordAppends();
+        buffer().position(initPos);
+        aborted = true;
+    }
+
+    public void close() {
         if (builtRecords != null)
             return;
 
-        if (!aborted) {
-            if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
-                throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
+        if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
+            throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
 
-            if (producerId != RecordBatch.NO_PRODUCER_ID) {
-                if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
-                    throw new IllegalArgumentException("Invalid negative producer epoch");
+        if (producerId != RecordBatch.NO_PRODUCER_ID) {
+            if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
+                throw new IllegalArgumentException("Invalid negative producer epoch");
 
-                if (baseSequence < 0 && !isControlBatch)
-                    throw new IllegalArgumentException("Invalid negative sequence number used");
+            if (baseSequence < 0 && !isControlBatch)
+                throw new IllegalArgumentException("Invalid negative sequence number used");
 
-                if (magic < RecordBatch.MAGIC_VALUE_V2)
-                    throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
-            }
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
         }
 
         closeForRecordAppends();
