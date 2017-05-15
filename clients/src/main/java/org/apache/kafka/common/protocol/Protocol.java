@@ -1521,9 +1521,6 @@ public class Protocol {
             new Field("producer_epoch",
                     INT16,
                     "Current epoch associated with the producer id."),
-            new Field("retention_time",
-                    INT64,
-                    "The time in ms to retain the offset."),
             new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),

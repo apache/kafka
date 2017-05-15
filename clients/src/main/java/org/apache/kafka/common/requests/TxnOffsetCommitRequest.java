@@ -30,7 +30,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     private static final String CONSUMER_GROUP_ID_KEY_NAME = "consumer_group_id";
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String PRODUCER_EPOCH_KEY_NAME = "producer_epoch";
-    private static final String RETENTION_TIME_KEY_NAME = "retention_time";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
@@ -42,16 +41,14 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         private final String consumerGroupId;
         private final long producerId;
         private final short producerEpoch;
-        private final long retentionTimeMs;
         private final Map<TopicPartition, CommittedOffset> offsets;
 
-        public Builder(String consumerGroupId, long producerId, short producerEpoch, long retentionTimeMs,
+        public Builder(String consumerGroupId, long producerId, short producerEpoch,
                        Map<TopicPartition, CommittedOffset> offsets) {
             super(ApiKeys.TXN_OFFSET_COMMIT);
             this.consumerGroupId = consumerGroupId;
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
-            this.retentionTimeMs = retentionTimeMs;
             this.offsets = offsets;
         }
 
@@ -61,23 +58,21 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
         @Override
         public TxnOffsetCommitRequest build(short version) {
-            return new TxnOffsetCommitRequest(version, consumerGroupId, producerId, producerEpoch, retentionTimeMs, offsets);
+            return new TxnOffsetCommitRequest(version, consumerGroupId, producerId, producerEpoch, offsets);
         }
     }
 
     private final String consumerGroupId;
     private final long producerId;
     private final short producerEpoch;
-    private final long retentionTimeMs;
     private final Map<TopicPartition, CommittedOffset> offsets;
 
     public TxnOffsetCommitRequest(short version, String consumerGroupId, long producerId, short producerEpoch,
-                                  long retentionTimeMs, Map<TopicPartition, CommittedOffset> offsets) {
+                                  Map<TopicPartition, CommittedOffset> offsets) {
         super(version);
         this.consumerGroupId = consumerGroupId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
-        this.retentionTimeMs = retentionTimeMs;
         this.offsets = offsets;
     }
 
@@ -86,7 +81,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         this.consumerGroupId = struct.getString(CONSUMER_GROUP_ID_KEY_NAME);
         this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
         this.producerEpoch = struct.getShort(PRODUCER_EPOCH_KEY_NAME);
-        this.retentionTimeMs = struct.getLong(RETENTION_TIME_KEY_NAME);
 
         Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
         Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
@@ -116,10 +110,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return producerEpoch;
     }
 
-    public long retentionTimeMs() {
-        return retentionTimeMs;
-    }
-
     public Map<TopicPartition, CommittedOffset> offsets() {
         return offsets;
     }
@@ -130,7 +120,6 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         struct.set(CONSUMER_GROUP_ID_KEY_NAME, consumerGroupId);
         struct.set(PRODUCER_ID_KEY_NAME, producerId);
         struct.set(PRODUCER_EPOCH_KEY_NAME, producerEpoch);
-        struct.set(RETENTION_TIME_KEY_NAME, retentionTimeMs);
 
         Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupDataByTopic(offsets);
         Object[] partitionsArray = new Object[mappedPartitionOffsets.size()];

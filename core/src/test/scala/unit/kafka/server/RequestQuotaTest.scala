@@ -270,7 +270,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new WriteTxnMarkersRequest.Builder(List.empty.asJava)
 
         case ApiKeys.TXN_OFFSET_COMMIT =>
-          new TxnOffsetCommitRequest.Builder("test-txn-group", 2, 0, 3600, Map.empty.asJava)
+          new TxnOffsetCommitRequest.Builder("test-txn-group", 2, 0, Map.empty.asJava)
 
         case key =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
