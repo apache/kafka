@@ -118,7 +118,7 @@ public class ProducerPerformance {
             Stats stats = new Stats(numRecords, 5000, numThreads);
             ProducerPerformanceThread[] producerPerformanceThreads = new ProducerPerformanceThread[numThreads];
             long numRecordsPerThread = numRecords / numThreads;
-            int throughputPerThread = Math.max(throughput / numThreads, 1);
+            int throughputPerThread = throughput <= 0 ? throughput : Math.max(throughput / numThreads, 1);
             for (int i = 0; i < numThreads; i++) {
                 // If number of records cannot be exactly divided by num threads, some threads need to send one more record.
                 int numRecordsAdjustment = i < numRecords % numThreads ? 1 : 0;
