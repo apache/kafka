@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io._
 import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
@@ -2405,7 +2406,7 @@ class LogTest {
 
     // delete all snapshot files
     logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
-      file.delete()
+      Files.delete(file.toPath)
     }
 
     // delete the last offset and transaction index files to force recovery. this should force us to rebuild
