@@ -17,38 +17,39 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.connector.Connector;
-import org.apache.kafka.connect.sink.SinkConnector;
-import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
 
-import java.util.Locale;
+import java.util.Collection;
 
-public enum ModuleType {
-    SOURCE(SourceConnector.class),
-    SINK(SinkConnector.class),
-    CONNECTOR(Connector.class),
-    CONVERTER(Converter.class),
-    TRANSFORMATION(Transformation.class),
-    UNKNOWN(Object.class);
+public class PluginScanResult {
+    private final Collection<PluginDesc<Connector>> connectors;
+    private final Collection<PluginDesc<Converter>> converters;
+    private final Collection<PluginDesc<Transformation>> transformations;
 
-    private Class<?> klass;
-
-    ModuleType(Class<?> klass) {
-        this.klass = klass;
+    public PluginScanResult(
+            Collection<PluginDesc<Connector>> connectors,
+            Collection<PluginDesc<Converter>> converters,
+            Collection<PluginDesc<Transformation>> transformations
+    ) {
+        this.connectors = connectors;
+        this.converters = converters;
+        this.transformations = transformations;
     }
 
-    public static ModuleType from(Class<?> klass) {
-        for (ModuleType type : ModuleType.values()) {
-            if (type.klass.isAssignableFrom(klass)) {
-                return type;
-            }
-        }
-        return UNKNOWN;
+    public Collection<PluginDesc<Connector>> connectors() {
+        return connectors;
     }
 
-    @Override
-    public String toString() {
-        return super.toString().toLowerCase(Locale.ROOT);
+    public Collection<PluginDesc<Converter>> converters() {
+        return converters;
+    }
+
+    public Collection<PluginDesc<Transformation>> transformations() {
+        return transformations;
+    }
+
+    public boolean isEmpty() {
+        return connectors().isEmpty() && converters().isEmpty() && transformations().isEmpty();
     }
 }

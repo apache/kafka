@@ -53,18 +53,18 @@ import java.util.concurrent.ConcurrentMap;
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
 
-    private final ConcurrentMap<String, SortedMap<ModuleDesc<?>, ModuleClassLoader>> moduleLoaders;
-    private final SortedSet<ModuleDesc<Connector>> connectors;
-    private final SortedSet<ModuleDesc<Converter>> converters;
-    private final SortedSet<ModuleDesc<Transformation>> transformations;
-    private final List<String> modulePaths;
-    private final Map<Path, ModuleClassLoader> activePaths;
+    private final ConcurrentMap<String, SortedMap<PluginDesc<?>, PluginClassLoader>> pluginLoaders;
+    private final SortedSet<PluginDesc<Connector>> connectors;
+    private final SortedSet<PluginDesc<Converter>> converters;
+    private final SortedSet<PluginDesc<Transformation>> transformations;
+    private final List<String> pluginPaths;
+    private final Map<Path, PluginClassLoader> activePaths;
     private final Map<Path, Void> inactivePaths;
 
-    public DelegatingClassLoader(List<String> modulePaths, ClassLoader parent) {
+    public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
-        this.modulePaths = modulePaths;
-        this.moduleLoaders = new ConcurrentHashMap<>();
+        this.pluginPaths = pluginPaths;
+        this.pluginLoaders = new ConcurrentHashMap<>();
         this.activePaths = new HashMap<>();
         this.inactivePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
@@ -72,8 +72,8 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.transformations = new TreeSet<>();
     }
 
-    public DelegatingClassLoader(List<String> modulePaths) {
-        this(modulePaths, ClassLoader.getSystemClassLoader());
+    public DelegatingClassLoader(List<String> pluginPaths) {
+        this(pluginPaths, ClassLoader.getSystemClassLoader());
     }
 
     private static boolean isConcrete(Class<?> cls) {
@@ -81,7 +81,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
     }
 
-    private static List<Path> moduleDirs(Path topDir) throws IOException {
+    private static List<Path> pluginDirs(Path topDir) throws IOException {
         DirectoryStream.Filter<Path> dirFilter = new DirectoryStream.Filter<Path>() {
             public boolean accept(Path path) throws IOException {
                 return Files.isDirectory(path);
@@ -98,7 +98,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return dirs;
     }
 
-    private static List<URL> jarPaths(Path moduleDir) throws IOException {
+    private static List<URL> jarPaths(Path pluginDir) throws IOException {
         DirectoryStream.Filter<Path> jarFilter = new DirectoryStream.Filter<Path>() {
             public boolean accept(Path file) throws IOException {
                 return file.toString().toLowerCase(Locale.ROOT).endsWith(".jar");
@@ -106,7 +106,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         };
 
         List<URL> jars = new ArrayList<>();
-        try (DirectoryStream<Path> listing = Files.newDirectoryStream(moduleDir, jarFilter)) {
+        try (DirectoryStream<Path> listing = Files.newDirectoryStream(pluginDir, jarFilter)) {
             for (Path jar : listing) {
                 jars.add(jar.toUri().toURL());
             }
@@ -114,154 +114,154 @@ public class DelegatingClassLoader extends URLClassLoader {
         return jars;
     }
 
-    public void addAlias(ModuleDesc<?> module, String alias) {
-        SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(module.className());
+    public void addAlias(PluginDesc<?> plugin, String alias) {
+        SortedMap<PluginDesc<?>, PluginClassLoader> inner = pluginLoaders.get(plugin.className());
         if (inner != null) {
-            moduleLoaders.putIfAbsent(alias, inner);
+            pluginLoaders.putIfAbsent(alias, inner);
         }
     }
 
-    private <T> void addModules(Collection<ModuleDesc<T>> modules, ModuleClassLoader loader) {
-        for (ModuleDesc<T> module : modules) {
-            String moduleClassName = module.className();
-            SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(moduleClassName);
+    private <T> void addPlugins(Collection<PluginDesc<T>> plugins, PluginClassLoader loader) {
+        for (PluginDesc<T> plugin : plugins) {
+            String pluginClassName = plugin.className();
+            SortedMap<PluginDesc<?>, PluginClassLoader> inner = pluginLoaders.get(pluginClassName);
             if (inner == null) {
                 inner = new TreeMap<>();
-                moduleLoaders.put(moduleClassName, inner);
+                pluginLoaders.put(pluginClassName, inner);
             }
-            inner.put(module, loader);
+            inner.put(plugin, loader);
         }
     }
 
     public void initLoaders() {
-        for (String path : modulePaths) {
+        for (String path : pluginPaths) {
             try {
-                Path modulePath = Paths.get(path).toAbsolutePath();
-                if (Files.isDirectory(modulePath)) {
-                    for (Path dir : moduleDirs(modulePath)) {
+                Path pluginPath = Paths.get(path).toAbsolutePath();
+                if (Files.isDirectory(pluginPath)) {
+                    for (Path dir : pluginDirs(pluginPath)) {
                         log.info("Loading dir: {}", dir);
                         URL[] jars = jarPaths(dir).toArray(new URL[0]);
                         // log.info("Loading jars: " + Arrays.toString(jars));
-                        ModuleClassLoader loader = newModuleClassLoader(jars);
+                        PluginClassLoader loader = newPluginClassLoader(jars);
                         log.info("Using loader: {}", loader);
-                        ModuleScanResult modules = scanModulePath(loader, jars);
+                        PluginScanResult plugins = scanPluginPath(loader, jars);
 
-                        if (modules.isEmpty()) {
+                        if (plugins.isEmpty()) {
                             inactivePaths.put(dir, null);
                         } else {
                             activePaths.put(dir, loader);
                         }
 
-                        addModules(modules.connectors(), loader);
-                        connectors.addAll(modules.connectors());
-                        addModules(modules.converters(), loader);
-                        converters.addAll(modules.converters());
-                        addModules(modules.transformations(), loader);
-                        transformations.addAll(modules.transformations());
+                        addPlugins(plugins.connectors(), loader);
+                        connectors.addAll(plugins.connectors());
+                        addPlugins(plugins.converters(), loader);
+                        converters.addAll(plugins.converters());
+                        addPlugins(plugins.transformations(), loader);
+                        transformations.addAll(plugins.transformations());
                     }
                 }
             } catch (InvalidPathException | MalformedURLException e) {
-                log.warn("Invalid path in module path: {}. Ignoring.", path);
+                log.warn("Invalid path in plugin path: {}. Ignoring.", path);
             } catch (IOException e) {
-                log.warn("Could not get listing for module path: {}. Ignoring.", path);
+                log.warn("Could not get listing for plugin path: {}. Ignoring.", path);
             } catch (InstantiationException | IllegalAccessException e) {
-                log.warn("Could not instantiate modules in: {}. Ignoring: {}", path, e);
+                log.warn("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
             }
         }
     }
 
-    private static ModuleClassLoader newModuleClassLoader(final URL[] jars) {
-        return (ModuleClassLoader) AccessController.doPrivileged(
+    private static PluginClassLoader newPluginClassLoader(final URL[] jars) {
+        return (PluginClassLoader) AccessController.doPrivileged(
                 new PrivilegedAction() {
                     @Override
                     public Object run() {
-                        return new ModuleClassLoader(jars);
+                        return new PluginClassLoader(jars);
                     }
                 }
         );
     }
 
-    public Set<ModuleDesc<Connector>> connectors() {
+    public Set<PluginDesc<Connector>> connectors() {
         return connectors;
     }
 
-    public Set<ModuleDesc<Converter>> converters() {
+    public Set<PluginDesc<Converter>> converters() {
         return converters;
     }
 
-    public Set<ModuleDesc<Transformation>> transformations() {
+    public Set<PluginDesc<Transformation>> transformations() {
         return transformations;
     }
 
-    private ModuleScanResult scanModulePath(
-            ModuleClassLoader loader,
+    private PluginScanResult scanPluginPath(
+            PluginClassLoader loader,
             URL[] urls
     ) throws InstantiationException, IllegalAccessException {
-        //log.info("Scanning module path urls: " + Arrays.toString(urls));
+        //log.info("Scanning plugin path urls: " + Arrays.toString(urls));
         ConfigurationBuilder builder = new ConfigurationBuilder();
-        builder.setClassLoaders(new ModuleClassLoader[]{loader});
+        builder.setClassLoaders(new PluginClassLoader[]{loader});
         builder.addUrls(urls);
         Reflections reflections = new Reflections(builder);
 
-        return new ModuleScanResult(
-                getModuleDesc(reflections, Connector.class, loader),
-                getModuleDesc(reflections, Converter.class, loader),
-                getModuleDesc(reflections, Transformation.class, loader)
+        return new PluginScanResult(
+                getPluginDesc(reflections, Connector.class, loader),
+                getPluginDesc(reflections, Converter.class, loader),
+                getPluginDesc(reflections, Transformation.class, loader)
         );
     }
 
-    private <T> Collection<ModuleDesc<T>> getModuleDesc(
+    private <T> Collection<PluginDesc<T>> getPluginDesc(
             Reflections reflections,
             Class<T> klass,
-            ModuleClassLoader loader
+            PluginClassLoader loader
     ) throws InstantiationException, IllegalAccessException {
-        Set<Class<? extends T>> modules = reflections.getSubTypesOf(klass);
+        Set<Class<? extends T>> plugins = reflections.getSubTypesOf(klass);
 
-        Collection<ModuleDesc<T>> result = new ArrayList<>();
-        for (Class<? extends T> module : modules) {
-            if (isConcrete(module)) {
-                // Temporary workaround until all the modules are versioned.
-                if (Connector.class.isAssignableFrom(module)) {
+        Collection<PluginDesc<T>> result = new ArrayList<>();
+        for (Class<? extends T> plugin : plugins) {
+            if (isConcrete(plugin)) {
+                // Temporary workaround until all the plugins are versioned.
+                if (Connector.class.isAssignableFrom(plugin)) {
                     result.add(
-                            new ModuleDesc<>(
-                                    module,
-                                    ((Connector) module.newInstance()).version(),
+                            new PluginDesc<>(
+                                    plugin,
+                                    ((Connector) plugin.newInstance()).version(),
                                     loader
                             )
                     );
                 } else {
-                    result.add(new ModuleDesc<>(module, "undefined", loader));
+                    result.add(new PluginDesc<>(plugin, "undefined", loader));
                 }
             }
         }
         return result;
     }
 
-    public ModuleClassLoader connectorLoader(Connector connector) {
+    public PluginClassLoader connectorLoader(Connector connector) {
         return connectorLoader(connector.getClass().getCanonicalName());
     }
 
-    public ModuleClassLoader connectorLoader(String connectorClassOrAlias) {
-        SortedMap<ModuleDesc<?>, ModuleClassLoader> inner =
-                moduleLoaders.get(connectorClassOrAlias);
+    public PluginClassLoader connectorLoader(String connectorClassOrAlias) {
+        SortedMap<PluginDesc<?>, PluginClassLoader> inner =
+                pluginLoaders.get(connectorClassOrAlias);
         return inner.get(inner.lastKey());
     }
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (!ModuleUtils.validate(name)) {
+        if (!PluginUtils.validate(name)) {
             // There are no paths in this classloader, will attempt to load with the parent.
             return super.loadClass(name, resolve);
         }
 
-        SortedMap<ModuleDesc<?>, ModuleClassLoader> inner = moduleLoaders.get(name);
+        SortedMap<PluginDesc<?>, PluginClassLoader> inner = pluginLoaders.get(name);
         if (inner != null) {
             log.warn("Class has been found before: {} by {}", name, inner.get(inner.lastKey()));
             return inner.get(inner.lastKey()).loadClass(name, resolve);
         }
 
         Class<?> klass = null;
-        for (ModuleClassLoader loader : activePaths.values()) {
+        for (PluginClassLoader loader : activePaths.values()) {
             try {
                 klass = loader.loadClass(name, resolve);
                 break;

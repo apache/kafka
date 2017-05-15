@@ -124,9 +124,9 @@ public class WorkerConfig extends AbstractConfig {
         + "The default value of the Access-Control-Allow-Methods header allows cross origin requests for GET, POST and HEAD.";
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
-    public static final String MODULE_PATH_CONFIG = "module.path";
-    protected static final String MODULE_PATH_DOC = "List of locations that contain "
-        + "Connect modules (Connectors, Transformations, Converters). Two or more locations "
+    public static final String PLUGIN_PATH_CONFIG = "plugin.path";
+    protected static final String PLUGIN_PATH_DOC = "List of locations that contain "
+        + "Connect plugins (Connectors, Transformations, Converters). Two or more locations "
         + "should be separated by commas";
 
     /**
@@ -164,21 +164,21 @@ public class WorkerConfig extends AbstractConfig {
                         ACCESS_CONTROL_ALLOW_METHODS_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_METHODS_DOC)
                 .define(
-                        MODULE_PATH_CONFIG,
+                        PLUGIN_PATH_CONFIG,
                         Type.LIST,
                         null,
                         Importance.LOW,
-                        MODULE_PATH_DOC
+                        PLUGIN_PATH_DOC
                 );
     }
 
-    public List<String> moduleLocations() {
-        List<String> moduleLocations = getList(MODULE_PATH_CONFIG);
-        if (moduleLocations == null || moduleLocations.isEmpty()) {
+    public List<String> pluginLocations() {
+        List<String> pluginLocations = getList(PLUGIN_PATH_CONFIG);
+        if (pluginLocations == null || pluginLocations.isEmpty()) {
             return Collections.emptyList();
         }
 
-        return moduleLocations;
+        return pluginLocations;
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {

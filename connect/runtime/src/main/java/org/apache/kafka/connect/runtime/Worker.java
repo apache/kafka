@@ -24,7 +24,7 @@ import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.isolation.Modules;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -66,7 +66,7 @@ public class Worker {
     private final ExecutorService executor;
     private final Time time;
     private final String workerId;
-    private final Modules modules;
+    private final Plugins plugins;
     private final WorkerConfig config;
     private final Converter defaultKeyConverter;
     private final Converter defaultValueConverter;
@@ -82,35 +82,35 @@ public class Worker {
     public Worker(
             String workerId,
             Time time,
-            Modules modules,
+            Plugins plugins,
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
     ) {
         this.executor = Executors.newCachedThreadPool();
         this.workerId = workerId;
         this.time = time;
-        this.modules = modules;
+        this.plugins = plugins;
         this.config = config;
         // Converters are required properties, thus getClass won't return null.
-        this.defaultKeyConverter = modules.newConverter(
+        this.defaultKeyConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG).getName(),
                 config
         );
         this.defaultKeyConverter.configure(config.originalsWithPrefix("key.converter."), true);
-        this.defaultValueConverter = modules.newConverter(
+        this.defaultValueConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG).getName(),
                 config
         );
         this.defaultValueConverter.configure(config.originalsWithPrefix("value.converter."), false);
         // Same, internal converters are required properties, thus getClass won't return null.
-        this.internalKeyConverter = modules.newConverter(
+        this.internalKeyConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG).getName(),
                 config
         );
         this.internalKeyConverter.configure(
                 config.originalsWithPrefix("internal.key.converter."),
                 true);
-        this.internalValueConverter = modules.newConverter(
+        this.internalValueConverter = plugins.newConverter(
                 config.getClass(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG).getName(),
                 config
         );
@@ -201,13 +201,13 @@ public class Worker {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
-            final Connector connector = modules.newConnector(connClass);
+            final Connector connector = plugins.newConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
-            ClassLoader save = modules.compareAndSwapLoaders(connector);
+            ClassLoader save = plugins.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
             workerConnector.transitionTo(initialState);
-            Modules.compareAndSwapLoaders(save);
+            Plugins.compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start connector {}", connName, t);
             statusListener.onFailure(connName, t);
@@ -338,16 +338,16 @@ public class Worker {
         try {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            ClassLoader connectorLoader = modules.delegatingLoader().connectorLoader(connType);
-            ClassLoader save = Modules.compareAndSwapLoaders(connectorLoader);
+            ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
+            ClassLoader save = Plugins.compareAndSwapLoaders(connectorLoader);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
-            final Task task = modules.newTask(taskClass);
+            final Task task = plugins.newTask(taskClass);
             log.info("Instantiated task {} with version {} of type {}", id, task.version(), taskClass.getName());
 
             // By maintaining connector's specific class loader for this thread here, we first
             // search for converters within the connector dependencies, and if not found the
-            // module class loader delegates loading to the delegating classloader.
+            // plugin class loader delegates loading to the delegating classloader.
             Converter keyConverter = connConfig.getConfiguredInstance(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, Converter.class);
             if (keyConverter != null)
                 keyConverter.configure(connConfig.originalsWithPrefix("key.converter."), true);
@@ -361,7 +361,7 @@ public class Worker {
 
             workerTask = buildWorkerTask(connConfig, id, task, statusListener, initialState, keyConverter, valueConverter, connectorLoader);
             workerTask.initialize(taskConfig);
-            Modules.compareAndSwapLoaders(save);
+            Plugins.compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
             statusListener.onFailure(id, t);
@@ -492,8 +492,8 @@ public class Worker {
         return internalValueConverter;
     }
 
-    public Modules getModules() {
-        return modules;
+    public Plugins getPlugins() {
+        return plugins;
     }
 
     public String workerId() {
@@ -506,14 +506,14 @@ public class Worker {
         WorkerConnector workerConnector = connectors.get(connName);
         // TODO: Make sure that tasks can't be around while a connector object is null
         if (workerConnector != null) {
-            ClassLoader save = modules.compareAndSwapLoaders(workerConnector.connector());
+            ClassLoader save = plugins.compareAndSwapLoaders(workerConnector.connector());
             workerConnector.transitionTo(state);
 
             for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
                 if (taskEntry.getKey().connector().equals(connName))
                     taskEntry.getValue().transitionTo(state);
             }
-            Modules.compareAndSwapLoaders(save);
+            Plugins.compareAndSwapLoaders(save);
         }
     }
 

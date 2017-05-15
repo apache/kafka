@@ -21,32 +21,32 @@ import org.apache.maven.artifact.versioning.DefaultArtifactVersion;
 
 import java.util.Objects;
 
-public class ModuleDesc<T> implements Comparable<ModuleDesc<T>> {
+public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     private final Class<? extends T> klass;
     private final String name;
     private final String version;
     private final DefaultArtifactVersion encodedVersion;
-    private final ModuleType type;
+    private final PluginType type;
     private final String typeName;
     private final String path;
 
-    public ModuleDesc(Class<? extends T> klass, String version, ModuleClassLoader loader) {
+    public PluginDesc(Class<? extends T> klass, String version, PluginClassLoader loader) {
         this.klass = klass;
         this.name = klass.getCanonicalName();
         this.version = version;
         this.encodedVersion = new DefaultArtifactVersion(version);
-        this.type = ModuleType.from(klass);
+        this.type = PluginType.from(klass);
         this.typeName = type.toString();
         this.path = loader.path();
     }
 
-    public Class<? extends T> moduleClass() {
+    public Class<? extends T> pluginClass() {
         return klass;
     }
 
     @Override
     public String toString() {
-        return "ModuleDesc{" +
+        return "PluginDesc{" +
                 "klass=" + klass +
                 ", name='" + name + '\'' +
                 ", version='" + version + '\'' +
@@ -67,7 +67,7 @@ public class ModuleDesc<T> implements Comparable<ModuleDesc<T>> {
         return version;
     }
 
-    public ModuleType type() {
+    public PluginType type() {
         return type;
     }
 
@@ -86,11 +86,11 @@ public class ModuleDesc<T> implements Comparable<ModuleDesc<T>> {
         if (this == o) {
             return true;
         }
-        if (!(o instanceof ModuleDesc)) {
+        if (!(o instanceof PluginDesc)) {
             return false;
         }
 
-        ModuleDesc<?> that = (ModuleDesc<?>) o;
+        PluginDesc<?> that = (PluginDesc<?>) o;
 
         if (klass != null ? !klass.equals(that.klass) : that.klass != null) {
             return false;
@@ -107,7 +107,7 @@ public class ModuleDesc<T> implements Comparable<ModuleDesc<T>> {
     }
 
     @Override
-    public int compareTo(ModuleDesc other) {
+    public int compareTo(PluginDesc other) {
         int nameComp = name.compareTo(other.name);
         return nameComp != 0 ? nameComp : encodedVersion.compareTo(other.encodedVersion);
     }

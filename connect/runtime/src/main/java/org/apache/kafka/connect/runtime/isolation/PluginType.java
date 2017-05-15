@@ -17,39 +17,38 @@
 package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.sink.SinkConnector;
+import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.transforms.Transformation;
 
-import java.util.Collection;
+import java.util.Locale;
 
-public class ModuleScanResult {
-    private final Collection<ModuleDesc<Connector>> connectors;
-    private final Collection<ModuleDesc<Converter>> converters;
-    private final Collection<ModuleDesc<Transformation>> transformations;
+public enum PluginType {
+    SOURCE(SourceConnector.class),
+    SINK(SinkConnector.class),
+    CONNECTOR(Connector.class),
+    CONVERTER(Converter.class),
+    TRANSFORMATION(Transformation.class),
+    UNKNOWN(Object.class);
 
-    public ModuleScanResult(
-            Collection<ModuleDesc<Connector>> connectors,
-            Collection<ModuleDesc<Converter>> converters,
-            Collection<ModuleDesc<Transformation>> transformations
-    ) {
-        this.connectors = connectors;
-        this.converters = converters;
-        this.transformations = transformations;
+    private Class<?> klass;
+
+    PluginType(Class<?> klass) {
+        this.klass = klass;
     }
 
-    public Collection<ModuleDesc<Connector>> connectors() {
-        return connectors;
+    public static PluginType from(Class<?> klass) {
+        for (PluginType type : PluginType.values()) {
+            if (type.klass.isAssignableFrom(klass)) {
+                return type;
+            }
+        }
+        return UNKNOWN;
     }
 
-    public Collection<ModuleDesc<Converter>> converters() {
-        return converters;
-    }
-
-    public Collection<ModuleDesc<Transformation>> transformations() {
-        return transformations;
-    }
-
-    public boolean isEmpty() {
-        return connectors().isEmpty() && converters().isEmpty() && transformations().isEmpty();
+    @Override
+    public String toString() {
+        return super.toString().toLowerCase(Locale.ROOT);
     }
 }

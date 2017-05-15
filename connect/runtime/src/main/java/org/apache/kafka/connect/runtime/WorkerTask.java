@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.connect.runtime.isolation.Modules;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -181,7 +181,7 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
-        Modules.compareAndSwapLoaders(loader);
+        Plugins.compareAndSwapLoaders(loader);
         try {
             doRun();
             onShutdown();

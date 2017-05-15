@@ -40,20 +40,20 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class Modules {
-    private static final Logger log = LoggerFactory.getLogger(Modules.class);
+public class Plugins {
+    private static final Logger log = LoggerFactory.getLogger(Plugins.class);
 
-    private final List<String> moduleTopPaths;
-    private final Map<ModuleClassLoader, URL[]> loaders;
+    private final List<String> pluginTopPaths;
+    private final Map<PluginClassLoader, URL[]> loaders;
     private final DelegatingClassLoader delegatingLoader;
 
-    public Modules(Map<String, String> props) {
+    public Plugins(Map<String, String> props) {
         loaders = new HashMap<>();
-        String pathList = props.get(WorkerConfig.MODULE_PATH_CONFIG);
-        moduleTopPaths = pathList == null
+        String pathList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
+        pluginTopPaths = pathList == null
                          ? new ArrayList<String>()
                          : Arrays.asList(pathList.trim().split("\\s*,\\s*", -1));
-        delegatingLoader = newDelegatingClassLoader(moduleTopPaths);
+        delegatingLoader = newDelegatingClassLoader(pluginTopPaths);
         delegatingLoader.initLoaders();
     }
 
@@ -72,19 +72,19 @@ public class Modules {
         return delegatingLoader;
     }
 
-    public Map<ModuleClassLoader, URL[]> getLoaders() {
+    public Map<PluginClassLoader, URL[]> getLoaders() {
         return loaders;
     }
 
-    public Set<ModuleDesc<Connector>> connectors() {
+    public Set<PluginDesc<Connector>> connectors() {
         return delegatingLoader.connectors();
     }
 
-    public Set<ModuleDesc<Converter>> converters() {
+    public Set<PluginDesc<Converter>> converters() {
         return delegatingLoader.converters();
     }
 
-    public Set<ModuleDesc<Transformation>> transformations() {
+    public Set<PluginDesc<Transformation>> transformations() {
         return delegatingLoader.transformations();
     }
 
@@ -92,19 +92,19 @@ public class Modules {
     public Connector newConnector(String connectorClassOrAlias) {
         Class<? extends Connector> klass;
         try {
-            klass = moduleClass(
+            klass = pluginClass(
                     delegatingLoader,
                     connectorClassOrAlias,
                     Connector.class
             );
         } catch (ClassNotFoundException e) {
-            List<ModuleDesc<Connector>> matches = new ArrayList<>();
-            for (ModuleDesc<Connector> module : delegatingLoader.connectors()) {
-                Class<?> moduleClass = module.moduleClass();
-                String simpleName = moduleClass.getSimpleName();
+            List<PluginDesc<Connector>> matches = new ArrayList<>();
+            for (PluginDesc<Connector> plugin : delegatingLoader.connectors()) {
+                Class<?> pluginClass = plugin.pluginClass();
+                String simpleName = pluginClass.getSimpleName();
                 if (simpleName.equals(connectorClassOrAlias)
                         || simpleName.equals(connectorClassOrAlias + "Connector")) {
-                    matches.add(module);
+                    matches.add(plugin);
                 }
             }
 
@@ -113,7 +113,7 @@ public class Modules {
                         "Failed to find any class that implements Connector and which name matches "
                         + connectorClassOrAlias
                         + ", available connectors are: "
-                        + moduleNames(delegatingLoader.connectors())
+                        + pluginNames(delegatingLoader.connectors())
                 );
             }
             if (matches.size() > 1) {
@@ -122,21 +122,21 @@ public class Modules {
                         + connectorClassOrAlias
                         +
                         ". Please use full package and class name instead. Classes found: "
-                        + moduleNames(matches)
+                        + pluginNames(matches)
                 );
             }
 
-            ModuleDesc<Connector> entry = matches.get(0);
+            PluginDesc<Connector> entry = matches.get(0);
             delegatingLoader.addAlias(entry, connectorClassOrAlias);
-            klass = entry.moduleClass();
+            klass = entry.pluginClass();
         }
-        return newModule(klass);
+        return newPlugin(klass);
     }
 
-    private static <T> String moduleNames(Collection<ModuleDesc<T>> modules) {
+    private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
         StringBuilder names = new StringBuilder();
-        for (ModuleDesc<T> module : modules) {
-            names.append(module.className()).append(", ");
+        for (PluginDesc<T> plugin : plugins) {
+            names.append(plugin.className()).append(", ");
         }
         String result = names.toString();
         return result.isEmpty()
@@ -145,7 +145,7 @@ public class Modules {
     }
 
     public Task newTask(Class<? extends Task> taskClass) {
-        return newModule(taskClass);
+        return newPlugin(taskClass);
     }
 
     public Converter newConverter(String converterClassOrAlias) {
@@ -155,7 +155,7 @@ public class Modules {
     public Converter newConverter(String converterClassOrAlias, AbstractConfig config) {
         Class<? extends Converter> klass;
         try {
-            klass = moduleClass(
+            klass = pluginClass(
                     delegatingLoader,
                     converterClassOrAlias,
                     Converter.class
@@ -165,10 +165,10 @@ public class Modules {
                     "Failed to find any class that implements Converter and which name matches "
                             + converterClassOrAlias
                             + ", available connectors are: "
-                            + moduleNames(delegatingLoader.converters())
+                            + pluginNames(delegatingLoader.converters())
             );
         }
-        return config != null ? newConfiguredModule(config, klass) : newModule(klass);
+        return config != null ? newConfiguredPlugin(config, klass) : newPlugin(klass);
     }
 
     public <R extends ConnectRecord<R>> Transformation<R> newTranformations(
@@ -177,7 +177,7 @@ public class Modules {
         return null;
     }
 
-    protected static <T> T newModule(Class<T> klass) {
+    protected static <T> T newPlugin(Class<T> klass) {
         try {
             return Utils.newInstance(klass);
         } catch (Throwable t) {
@@ -185,29 +185,29 @@ public class Modules {
         }
     }
 
-    protected static <T> T newConfiguredModule(AbstractConfig config, Class<T> klass) {
-        T module = Utils.newInstance(klass);
-        if (module instanceof Configurable) {
-            ((Configurable) module).configure(config.originals());
+    protected static <T> T newConfiguredPlugin(AbstractConfig config, Class<T> klass) {
+        T plugin = Utils.newInstance(klass);
+        if (plugin instanceof Configurable) {
+            ((Configurable) plugin).configure(config.originals());
         }
-        return module;
+        return plugin;
     }
 
     @SuppressWarnings("unchecked")
-    protected static <U> Class<? extends U> moduleClass(
+    protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,
-            Class<U> moduleClass
+            Class<U> pluginClass
     ) throws ClassNotFoundException {
         Class<?> klass = loader.loadClass(classOrAlias, false);
-        if (moduleClass.isAssignableFrom(klass)) {
+        if (pluginClass.isAssignableFrom(klass)) {
             return (Class<? extends U>) klass;
         }
 
         throw new ClassNotFoundException(
                 "Requested class: "
                 + classOrAlias
-                + " does not extend " + moduleClass.getSimpleName()
+                + " does not extend " + pluginClass.getSimpleName()
         );
     }
 

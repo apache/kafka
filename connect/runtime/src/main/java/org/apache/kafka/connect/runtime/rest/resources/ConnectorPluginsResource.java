@@ -19,7 +19,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.isolation.ModuleDesc;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorType;
@@ -71,12 +71,12 @@ public class ConnectorPluginsResource {
     public List<ConnectorPluginInfo> listConnectorPlugins() {
         List<ConnectorPluginInfo> pluginList = new ArrayList<>();
         // TODO: exclude dummy specific connectors.
-        // TODO: refactor to simplify ModuleDesc -> ConnectorPluginInfo
-        for (ModuleDesc<Connector> module : herder.modules().connectors()) {
+        // TODO: refactor to simplify PluginDesc -> ConnectorPluginInfo
+        for (PluginDesc<Connector> plugin : herder.plugins().connectors()) {
             pluginList.add(new ConnectorPluginInfo(
-                    module.className(),
-                    ConnectorType.from(module.moduleClass()),
-                    module.version())
+                    plugin.className(),
+                    ConnectorType.from(plugin.pluginClass()),
+                    plugin.version())
             );
         }
 

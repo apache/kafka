@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
-import org.apache.kafka.connect.runtime.isolation.Modules;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
@@ -181,8 +181,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
     }
 
     @Override
-    public Modules modules() {
-        return worker.getModules();
+    public Plugins plugins() {
+        return worker.getPlugins();
     }
 
     @Override
@@ -231,7 +231,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
         Connector connector = getConnector(connType);
-        ClassLoader save = worker.getModules().compareAndSwapLoaders(connector);
+        ClassLoader save = worker.getPlugins().compareAndSwapLoaders(connector);
         final ConfigDef connectorConfigDef = ConnectorConfig.enrich(
                 (connector instanceof SourceConnector) ? SourceConnectorConfig.configDef() : SinkConnectorConfig.configDef(),
                 connectorConfig,
@@ -255,7 +255,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         allGroups.addAll(configDef.groups());
         configValues.addAll(config.configValues());
 
-        Modules.compareAndSwapLoaders(save);
+        Plugins.compareAndSwapLoaders(save);
         return generateResult(connType, configKeys, configValues, allGroups);
     }
 
@@ -332,7 +332,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (tempConnectors.containsKey(connType)) {
             return tempConnectors.get(connType);
         } else {
-            Connector connector = worker.getModules().newConnector(connType);
+            Connector connector = worker.getPlugins().newConnector(connType);
             tempConnectors.put(connType, connector);
             return connector;
         }

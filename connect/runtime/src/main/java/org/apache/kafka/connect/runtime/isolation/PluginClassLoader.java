@@ -22,16 +22,16 @@ import org.slf4j.LoggerFactory;
 import java.net.URL;
 import java.net.URLClassLoader;
 
-public class ModuleClassLoader extends URLClassLoader {
+public class PluginClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private final String pluginPath;
 
-    public ModuleClassLoader(URL[] urls, ClassLoader parent) {
+    public PluginClassLoader(URL[] urls, ClassLoader parent) {
         super(urls, parent);
         pluginPath = path();
     }
 
-    public ModuleClassLoader(URL[] urls) {
+    public PluginClassLoader(URL[] urls) {
         super(urls);
         pluginPath = path();
     }
@@ -40,7 +40,7 @@ public class ModuleClassLoader extends URLClassLoader {
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
-            if (ModuleUtils.validate(name)) {
+            if (PluginUtils.validate(name)) {
                 try {
                     klass = findClass(name);
                 } catch (ClassNotFoundException e) {
@@ -69,6 +69,6 @@ public class ModuleClassLoader extends URLClassLoader {
 
     @Override
     public String toString() {
-        return "ModuleClassLoader{pluginPath=" + pluginPath + "}";
+        return "PluginClassLoader{pluginPath=" + pluginPath + "}";
     }
 }
