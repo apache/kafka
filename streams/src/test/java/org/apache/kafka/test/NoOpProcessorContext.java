@@ -51,7 +51,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @Override public Cancellable schedule (long interval, PunctuationType type, Punctuator callback) {
+    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
         return null;
     }
 

@@ -124,7 +124,7 @@ public class StreamTaskTest {
 
     private Punctuator punctuator = new Punctuator() {
         @Override
-        public void punctuate (long timestamp) {
+        public void punctuate(long timestamp) {
             punctuatedAt = timestamp;
         }
     };
@@ -399,7 +399,7 @@ public class StreamTaskTest {
         }
     }
 
-    @SuppressWarnings(value={"unchecked", "deprecation"})
+    @SuppressWarnings(value = {"unchecked", "deprecation"})
     @Test
     public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingDeprecated() throws Exception {
         final Processor processor = new AbstractProcessor() {
@@ -456,7 +456,7 @@ public class StreamTaskTest {
         try {
             task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Punctuator() {
                 @Override
-                public void punctuate (long timestamp) {
+                public void punctuate(long timestamp) {
                     throw new KafkaException("KABOOM!");
                 }
             });
@@ -645,7 +645,7 @@ public class StreamTaskTest {
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() throws Exception {
         task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
-            public void punctuate (long timestamp) {
+            public void punctuate(long timestamp) {
                 // no-op
             }
         });
@@ -656,7 +656,7 @@ public class StreamTaskTest {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
         task.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
-            public void punctuate (long timestamp) {
+            public void punctuate(long timestamp) {
                 // no-op
             }
         });
@@ -666,7 +666,7 @@ public class StreamTaskTest {
     public void shouldThrowIllegalArgumentExceptionOnScheduleIfPunctuationTypeIsInvalid() throws Exception {
         task.schedule(1, null, new Punctuator() {
             @Override
-            public void punctuate (long timestamp) {
+            public void punctuate(long timestamp) {
                 // no-op
             }
         });

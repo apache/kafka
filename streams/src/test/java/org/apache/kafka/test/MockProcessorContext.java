@@ -170,7 +170,7 @@ public class MockProcessorContext implements InternalProcessorContext, RecordCol
         return storeMap.get(name);
     }
 
-    @Override public Cancellable schedule (long interval, PunctuationType type, Punctuator callback) {
+    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 

@@ -35,7 +35,7 @@ public class PunctuationQueueTest {
         final PunctuationQueue queue = new PunctuationQueue();
         final Punctuator punctuator = new Punctuator() {
             @Override
-            public void punctuate (long timestamp) {
+            public void punctuate(long timestamp) {
                 node.processor().punctuate(timestamp);
             }
         };

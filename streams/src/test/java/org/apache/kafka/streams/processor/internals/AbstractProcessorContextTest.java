@@ -148,7 +148,7 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public Cancellable schedule (long interval, PunctuationType type, Punctuator callback) {
+        public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
             return null;
         }
 
