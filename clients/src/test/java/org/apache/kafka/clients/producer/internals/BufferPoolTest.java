@@ -48,7 +48,10 @@ import static org.easymock.EasyMock.anyDouble;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.anyString;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 
 @RunWith(PowerMockRunner.class)
@@ -353,7 +356,7 @@ public class BufferPoolTest {
         try {
             bufferPool.allocateByteBuffer(1024);
             // should not reach here
-            assertFalse(true);
+            fail("Should have thrown OutOfMemoryError");
         } catch (OutOfMemoryError ignored) {
 
         }
