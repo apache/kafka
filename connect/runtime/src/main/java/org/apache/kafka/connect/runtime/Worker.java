@@ -197,6 +197,7 @@ public class Worker {
             throw new ConnectException("Connector with name " + connName + " already exists");
 
         final WorkerConnector workerConnector;
+        ClassLoader save = plugins.currentThreadLoader();
         try {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
@@ -204,12 +205,15 @@ public class Worker {
             final Connector connector = plugins.newConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, statusListener);
             log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
-            ClassLoader save = plugins.compareAndSwapLoaders(connector);
+            save = plugins.compareAndSwapLoaders(connector);
             workerConnector.initialize(connConfig);
             workerConnector.transitionTo(initialState);
             Plugins.compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start connector {}", connName, t);
+            // Can't be put in a finally block because it needs to be swapped before the call on
+            // statusListener
+            Plugins.compareAndSwapLoaders(save);
             statusListener.onFailure(connName, t);
             return false;
         }
@@ -335,11 +339,12 @@ public class Worker {
             throw new ConnectException("Task already exists in this worker: " + id);
 
         final WorkerTask workerTask;
+        ClassLoader save = plugins.currentThreadLoader();
         try {
             final ConnectorConfig connConfig = new ConnectorConfig(connProps);
             String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
-            ClassLoader save = Plugins.compareAndSwapLoaders(connectorLoader);
+            save = Plugins.compareAndSwapLoaders(connectorLoader);
             final TaskConfig taskConfig = new TaskConfig(taskProps);
             final Class<? extends Task> taskClass = taskConfig.getClass(TaskConfig.TASK_CLASS_CONFIG).asSubclass(Task.class);
             final Task task = plugins.newTask(taskClass);
@@ -364,6 +369,9 @@ public class Worker {
             Plugins.compareAndSwapLoaders(save);
         } catch (Throwable t) {
             log.error("Failed to start task {}", id, t);
+            // Can't be put in a finally block because it needs to be swapped before the call on
+            // statusListener
+            Plugins.compareAndSwapLoaders(save);
             statusListener.onFailure(id, t);
             return false;
         }
@@ -507,13 +515,16 @@ public class Worker {
         // TODO: Make sure that tasks can't be around while a connector object is null
         if (workerConnector != null) {
             ClassLoader save = plugins.compareAndSwapLoaders(workerConnector.connector());
-            workerConnector.transitionTo(state);
+            try {
+                workerConnector.transitionTo(state);
 
-            for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
-                if (taskEntry.getKey().connector().equals(connName))
-                    taskEntry.getValue().transitionTo(state);
+                for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
+                    if (taskEntry.getKey().connector().equals(connName))
+                        taskEntry.getValue().transitionTo(state);
+                }
+            } finally {
+                Plugins.compareAndSwapLoaders(save);
             }
-            Plugins.compareAndSwapLoaders(save);
         }
     }
 

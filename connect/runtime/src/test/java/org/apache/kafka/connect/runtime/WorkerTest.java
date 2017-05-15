@@ -44,6 +44,7 @@ import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
+import org.easymock.Mock;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -74,8 +75,11 @@ public class WorkerTest extends ThreadedTest {
 
     private WorkerConfig config;
     private Worker worker;
+    @Mock
     private Plugins plugins = PowerMock.createMock(Plugins.class);
+    @Mock
     private PluginClassLoader pluginLoader = PowerMock.createMock(PluginClassLoader.class);
+    @Mock
     private DelegatingClassLoader delegatingLoader =
             PowerMock.createMock(DelegatingClassLoader.class);
     private OffsetBackingStore offsetBackingStore = PowerMock.createMock(OffsetBackingStore.class);
@@ -95,6 +99,7 @@ public class WorkerTest extends ThreadedTest {
         workerProps.put("internal.value.converter.schemas.enable", "false");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         config = new StandaloneConfig(workerProps);
+        PowerMock.mockStatic(Plugins.class);
     }
 
     @Test
@@ -106,6 +111,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         EasyMock.expect(plugins.newConnector(WorkerTestConnector.class.getName()))
                 .andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
@@ -116,11 +123,13 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, WorkerTestConnector.class.getName());
 
-        EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(pluginLoader);
+        EasyMock.expect(plugins.compareAndSwapLoaders(connector)).andReturn(delegatingLoader);
         connector.initialize(EasyMock.anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
         connector.start(props);
         EasyMock.expectLastCall();
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         connectorStatusListener.onStartup(CONNECTOR_ID);
         EasyMock.expectLastCall();
@@ -167,9 +176,12 @@ public class WorkerTest extends ThreadedTest {
         props.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_ID);
         props.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, "java.util.HashMap"); // Bad connector class name
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         EasyMock.expect(plugins.newConnector(EasyMock.anyString()))
                 .andThrow(new ConnectException("Failed to find Connector"));
 
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
         connectorStatusListener.onFailure(
                 EasyMock.eq(CONNECTOR_ID),
                 EasyMock.<ConnectException>anyObject()
@@ -197,6 +209,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         EasyMock.expect(plugins.newConnector("WorkerTestConnector")).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
@@ -211,6 +225,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
         connector.start(props);
         EasyMock.expectLastCall();
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         connectorStatusListener.onStartup(CONNECTOR_ID);
         EasyMock.expectLastCall();
@@ -250,6 +266,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         EasyMock.expect(plugins.newConnector("WorkerTest")).andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
 
@@ -264,6 +282,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
         connector.start(props);
         EasyMock.expectLastCall();
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         connectorStatusListener.onStartup(CONNECTOR_ID);
         EasyMock.expectLastCall();
@@ -316,6 +336,8 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         EasyMock.expect(plugins.newConnector(WorkerTestConnector.class.getName()))
                 .andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
@@ -331,6 +353,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expectLastCall();
         connector.start(props);
         EasyMock.expectLastCall();
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         connectorStatusListener.onStartup(CONNECTOR_ID);
         EasyMock.expectLastCall();
@@ -392,6 +416,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(workerTask.id()).andStubReturn(TASK_ID);
         EasyMock.expect(task.version()).andReturn("1.0");
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(TASK_ID),
                 EasyMock.eq(task),
@@ -426,6 +452,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(pluginLoader.loadClass(ByteArraySerializer.class.getName()));
         EasyMock.expectLastCall().andReturn(ByteArraySerializer.class);
 
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
+
         // Remove
         workerTask.stop();
         EasyMock.expectLastCall();
@@ -457,12 +485,16 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, "missing.From.This.Workers.Classpath");
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         EasyMock.expect(plugins.delegatingLoader()).andReturn(delegatingLoader);
         EasyMock.expect(delegatingLoader.connectorLoader(WorkerTestConnector.class.getName()))
                 .andReturn(pluginLoader);
 
         EasyMock.expect(pluginLoader.loadClass(origProps.get(TaskConfig.TASK_CLASS_CONFIG)))
                 .andThrow(new ClassNotFoundException());
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         taskStatusListener.onFailure(EasyMock.eq(TASK_ID), EasyMock.<ConfigException>anyObject());
         EasyMock.expectLastCall();
@@ -489,7 +521,9 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(plugins.newTask(TestSourceTask.class)).andReturn(task);
         EasyMock.expect(task.version()).andReturn("1.0");
-        
+
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(TASK_ID),
                 EasyMock.eq(task),
@@ -521,6 +555,8 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(pluginLoader.loadClass(ByteArraySerializer.class.getName()));
         EasyMock.expectLastCall().andReturn(ByteArraySerializer.class);
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         // Remove on Worker.stop()
         workerTask.stop();
@@ -557,6 +593,8 @@ public class WorkerTest extends ThreadedTest {
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
         Capture<TestConverter> valueConverter = EasyMock.newCapture();
 
+        EasyMock.expect(plugins.currentThreadLoader())
+                .andReturn(Thread.currentThread().getContextClassLoader());
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(TASK_ID),
                 EasyMock.eq(task),
@@ -574,6 +612,10 @@ public class WorkerTest extends ThreadedTest {
                 .andReturn(workerTask);
         Map<String, String> origProps = new HashMap<>();
         origProps.put(TaskConfig.TASK_CLASS_CONFIG, TestSourceTask.class.getName());
+
+        EasyMock.expect(delegatingLoader.loadClass(TestConverter.class.getName()))
+                .andReturn((Class) TestConverter.class);
+
         workerTask.initialize(new TaskConfig(origProps));
         EasyMock.expectLastCall();
         workerTask.run();
@@ -588,6 +630,8 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(pluginLoader.loadClass(ByteArraySerializer.class.getName()));
         EasyMock.expectLastCall().andReturn(ByteArraySerializer.class);
+
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader));
 
         // Remove
         workerTask.stop();
@@ -634,12 +678,16 @@ public class WorkerTest extends ThreadedTest {
     }
 
     private void expectConverters() {
+        expectConverters(JsonConverter.class);
+    }
+
+    private void expectConverters(Class<? extends Converter> converterClass) {
         // connector default
-        Converter keyConverter = PowerMock.createMock(JsonConverter.class);
-        Converter valueConverter = PowerMock.createMock(JsonConverter.class);
+        Converter keyConverter = PowerMock.createMock(converterClass);
+        Converter valueConverter = PowerMock.createMock(converterClass);
         //internal
-        Converter internalKeyConverter = PowerMock.createMock(JsonConverter.class);
-        Converter internalValueConverter = PowerMock.createMock(JsonConverter.class);
+        Converter internalKeyConverter = PowerMock.createMock(converterClass);
+        Converter internalValueConverter = PowerMock.createMock(converterClass);
 
         // Instantiate and configure default
         EasyMock.expect(plugins.newConverter(JsonConverter.class.getName(), config))

@@ -211,6 +211,10 @@ public class Plugins {
         );
     }
 
+    public ClassLoader currentThreadLoader() {
+        return Thread.currentThread().getContextClassLoader();
+    }
+
     public ClassLoader compareAndSwapWithDelegatingLoader() {
         ClassLoader current = Thread.currentThread().getContextClassLoader();
         if (!current.equals(delegatingLoader)) {
@@ -224,7 +228,7 @@ public class Plugins {
         return compareAndSwapLoaders(connectorLoader);
     }
 
-    public static final ClassLoader compareAndSwapLoaders(ClassLoader loader) {
+    public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
         ClassLoader current = Thread.currentThread().getContextClassLoader();
         if (!current.equals(loader)) {
             Thread.currentThread().setContextClassLoader(loader);

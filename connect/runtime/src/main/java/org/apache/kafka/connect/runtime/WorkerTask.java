@@ -181,7 +181,7 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
-        Plugins.compareAndSwapLoaders(loader);
+        ClassLoader save = Plugins.compareAndSwapLoaders(loader);
         try {
             doRun();
             onShutdown();
@@ -191,6 +191,7 @@ abstract class WorkerTask implements Runnable {
             if (t instanceof Error)
                 throw (Error) t;
         } finally {
+            Plugins.compareAndSwapLoaders(save);
             shutdownLatch.countDown();
         }
     }
