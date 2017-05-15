@@ -51,7 +51,6 @@ trait AdminUtilities {
 
 object AdminUtils extends Logging with AdminUtilities {
   val rand = new Random
-  val AdminClientId = "__admin_client"
   val EntityConfigChangeZnodePrefix = "config_change_"
 
   /**
