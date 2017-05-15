@@ -59,7 +59,7 @@ class LogTest {
 
   def createEmptyLogs(dir: File, offsets: Int*) {
     for(offset <- offsets) {
-      Log.logFilename(dir, offset).createNewFile()
+      Log.logFile(dir, offset).createNewFile()
       Log.offsetIndexFile(dir, offset).createNewFile()
     }
   }
@@ -68,7 +68,7 @@ class LogTest {
   def testOffsetFromFilename() {
     val offset = 23423423L
 
-    val logFile = Log.logFilename(tmpDir, offset)
+    val logFile = Log.logFile(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFilename(logFile.getName))
 
     val offsetIndexFile = Log.offsetIndexFile(tmpDir, offset)
@@ -1634,10 +1634,24 @@ class LogTest {
   def testParseTopicPartitionName() {
     val topic = "test_topic"
     val partition = "143"
-    val dir = new File(logDir + topicPartitionName(topic, partition))
+    val dir = new File(logDir, topicPartitionName(topic, partition))
     val topicPartition = Log.parseTopicPartitionName(dir)
     assertEquals(topic, topicPartition.topic)
     assertEquals(partition.toInt, topicPartition.partition)
+  }
+
+  /**
+   * Tests that log directories with a period in their name that have been marked for deletion
+   * are parsed correctly by `Log.parseTopicPartitionName` (see KAFKA-5232 for details).
+   */
+  @Test
+  def testParseTopicPartitionNameWithPeriodForDeletedTopic() {
+    val topic = "foo.bar-testtopic"
+    val partition = "42"
+    val dir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val topicPartition = Log.parseTopicPartitionName(dir)
+    assertEquals("Unexpected topic name parsed", topic, topicPartition.topic)
+    assertEquals("Unexpected partition number parsed", partition.toInt, topicPartition.partition)
   }
 
   @Test
@@ -1647,7 +1661,7 @@ class LogTest {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // its GOOD!
     }
   }
 
@@ -1658,7 +1672,7 @@ class LogTest {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // its GOOD!
     }
   }
 
@@ -1666,12 +1680,20 @@ class LogTest {
   def testParseTopicPartitionNameForMissingSeparator() {
     val topic = "test_topic"
     val partition = "1999"
-    val dir = new File(logDir + File.separator + topic + partition)
+    val dir = new File(logDir, topic + partition)
     try {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // expected
+    }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
     }
   }
 
@@ -1679,13 +1701,22 @@ class LogTest {
   def testParseTopicPartitionNameForMissingTopic() {
     val topic = ""
     val partition = "1999"
-    val dir = new File(logDir + topicPartitionName(topic, partition))
+    val dir = new File(logDir, topicPartitionName(topic, partition))
     try {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // expected
     }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+
   }
 
   @Test
@@ -1697,7 +1728,36 @@ class LogTest {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // expected
+    }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForInvalidPartition() {
+    val topic = "test_topic"
+    val partition = "1999a"
+    val dir = new File(logDir, topicPartitionName(topic, partition))
+    try {
+      Log.parseTopicPartitionName(dir)
+      fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
     }
   }
 
@@ -1720,7 +1780,7 @@ class LogTest {
   }
 
   def topicPartitionName(topic: String, partition: String): String =
-    File.separator + topic + "-" + partition
+    topic + "-" + partition
 
   @Test
   def testDeleteOldSegmentsMethod() {
