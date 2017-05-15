@@ -492,7 +492,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param type
      * @throws IllegalStateException if the current node is not null
      */
-    public Cancellable schedule (final long interval, PunctuationType type, final Punctuator punctuator) {
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() == null) {
             throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
         }

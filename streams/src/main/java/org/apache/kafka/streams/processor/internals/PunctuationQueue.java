@@ -40,11 +40,15 @@ public class PunctuationQueue {
         synchronized (pq) {
             boolean punctuated = false;
             PunctuationSchedule top = pq.peek();
-            while (top != null && top.timestamp <= timestamp && !top.isCancelled) {
+            while (top != null && top.timestamp <= timestamp) {
                 PunctuationSchedule sched = top;
                 pq.poll();
-                processorNodePunctuator.punctuate(sched.node(), timestamp, type, sched.punctuator());
-                pq.add(sched.next(timestamp));
+
+                if(!top.isCancelled) {
+                    processorNodePunctuator.punctuate(sched.node(), timestamp, type, sched.punctuator());
+                    pq.add(sched.next(timestamp));
+                }
+
                 punctuated = true;
 
                 top = pq.peek();
