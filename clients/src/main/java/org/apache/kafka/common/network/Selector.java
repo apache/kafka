@@ -26,6 +26,7 @@ import java.nio.channels.SocketChannel;
 import java.nio.channels.UnresolvedAddressException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -96,11 +97,8 @@ public class Selector implements Selectable, AutoCloseable {
     private final List<String> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
-    private final String metricGrpPrefix;
-    private final Map<String, String> metricTags;
     private final ChannelBuilder channelBuilder;
     private final int maxReceiveSize;
-    private final boolean metricsPerConnection;
     private final boolean recordTimePerConnection;
     private final IdleExpiryManager idleExpiryManager;
 
@@ -132,8 +130,6 @@ public class Selector implements Selectable, AutoCloseable {
         }
         this.maxReceiveSize = maxReceiveSize;
         this.time = time;
-        this.metricGrpPrefix = metricGrpPrefix;
-        this.metricTags = metricTags;
         this.channels = new HashMap<>();
         this.completedSends = new ArrayList<>();
         this.completedReceives = new ArrayList<>();
@@ -143,9 +139,8 @@ public class Selector implements Selectable, AutoCloseable {
         this.connected = new ArrayList<>();
         this.disconnected = new ArrayList<>();
         this.failedSends = new ArrayList<>();
-        this.sensors = new SelectorMetrics(metrics);
+        this.sensors = new SelectorMetrics(metrics, metricGrpPrefix, metricTags, metricsPerConnection);
         this.channelBuilder = channelBuilder;
-        this.metricsPerConnection = metricsPerConnection;
         this.recordTimePerConnection = recordTimePerConnection;
         this.idleExpiryManager = connectionMaxIdleMs < 0 ? null : new IdleExpiryManager(time, connectionMaxIdleMs);
     }
@@ -162,7 +157,7 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, new HashMap<String, String>(), true, channelBuilder);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.<String, String>emptyMap(), true, channelBuilder);
     }
 
     /**
@@ -679,6 +674,10 @@ public class Selector implements Selectable, AutoCloseable {
 
     private class SelectorMetrics {
         private final Metrics metrics;
+        private final String metricGrpPrefix;
+        private final Map<String, String> metricTags;
+        private final boolean metricsPerConnection;
+
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
         public final Sensor bytesTransferred;
@@ -691,8 +690,11 @@ public class Selector implements Selectable, AutoCloseable {
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
         private final List<Sensor> sensors = new ArrayList<>();
 
-        public SelectorMetrics(Metrics metrics) {
+        public SelectorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection) {
             this.metrics = metrics;
+            this.metricGrpPrefix = metricGrpPrefix;
+            this.metricTags = metricTags;
+            this.metricsPerConnection = metricsPerConnection;
             String metricGrpName = metricGrpPrefix + "-metrics";
             StringBuilder tagsSuffix = new StringBuilder();
 

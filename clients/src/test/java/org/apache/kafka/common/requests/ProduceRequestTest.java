@@ -42,6 +42,7 @@ public class ProduceRequestTest {
                                                                                    1L,
                                                                                    (short) 1,
                                                                                    1,
+                                                                                   1,
                                                                                    simpleRecord);
         final ProduceRequest request = new ProduceRequest.Builder(RecordBatch.CURRENT_MAGIC_VALUE,
                                                                   (short) -1,

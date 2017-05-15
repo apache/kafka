@@ -22,14 +22,14 @@ import java.nio._
 import java.nio.channels._
 import java.nio.charset.Charset
 import java.security.cert.X509Certificate
-import java.util.Properties
+import java.util.{ArrayList, Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
 import javax.net.ssl.X509TrustManager
 
 import kafka.admin.AdminUtils
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
-import kafka.common.{Topic, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.consumer.{ConsumerConfig, ConsumerTimeoutException, KafkaStream}
 import kafka.log._
 import kafka.message._
@@ -40,9 +40,10 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.record._
@@ -289,7 +290,7 @@ object TestUtils extends Logging {
     */
   def createOffsetsTopic(zkUtils: ZkUtils, servers: Seq[KafkaServer]): Unit = {
     val server = servers.head
-    createTopic(zkUtils, Topic.GroupMetadataTopicName,
+    createTopic(zkUtils, Topic.GROUP_METADATA_TOPIC_NAME,
       server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       servers,
@@ -1297,6 +1298,27 @@ object TestUtils extends Logging {
     }
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
 
+  }
+
+  def consumeTopicRecords[K, V](servers: Seq[KafkaServer], topic: String, numMessages: Int,
+                                waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+    val consumer = createNewConsumer(TestUtils.getBrokerListStrFromServers(servers),
+      securityProtocol = SecurityProtocol.PLAINTEXT)
+    try {
+      consumer.subscribe(Collections.singleton(topic))
+      consumeRecords(consumer, numMessages, waitTime)
+    } finally consumer.close()
+  }
+
+  def consumeRecords[K, V](consumer: KafkaConsumer[K, V], numMessages: Int,
+                           waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+    val records = new ArrayBuffer[ConsumerRecord[K, V]]()
+    waitUntilTrue(() => {
+      records ++= consumer.poll(50).asScala
+      records.size >= numMessages
+    }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
+    assertEquals("Consumed more records than expected", numMessages, records.size)
+    records
   }
 }
 

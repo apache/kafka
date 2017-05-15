@@ -444,16 +444,16 @@ public final class RecordAccumulator {
                                         // request
                                         break;
                                     } else {
-                                        PidAndEpoch pidAndEpoch = null;
+                                        ProducerIdAndEpoch producerIdAndEpoch = null;
                                         if (transactionManager != null) {
-                                            pidAndEpoch = transactionManager.pidAndEpoch();
-                                            if (!pidAndEpoch.isValid())
+                                            producerIdAndEpoch = transactionManager.pidAndEpoch();
+                                            if (!producerIdAndEpoch.isValid())
                                                 // we cannot send the batch until we have refreshed the PID
                                                 break;
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
-                                        if (pidAndEpoch != null && !batch.inRetry()) {
+                                        if (producerIdAndEpoch != null && !batch.inRetry()) {
                                             // If the batch is in retry, then we should not change the pid and
                                             // sequence number, since this may introduce duplicates. In particular,
                                             // the previous attempt may actually have been accepted, and if we change
@@ -461,9 +461,9 @@ public final class RecordAccumulator {
                                             // a duplicate.
                                             int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
                                             log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
-                                                    node, pidAndEpoch.producerId, pidAndEpoch.epoch,
+                                                    node, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
                                                     batch.topicPartition, sequenceNumber);
-                                            batch.setProducerState(pidAndEpoch, sequenceNumber);
+                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber);
                                         }
                                         batch.close();
                                         size += batch.sizeInBytes();

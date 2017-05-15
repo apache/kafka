@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.List;
 
@@ -29,12 +30,18 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     private ProcessorContext context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
+    private final TimestampExtractor timestampExtractor;
 
-    public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public SourceNode(String name, List<String> topics, TimestampExtractor timestampExtractor, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
         super(name);
         this.topics = topics;
+        this.timestampExtractor = timestampExtractor;
         this.keyDeserializer = keyDeserializer;
         this.valDeserializer = valDeserializer;
+    }
+
+    public SourceNode(String name, List<String> topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+        this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
     K deserializeKey(String topic, byte[] data) {
@@ -93,4 +100,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         return sb.toString();
     }
 
+    public TimestampExtractor getTimestampExtractor() {
+        return timestampExtractor;
+    }
 }

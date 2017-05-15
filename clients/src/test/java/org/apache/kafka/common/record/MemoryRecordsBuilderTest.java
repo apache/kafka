@@ -400,7 +400,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(10L, "1".getBytes(), "a".getBytes());
         builder.close();
 
-        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, 15L, (short) 0,
+        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, System.currentTimeMillis(), 0, 15L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
@@ -409,7 +409,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
 
-        MemoryRecords.writeEndTransactionalMarker(buffer, 14L, 1L, (short) 0,
+        MemoryRecords.writeEndTransactionalMarker(buffer, 14L, System.currentTimeMillis(), 0, 1L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
 
         buffer.flip();

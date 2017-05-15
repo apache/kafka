@@ -35,6 +35,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -1232,6 +1233,20 @@ public class KafkaConsumerTest {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer();
         consumer.close();
         consumer.close();
+    }
+
+    @Test
+    public void testMetricConfigRecordingLevel() {
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+            assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
+        }
+
+        props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+            assertEquals(Sensor.RecordingLevel.DEBUG, consumer.metrics.config().recordLevel());
+        }
     }
 
     private void consumerCloseTest(final long closeTimeoutMs,

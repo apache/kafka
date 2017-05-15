@@ -1015,6 +1015,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeEnsureValid(currentBatch);
 
                     if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
+                        // remove from the aborted transaction queue all aborted transactions which have begun
+                        // before the current batch's last offset and add the associated producerIds to the
+                        // aborted producer set
+                        consumeAbortedTransactionsUpTo(currentBatch.lastOffset());
+
                         long producerId = currentBatch.producerId();
                         if (containsAbortMarker(currentBatch)) {
                             abortedProducerIds.remove(producerId);
@@ -1072,29 +1077,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return records;
         }
 
-        private boolean isBatchAborted(RecordBatch batch) {
-            /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
-            *   0. Check whether the pid is in the 'abortedProducerIds' set && the entry does not include an abort marker.
-            *      If so, skip the entry.
-            *   1. If the pid is in aborted pids and the entry contains an abort marker, remove the pid from
-            *      aborted pids and skip the entry.
-            *   2. Check lowest offset entry in the abort index. If the PID of the current entry matches the
-            *      pid of the abort index entry, and the incoming offset is no smaller than the abort index offset,
-            *      this means that the entry has been aborted. Add the pid to the aborted pids set, and remove
-            *      the entry from the abort index.
-            */
-            long producerId = batch.producerId();
-            if (abortedProducerIds.contains(producerId)) {
-                return true;
-            } else if (abortedTransactions != null && !abortedTransactions.isEmpty()) {
-                FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
-                if (nextAbortedTransaction.producerId == producerId && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
-                    abortedProducerIds.add(producerId);
-                    abortedTransactions.poll();
-                    return true;
-                }
+        private void consumeAbortedTransactionsUpTo(long offset) {
+            if (abortedTransactions == null)
+                return;
+
+            while (!abortedTransactions.isEmpty() && abortedTransactions.peek().firstOffset <= offset) {
+                FetchResponse.AbortedTransaction abortedTransaction = abortedTransactions.poll();
+                abortedProducerIds.add(abortedTransaction.producerId);
             }
-            return false;
+        }
+
+        private boolean isBatchAborted(RecordBatch batch) {
+            return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
         }
 
         private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {

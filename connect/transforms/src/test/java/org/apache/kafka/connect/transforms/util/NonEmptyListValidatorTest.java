@@ -14,21 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.errors;
+package org.apache.kafka.connect.transforms.util;
 
-/**
- * The transaction coordinator returns this error code if the timeout received via the InitProducerIdRequest is larger than
- * the `max.transaction.timeout.ms` config value.
- */
-public class InvalidTxnTimeoutException extends ApiException {
-    private static final long serialVersionUID = 1L;
+import org.apache.kafka.common.config.ConfigException;
+import org.junit.Test;
 
-    public InvalidTxnTimeoutException(String message, Throwable cause) {
-        super(message, cause);
+import java.util.Collections;
+
+public class NonEmptyListValidatorTest {
+
+    @Test(expected = ConfigException.class)
+    public void testNullList() {
+        new NonEmptyListValidator().ensureValid("foo", null);
     }
 
-    public InvalidTxnTimeoutException(String message) {
-        super(message);
+    @Test(expected = ConfigException.class)
+    public void testEmptyList() {
+        new NonEmptyListValidator().ensureValid("foo", Collections.emptyList());
+    }
+
+    @Test
+    public void testValidList() {
+        new NonEmptyListValidator().ensureValid("foo", Collections.singletonList("foo"));
     }
 }
-

@@ -46,6 +46,8 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
     //   NotEnoughReplicas
     //   NotEnoughReplicasAfterAppend
     //   InvalidRequiredAcks
+    //   TransactionCoordinatorFenced
+    //   RequestTimeout
 
     private final Map<Long, Map<TopicPartition, Errors>> errors;
 

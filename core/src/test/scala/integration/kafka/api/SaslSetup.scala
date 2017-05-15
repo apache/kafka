@@ -100,10 +100,10 @@ trait SaslSetup {
   }
 
   private def writeJaasConfigurationToFile(jaasSections: Seq[JaasSection]) {
-    // This will cause a reload of the Configuration singleton when `getConfiguration` is called
-    Configuration.setConfiguration(null)
     val file = JaasTestUtils.writeJaasContextsToFile(jaasSections)
     System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, file.getAbsolutePath)
+    // This will cause a reload of the Configuration singleton when `getConfiguration` is called
+    Configuration.setConfiguration(null)
   }
 
   def closeSasl() {

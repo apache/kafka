@@ -23,10 +23,11 @@ import scala.collection.{Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
-import kafka.common.{BrokerEndPointNotAvailableException, Topic, TopicAndPartition}
+import kafka.common.{BrokerEndPointNotAvailableException, TopicAndPartition}
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -156,6 +157,24 @@ class MetadataCache(brokerId: Int) extends Logging {
   def getPartitionInfo(topic: String, partitionId: Int): Option[PartitionStateInfo] = {
     inReadLock(partitionMetadataLock) {
       cache.get(topic).flatMap(_.get(partitionId))
+    }
+  }
+
+  def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
+    inReadLock(partitionMetadataLock) {
+      cache.get(topic).flatMap(_.get(partitionId)) match {
+        case Some(partitionInfo) =>
+          val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+          try {
+            getAliveEndpoint(leaderId, listenerName)
+          } catch {
+            case e: BrokerEndPointNotAvailableException =>
+              None
+          }
+
+        case None =>
+          None
+      }
     }
   }
 

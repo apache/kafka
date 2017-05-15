@@ -222,8 +222,11 @@ public class MemoryRecordsTest {
             short producerEpoch = 13;
             long initialOffset = 983L;
             int coordinatorEpoch = 347;
+            int partitionLeaderEpoch = 29;
+
             EndTransactionMarker marker = new EndTransactionMarker(ControlRecordType.COMMIT, coordinatorEpoch);
-            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, producerId, producerEpoch, marker);
+            MemoryRecords records = MemoryRecords.withEndTransactionMarker(initialOffset, System.currentTimeMillis(),
+                    partitionLeaderEpoch, producerId, producerEpoch, marker);
             // verify that buffer allocation was precise
             assertEquals(records.buffer().remaining(), records.buffer().capacity());
 
@@ -235,6 +238,7 @@ public class MemoryRecordsTest {
             assertEquals(producerId, batch.producerId());
             assertEquals(producerEpoch, batch.producerEpoch());
             assertEquals(initialOffset, batch.baseOffset());
+            assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
             assertTrue(batch.isValid());
 
             List<Record> createdRecords = TestUtils.toList(batch);
@@ -245,6 +249,55 @@ public class MemoryRecordsTest {
             EndTransactionMarker deserializedMarker = EndTransactionMarker.deserialize(record);
             assertEquals(ControlRecordType.COMMIT, deserializedMarker.controlType());
             assertEquals(coordinatorEpoch, deserializedMarker.coordinatorEpoch());
+        }
+    }
+
+    @Test
+    public void testFilterToBatchDiscard() {
+        if (compression != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2) {
+            ByteBuffer buffer = ByteBuffer.allocate(2048);
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+            builder.append(10L, "1".getBytes(), "a".getBytes());
+            builder.close();
+
+            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
+            builder.append(11L, "2".getBytes(), "b".getBytes());
+            builder.append(12L, "3".getBytes(), "c".getBytes());
+            builder.close();
+
+            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
+            builder.append(13L, "4".getBytes(), "d".getBytes());
+            builder.append(20L, "5".getBytes(), "e".getBytes());
+            builder.append(15L, "6".getBytes(), "f".getBytes());
+            builder.close();
+
+            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
+            builder.append(16L, "7".getBytes(), "g".getBytes());
+            builder.close();
+
+            buffer.flip();
+
+            ByteBuffer filtered = ByteBuffer.allocate(2048);
+            MemoryRecords.readableRecords(buffer).filterTo(new MemoryRecords.RecordFilter() {
+                @Override
+                protected boolean shouldDiscard(RecordBatch batch) {
+                    // discard the second and fourth batches
+                    return batch.lastOffset() == 2L || batch.lastOffset() == 6L;
+                }
+
+                @Override
+                protected boolean shouldRetain(RecordBatch recordBatch, Record record) {
+                    return true;
+                }
+            }, filtered);
+
+            filtered.flip();
+            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+            assertEquals(2, batches.size());
+            assertEquals(0L, batches.get(0).lastOffset());
+            assertEquals(5L, batches.get(1).lastOffset());
         }
     }
 
@@ -490,7 +543,7 @@ public class MemoryRecordsTest {
         return values;
     }
 
-    private static class RetainNonNullKeysFilter implements MemoryRecords.RecordFilter {
+    private static class RetainNonNullKeysFilter extends MemoryRecords.RecordFilter {
         @Override
         public boolean shouldRetain(RecordBatch batch, Record record) {
             return record.hasKey();

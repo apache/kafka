@@ -42,8 +42,8 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.requests.InitPidRequest;
-import org.apache.kafka.common.requests.InitPidResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.Time;
@@ -363,7 +363,7 @@ public class Sender implements Runnable {
 
     private ClientResponse sendAndAwaitInitPidRequest(Node node) throws IOException {
         String nodeId = node.idString();
-        InitPidRequest.Builder builder = new InitPidRequest.Builder(null);
+        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
@@ -382,33 +382,33 @@ public class Sender implements Runnable {
         if (transactionManager == null || transactionManager.isTransactional())
             return;
 
-        while (!transactionManager.hasPid() && !transactionManager.isInErrorState()) {
+        while (!transactionManager.hasProducerId() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
-                    if (response.hasResponse() && (response.responseBody() instanceof InitPidResponse)) {
-                        InitPidResponse initPidResponse = (InitPidResponse) response.responseBody();
-                        Errors error = initPidResponse.error();
-                        if (error == Errors.PRODUCER_ID_AUTHORIZATION_FAILED) {
-                            transactionManager.setError(error.exception());
-                        } else {
-                            PidAndEpoch pidAndEpoch = new PidAndEpoch(
-                                    initPidResponse.producerId(), initPidResponse.epoch());
-                            transactionManager.setPidAndEpoch(pidAndEpoch);
+
+                    if (response.hasResponse() && (response.responseBody() instanceof InitProducerIdResponse)) {
+                        InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
+                        if (initProducerIdResponse.error() == Errors.PRODUCER_ID_AUTHORIZATION_FAILED) {
+                            transactionManager.setError(initProducerIdResponse.error().exception());
+                            return;
                         }
+                        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
+                                initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
                     } else {
-                        log.error("Received an unexpected response type for an InitPidRequest from {}. " +
+                        log.error("Received an unexpected response type for an InitProducerIdRequest from {}. " +
                                 "We will back off and try again.", node);
                     }
                 } else {
-                    log.debug("Could not find an available broker to send InitPidRequest to. " +
+                    log.debug("Could not find an available broker to send InitProducerIdRequest to. " +
                             "We will back off and try again.");
                 }
             } catch (Exception e) {
                 log.warn("Received an exception while trying to get a pid. Will back off and retry.", e);
             }
-            log.trace("Retry InitPidRequest in {}ms.", retryBackoffMs);
+            log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }

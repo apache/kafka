@@ -18,18 +18,19 @@
 package kafka.coordinator.group
 
 
-import kafka.common.{OffsetAndMetadata, Topic}
+import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, ReplicaManager}
 import kafka.utils._
 import kafka.utils.timer.MockTimer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse}
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, OffsetFetchResponse, TransactionResult}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import java.util.concurrent.TimeUnit
 
+import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -83,13 +84,13 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
-    ret += (Topic.GroupMetadataTopicName -> Map(0 -> Seq(1), 1 -> Seq(1)))
+    ret += (Topic.GROUP_METADATA_TOPIC_NAME -> Map(0 -> Seq(1), 1 -> Seq(1)))
 
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
     zkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.GroupMetadataTopicName)).andReturn(Some(2))
+    EasyMock.expect(zkUtils.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).andReturn(Some(2))
     EasyMock.replay(zkUtils)
 
     timer = new MockTimer
@@ -310,7 +311,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     assertEquals(Errors.NONE, syncGroupError)
 
     EasyMock.reset(replicaManager)
-    EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andReturn(None)
+    EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId))).andReturn(None)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
@@ -768,6 +769,223 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
+  def testBasicFetchTxnOffsets() {
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+    val producerId = 1000L
+    val producerEpoch : Short = 2
+
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+
+    // Validate that the offset isn't materialjzed yet.
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+
+    val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+
+    // Send commit marker.
+    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
+
+    // Validate that committed offset is materialized.
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, secondReqError)
+    assertEquals(Some(0), secondReqPartitionData.get(tp).map(_.offset))
+  }
+
+  @Test
+  def testFetchTxnOffsetsWithAbort() {
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+    val producerId = 1000L
+    val producerEpoch : Short = 2
+
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+
+    val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+
+    // Validate that the pending commit is discarded.
+    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
+
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, secondReqError)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
+  }
+
+  @Test
+  def testFetchTxnOffsetsIgnoreSpuriousCommit() {
+    val tp = new TopicPartition("topic", 0)
+    val offset = OffsetAndMetadata(0)
+    val producerId = 1000L
+    val producerEpoch : Short = 2
+
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, immutable.Map(tp -> offset))
+    assertEquals(Errors.NONE, commitOffsetResult(tp))
+
+    val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, error)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData.get(tp).map(_.offset))
+
+    val offsetsTopic = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.ABORT)
+
+    val (secondReqError, secondReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, secondReqError)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), secondReqPartitionData.get(tp).map(_.offset))
+
+    // Ignore spurious commit.
+    groupCoordinator.handleTxnCompletion(producerId, List(offsetsTopic), TransactionResult.COMMIT)
+
+    val (thirdReqError, thirdReqPartitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
+    assertEquals(Errors.NONE, secondReqError)
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), thirdReqPartitionData.get(tp).map(_.offset))
+  }
+
+  @Test
+  def testFetchTxnOffsetsOneProducerMultipleGroups() {
+    // One producer, two groups located on separate offsets topic partitions.
+    // Both group have pending offset commits.
+    // Marker for only one partition is received. That commit should be materialized while the other should not.
+
+    val partitions = List(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0))
+    val offsets = List(OffsetAndMetadata(10), OffsetAndMetadata(15))
+    val producerId = 1000L
+    val producerEpoch: Short = 3
+
+    val groupIds = List(groupId, otherGroupId)
+    val offsetTopicPartitions = List(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)),
+      new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(otherGroupId)))
+
+    groupCoordinator.groupManager.addPartitionOwnership(offsetTopicPartitions(1).partition)
+    val errors = mutable.ArrayBuffer[Errors]()
+    val partitionData = mutable.ArrayBuffer[Map[TopicPartition, OffsetFetchResponse.PartitionData]]()
+
+    val commitOffsetResults = mutable.ArrayBuffer[CommitOffsetCallbackParams]()
+
+    // Ensure that the two groups map to different partitions.
+    assertNotEquals(offsetTopicPartitions(0), offsetTopicPartitions(1))
+
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerId, producerEpoch, immutable.Map(partitions(0) -> offsets(0))))
+    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions(0)))
+    commitOffsetResults.append(commitTransactionalOffsets(otherGroupId, producerId, producerEpoch, immutable.Map(partitions(1) -> offsets(1))))
+    assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
+
+    // We got a commit for only one __consumer_offsets partition. We should only materialize it's group offsets.
+    groupCoordinator.handleTxnCompletion(producerId, List(offsetTopicPartitions(0)), TransactionResult.COMMIT)
+    groupCoordinator.handleFetchOffsets(groupIds(0), Some(partitions)) match {
+      case (error, partData) =>
+        errors.append(error)
+        partitionData.append(partData)
+      case _ =>
+    }
+
+     groupCoordinator.handleFetchOffsets(groupIds(1), Some(partitions)) match {
+      case (error, partData) =>
+        errors.append(error)
+        partitionData.append(partData)
+      case _ =>
+    }
+
+    assertEquals(2, errors.size)
+    assertEquals(Errors.NONE, errors(0))
+    assertEquals(Errors.NONE, errors(1))
+
+    // Exactly one offset commit should have been materialized.
+    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(1)).map(_.offset))
+
+    // Now we receive the other marker.
+    groupCoordinator.handleTxnCompletion(producerId, List(offsetTopicPartitions(1)), TransactionResult.COMMIT)
+    errors.clear()
+    partitionData.clear()
+    groupCoordinator.handleFetchOffsets(groupIds(0), Some(partitions)) match {
+      case (error, partData) =>
+        errors.append(error)
+        partitionData.append(partData)
+      case _ =>
+    }
+
+     groupCoordinator.handleFetchOffsets(groupIds(1), Some(partitions)) match {
+      case (error, partData) =>
+        errors.append(error)
+        partitionData.append(partData)
+      case _ =>
+    }
+    // Two offsets should have been materialized
+    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(0)).map(_.offset))
+    assertEquals(Some(offsets(1).offset), partitionData(1).get(partitions(1)).map(_.offset))
+  }
+
+  @Test
+  def testFetchTxnOffsetsMultipleProducersOneGroup() {
+    // One group, two producers
+    // Different producers will commit offsets for different partitions.
+    // Each partition's offsets should be materialized when the corresponding producer's marker is received.
+
+    val partitions = List(new TopicPartition("topic1", 0), new TopicPartition("topic2", 0))
+    val offsets = List(OffsetAndMetadata(10), OffsetAndMetadata(15))
+    val producerIds = List(1000L, 1005L)
+    val producerEpochs: Seq[Short] = List(3, 4)
+
+    val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
+
+    val errors = mutable.ArrayBuffer[Errors]()
+    val partitionData = mutable.ArrayBuffer[Map[TopicPartition, OffsetFetchResponse.PartitionData]]()
+
+    val commitOffsetResults = mutable.ArrayBuffer[CommitOffsetCallbackParams]()
+
+    // producer0 commits the offsets for partition0
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(0), producerEpochs(0), immutable.Map(partitions(0) -> offsets(0))))
+    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions(0)))
+
+    // producer1 commits the offsets for partition1
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(1), producerEpochs(1), immutable.Map(partitions(1) -> offsets(1))))
+    assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
+
+    // producer0 commits its transaction.
+    groupCoordinator.handleTxnCompletion(producerIds(0), List(offsetTopicPartition), TransactionResult.COMMIT)
+    groupCoordinator.handleFetchOffsets(groupId, Some(partitions)) match {
+      case (error, partData) =>
+        errors.append(error)
+        partitionData.append(partData)
+      case _ =>
+    }
+
+    assertEquals(Errors.NONE, errors(0))
+
+    // We should only see the offset commit for producer0
+    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
+
+    // producer1 now commits its transaction.
+    groupCoordinator.handleTxnCompletion(producerIds(1), List(offsetTopicPartition), TransactionResult.COMMIT)
+
+    groupCoordinator.handleFetchOffsets(groupId, Some(partitions)) match {
+      case (error, partData) =>
+        errors.append(error)
+        partitionData.append(partData)
+      case _ =>
+    }
+
+    assertEquals(Errors.NONE, errors(1))
+
+    // We should now see the offset commits for both producers.
+    assertEquals(Some(offsets(0).offset), partitionData(1).get(partitions(0)).map(_.offset))
+    assertEquals(Some(offsets(1).offset), partitionData(1).get(partitions(1)).map(_.offset))
+  }
+
+  @Test
   def testFetchOffsetForUnknownPartition(): Unit = {
     val tp = new TopicPartition("topic", 0)
     val (error, partitionData) = groupCoordinator.handleFetchOffsets(groupId, Some(Seq(tp)))
@@ -1129,7 +1347,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
-        Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
+        Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)
         )
       )})
@@ -1211,7 +1429,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
       EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
       override def answer = capturedArgument.getValue.apply(
-        Map(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId) ->
+        Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
           new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)
         )
       )})
@@ -1222,10 +1440,38 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
   }
 
+  private def commitTransactionalOffsets(groupId: String,
+                                         producerId: Long,
+                                         producerEpoch: Short,
+                                         offsets: immutable.Map[TopicPartition, OffsetAndMetadata]): CommitOffsetCallbackParams = {
+    val (responseFuture, responseCallback) = setupCommitOffsetsCallback
+
+    val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+
+    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+      EasyMock.anyShort(),
+      internalTopicsAllowed = EasyMock.eq(true),
+      isFromClient = EasyMock.eq(false),
+      EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
+      EasyMock.capture(capturedArgument))).andAnswer(new IAnswer[Unit] {
+      override def answer = capturedArgument.getValue.apply(
+        Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId)) ->
+          new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP)
+        )
+      )})
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V2)).anyTimes()
+    EasyMock.replay(replicaManager)
+
+    groupCoordinator.handleCommitOffsets(groupId, null, -1, offsets, responseCallback, producerId, producerEpoch)
+    val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
+    EasyMock.reset(replicaManager)
+    result
+  }
+
   private def leaveGroup(groupId: String, consumerId: String): LeaveGroupCallbackParams = {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
 
-    EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andReturn(None)
+    EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId))).andReturn(None)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 

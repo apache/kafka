@@ -59,7 +59,7 @@ class LogTest {
 
   def createEmptyLogs(dir: File, offsets: Int*) {
     for(offset <- offsets) {
-      Log.logFilename(dir, offset).createNewFile()
+      Log.logFile(dir, offset).createNewFile()
       Log.offsetIndexFile(dir, offset).createNewFile()
     }
   }
@@ -68,7 +68,7 @@ class LogTest {
   def testOffsetFromFilename() {
     val offset = 23423423L
 
-    val logFile = Log.logFilename(tmpDir, offset)
+    val logFile = Log.logFile(tmpDir, offset)
     assertEquals(offset, Log.offsetFromFilename(logFile.getName))
 
     val offsetIndexFile = Log.offsetIndexFile(tmpDir, offset)
@@ -375,9 +375,10 @@ class LogTest {
                             producerId: Long,
                             epoch: Short,
                             offset: Long = 0L,
-                            coordinatorEpoch: Int = 0): MemoryRecords = {
+                            coordinatorEpoch: Int = 0,
+                            partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    MemoryRecords.withEndTransactionMarker(offset, producerId, epoch, marker)
+    MemoryRecords.withEndTransactionMarker(offset, time.milliseconds(), partitionLeaderEpoch, producerId, epoch, marker)
   }
 
   @Test
@@ -1633,10 +1634,24 @@ class LogTest {
   def testParseTopicPartitionName() {
     val topic = "test_topic"
     val partition = "143"
-    val dir = new File(logDir + topicPartitionName(topic, partition))
+    val dir = new File(logDir, topicPartitionName(topic, partition))
     val topicPartition = Log.parseTopicPartitionName(dir)
     assertEquals(topic, topicPartition.topic)
     assertEquals(partition.toInt, topicPartition.partition)
+  }
+
+  /**
+   * Tests that log directories with a period in their name that have been marked for deletion
+   * are parsed correctly by `Log.parseTopicPartitionName` (see KAFKA-5232 for details).
+   */
+  @Test
+  def testParseTopicPartitionNameWithPeriodForDeletedTopic() {
+    val topic = "foo.bar-testtopic"
+    val partition = "42"
+    val dir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    val topicPartition = Log.parseTopicPartitionName(dir)
+    assertEquals("Unexpected topic name parsed", topic, topicPartition.topic)
+    assertEquals("Unexpected partition number parsed", partition.toInt, topicPartition.partition)
   }
 
   @Test
@@ -1646,7 +1661,7 @@ class LogTest {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // its GOOD!
     }
   }
 
@@ -1657,7 +1672,7 @@ class LogTest {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // its GOOD!
     }
   }
 
@@ -1665,12 +1680,20 @@ class LogTest {
   def testParseTopicPartitionNameForMissingSeparator() {
     val topic = "test_topic"
     val partition = "1999"
-    val dir = new File(logDir + File.separator + topic + partition)
+    val dir = new File(logDir, topic + partition)
     try {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // expected
+    }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
     }
   }
 
@@ -1678,13 +1701,22 @@ class LogTest {
   def testParseTopicPartitionNameForMissingTopic() {
     val topic = ""
     val partition = "1999"
-    val dir = new File(logDir + topicPartitionName(topic, partition))
+    val dir = new File(logDir, topicPartitionName(topic, partition))
     try {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // expected
     }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+
   }
 
   @Test
@@ -1696,7 +1728,36 @@ class LogTest {
       Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
-      case _: Exception => // its GOOD!
+      case _: KafkaException => // expected
+    }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topicPartitionName(topic, partition)))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForInvalidPartition() {
+    val topic = "test_topic"
+    val partition = "1999a"
+    val dir = new File(logDir, topicPartitionName(topic, partition))
+    try {
+      Log.parseTopicPartitionName(dir)
+      fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+    // also test the "-delete" marker case
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(topic + partition))
+    try {
+      Log.parseTopicPartitionName(deleteMarkerDir)
+      fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
     }
   }
 
@@ -1719,7 +1780,7 @@ class LogTest {
   }
 
   def topicPartitionName(topic: String, partition: String): String =
-    File.separator + topic + "-" + partition
+    topic + "-" + partition
 
   @Test
   def testDeleteOldSegmentsMethod() {
@@ -2382,22 +2443,22 @@ class LogTest {
 
   private def allAbortedTransactions(log: Log) = log.logSegments.flatMap(_.txnIndex.allAbortedTxns)
 
-  private def appendTransactionalAsLeader(log: Log, pid: Long, producerEpoch: Short): Int => Unit = {
+  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Int => Unit = {
     var sequence = 0
     numRecords: Int => {
       val simpleRecords = (sequence until sequence + numRecords).map { seq =>
         new SimpleRecord(s"$seq".getBytes)
       }
-      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, pid,
+      val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
         producerEpoch, sequence, simpleRecords: _*)
       log.appendAsLeader(records, leaderEpoch = 0)
       sequence += numRecords
     }
   }
 
-  private def appendEndTxnMarkerAsLeader(log: Log, pid: Long, producerEpoch: Short,
+  private def appendEndTxnMarkerAsLeader(log: Log, producerId: Long, producerEpoch: Short,
                                          controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
-    val records = endTxnRecords(controlType, pid, producerEpoch, coordinatorEpoch = coordinatorEpoch)
+    val records = endTxnRecords(controlType, producerId, producerEpoch, coordinatorEpoch = coordinatorEpoch)
     log.appendAsLeader(records, isFromClient = false, leaderEpoch = 0)
   }
 
@@ -2409,10 +2470,10 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
   }
 
-  private def appendTransactionalToBuffer(buffer: ByteBuffer, pid: Long, epoch: Short): (Long, Int) => Unit = {
+  private def appendTransactionalToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short): (Long, Int) => Unit = {
     var sequence = 0
     (offset: Long, numRecords: Int) => {
-      val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, pid, epoch, sequence, true)
+      val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, producerId, producerEpoch, sequence, true)
       for (seq <- sequence until sequence + numRecords) {
         val record = new SimpleRecord(s"$seq".getBytes)
         builder.append(record)
@@ -2424,9 +2485,9 @@ class LogTest {
   }
 
   private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
-                                    controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
+                                         controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
     val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    MemoryRecords.writeEndTransactionalMarker(buffer, offset, producerId, producerEpoch, marker)
+    MemoryRecords.writeEndTransactionalMarker(buffer, offset, time.milliseconds(), 0, producerId, producerEpoch, marker)
   }
 
   private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {

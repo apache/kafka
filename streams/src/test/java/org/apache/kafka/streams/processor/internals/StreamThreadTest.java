@@ -47,6 +47,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.util.Arrays;
@@ -140,7 +141,7 @@ public class StreamThreadTest {
                 setProperty(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
                 setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
-                setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
+                setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
                 setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
             }
         };
@@ -344,6 +345,7 @@ public class StreamThreadTest {
                 .persistent()
                 .build()
         );
+        builder.addSource("source", TOPIC);
         final StreamsConfig config = new StreamsConfig(configProps());
         final MockClientSupplier mockClientSupplier = new MockClientSupplier();
         mockClientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
@@ -683,7 +685,7 @@ public class StreamThreadTest {
 
     @Test
     public void shouldInjectSharedProducerForAllTasksUsingClientSupplierWhenEosDisabled() {
-        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
+        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X").addSource("source1", "someTopic");
         final StreamsConfig config = new StreamsConfig(configProps());
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         final StreamThread thread = new StreamThread(
@@ -717,7 +719,7 @@ public class StreamThreadTest {
 
     @Test
     public void shouldInjectProducerPerTaskUsingClientSupplierForEoS() {
-        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
+        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X").addSource("source1", "someTopic");
         final Properties properties = configProps();
         properties.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         final StreamsConfig config = new StreamsConfig(properties);
@@ -756,7 +758,7 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseAllTaskProducers() {
-        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
+        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X").addSource("source1", "someTopic");
         final Properties properties = configProps();
         properties.setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         final StreamsConfig config = new StreamsConfig(properties);
@@ -790,7 +792,7 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseThreadProducer() {
-        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X");
+        final TopologyBuilder builder = new TopologyBuilder().setApplicationId("X").addSource("source1", "someTopic");
         final StreamsConfig config = new StreamsConfig(configProps());
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         final StreamThread thread = new StreamThread(
@@ -993,6 +995,13 @@ public class StreamThreadTest {
             }
         });
 
+        StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
+        updatedTopicsField.setAccessible(true);
+        Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+        updatedTopics.add(t1.topic());
+        builder.updateSubscriptions(subscriptionUpdates, null);
+
         // should create task for id 0_0 with a single partition
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
@@ -1002,6 +1011,8 @@ public class StreamThreadTest {
 
         // update assignment for the task 0_0 so it now has 2 partitions
         task00Partitions.add(new TopicPartition("t2", 0));
+        updatedTopics.add("t2");
+
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
         thread.rebalanceListener.onPartitionsAssigned(task00Partitions);
 

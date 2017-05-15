@@ -441,7 +441,8 @@ public enum Errors {
                 return new InvalidTxnStateException(message);
             }
         }),
-    INVALID_PID_MAPPING(49, "The PID mapping is invalid",
+    INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producerId which is not currently assigned to " +
+            "its transactionalId",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {

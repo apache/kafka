@@ -20,18 +20,17 @@ package kafka.admin
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
-
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
-import kafka.common.{TopicAndPartition, _}
+import kafka.common.{OffsetMetadataAndError, TopicAndPartition}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
-
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.BrokerNotAvailableException
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 import org.apache.kafka.common.security.JaasUtils
