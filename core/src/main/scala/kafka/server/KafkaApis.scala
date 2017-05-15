@@ -28,7 +28,6 @@ import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
 import kafka.cluster.Partition
 import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
-import kafka.common.Topic.{GroupMetadataTopicName, TransactionStateTopicName, isInternal}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
@@ -40,6 +39,7 @@ import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe,
 import kafka.utils.{Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.common.internals.Topic.{isInternal, GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
@@ -139,16 +139,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         // this callback is invoked under the replica state change lock to ensure proper order of
         // leadership changes
         updatedLeaders.foreach { partition =>
-          if (partition.topic == GroupMetadataTopicName)
+          if (partition.topic == GROUP_METADATA_TOPIC_NAME)
             groupCoordinator.handleGroupImmigration(partition.partitionId)
-          else if (partition.topic == TransactionStateTopicName)
+          else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
             txnCoordinator.handleTxnImmigration(partition.partitionId, partition.getLeaderEpoch)
         }
 
         updatedFollowers.foreach { partition =>
-          if (partition.topic == GroupMetadataTopicName)
+          if (partition.topic == GROUP_METADATA_TOPIC_NAME)
             groupCoordinator.handleGroupEmigration(partition.partitionId)
-          else if (partition.topic == TransactionStateTopicName)
+          else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
             txnCoordinator.handleTxnEmigration(partition.partitionId)
         }
       }
@@ -185,7 +185,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
       // is not cleared.
       result.foreach { case (topicPartition, error) =>
-        if (error == Errors.NONE && stopReplicaRequest.deletePartitions() && topicPartition.topic == GroupMetadataTopicName) {
+        if (error == Errors.NONE && stopReplicaRequest.deletePartitions() && topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
           groupCoordinator.handleGroupEmigration(topicPartition.partition)
         }
       }
@@ -816,7 +816,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val aliveBrokers = metadataCache.getAliveBrokers
 
     topic match {
-      case GroupMetadataTopicName =>
+      case GROUP_METADATA_TOPIC_NAME =>
         if (aliveBrokers.size < config.offsetsTopicReplicationFactor) {
           error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
             s"'${config.offsetsTopicReplicationFactor}' for the offsets topic (configured via " +
@@ -827,7 +827,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor.toInt,
             groupCoordinator.offsetsTopicConfigs)
         }
-      case TransactionStateTopicName =>
+      case TRANSACTION_STATE_TOPIC_NAME =>
         if (aliveBrokers.size < config.transactionTopicReplicationFactor) {
           error(s"Number of alive brokers '${aliveBrokers.size}' does not meet the required replication factor " +
             s"'${config.transactionTopicReplicationFactor}' for the transactions state topic (configured via " +
@@ -1037,12 +1037,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val (partition, topicMetadata) = findCoordinatorRequest.coordinatorType match {
         case FindCoordinatorRequest.CoordinatorType.GROUP =>
           val partition = groupCoordinator.partitionFor(findCoordinatorRequest.coordinatorKey)
-          val metadata = getOrCreateInternalTopic(GroupMetadataTopicName, request.listenerName)
+          val metadata = getOrCreateInternalTopic(GROUP_METADATA_TOPIC_NAME, request.listenerName)
           (partition, metadata)
 
         case FindCoordinatorRequest.CoordinatorType.TRANSACTION =>
           val partition = txnCoordinator.partitionFor(findCoordinatorRequest.coordinatorKey)
-          val metadata = getOrCreateInternalTopic(TransactionStateTopicName, request.listenerName)
+          val metadata = getOrCreateInternalTopic(TRANSACTION_STATE_TOPIC_NAME, request.listenerName)
           (partition, metadata)
 
         case _ =>
@@ -1504,7 +1504,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.transactionalId
     val groupId = addOffsetsToTxnRequest.consumerGroupId
-    val offsetTopicPartition = new TopicPartition(GroupMetadataTopicName, groupCoordinator.partitionFor(groupId))
+    val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
 
     // Send response callback
     def sendResponseCallback(error: Errors): Unit = {

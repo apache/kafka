@@ -45,6 +45,8 @@ import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import java.util.Map.{Entry => JEntry}
 import java.lang.{Long => JLong}
 
+import org.apache.kafka.common.internals.Topic
+
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
     NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
@@ -778,7 +780,7 @@ class Log(@volatile var dir: File,
                               loadingFromLog: Boolean): Unit = {
     val pid = batch.producerId
     val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
-    val shouldValidateSequenceNumbers = topicPartition.topic() != Topic.GroupMetadataTopicName
+    val shouldValidateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
     val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
