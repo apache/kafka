@@ -302,7 +302,10 @@ class LogSegmentTest {
     segment.append(firstOffset = 107L, largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 107L, endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, offset = 107L))
 
-    segment.recover(64 * 1024, new ProducerStateManager(topicPartition, logDir))
+    var stateManager = new ProducerStateManager(topicPartition, logDir)
+    segment.recover(64 * 1024, stateManager)
+    assertEquals(108L, stateManager.mapEndOffset)
+
 
     var abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
@@ -313,9 +316,10 @@ class LogSegmentTest {
     assertEquals(100L, abortedTxn.lastStableOffset)
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
-    val stateManager = new ProducerStateManager(topicPartition, logDir)
+    stateManager = new ProducerStateManager(topicPartition, logDir)
     stateManager.loadProducerEntry(ProducerIdEntry(pid2, producerEpoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L)))
     segment.recover(64 * 1024, stateManager)
+    assertEquals(108L, stateManager.mapEndOffset)
 
     abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)

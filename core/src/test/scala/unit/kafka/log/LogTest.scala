@@ -178,7 +178,7 @@ class LogTest {
 
   @Test
   def testRebuildPidMapWithCompactedData() {
-    val log = createLog(2048, pidSnapshotIntervalMs = Int.MaxValue)
+    val log = createLog(2048)
     val pid = 1L
     val epoch = 0.toShort
     val seq = 0
@@ -2319,6 +2319,110 @@ class LogTest {
   }
 
   @Test
+  def testRecoverOnlyLastSegment(): Unit = {
+    val log = createLog(128)
+    val epoch = 0.toShort
+
+    val pid1 = 1L
+    val pid2 = 2L
+    val pid3 = 3L
+    val pid4 = 4L
+
+    val appendPid1 = appendTransactionalAsLeader(log, pid1, epoch)
+    val appendPid2 = appendTransactionalAsLeader(log, pid2, epoch)
+    val appendPid3 = appendTransactionalAsLeader(log, pid3, epoch)
+    val appendPid4 = appendTransactionalAsLeader(log, pid4, epoch)
+
+    // mix transactional and non-transactional data
+    appendPid1(5) // nextOffset: 5
+    appendNonTransactionalAsLeader(log, 3) // 8
+    appendPid2(2) // 10
+    appendPid1(4) // 14
+    appendPid3(3) // 17
+    appendNonTransactionalAsLeader(log, 2) // 19
+    appendPid1(10) // 29
+    appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
+    appendPid2(6) // 36
+    appendPid4(3) // 39
+    appendNonTransactionalAsLeader(log, 10) // 49
+    appendPid3(9) // 58
+    appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
+    appendPid4(8) // 67
+    appendPid2(7) // 74
+    appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
+    appendNonTransactionalAsLeader(log, 10) // 85
+    appendPid4(4) // 89
+    appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
+
+    // delete the last offset and transaction index files to force recovery
+    val lastSegment = log.logSegments.last
+    val recoveryPoint = lastSegment.baseOffset
+    lastSegment.index.delete()
+    lastSegment.txnIndex.delete()
+
+    log.close()
+
+    val reloadedLog = createLog(1024, recoveryPoint = recoveryPoint)
+    val abortedTransactions = allAbortedTransactions(reloadedLog)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+  }
+
+  @Test
+  def testRecoverLastSegmentWithNoSnapshots(): Unit = {
+    val log = createLog(128)
+    val epoch = 0.toShort
+
+    val pid1 = 1L
+    val pid2 = 2L
+    val pid3 = 3L
+    val pid4 = 4L
+
+    val appendPid1 = appendTransactionalAsLeader(log, pid1, epoch)
+    val appendPid2 = appendTransactionalAsLeader(log, pid2, epoch)
+    val appendPid3 = appendTransactionalAsLeader(log, pid3, epoch)
+    val appendPid4 = appendTransactionalAsLeader(log, pid4, epoch)
+
+    // mix transactional and non-transactional data
+    appendPid1(5) // nextOffset: 5
+    appendNonTransactionalAsLeader(log, 3) // 8
+    appendPid2(2) // 10
+    appendPid1(4) // 14
+    appendPid3(3) // 17
+    appendNonTransactionalAsLeader(log, 2) // 19
+    appendPid1(10) // 29
+    appendEndTxnMarkerAsLeader(log, pid1, epoch, ControlRecordType.ABORT) // 30
+    appendPid2(6) // 36
+    appendPid4(3) // 39
+    appendNonTransactionalAsLeader(log, 10) // 49
+    appendPid3(9) // 58
+    appendEndTxnMarkerAsLeader(log, pid3, epoch, ControlRecordType.COMMIT) // 59
+    appendPid4(8) // 67
+    appendPid2(7) // 74
+    appendEndTxnMarkerAsLeader(log, pid2, epoch, ControlRecordType.ABORT) // 75
+    appendNonTransactionalAsLeader(log, 10) // 85
+    appendPid4(4) // 89
+    appendEndTxnMarkerAsLeader(log, pid4, epoch, ControlRecordType.COMMIT) // 90
+
+    // delete all snapshot files
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+      file.delete()
+    }
+
+    // delete the last offset and transaction index files to force recovery. this should force us to rebuild
+    // the producer state from the start of the log
+    val lastSegment = log.logSegments.last
+    val recoveryPoint = lastSegment.baseOffset
+    lastSegment.index.delete()
+    lastSegment.txnIndex.delete()
+
+    log.close()
+
+    val reloadedLog = createLog(1024, recoveryPoint = recoveryPoint)
+    val abortedTransactions = allAbortedTransactions(reloadedLog)
+    assertEquals(List(new AbortedTxn(pid1, 0L, 29L, 8L), new AbortedTxn(pid2, 8L, 74L, 36L)), abortedTransactions)
+  }
+
+  @Test
   def testTransactionIndexUpdatedThroughReplication(): Unit = {
     val epoch = 0.toShort
     val log = createLog(1024 * 1024)
@@ -2474,7 +2578,7 @@ class LogTest {
   private def createLog(messageSizeInBytes: Int, retentionMs: Int = -1, retentionBytes: Int = -1,
                         cleanupPolicy: String = "delete", messagesPerSegment: Int = 5,
                         maxPidExpirationMs: Int = 300000, pidExpirationCheckIntervalMs: Int = 30000,
-                        pidSnapshotIntervalMs: Int = 60000): Log = {
+                        recoveryPoint: Long = 0L): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, messageSizeInBytes * messagesPerSegment: Integer)
     logProps.put(LogConfig.RetentionMsProp, retentionMs: Integer)

@@ -429,6 +429,12 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * or equal to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
+    // remove all out of range snapshots
+    deleteSnapshotFiles { file =>
+      val offset = offsetFromFilename(file.getName)
+      offset > logEndOffset || offset <= logStartOffset
+    }
+
     if (logEndOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
@@ -436,10 +442,6 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // since we assume that the offset is less than or equal to the high watermark, it is
       // safe to clear the unreplicated transactions
       unreplicatedTxns.clear()
-      deleteSnapshotFiles { file =>
-        val offset = offsetFromFilename(file.getName)
-        offset > logEndOffset || offset <= logStartOffset
-      }
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
       evictUnretainedProducers(logStartOffset)

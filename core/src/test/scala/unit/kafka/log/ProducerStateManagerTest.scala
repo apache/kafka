@@ -23,6 +23,7 @@ import kafka.server.LogOffsetMetadata
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.junit.Assert._
@@ -224,6 +225,26 @@ class ProducerStateManagerTest extends JUnitSuite {
     val epoch = 0.toShort
     append(idMapping, pid, 0, epoch, 0L, isTransactional = true)
     append(idMapping, pid, 1, epoch, 1L, isTransactional = false)
+  }
+
+  @Test
+  def testTruncateAndReloadRemovesOutOfRangeSnapshots(): Unit = {
+    val epoch = 0.toShort
+    append(idMapping, pid, epoch, 0, 0L)
+    idMapping.takeSnapshot()
+    append(idMapping, pid, epoch, 1, 1L)
+    idMapping.takeSnapshot()
+    append(idMapping, pid, epoch, 2, 2L)
+    idMapping.takeSnapshot()
+    append(idMapping, pid, epoch, 3, 3L)
+    idMapping.takeSnapshot()
+    append(idMapping, pid, epoch, 4, 4L)
+    idMapping.takeSnapshot()
+
+    idMapping.truncateAndReload(1L, 3L, time.milliseconds())
+
+    assertEquals(Some(2L), idMapping.oldestSnapshotOffset)
+    assertEquals(Some(3L), idMapping.latestSnapshotOffset)
   }
 
   @Test

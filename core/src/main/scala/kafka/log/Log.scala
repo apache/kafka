@@ -316,6 +316,7 @@ class Log(@volatile var dir: File,
       if (fetchDataInfo != null)
         loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
+    stateManager.updateMapEndOffset(segment.baseOffset)
     val bytesTruncated = segment.recover(config.maxMessageSize, stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
