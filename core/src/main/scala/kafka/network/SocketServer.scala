@@ -544,7 +544,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def processDisconnected() {
-    selector.disconnected.asScala.foreach { connectionId =>
+    selector.disconnected.keySet.asScala.foreach { connectionId =>
       val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
         throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
       }.remoteHost
