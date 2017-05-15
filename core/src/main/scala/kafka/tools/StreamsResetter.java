@@ -154,7 +154,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        consumerConfigOption = optionParser.accepts("consumer-config", "Consumer configuration Property file")
+        consumerConfigOption = optionParser.accepts("consumer-config", "Consumer configuration properties file")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("Consumer config property file");
