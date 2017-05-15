@@ -114,7 +114,7 @@ public class TransactionManager {
 
 
     // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
-    // a pending FindCoordinator request, that must always go first. Next, If we need a PID, that must go second.
+    // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
     // The endTxn request must always go last.
     private enum Priority {
         FIND_COORDINATOR(0),
@@ -262,17 +262,17 @@ public class TransactionManager {
     }
 
     /**
-     * Get the current pid and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
+     * Get the current producer id and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
      * verify that the result is valid.
      *
      * @return the current ProducerIdAndEpoch.
      */
-    ProducerIdAndEpoch pidAndEpoch() {
+    ProducerIdAndEpoch producerIdAndEpoch() {
         return producerIdAndEpoch;
     }
 
     /**
-     * Set the pid and epoch atomically.
+     * Set the producer id and epoch atomically.
      */
     void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
         this.producerIdAndEpoch = producerIdAndEpoch;
@@ -291,7 +291,7 @@ public class TransactionManager {
      * messages will return an OutOfOrderSequenceException.
      *
      * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
-     * for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and the user
+     * for the same producer id. This might involve aborting the ongoing transaction during the initPidRequest, and the user
      * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
      * produce error to the user and let them abort the transaction and close the producer explicitly.
      */

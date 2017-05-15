@@ -98,7 +98,7 @@ class LogTest {
                       LogConfig(logProps),
                       logStartOffset = 0L,
                       recoveryPoint = 0L,
-                      maxPidExpirationMs = 24 * 60,
+                      maxProducerIdExpirationMs = 24 * 60,
                       scheduler = time.scheduler,
                       time = time)
     assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
@@ -2436,8 +2436,8 @@ class LogTest {
       recoveryPoint = 0L,
       scheduler = time.scheduler,
       time = time,
-      maxPidExpirationMs = maxPidExpirationMs,
-      pidExpirationCheckIntervalMs = pidExpirationCheckIntervalMs)
+      maxProducerIdExpirationMs = maxPidExpirationMs,
+      producerIdExpirationCheckIntervalMs = pidExpirationCheckIntervalMs)
     log
   }
 

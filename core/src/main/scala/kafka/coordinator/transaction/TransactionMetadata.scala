@@ -70,9 +70,9 @@ private[transaction] case object CompleteCommit extends TransactionState { val b
 private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
 private[transaction] object TransactionMetadata {
-  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def byteToState(byte: Byte): TransactionState = {
     byte match {
@@ -212,7 +212,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
     // metadata transition is valid only if all the following conditions are met:
     //
     // 1. the new state is already indicated in the pending state.
-    // 2. the pid is the same (i.e. this field should never be changed)
+    // 2. the producerId is the same (i.e. this field should never be changed)
     // 3. the epoch should be either the same value or old value + 1.
     // 4. the last update time is no smaller than the old value.
     // 4. the old partitions set is a subset of the new partitions set.

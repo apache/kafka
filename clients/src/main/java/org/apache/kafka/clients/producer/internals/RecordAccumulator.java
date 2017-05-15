@@ -446,19 +446,19 @@ public final class RecordAccumulator {
                                     } else {
                                         ProducerIdAndEpoch producerIdAndEpoch = null;
                                         if (transactionManager != null) {
-                                            producerIdAndEpoch = transactionManager.pidAndEpoch();
+                                            producerIdAndEpoch = transactionManager.producerIdAndEpoch();
                                             if (!producerIdAndEpoch.isValid())
-                                                // we cannot send the batch until we have refreshed the PID
+                                                // we cannot send the batch until we have refreshed the producer id
                                                 break;
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
                                         if (producerIdAndEpoch != null && !batch.inRetry()) {
-                                            // If the batch is in retry, then we should not change the pid and
+                                            // If the batch is in retry, then we should not change the producer id and
                                             // sequence number, since this may introduce duplicates. In particular,
                                             // the previous attempt may actually have been accepted, and if we change
-                                            // the pid and sequence here, this attempt will also be accepted, causing
-                                            // a duplicate.
+                                            // the producer id and sequence here, this attempt will also be accepted,
+                                            // causing a duplicate.
                                             int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
                                             log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
                                                     node, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,

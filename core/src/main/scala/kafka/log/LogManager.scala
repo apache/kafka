@@ -173,7 +173,7 @@ class LogManager(val logDirs: Array[File],
             config = config,
             logStartOffset = logStartOffset,
             recoveryPoint = logRecoveryPoint,
-            maxPidExpirationMs = maxPidExpirationMs,
+            maxProducerIdExpirationMs = maxPidExpirationMs,
             scheduler = scheduler,
             time = time)
           if (logDir.getName.endsWith(Log.DeleteDirSuffix)) {
@@ -414,7 +414,7 @@ class LogManager(val logDirs: Array[File],
           config = config,
           logStartOffset = 0L,
           recoveryPoint = 0L,
-          maxPidExpirationMs = maxPidExpirationMs,
+          maxProducerIdExpirationMs = maxPidExpirationMs,
           scheduler = scheduler,
           time = time)
         logs.put(topicPartition, log)
