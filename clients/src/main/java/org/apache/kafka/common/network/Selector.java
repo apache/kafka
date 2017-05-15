@@ -490,8 +490,12 @@ public class Selector implements Selectable, AutoCloseable {
                 it.remove();
             }
         }
-        for (String channel : this.failedSends)
+        for (String channel : this.failedSends) {
+            KafkaChannel failedChannel = closingChannels.get(channel);
+            if (failedChannel != null)
+                failedChannel.state(ChannelState.FAILED_SEND);
             this.disconnected.put(channel, ChannelState.FAILED_SEND);
+        }
         this.failedSends.clear();
     }
 

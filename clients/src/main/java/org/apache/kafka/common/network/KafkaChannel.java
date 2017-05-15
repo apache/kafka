@@ -74,7 +74,7 @@ public class KafkaChannel {
             transportLayer.handshake();
         if (transportLayer.ready() && !authenticator.complete())
             authenticator.authenticate();
-        if (transportLayer.ready() && authenticator.complete())
+        if (ready())
             state = ChannelState.READY;
     }
 
