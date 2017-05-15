@@ -217,14 +217,14 @@ object TransactionLog {
       val value = valueSchema.read(buffer)
 
       if (version == CurrentVersion) {
-        val producerId = value.get(ProducerIdField).asInstanceOf[Long]
-        val epoch = value.get(ProducerEpochField).asInstanceOf[Short]
-        val timeout = value.get(TxnTimeoutField).asInstanceOf[Int]
+        val producerId = value.getLong(ProducerIdField)
+        val epoch = value.getShort(ProducerEpochField)
+        val timeout = value.getInt(TxnTimeoutField)
 
         val stateByte = value.getByte(TxnStatusField)
         val state = TransactionMetadata.byteToState(stateByte)
-        val entryTimestamp = value.get(TxnEntryTimestampField).asInstanceOf[Long]
-        val startTimestamp = value.get(TxnStartTimestampField).asInstanceOf[Long]
+        val entryTimestamp = value.getLong(TxnEntryTimestampField)
+        val startTimestamp = value.getLong(TxnStartTimestampField)
 
         val transactionMetadata = new TransactionMetadata(producerId, epoch, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
 
@@ -233,7 +233,7 @@ object TransactionLog {
 
           topicPartitionArray.foreach { memberMetadataObj =>
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
-            val topic = memberMetadata.get(PartitionsTopicField).asInstanceOf[String]
+            val topic = memberMetadata.getString(PartitionsTopicField)
             val partitionIdArray = memberMetadata.getArray(PartitionIdsField)
 
             val topicPartitions = partitionIdArray.map { partitionIdObj =>
