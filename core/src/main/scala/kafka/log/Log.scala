@@ -44,6 +44,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import java.util.Map.{Entry => JEntry}
 import java.lang.{Long => JLong}
+import java.util.regex.Pattern
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
@@ -254,7 +255,7 @@ class Log(@volatile var dir: File,
       if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
         val offset = offsetFromFilename(filename)
-        val logFile = logFilename(dir, offset)
+        val logFile = Log.logFile(dir, offset)
         if (!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
           Files.deleteIfExists(file.toPath)
@@ -1137,7 +1138,7 @@ class Log(@volatile var dir: File,
     val start = time.nanoseconds
     lock synchronized {
       val newOffset = math.max(expectedNextOffset, logEndOffset)
-      val logFile = logFilename(dir, newOffset)
+      val logFile = Log.logFile(dir, newOffset)
       val offsetIdxFile = offsetIndexFile(dir, newOffset)
       val timeIdxFile = timeIndexFile(dir, newOffset)
       val txnIdxFile = transactionIndexFile(dir, newOffset)
@@ -1492,6 +1493,8 @@ object Log {
   /** a directory that is scheduled to be deleted */
   val DeleteDirSuffix = "-delete"
 
+  private val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
+
   val UnknownLogStartOffset = -1L
 
   /**
@@ -1515,8 +1518,17 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def logFilename(dir: File, offset: Long) =
+  def logFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix)
+
+  /**
+    * Return a directory name to rename the log directory to for async deletion. The name will be in the following
+    * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
+    */
+  def logDeleteDirName(logName: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    s"$logName.$uniqueId$DeleteDirSuffix"
+  }
 
   /**
    * Construct an index file name in the given dir using the given base offset
@@ -1555,19 +1567,19 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicPartition = {
+    if (dir == null)
+      throw new KafkaException("dir should not be null")
 
     def exception(dir: File): KafkaException = {
-      new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
-        "'" + dir.getName + "' is not in the form of topic-partition or " +
-        "ongoing-deleting directory(topic-partition.uniqueId-delete)\n" +
-        "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
-        "directory")
+      new KafkaException(s"Found directory ${dir.getCanonicalPath}, '${dir.getName}' is not in the form of " +
+        "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
+        "Kafka's log directories (and children) should only contain Kafka topic data.")
     }
 
     val dirName = dir.getName
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
-    if (dirName.endsWith(DeleteDirSuffix) && !dirName.matches("^(\\S+)-(\\S+)\\.(\\S+)" + DeleteDirSuffix))
+    if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
@@ -1576,11 +1588,15 @@ object Log {
 
     val index = name.lastIndexOf('-')
     val topic = name.substring(0, index)
-    val partition = name.substring(index + 1)
-    if (topic.length < 1 || partition.length < 1)
+    val partitionString = name.substring(index + 1)
+    if (topic.isEmpty || partitionString.isEmpty)
       throw exception(dir)
 
-    new TopicPartition(topic, partition.toInt)
+    val partition =
+      try partitionString.toInt
+      catch { case _: NumberFormatException => throw exception(dir) }
+
+    new TopicPartition(topic, partition)
   }
 
   private def isIndexFile(file: File): Boolean = {
