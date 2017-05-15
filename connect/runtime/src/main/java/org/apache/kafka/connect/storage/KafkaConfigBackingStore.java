@@ -423,7 +423,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
         final NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(1).
-                replicationFactor(config.getInt(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                replicationFactor(config.getShort(DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG)).
                 build();
         TopicSupplier topicSupplier = new TopicSupplier() {
             @Override

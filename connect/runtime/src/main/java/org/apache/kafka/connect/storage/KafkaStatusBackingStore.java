@@ -141,7 +141,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         final NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.STATUS_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getInt(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG)).
                 build();
         TopicSupplier topicSupplier = new TopicSupplier() {
             @Override

@@ -84,7 +84,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         final NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).
-                replicationFactor(config.getInt(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
                 build();
         TopicSupplier topicSupplier = new TopicSupplier() {
             @Override

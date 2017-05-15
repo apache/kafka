@@ -242,11 +242,13 @@ public class DistributedConfig extends WorkerConfig {
                 .define(OFFSET_STORAGE_PARTITIONS_CONFIG,
                         ConfigDef.Type.INT,
                         25,
+                        atLeast(1),
                         ConfigDef.Importance.LOW,
                         OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
                 .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
-                        ConfigDef.Type.INT,
+                        ConfigDef.Type.SHORT,
                         3,
+                        atLeast(1),
                         ConfigDef.Importance.LOW,
                         OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
                 .define(CONFIG_TOPIC_CONFIG,
@@ -254,8 +256,9 @@ public class DistributedConfig extends WorkerConfig {
                         ConfigDef.Importance.HIGH,
                         CONFIG_TOPIC_CONFIG_DOC)
                 .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
-                        ConfigDef.Type.INT,
+                        ConfigDef.Type.SHORT,
                         3,
+                        atLeast(1),
                         ConfigDef.Importance.LOW,
                         CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
                 .define(STATUS_STORAGE_TOPIC_CONFIG,
@@ -265,11 +268,13 @@ public class DistributedConfig extends WorkerConfig {
                 .define(STATUS_STORAGE_PARTITIONS_CONFIG,
                         ConfigDef.Type.INT,
                         5,
+                        atLeast(1),
                         ConfigDef.Importance.LOW,
                         STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
                 .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
-                        ConfigDef.Type.INT,
+                        ConfigDef.Type.SHORT,
                         3,
+                        atLeast(1),
                         ConfigDef.Importance.LOW,
                         STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);
     }

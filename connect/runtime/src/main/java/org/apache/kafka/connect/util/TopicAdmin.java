@@ -44,6 +44,13 @@ import java.util.concurrent.ExecutionException;
  */
 public class TopicAdmin implements AutoCloseable {
 
+    private static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
+    private static final String CLEANUP_POLICY_COMPACT = "compact";
+
+    private static final String MIN_INSYNC_REPLICAS_CONFIG = "min.insync.replicas";
+
+    private static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
+
     /**
      * A builder of {@link NewTopic} instances.
      */
@@ -74,8 +81,8 @@ public class TopicAdmin implements AutoCloseable {
          * @param replicationFactor the desired replication factor; must be positive
          * @return this builder to allow methods to be chained; never null
          */
-        public NewTopicBuilder replicationFactor(int replicationFactor) {
-            this.replicationFactor = (short) replicationFactor;
+        public NewTopicBuilder replicationFactor(short replicationFactor) {
+            this.replicationFactor = replicationFactor;
             return this;
         }
 
@@ -85,7 +92,7 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder compacted() {
-            this.configs.put("cleanup.policy", "compact");
+            this.configs.put(CLEANUP_POLICY_CONFIG, CLEANUP_POLICY_COMPACT);
             return this;
         }
 
@@ -96,7 +103,7 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder minInSyncReplicas(short minInSyncReplicas) {
-            this.configs.put("min.insync.replicas", Short.toString(minInSyncReplicas));
+            this.configs.put(MIN_INSYNC_REPLICAS_CONFIG, Short.toString(minInSyncReplicas));
             return this;
         }
 
@@ -108,7 +115,7 @@ public class TopicAdmin implements AutoCloseable {
          * @return this builder to allow methods to be chained; never null
          */
         public NewTopicBuilder uncleanLeaderElection(boolean allow) {
-            this.configs.put("unclean.leader.election.enable", Boolean.toString(allow));
+            this.configs.put(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, Boolean.toString(allow));
             return this;
         }
 
