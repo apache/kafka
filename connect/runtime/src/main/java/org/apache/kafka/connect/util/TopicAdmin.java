@@ -19,6 +19,7 @@ package org.apache.kafka.connect.util;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
+import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResults;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -191,7 +192,7 @@ public class TopicAdmin implements AutoCloseable {
 
         Set<String> existingTopicNames = new HashSet<>();
         try {
-            ListTopicsResults listingResults = admin.listTopics();
+            ListTopicsResults listingResults = admin.listTopics(new ListTopicsOptions().listInternal(true));
             Map<String, TopicListing> topicListingsByName = listingResults.namesToDescriptions().get();
             for (String topicName : topicNames) {
                 TopicListing listing = topicListingsByName.get(topicName);
@@ -306,29 +307,31 @@ public class TopicAdmin implements AutoCloseable {
                 topicsByName.remove(existingTopicName);
             }
 
-            // Attempt to create any missing topics
-            CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
-            Map<String, KafkaFuture<Void>> newResults = admin.createTopics(topicsByName.values(), args).results();
+            if (!topicsByName.isEmpty()) {
+                // Attempt to create any missing topics
+                CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
+                Map<String, KafkaFuture<Void>> newResults = admin.createTopics(topicsByName.values(), args).results();
 
-            // Iterate over each one so that we can handle individual failures like when some topics already exist
-            for (Map.Entry<String, KafkaFuture<Void>> entry : newResults.entrySet()) {
-                String topic = entry.getKey();
-                try {
-                    entry.getValue().get();
-                    log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
-                } catch (ExecutionException e) {
-                    Throwable cause = e.getCause();
-                    if (cause instanceof UnsupportedVersionException) {
-                        // Broker is too old
-                        log.info("Unable to use Kafka admin client to create topics using the brokers at {}", bootstrapServers);
-                        return null;
+                // Iterate over each one so that we can handle individual failures like when some topics already exist
+                for (Map.Entry<String, KafkaFuture<Void>> entry : newResults.entrySet()) {
+                    String topic = entry.getKey();
+                    try {
+                        entry.getValue().get();
+                        log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
+                    } catch (ExecutionException e) {
+                        Throwable cause = e.getCause();
+                        if (cause instanceof UnsupportedVersionException) {
+                            // Broker is too old
+                            log.info("Unable to use Kafka admin client to create topics using the brokers at {}", bootstrapServers);
+                            return null;
+                        }
+                        if (e.getCause() instanceof TopicExistsException) {
+                            // Must have been created by another client, so keep going
+                            log.debug("Found existing topic '{}' on the brokers at {}", topic, bootstrapServers);
+                            continue;
+                        }
+                        throw e;
                     }
-                    if (e.getCause() instanceof TopicExistsException) {
-                        // Must have been created by another client, so keep going
-                        log.debug("Found existing topic '{}' on the brokers at {}", topic, bootstrapServers);
-                        continue;
-                    }
-                    throw e;
                 }
             }
             // Get descriptions for all the topics we're interested in, including those that we just may have created

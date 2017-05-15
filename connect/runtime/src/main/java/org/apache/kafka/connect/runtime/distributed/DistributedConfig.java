@@ -247,7 +247,7 @@ public class DistributedConfig extends WorkerConfig {
                         OFFSET_STORAGE_PARTITIONS_CONFIG_DOC)
                 .define(OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        3,
+                        (short) 3,
                         atLeast(1),
                         ConfigDef.Importance.LOW,
                         OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
@@ -257,7 +257,7 @@ public class DistributedConfig extends WorkerConfig {
                         CONFIG_TOPIC_CONFIG_DOC)
                 .define(CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        3,
+                        (short) 3,
                         atLeast(1),
                         ConfigDef.Importance.LOW,
                         CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
@@ -273,7 +273,7 @@ public class DistributedConfig extends WorkerConfig {
                         STATUS_STORAGE_PARTITIONS_CONFIG_DOC)
                 .define(STATUS_STORAGE_REPLICATION_FACTOR_CONFIG,
                         ConfigDef.Type.SHORT,
-                        3,
+                        (short) 3,
                         atLeast(1),
                         ConfigDef.Importance.LOW,
                         STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);

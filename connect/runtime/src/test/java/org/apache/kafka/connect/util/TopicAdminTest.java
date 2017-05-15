@@ -55,6 +55,7 @@ public class TopicAdminTest {
         boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).response());
@@ -71,8 +72,10 @@ public class TopicAdminTest {
         boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().prepareResponse(metadataResponseFor(cluster).withTopic(newTopic.name(), newTopic.partitions(), internal).response());
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).withTopic(newTopic.name(), newTopic.partitions(), internal).response());
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
             TopicDescription desc = admin.createTopicIfMissing(newTopic);
@@ -88,8 +91,10 @@ public class TopicAdminTest {
         boolean internal = true;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().prepareResponse(metadataResponseFor(cluster).withTopic(newTopic.name(), newTopic.partitions(), internal).response());
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).withTopic(newTopic.name(), newTopic.partitions(), internal).response());
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
             TopicDescription desc = admin.createTopicIfMissing(newTopic);
@@ -105,6 +110,7 @@ public class TopicAdminTest {
         boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             // Three calls are made ...
@@ -126,6 +132,7 @@ public class TopicAdminTest {
         boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             // Three calls are made ...
@@ -155,15 +162,17 @@ public class TopicAdminTest {
         boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             // First expect to find existing topic ...
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).withTopic(existingTopic.name(), existingTopic.partitions(), internal).response());
             // Then expect to create the new topic ...
             env.kafkaClient().prepareResponse(createTopicResponse(newTopic));
-            // Finally return information for only new topic ...
+            // Finally return information for new and existing topics ...
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).
                     withTopic(newTopic.name(), newTopic.partitions(), internal).
+                    withTopic(existingTopic.name(), existingTopic.partitions(), internal).
                     response());
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
             Map<String, TopicDescription> desc = admin.createTopicsIfMissing(existingTopic, newTopic);
@@ -185,15 +194,17 @@ public class TopicAdminTest {
         boolean internal = false;
         Cluster cluster = createCluster(1);
         try (MockKafkaAdminClientEnv env = new MockKafkaAdminClientEnv(cluster)) {
+            env.kafkaClient().setNode(cluster.controller());
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
             // First expect to find only the existing topic ...
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).withTopic(existingTopic.name(), existingTopic.partitions(), internal).response());
             // Then expect to create the new topic, except error because another client just created it ...
             env.kafkaClient().prepareResponse(createTopicResponseWithAlreadyExists(newTopic));
-            // Finally return information for only new topic ...
+            // Finally return information for new and existing topics ...
             env.kafkaClient().prepareResponse(metadataResponseFor(cluster).
                     withTopic(newTopic.name(), newTopic.partitions(), internal).
+                    withTopic(existingTopic.name(), existingTopic.partitions(), internal).
                     response());
             TopicAdmin admin = new TopicAdmin(null, env.adminClient());
             Map<String, TopicDescription> desc = admin.createTopicsIfMissing(existingTopic, newTopic);
