@@ -662,16 +662,6 @@ public class StreamTaskTest {
         });
     }
 
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIllegalArgumentExceptionOnScheduleIfPunctuationTypeIsInvalid() throws Exception {
-        task.schedule(1, null, new Punctuator() {
-            @Override
-            public void punctuate(long timestamp) {
-                // no-op
-            }
-        });
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
