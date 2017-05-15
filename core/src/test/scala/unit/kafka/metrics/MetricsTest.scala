@@ -105,7 +105,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map(topic -> 1), new StringDecoder, new StringDecoder)
     getMessages(topicMessageStreams1, nMessages)
 
-    zkConsumerConnector1.shutdown()
+    zkConsumerConnector1.shutdown
   }
 
   @Test
