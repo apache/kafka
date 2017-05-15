@@ -131,10 +131,10 @@ public class ProducerPerformance {
             for (ProducerPerformanceThread t : producerPerformanceThreads)
                 t.join();
             producer.flush();
+            /* print final results */
             stats.printTotal();
             if (shouldPrintMetrics)
                 ToolsUtils.printMetrics(producer.metrics());
-            /* print final results */
             producer.close();
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
