@@ -18,8 +18,9 @@ package org.apache.kafka.connect.runtime.isolation;
 
 public class PluginUtils {
     private static final String BLACKLIST = "^(?:"
-            + "java\\."
-            + "|javax\\."
+            + "java"
+            + "|javax"
+            + "|org\\.omg"
             + "|org\\.w3c\\.dom"
             + "|org\\.apache\\.kafka\\.common"
             + "|org\\.apache\\.kafka\\.connect"
