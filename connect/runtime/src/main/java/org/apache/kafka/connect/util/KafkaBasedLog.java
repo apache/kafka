@@ -149,7 +149,7 @@ public class KafkaBasedLog<K, V> {
                 partitions.add(new TopicPartition(topic, entry.getValue().partition()));
             }
         } else {
-            log.debug("Unable to find or create topic '{}', so falling back to auto-creation.", topic);
+            log.info("Unable to find or create topic '{}', so falling back to auto-creation.", topic);
             List<PartitionInfo> partitionInfos = null;
             long started = time.milliseconds();
             while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {

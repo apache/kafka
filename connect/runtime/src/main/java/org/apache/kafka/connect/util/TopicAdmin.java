@@ -19,8 +19,10 @@ package org.apache.kafka.connect.util;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
+import org.apache.kafka.clients.admin.ListTopicsResults;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -149,6 +151,7 @@ public class TopicAdmin implements AutoCloseable {
 
     /**
      * Obtain a {@link NewTopicBuilder builder} to define a {@link NewTopic}.
+     *
      * @param topicName the name of the topic
      * @return the {@link NewTopic} description of the topic; never null
      */
@@ -176,6 +179,40 @@ public class TopicAdmin implements AutoCloseable {
     }
 
     /**
+     * Filter the supplied list of topics to determine which of them already exist.
+     *
+     * @param topicNames the names of the topics
+     * @return the set of names that refer to already-existing topics; null only if the broker cannot perform this operation
+     * @throws ExecutionException
+     * @throws InterruptedException
+     */
+    private Set<String> existingTopics(Collection<String> topicNames) throws ExecutionException, InterruptedException {
+        if (topicNames == null || topicNames.isEmpty()) return Collections.emptySet();
+
+        Set<String> existingTopicNames = new HashSet<>();
+        try {
+            ListTopicsResults listingResults = admin.listTopics();
+            Map<String, TopicListing> topicListingsByName = listingResults.namesToDescriptions().get();
+            for (String topicName : topicNames) {
+                TopicListing listing = topicListingsByName.get(topicName);
+                if (listing != null) {
+                    existingTopicNames.add(listing.name());
+                }
+            }
+        } catch (InterruptedException e) {
+            throw e;
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof UnsupportedVersionException) {
+                // Broker is too old
+                return null;
+            }
+            throw e;
+        }
+        return existingTopicNames;
+    }
+
+    /**
      * Get a description of one or more topics.
      *
      * @param topicNames the names of the topics
@@ -185,6 +222,8 @@ public class TopicAdmin implements AutoCloseable {
      */
     private Map<String, TopicDescription> describeTopics(Collection<String> topicNames) throws ExecutionException, InterruptedException {
         if (topicNames == null || topicNames.isEmpty()) return Collections.emptyMap();
+
+        // Now get the descriptions for those topics that already exist ...
         Map<String, KafkaFuture<TopicDescription>> results = admin.describeTopics(topicNames).results();
         Map<String, TopicDescription> descriptions = new HashMap<>();
         for (Map.Entry<String, KafkaFuture<TopicDescription>> entry : results.entrySet()) {
@@ -248,23 +287,23 @@ public class TopicAdmin implements AutoCloseable {
         for (NewTopic topic : topics) {
             if (topic != null) topicsByName.put(topic.name(), topic);
         }
-        Set<String> requestedTopicNames = new HashSet<>(topicsByName.keySet());
+        Set<String> allRequestedTopicNames = new HashSet<>(topicsByName.keySet());
+        String bootstrapServers = bootstrapServers();
 
         try {
-            // Check for existing topics
-            Map<String, TopicDescription> descriptions = describeTopics(requestedTopicNames);
-            if (descriptions == null) {
+            // Getting topic descriptions for non-existant topics may auto-create them, so first see which of
+            // our topics do already exist
+            Set<String> existingTopicNames = existingTopics(topicsByName.keySet());
+            if (existingTopicNames == null) {
                 // The broker is too old to do this work, so return immediately
-                log.debug("Unable to use Kafka admin client to read topic descriptions using the brokers at {}", this);
+                log.debug("Unable to use Kafka admin client to list existing topics using the brokers at {}", bootstrapServers);
                 return null;
             }
 
-            for (String existingTopicName : descriptions.keySet()) {
-                log.debug("Found existing topic '{}' on the brokers at {}", existingTopicName, this);
+            // Remove the topics that already exist
+            for (String existingTopicName : existingTopicNames) {
+                log.debug("Found existing topic '{}' on the brokers at {}", existingTopicName, bootstrapServers);
                 topicsByName.remove(existingTopicName);
-            }
-            if (topicsByName.isEmpty()) {
-                return descriptions;
             }
 
             // Attempt to create any missing topics
@@ -276,44 +315,41 @@ public class TopicAdmin implements AutoCloseable {
                 String topic = entry.getKey();
                 try {
                     entry.getValue().get();
-                    log.info("Created topic {} on brokers at {}", topicsByName.get(topic), this);
+                    log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
                 } catch (ExecutionException e) {
                     Throwable cause = e.getCause();
                     if (cause instanceof UnsupportedVersionException) {
                         // Broker is too old
-                        log.info("Unable to use Kafka admin client to create topics using the brokers at {}", this);
+                        log.info("Unable to use Kafka admin client to create topics using the brokers at {}", bootstrapServers);
                         return null;
                     }
                     if (e.getCause() instanceof TopicExistsException) {
                         // Must have been created by another client, so keep going
-                        log.debug("Found existing topic '{}' on the brokers at {}", topic, this);
+                        log.debug("Found existing topic '{}' on the brokers at {}", topic, bootstrapServers);
                         continue;
                     }
                     throw e;
                 }
             }
-            // Get descriptions for the topics we just tried to create, including any that did in fact exist
-            Map<String, TopicDescription> newDescriptions = describeTopics(topicsByName.keySet());
-            // And combine with the descriptions for the already-existing topics
-            descriptions.putAll(newDescriptions);
-            return descriptions;
+            // Get descriptions for all the topics we're interested in, including those that we just may have created
+            return describeTopics(allRequestedTopicNames);
         } catch (InterruptedException e) {
             Thread.interrupted();
-            throw new ConnectException("Interrupted while attempting to create/find topic(s) '" + requestedTopicNames + "'", e);
+            throw new ConnectException("Interrupted while attempting to create/find topic(s) '" + allRequestedTopicNames + "'", e);
         } catch (ExecutionException e) {
             Throwable cause = e.getCause();
             if (cause instanceof UnsupportedVersionException) {
                 // Broker is too old
-                log.debug("Unable to use Kafka admin client to create topic descriptions using the brokers at {}", this);
+                log.info("Unable to use Kafka admin client to create topic descriptions using the brokers at {}", bootstrapServers);
                 return null;
             }
             if (cause instanceof TimeoutException) {
                 // Timed out waiting for the operation to complete
-                throw new ConnectException("Timed out while checking for or creating topic(s) '" + requestedTopicNames + "'." +
+                throw new ConnectException("Timed out while checking for or creating topic(s) '" + allRequestedTopicNames + "'." +
                         " This could indicate a connectivity issue, unavailable topic partitions, or if" +
                         " this is your first use of the topic it may have taken too long to create.", cause);
             }
-            throw new ConnectException("Error while attempting to create/find topics '" + requestedTopicNames + "'", cause);
+            throw new ConnectException("Error while attempting to create/find topics '" + allRequestedTopicNames + "'", cause);
         }
     }
 
@@ -322,8 +358,7 @@ public class TopicAdmin implements AutoCloseable {
         admin.close();
     }
 
-    @Override
-    public String toString() {
+    private String bootstrapServers() {
         Object servers = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
         return servers != null ? servers.toString() : "<unknown>";
     }
