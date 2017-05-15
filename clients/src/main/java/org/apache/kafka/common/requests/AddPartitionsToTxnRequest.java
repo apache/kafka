@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -126,7 +127,11 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     @Override
     public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new AddPartitionsToTxnResponse(throttleTimeMs, Errors.forException(e));
+        final HashMap<TopicPartition, Errors> errors = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            errors.put(partition, Errors.forException(e));
+        }
+        return new AddPartitionsToTxnResponse(throttleTimeMs, errors);
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {

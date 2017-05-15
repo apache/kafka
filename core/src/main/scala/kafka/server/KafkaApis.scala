@@ -1513,7 +1513,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
 
     if(!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
-      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+
+      sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs,
+        partitionsToAdd.asScala.map{tp => (tp, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)}.toMap.asJava))
     else {
       val internalTopics = partitionsToAdd.asScala.filter {tp => org.apache.kafka.common.internals.Topic.isInternal(tp.topic())}
 
@@ -1526,15 +1528,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         tp => authorize(request.session, Write, new Resource(Topic, tp.topic))
       }
 
-      if (nonExistingOrUnauthorizedForDescribeTopics.nonEmpty)
-        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, Errors.UNKNOWN_TOPIC_OR_PARTITION))
-      else if (unauthorizedForWriteRequestInfo.nonEmpty || internalTopics.nonEmpty)
-        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, Errors.TOPIC_AUTHORIZATION_FAILED))
-      else {
+      if (nonExistingOrUnauthorizedForDescribeTopics.nonEmpty
+        || unauthorizedForWriteRequestInfo.nonEmpty
+        || internalTopics.nonEmpty) {
+
+        val partitionErrors = unauthorizedForWriteRequestInfo.map { tp => (tp, Errors.TOPIC_AUTHORIZATION_FAILED) }.toMap ++
+          nonExistingOrUnauthorizedForDescribeTopics.map { tp => (tp, Errors.UNKNOWN_TOPIC_OR_PARTITION) }.toMap ++
+          internalTopics.map { tp => (tp, Errors.TOPIC_AUTHORIZATION_FAILED) }
+
+        sendResponseMaybeThrottle(request, (throttleTimeMs: Int) => new AddPartitionsToTxnResponse(throttleTimeMs, partitionErrors.asJava))
+      } else {
         // Send response callback
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(throttleTimeMs: Int): AbstractResponse = {
-            val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(throttleTimeMs, error)
+            val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(throttleTimeMs,
+              partitionsToAdd.asScala.map{tp => (tp, error)}.toMap.asJava)
             trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
             responseBody
           }
