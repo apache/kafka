@@ -89,17 +89,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                            final long earliestSessionEndTime,
                                                            final long latestSessionStartTime) {
-        validateStoreOpen();
-        final Bytes binarySessionId = Bytes.wrap(serdes.rawKey(key));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName,
-                                                                                  keySchema.lowerRange(binarySessionId, earliestSessionEndTime),
-                                                                                  keySchema.upperRange(binarySessionId, latestSessionStartTime));
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(binarySessionId, earliestSessionEndTime, latestSessionStartTime);
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionId,
-                                                                             earliestSessionEndTime,
-                                                                             latestSessionStartTime);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
-        return new MergedSortedCacheSessionStoreIterator<>(filteredCacheIterator, storeIterator, serdes);
+        return findSessions(key, key, earliestSessionEndTime, latestSessionStartTime);
     }
 
     @Override
