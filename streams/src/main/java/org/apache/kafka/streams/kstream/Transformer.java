@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
@@ -80,6 +81,7 @@ public interface Transformer<K, V, R> {
     R transform(final K key, final V value);
 
     /**
+     * <b>Deprecated as of 0.11.0.0</b> - <i>Please use {@link Punctuator)} functional interface instead.</i>
      * Perform any periodic operations and possibly generate new {@link KeyValue} pairs if this processor
      * {@link ProcessorContext#schedule(long) schedules itself} with the context during
      * {@link #init(ProcessorContext) initialization}.

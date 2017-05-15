@@ -34,14 +34,14 @@ public class PunctuationQueue {
         }
     }
 
-    public boolean mayPunctuate(long timestamp, Punctuator punctuator) {
+    public boolean mayPunctuate(long timestamp, ProcessorNodePunctuator punctuator) {
         synchronized (pq) {
             boolean punctuated = false;
             PunctuationSchedule top = pq.peek();
-            while (top != null && top.timestamp <= timestamp) {
+            while (top != null && top.timestamp <= timestamp && !top.isCancelled) {
                 PunctuationSchedule sched = top;
                 pq.poll();
-                punctuator.punctuate(sched.node(), timestamp);
+                punctuator.punctuate(sched.node(), timestamp, sched.punctuateDelegate());
                 pq.add(sched.next(timestamp));
                 punctuated = true;
 

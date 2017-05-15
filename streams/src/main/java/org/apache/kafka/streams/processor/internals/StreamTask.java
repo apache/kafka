@@ -29,7 +29,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -46,7 +48,7 @@ import static java.util.Collections.singleton;
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
-public class StreamTask extends AbstractTask implements Punctuator {
+public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final Logger log = LoggerFactory.getLogger(StreamTask.class);
 
@@ -219,7 +221,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @throws IllegalStateException if the current node is not null
      */
     @Override
-    public void punctuate(final ProcessorNode node, final long timestamp) {
+    public void punctuate(final ProcessorNode node, final long timestamp, Runnable punctuateDelegate) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
         }
@@ -231,7 +233,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         }
 
         try {
-            node.punctuate(timestamp);
+            node.punctuate(punctuateDelegate);
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("%s Exception caught while punctuating processor '%s'", logPrefix,  node.name()), e);
         } finally {
@@ -486,12 +488,26 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * @param interval  the interval in milliseconds
      * @throws IllegalStateException if the current node is not null
      */
-    public void schedule(final long interval) {
+    public Cancellable schedule(final long interval, final Punctuator punctuator) {
         if (processorContext.currentNode() == null) {
             throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
         }
 
-        punctuationQueue.schedule(new PunctuationSchedule(processorContext.currentNode(), interval));
+        final PunctuationSchedule schedule = new PunctuationSchedule(processorContext.currentNode(), interval, new Runnable() {
+            @Override
+            public void run () {
+                punctuator.punctuate(context().timestamp());
+            }
+        });
+
+        punctuationQueue.schedule(schedule);
+
+        return new Cancellable() {
+            @Override
+            public void cancel () {
+                schedule.cancel();
+            }
+        };
     }
 
     /**

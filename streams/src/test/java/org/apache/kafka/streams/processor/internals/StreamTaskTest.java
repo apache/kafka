@@ -38,7 +38,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
@@ -117,6 +120,14 @@ public class StreamTaskTest {
     private StreamsConfig config;
     private StreamsConfig eosConfig;
     private StreamTask task;
+    private long punctuatedAt;
+
+    private Runnable punctuateDelegate = new Runnable() {
+        @Override
+        public void run () {
+            punctuatedAt = task.context().timestamp();
+        }
+    };
 
     private StreamsConfig createConfig(final boolean enableEoS) throws Exception {
         return new StreamsConfig(new Properties() {
@@ -388,10 +399,10 @@ public class StreamTaskTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings(value={"unchecked", "deprecation"})
     @Test
-    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuating() throws Exception {
-        final ProcessorNode punctuator = new ProcessorNode("test", new AbstractProcessor() {
+    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingDeprecated() throws Exception {
+        final Processor processor = new AbstractProcessor() {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(1);
@@ -404,11 +415,56 @@ public class StreamTaskTest {
             public void punctuate(final long timestamp) {
                 throw new KafkaException("KABOOM!");
             }
-        }, Collections.<String>emptySet());
+        };
+
+        final ProcessorNode punctuator = new ProcessorNode("test", processor, Collections.<String>emptySet());
         punctuator.init(new NoOpProcessorContext());
 
         try {
-            task.punctuate(punctuator, 1);
+            task.punctuate(punctuator, 1, new Runnable() {
+                @Override
+                public void run () {
+                    processor.punctuate(task.context().timestamp());
+                }
+            });
+            fail("Should've thrown StreamsException");
+        } catch (final StreamsException e) {
+            final String message = e.getMessage();
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
+            assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldWrapKafkaExceptionsWithStreamsExceptionAndAddContextWhenPunctuatingStreamTime() throws Exception {
+        final Processor processor = new AbstractProcessor() {
+            @Override
+            public void init(final ProcessorContext context) {
+                context.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
+                    @Override public void punctuate (long timestamp) {
+                        throw new KafkaException("KABOOM!");
+                    }
+                });
+            }
+
+            @Override
+            public void process(final Object key, final Object value) {}
+
+            @Override
+            public void punctuate(final long timestamp) {}
+        };
+
+        final ProcessorNode punctuator = new ProcessorNode("test", processor, Collections.<String>emptySet());
+        punctuator.init(new NoOpProcessorContext());
+
+        try {
+            task.punctuate(punctuator, 1, new Runnable() {
+                @Override
+                public void run () {
+                    processor.punctuate(task.context().timestamp());
+                }
+            });
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
             final String message = e.getMessage();
@@ -569,7 +625,7 @@ public class StreamTaskTest {
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
         try {
-            task.punctuate(processor, 10);
+            task.punctuate(processor, 10, punctuateDelegate);
             fail("Should throw illegal state exception as current node is not null");
         } catch (final IllegalStateException e) {
             // pass
@@ -578,27 +634,37 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() throws Exception {
-        task.punctuate(processor, 5);
-        assertThat(processor.punctuatedAt, equalTo(5L));
-        task.punctuate(processor, 10);
-        assertThat(processor.punctuatedAt, equalTo(10L));
+        task.punctuate(processor, 5, punctuateDelegate);
+        assertThat(punctuatedAt, equalTo(5L));
+        task.punctuate(processor, 10, punctuateDelegate);
+        assertThat(punctuatedAt, equalTo(10L));
     }
 
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccesfullPunctuate() throws Exception {
-        task.punctuate(processor, 5);
+        task.punctuate(processor, 5, punctuateDelegate);
         assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)
     public void shouldThrowIllegalStateExceptionOnScheduleIfCurrentNodeIsNull() throws Exception {
-        task.schedule(1);
+        task.schedule(1, new Punctuator() {
+            @Override
+            public void punctuate (long timestamp) {
+                // no-op
+            }
+        });
     }
 
     @Test
-    public void shouldNotThrowIExceptionOnScheduleIfCurrentNodeIsNotNull() throws Exception {
+    public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
-        task.schedule(1);
+        task.schedule(1, new Punctuator() {
+            @Override
+            public void punctuate (long timestamp) {
+                // no-op
+            }
+        });
     }
 
     @SuppressWarnings("unchecked")

@@ -26,37 +26,54 @@ import static org.junit.Assert.assertEquals;
 
 public class PunctuationQueueTest {
 
+    private long timestamp;
+
     @Test
     public void testPunctuationInterval() {
         TestProcessor processor = new TestProcessor();
-        ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
+        final ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
         PunctuationQueue queue = new PunctuationQueue();
 
-        PunctuationSchedule sched = new PunctuationSchedule(node, 100L);
+        ProcessorNodePunctuator punctuator = new ProcessorNodePunctuator() {
+            public void punctuate(ProcessorNode node, long time, Runnable punctuateDelegate) {
+                punctuateDelegate.run();
+            }
+        };
+
+        Runnable punctuateDelegate = new Runnable() {
+            @Override
+            public void run () {
+                node.processor().punctuate(getTimestamp());
+            }
+        };
+
+        PunctuationSchedule sched = new PunctuationSchedule(node, 100L, punctuateDelegate);
         final long now = sched.timestamp - 100L;
 
         queue.schedule(sched);
 
-        Punctuator punctuator = new Punctuator() {
-            public void punctuate(ProcessorNode node, long time) {
-                node.processor().punctuate(time);
-            }
-        };
-
-        queue.mayPunctuate(now, punctuator);
+        queue.mayPunctuate(atTimestamp(now), punctuator);
         assertEquals(0, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(now + 99L, punctuator);
+        queue.mayPunctuate(atTimestamp(now + 99L), punctuator);
         assertEquals(0, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(now + 100L, punctuator);
+        queue.mayPunctuate(atTimestamp(now + 100L), punctuator);
         assertEquals(1, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(now + 199L, punctuator);
+        queue.mayPunctuate(atTimestamp(now + 199L), punctuator);
         assertEquals(1, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(now + 200L, punctuator);
+        queue.mayPunctuate(atTimestamp(now + 200L), punctuator);
         assertEquals(2, processor.punctuatedAt.size());
+    }
+
+    private long getTimestamp () {
+        return timestamp;
+    }
+
+    private long atTimestamp(long timestamp) {
+        return this.timestamp = timestamp;
     }
 
     private static class TestProcessor extends AbstractProcessor<String, String> {

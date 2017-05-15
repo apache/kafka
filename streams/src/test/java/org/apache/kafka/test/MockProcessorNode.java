@@ -29,7 +29,6 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
 
     public final MockProcessorSupplier<K, V> supplier;
     public boolean closed;
-    public long punctuatedAt;
     public boolean initialized;
 
     public MockProcessorNode(long scheduleInterval) {
@@ -54,9 +53,8 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     @Override
-    public void punctuate(final long timestamp) {
-        super.punctuate(timestamp);
-        this.punctuatedAt = timestamp;
+    public void punctuate(final Runnable punctuateDelegate) {
+        super.punctuate(punctuateDelegate);
     }
 
     @Override

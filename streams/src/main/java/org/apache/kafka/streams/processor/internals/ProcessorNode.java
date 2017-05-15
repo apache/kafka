@@ -65,14 +65,6 @@ public class ProcessorNode<K, V> {
         }
     };
 
-    private long timestamp;
-    private Runnable punctuateDelegate = new Runnable() {
-        @Override
-        public void run() {
-            processor().punctuate(timestamp);
-        }
-    };
-
     public final Set<String> stateStores;
 
     public ProcessorNode(String name) {
@@ -133,8 +125,7 @@ public class ProcessorNode<K, V> {
         this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
     }
 
-    public void punctuate(long timestamp) {
-        this.timestamp = timestamp;
+    public void punctuate(Runnable punctuateDelegate) {
         this.nodeMetrics.metrics.measureLatencyNs(time, punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
     }
 
