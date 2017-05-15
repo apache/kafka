@@ -50,7 +50,7 @@ public class BufferPool {
     private final ReentrantLock lock;
     private final Deque<ByteBuffer> free;
     private final Deque<Condition> waiters;
-    /** This memory is accounted for separately from the poolable buffers in free. */
+    /** Poolable + non-poolable memory. */
     private long availableMemory;
     private final Metrics metrics;
     private final Time time;
@@ -99,6 +99,7 @@ public class BufferPool {
                                                + this.totalMemory
                                                + " on memory allocations.");
 
+        ByteBuffer buffer = null;
         this.lock.lock();
         try {
             // check if we have a free buffer of the right size pooled
@@ -110,16 +111,12 @@ public class BufferPool {
             int freeListSize = freeSize() * this.poolableSize;
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
-                // satisfy the request
+                // satisfy the request, but need to allocate the buffer
                 freeUp(size);
-                ByteBuffer allocatedBuffer = allocateByteBuffer(size);
                 this.availableMemory -= size;
-                return allocatedBuffer;
             } else {
                 // we are out of memory and will have to block
                 int accumulated = 0;
-                ByteBuffer buffer = null;
-                boolean hasError = true;
                 Condition moreMemory = this.lock.newCondition();
                 try {
                     long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
@@ -159,16 +156,11 @@ public class BufferPool {
                             accumulated += got;
                         }
                     }
-
-                    if (buffer == null)
-                        buffer = allocateByteBuffer(size);
-                    hasError = false;
-                    //unlock happens in top-level, enclosing finally
-                    return buffer;
+                    // Don't reclaim memory on throwable since nothing was thrown
+                    accumulated = 0;
                 } finally {
                     // When this loop was not able to successfully terminate don't loose available memory
-                    if (hasError)
-                        this.availableMemory += accumulated;
+                    this.availableMemory += accumulated;
                     this.waiters.remove(moreMemory);
                 }
             }
@@ -181,6 +173,35 @@ public class BufferPool {
             } finally {
                 // Another finally... otherwise find bugs complains
                 lock.unlock();
+            }
+        }
+
+        if (buffer == null)
+            return safeAllocateByteBuffer(size);
+        else
+            return buffer;
+    }
+
+    /**
+     * Allocate a buffer.  If buffer allocation fails (e.g. because of OOM) then return the size count back to
+     * available memory and signal the next waiter if it exists.
+     */
+    private ByteBuffer safeAllocateByteBuffer(int size) {
+        boolean error = true;
+        try {
+            ByteBuffer buffer = allocateByteBuffer(size);
+            error = false;
+            return buffer;
+        } finally {
+            if (error) {
+                this.lock.lock();
+                try {
+                    this.availableMemory += size;
+                    if (!this.waiters.isEmpty())
+                        this.waiters.peekFirst().signal();
+                } finally {
+                    this.lock.unlock();
+                }
             }
         }
     }
