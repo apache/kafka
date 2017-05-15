@@ -48,6 +48,8 @@ import java.util.regex.Pattern
 
 import org.apache.kafka.common.internals.Topic
 
+import org.apache.kafka.common.internals.Topic
+
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
     NoCompressionCodec, NoCompressionCodec, -1, -1, offsetsMonotonic = false)
