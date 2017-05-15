@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -57,7 +56,7 @@ class WindowStoreIteratorWrapper<K, V> {
                     final Bytes next = bytesIterator.peekNextKey();
                     final long timestamp = WindowStoreUtils.timestampFromBinaryKey(next.get());
                     final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(next.get());
-                    return new Windowed<>(key, new TimeWindow(timestamp, timestamp + windowSize));
+                    return new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
                 }
 
                 @Override
@@ -70,7 +69,7 @@ class WindowStoreIteratorWrapper<K, V> {
                     final long timestamp = WindowStoreUtils.timestampFromBinaryKey(next.key.get());
                     final Bytes key = WindowStoreUtils.bytesKeyFromBinaryKey(next.key.get());
                     return KeyValue.pair(
-                        new Windowed<>(key, new TimeWindow(timestamp, timestamp + windowSize)),
+                        new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize)),
                         next.value
                     );
                 }
@@ -163,7 +162,7 @@ class WindowStoreIteratorWrapper<K, V> {
             final byte[] nextKey = bytesIterator.peekNextKey().get();
             final long timestamp = WindowStoreUtils.timestampFromBinaryKey(nextKey);
             final K key = WindowStoreUtils.keyFromBinaryKey(nextKey, serdes);
-            return new Windowed<>(key, new TimeWindow(timestamp, timestamp + windowSize));
+            return new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
         }
 
         @Override
@@ -178,7 +177,7 @@ class WindowStoreIteratorWrapper<K, V> {
             final K key = WindowStoreUtils.keyFromBinaryKey(next.key.get(), serdes);
             final V value = serdes.valueFrom(next.value);
             return KeyValue.pair(
-                new Windowed<>(key, new TimeWindow(timestamp, timestamp + windowSize)),
+                new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize)),
                 value
             );
 

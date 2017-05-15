@@ -49,7 +49,7 @@ class MergedSortedCacheWindowStoreIterator<V> extends AbstractMergedSortedCacheS
     }
 
     @Override
-    V deserializeCacheValue(LRUCacheEntry cacheEntry) {
+    V deserializeCacheValue(final LRUCacheEntry cacheEntry) {
         return serdes.valueFrom(cacheEntry.value);
     }
 

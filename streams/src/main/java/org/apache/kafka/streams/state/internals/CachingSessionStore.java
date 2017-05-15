@@ -108,8 +108,8 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                            long earliestSessionEndTime,
                                                            long latestSessionStartTime) {
         validateStoreOpen();
-        final Bytes binarySessionIdFrom = Bytes.wrap(keySerde.serializer().serialize(topic, keyFrom));
-        final Bytes binarySessionIdTo = Bytes.wrap(keySerde.serializer().serialize(topic, keyTo));
+        final Bytes binarySessionIdFrom = Bytes.wrap(serdes.rawKey(keyFrom));
+        final Bytes binarySessionIdTo = Bytes.wrap(serdes.rawKey(keyTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName,
                                                                                   keySchema.lowerRange(binarySessionIdFrom, earliestSessionEndTime),
                                                                                   keySchema.upperRange(binarySessionIdTo, latestSessionStartTime));

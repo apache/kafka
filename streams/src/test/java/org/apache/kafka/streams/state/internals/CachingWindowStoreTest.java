@@ -100,6 +100,19 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    public void shouldPutFetchRangeFromCache() throws Exception {
+        cachingStore.put("a", "a");
+        cachingStore.put("b", "b");
+
+        final KeyValueIterator<Windowed<String>, String> iterator = cachingStore.fetch("a", "b", 10, 10);
+        assertEquals(KeyValue.pair(new Windowed<>("a", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a"), iterator.next());
+        assertEquals(KeyValue.pair(new Windowed<>("b", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "b"), iterator.next());
+        assertFalse(iterator.hasNext());
+        assertEquals(2, cache.size());
+    }
+
+
+    @Test
     public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
         int added = addItemsToCache();
         // all dirty entries should have been flushed
@@ -162,12 +175,18 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStore() throws Exception {
         final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
+        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP,     0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
         cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP + WINDOW_SIZE, "b"), fetch.next());
         assertFalse(fetch.hasNext());
+
+        final KeyValueIterator<Windowed<String>, String> fetchRange =
+            cachingStore.fetch("1", "2", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
+        assertEquals(KeyValue.pair(new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a"), fetchRange.next());
+        assertEquals(KeyValue.pair(new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)), "b"), fetchRange.next());
+        assertFalse(fetchRange.hasNext());
     }
 
     @Test
@@ -182,6 +201,12 @@ public class CachingWindowStoreTest {
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() throws Exception {
         cachingStore.close();
         cachingStore.fetch("a", 0, 10);
+    }
+
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() throws Exception {
+        cachingStore.close();
+        cachingStore.fetch("a", "b", 0, 10);
     }
 
     @Test(expected = InvalidStateStoreException.class)
@@ -201,6 +226,25 @@ public class CachingWindowStoreTest {
 
         final List<KeyValue<Long, String>> expected = Utils.mkList(KeyValue.pair(0L, "0001"), KeyValue.pair(1L, "0003"), KeyValue.pair(60000L, "0005"));
         assertThat(toList(cachingStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
+
+        assertThat(
+            toList(cachingStore.fetch("a", "a", 0, Long.MAX_VALUE)),
+            equalTo(Utils.mkList(windowedPair("a", "0001", 0), windowedPair("a", "0003", 1), windowedPair("a", "0005", 60000L)))
+        );
+
+        assertThat(
+            toList(cachingStore.fetch("aa", "aa", 0, Long.MAX_VALUE)),
+            equalTo(Utils.mkList(windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1)))
+        );
+
+        assertThat(
+            toList(cachingStore.fetch("a", "aa", 0, Long.MAX_VALUE)),
+            equalTo(Utils.mkList(windowedPair("a", "0001", 0), windowedPair("a", "0003", 1), windowedPair("a", "0005", 60000L), windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1)))
+        );
+    }
+
+    private static <K, V> KeyValue<Windowed<K>, V> windowedPair(K key, V value, long timestamp) {
+        return KeyValue.pair(new Windowed<>(key, new TimeWindow(timestamp, timestamp + WINDOW_SIZE)), value);
     }
 
     private int addItemsToCache() throws IOException {

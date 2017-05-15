@@ -49,7 +49,7 @@ class MergedSortedCacheKeyValueStoreIterator<K, V> extends AbstractMergedSortedC
     }
 
     @Override
-    V deserializeCacheValue(LRUCacheEntry cacheEntry) {
+    V deserializeCacheValue(final LRUCacheEntry cacheEntry) {
         return serdes.valueFrom(cacheEntry.value);
     }
 

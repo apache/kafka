@@ -37,7 +37,7 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
-    KeyValueIterator<Bytes, byte[]> fetch(Bytes key, long from, long to);
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to);
 
     /**
      * Fetch all records from the segmented store in the provided key range and time range
@@ -48,7 +48,7 @@ public interface SegmentedBytesStore extends StateStore {
      * @param to        latest time to match
      * @return  an iterator over key-value pairs
      */
-    KeyValueIterator<Bytes, byte[]> fetch(Bytes keyFrom, Bytes keyTo, long from, long to);
+    KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to);
 
     /**
      * Remove the record with the provided key. The key

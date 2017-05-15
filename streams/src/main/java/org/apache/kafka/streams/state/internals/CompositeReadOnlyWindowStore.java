@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -25,7 +24,6 @@ import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.List;
-import java.util.NoSuchElementException;
 
 /**
  * Wrapper over the underlying {@link ReadOnlyWindowStore}s found in a {@link
@@ -45,87 +43,58 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         this.storeName = storeName;
     }
 
-    @Override
-    public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+    private interface Fetcher<K, V, IteratorType extends KeyValueIterator<?, V>> {
+        IteratorType fetch(ReadOnlyWindowStore<K, V> store);
+        IteratorType empty();
+    }
+
+    public <ITERATORTYPE extends KeyValueIterator<?, V>> ITERATORTYPE fetch(Fetcher<K, V, ITERATORTYPE> fetcher) {
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
-                final WindowStoreIterator<V> result = windowStore.fetch(key, timeFrom, timeTo);
+                final ITERATORTYPE result = fetcher.fetch(windowStore);
                 if (!result.hasNext()) {
                     result.close();
                 } else {
                     return result;
                 }
             } catch (InvalidStateStoreException e) {
-                throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
+                throw new InvalidStateStoreException(
+                    "State store is not available anymore and may have been migrated to another instance; " +
+                    "please re-discover its location from the state metadata.");
             }
         }
 
-        return new WindowStoreIterator<V>() {
-            @Override
-            public void close() {
-            }
-
-            @Override
-            public Long peekNextKey() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public boolean hasNext() {
-                return false;
-            }
-
-            @Override
-            public KeyValue<Long, V> next() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public void remove() {
-            }
-        };
+        return fetcher.empty();
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
-        final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
-        for (ReadOnlyWindowStore<K, V> windowStore : stores) {
-            try {
-                final KeyValueIterator<Windowed<K>, V> result = windowStore.fetch(from, to, timeFrom, timeTo);
-                if (!result.hasNext()) {
-                    result.close();
-                } else {
-                    return result;
-                }
-            } catch (InvalidStateStoreException e) {
-                throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
-            }
-        }
-
-        return new KeyValueIterator<Windowed<K>, V>() {
+    public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+        return fetch(new Fetcher<K, V, WindowStoreIterator<V>>() {
             @Override
-            public void close() {
+            public WindowStoreIterator<V> fetch(ReadOnlyWindowStore<K, V> store) {
+                return store.fetch(key, timeFrom, timeTo);
             }
 
             @Override
-            public Windowed<K> peekNextKey() {
-                throw new NoSuchElementException();
+            public WindowStoreIterator<V> empty() {
+                return KeyValueIterators.emptyWindowStoreIterator();
+            }
+        });
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
+        return fetch(new Fetcher<K, V, KeyValueIterator<Windowed<K>, V>>() {
+            @Override
+            public KeyValueIterator<Windowed<K>, V> fetch(ReadOnlyWindowStore<K, V> store) {
+                return store.fetch(from, to, timeFrom, timeTo);
             }
 
             @Override
-            public boolean hasNext() {
-                return false;
+            public KeyValueIterator<Windowed<K>, V> empty() {
+                return KeyValueIterators.emptyIterator();
             }
-
-            @Override
-            public KeyValue<Windowed<K>, V> next() {
-                throw new NoSuchElementException();
-            }
-
-            @Override
-            public void remove() {
-            }
-        };
+        });
     }
 }

@@ -50,8 +50,7 @@ public class SegmentedBytesStoreStub implements SegmentedBytesStore {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
-        fetchCalled = true;
-        return new KeyValueIteratorStub<>(Collections.<KeyValue<Bytes, byte[]>>emptyIterator());
+        return fetch(key, key, from, to);
     }
 
     @Override
