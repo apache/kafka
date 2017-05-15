@@ -23,6 +23,7 @@ import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.Punctuator;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -62,6 +63,15 @@ public class ProcessorNode<K, V> {
             if (processor != null) {
                 processor.close();
             }
+        }
+    };
+
+    private long timestamp;
+    private Punctuator punctuator;
+    private Runnable punctuateDelegate = new Runnable() {
+        @Override
+        public void run() {
+            punctuator.punctuate(timestamp);
         }
     };
 
@@ -125,7 +135,9 @@ public class ProcessorNode<K, V> {
         this.nodeMetrics.metrics.measureLatencyNs(time, processDelegate, nodeMetrics.nodeProcessTimeSensor);
     }
 
-    public void punctuate(Runnable punctuateDelegate) {
+    public void punctuate(long timestamp, Punctuator punctuator) {
+        this.timestamp = timestamp;
+        this.punctuator = punctuator;
         this.nodeMetrics.metrics.measureLatencyNs(time, punctuateDelegate, nodeMetrics.nodePunctuateTimeSensor);
     }
 

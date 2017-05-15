@@ -57,7 +57,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
 
     @Override
     public void schedule(final long interval) {
-
     }
 
     @Override

@@ -224,7 +224,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws IllegalStateException if the current node is not null
      */
     @Override
-    public void punctuate (final ProcessorNode node, final long timestamp, PunctuationType type, Runnable punctuateDelegate) {
+    public void punctuate (final ProcessorNode node, final long timestamp, PunctuationType type, Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
         }
@@ -236,7 +236,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         try {
-            node.punctuate(punctuateDelegate);
+            node.punctuate(timestamp, punctuator);
         } catch (final KafkaException e) {
             throw new StreamsException(String.format("%s Exception caught while punctuating processor '%s'", logPrefix,  node.name()), e);
         } finally {
@@ -497,12 +497,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             throw new IllegalStateException(String.format("%s Current node is null", logPrefix));
         }
 
-        final PunctuationSchedule schedule = new PunctuationSchedule(processorContext.currentNode(), interval, new Runnable() {
-            @Override
-            public void run () {
-                punctuator.punctuate(context().timestamp());
-            }
-        });
+        final PunctuationSchedule schedule = new PunctuationSchedule(processorContext.currentNode(), interval, punctuator);
 
         switch(type) {
         case STREAM_TIME:

@@ -21,25 +21,25 @@ import org.apache.kafka.streams.processor.Punctuator;
 public class PunctuationSchedule extends Stamped<ProcessorNode> {
 
     final long interval;
-    final Runnable punctuateDelegate;
+    final Punctuator punctuator;
     boolean isCancelled = false;
 
-    public PunctuationSchedule(ProcessorNode node, long interval, Runnable punctuateDelegate) {
-        this(node, 0L, interval, punctuateDelegate);
+    public PunctuationSchedule(ProcessorNode node, long interval, Punctuator punctuator) {
+        this(node, 0L, interval, punctuator);
     }
 
-    public PunctuationSchedule(ProcessorNode node, long time, long interval, Runnable punctuateDelegate) {
+    public PunctuationSchedule(ProcessorNode node, long time, long interval, Punctuator punctuator) {
         super(node, time);
         this.interval = interval;
-        this.punctuateDelegate = punctuateDelegate;
+        this.punctuator = punctuator;
     }
 
     public ProcessorNode node() {
         return value;
     }
 
-    public Runnable punctuateDelegate() {
-        return punctuateDelegate;
+    public Punctuator punctuator() {
+        return punctuator;
     }
 
     public void cancel() {
@@ -50,9 +50,9 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
         // we need to special handle the case when it is firstly triggered (i.e. the timestamp
         // is equal to the interval) by reschedule based on the currTimestamp
         if (timestamp == 0L)
-            return new PunctuationSchedule(value, currTimestamp + interval, interval, punctuateDelegate);
+            return new PunctuationSchedule(value, currTimestamp + interval, interval, punctuator);
         else
-            return new PunctuationSchedule(value, timestamp + interval, interval, punctuateDelegate);
+            return new PunctuationSchedule(value, timestamp + interval, interval, punctuator);
     }
 
 }

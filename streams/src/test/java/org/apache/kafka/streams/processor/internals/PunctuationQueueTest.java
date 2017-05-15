@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -27,54 +28,44 @@ import static org.junit.Assert.assertEquals;
 
 public class PunctuationQueueTest {
 
-    private long timestamp;
-
     @Test
     public void testPunctuationInterval() {
-        TestProcessor processor = new TestProcessor();
+        final TestProcessor processor = new TestProcessor();
         final ProcessorNode<String, String> node = new ProcessorNode<>("test", processor, null);
-        PunctuationQueue queue = new PunctuationQueue();
-
-        ProcessorNodePunctuator punctuator = new ProcessorNodePunctuator() {
-            public void punctuate (ProcessorNode node, long time, PunctuationType type, Runnable punctuateDelegate) {
-                punctuateDelegate.run();
-            }
-        };
-
-        Runnable punctuateDelegate = new Runnable() {
+        final PunctuationQueue queue = new PunctuationQueue();
+        final Punctuator punctuator = new Punctuator() {
             @Override
-            public void run() {
-                node.processor().punctuate(getTimestamp());
+            public void punctuate (long timestamp) {
+                node.processor().punctuate(timestamp);
             }
         };
 
-        PunctuationSchedule sched = new PunctuationSchedule(node, 100L, punctuateDelegate);
+        final PunctuationSchedule sched = new PunctuationSchedule(node, 100L, punctuator);
         final long now = sched.timestamp - 100L;
 
         queue.schedule(sched);
 
-        queue.mayPunctuate(atTimestamp(now), PunctuationType.STREAM_TIME, punctuator);
+        ProcessorNodePunctuator processorNodePunctuator = new ProcessorNodePunctuator() {
+            @Override
+            public void punctuate(ProcessorNode node, long time, PunctuationType type, Punctuator punctuator) {
+                punctuator.punctuate(time);
+            }
+        };
+
+        queue.mayPunctuate(now, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(0, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(atTimestamp(now + 99L), PunctuationType.STREAM_TIME, punctuator);
+        queue.mayPunctuate(now + 99L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(0, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(atTimestamp(now + 100L), PunctuationType.STREAM_TIME, punctuator);
+        queue.mayPunctuate(now + 100L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(1, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(atTimestamp(now + 199L), PunctuationType.STREAM_TIME, punctuator);
+        queue.mayPunctuate(now + 199L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(1, processor.punctuatedAt.size());
 
-        queue.mayPunctuate(atTimestamp(now + 200L), PunctuationType.STREAM_TIME, punctuator);
+        queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(2, processor.punctuatedAt.size());
-    }
-
-    private long getTimestamp() {
-        return timestamp;
-    }
-
-    private long atTimestamp(long timestamp) {
-        return this.timestamp = timestamp;
     }
 
     private static class TestProcessor extends AbstractProcessor<String, String> {

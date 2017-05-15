@@ -122,10 +122,10 @@ public class StreamTaskTest {
     private StreamTask task;
     private long punctuatedAt;
 
-    private Runnable punctuateDelegate = new Runnable() {
+    private Punctuator punctuator = new Punctuator() {
         @Override
-        public void run () {
-            punctuatedAt = task.context().timestamp();
+        public void punctuate (long timestamp) {
+            punctuatedAt = timestamp;
         }
     };
 
@@ -421,10 +421,10 @@ public class StreamTaskTest {
         punctuator.init(new NoOpProcessorContext());
 
         try {
-            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Runnable() {
+            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Punctuator() {
                 @Override
-                public void run () {
-                    processor.punctuate(task.context().timestamp());
+                public void punctuate(long timestamp) {
+                    processor.punctuate(timestamp);
                 }
             });
             fail("Should've thrown StreamsException");
@@ -441,11 +441,6 @@ public class StreamTaskTest {
         final Processor processor = new AbstractProcessor() {
             @Override
             public void init(final ProcessorContext context) {
-                context.schedule(1, PunctuationType.STREAM_TIME, new Punctuator() {
-                    @Override public void punctuate (long timestamp) {
-                        throw new KafkaException("KABOOM!");
-                    }
-                });
             }
 
             @Override
@@ -459,10 +454,10 @@ public class StreamTaskTest {
         punctuator.init(new NoOpProcessorContext());
 
         try {
-            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Runnable() {
+            task.punctuate(punctuator, 1, PunctuationType.STREAM_TIME, new Punctuator() {
                 @Override
-                public void run () {
-                    processor.punctuate(task.context().timestamp());
+                public void punctuate (long timestamp) {
+                    throw new KafkaException("KABOOM!");
                 }
             });
             fail("Should've thrown StreamsException");
@@ -625,7 +620,7 @@ public class StreamTaskTest {
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() throws Exception {
         ((ProcessorContextImpl) task.processorContext()).setCurrentNode(processor);
         try {
-            task.punctuate(processor, 10, PunctuationType.STREAM_TIME, punctuateDelegate);
+            task.punctuate(processor, 10, PunctuationType.STREAM_TIME, punctuator);
             fail("Should throw illegal state exception as current node is not null");
         } catch (final IllegalStateException e) {
             // pass
@@ -634,15 +629,15 @@ public class StreamTaskTest {
 
     @Test
     public void shouldCallPunctuateOnPassedInProcessorNode() throws Exception {
-        task.punctuate(processor, 5, PunctuationType.STREAM_TIME, punctuateDelegate);
+        task.punctuate(processor, 5, PunctuationType.STREAM_TIME, punctuator);
         assertThat(punctuatedAt, equalTo(5L));
-        task.punctuate(processor, 10, PunctuationType.STREAM_TIME, punctuateDelegate);
+        task.punctuate(processor, 10, PunctuationType.STREAM_TIME, punctuator);
         assertThat(punctuatedAt, equalTo(10L));
     }
 
     @Test
     public void shouldSetProcessorNodeOnContextBackToNullAfterSuccesfullPunctuate() throws Exception {
-        task.punctuate(processor, 5, PunctuationType.STREAM_TIME, punctuateDelegate);
+        task.punctuate(processor, 5, PunctuationType.STREAM_TIME, punctuator);
         assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
     }
 
