@@ -17,6 +17,8 @@
 package org.apache.kafka.connect.util;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.admin.TopicDescription;
+import org.apache.kafka.clients.admin.TopicPartitionInfo;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -54,7 +56,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -90,7 +94,6 @@ public class KafkaBasedLogTest {
 
     private static final Set<TopicPartition> CONSUMER_ASSIGNMENT = new HashSet<>(Arrays.asList(TP0, TP1));
     private static final Map<String, String> FIRST_SET = new HashMap<>();
-    private static final TopicSupplier TOPIC_SUPPLIER = null;
     static {
         FIRST_SET.put("key", "value");
         FIRST_SET.put(null, null);
@@ -101,6 +104,19 @@ public class KafkaBasedLogTest {
 
     private static final PartitionInfo TPINFO0 = new PartitionInfo(TOPIC, 0, LEADER, new Node[]{REPLICA}, new Node[]{REPLICA});
     private static final PartitionInfo TPINFO1 = new PartitionInfo(TOPIC, 1, LEADER, new Node[]{REPLICA}, new Node[]{REPLICA});
+
+    private static final TopicDescription TOPIC_DESCRIPTION = createTopicDescription(TOPIC, TPINFO0, TPINFO1);
+
+    private static TopicDescription createTopicDescription(String topicName, PartitionInfo...partitionInfos) {
+        NavigableMap<Integer, TopicPartitionInfo> partitions = new TreeMap<>();
+        for (PartitionInfo info : partitionInfos) {
+            List<Node> replicas = Arrays.asList(info.replicas());
+            List<Node> isrs = Arrays.asList(info.inSyncReplicas());
+            TopicPartitionInfo tpInfo = new TopicPartitionInfo(info.partition(), info.leader(), replicas, isrs);
+            partitions.put(tpInfo.partition(), tpInfo);
+        }
+        return new TopicDescription(topicName, false, partitions);
+    }
 
     private static final String TP0_KEY = "TP0KEY";
     private static final String TP1_KEY = "TP1KEY";
@@ -115,6 +131,8 @@ public class KafkaBasedLogTest {
     @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
+    @Mock
+    private TopicSupplier topicSupplier;
 
     private Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
     private Callback<ConsumerRecord<String, String>> consumedCallback = new Callback<ConsumerRecord<String, String>>() {
@@ -133,7 +151,7 @@ public class KafkaBasedLogTest {
     @Before
     public void setUp() throws Exception {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, TOPIC_SUPPLIER);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, topicSupplier);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -464,6 +482,7 @@ public class KafkaBasedLogTest {
 
 
     private void expectStart() throws Exception {
+        EasyMock.expect(topicSupplier.getOrCreateTopic(EasyMock.eq(TOPIC))).andReturn(TOPIC_DESCRIPTION);
         PowerMock.expectPrivate(store, "createProducer")
                 .andReturn(producer);
         PowerMock.expectPrivate(store, "createConsumer")
