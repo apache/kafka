@@ -37,6 +37,7 @@ import com.yammer.metrics.core.Gauge
 import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import org.apache.kafka.common.TopicPartition
+import java.util.regex.Pattern
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, Record.NO_TIMESTAMP, -1L, Record.NO_TIMESTAMP,
@@ -788,7 +789,7 @@ class Log(@volatile var dir: File,
     val start = time.nanoseconds
     lock synchronized {
       val newOffset = Math.max(expectedNextOffset, logEndOffset)
-      val logFile = logFilename(dir, newOffset)
+      val logFile = Log.logFile(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
       val timeIndexFile = timeIndexFilename(dir, newOffset)
       for(file <- List(logFile, indexFile, timeIndexFile); if file.exists) {
@@ -1080,6 +1081,8 @@ object Log {
   /** a directory that is scheduled to be deleted */
   val DeleteDirSuffix = "-delete"
 
+  private val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
+
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros
    * so that ls sorts the files numerically.
@@ -1101,8 +1104,17 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def logFilename(dir: File, offset: Long) =
+  def logFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix)
+
+   /**
+    * Return a directory name to rename the log directory to for async deletion. The name will be in the following
+    * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
+    */
+  def logDeleteDirName(logName: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    s"$logName.$uniqueId$DeleteDirSuffix"
+  }
 
   /**
    * Construct an index file name in the given dir using the given base offset
@@ -1126,32 +1138,36 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicPartition = {
+    if (dir == null)
+      throw new KafkaException("dir should not be null")
 
     def exception(dir: File): KafkaException = {
-      new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
-        "'" + dir.getName + "' is not in the form of topic-partition or " +
-        "ongoing-deleting directory(topic-partition.uniqueId-delete)\n" +
-        "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
-        "directory")
+      new KafkaException(s"Found directory ${dir.getCanonicalPath}, '${dir.getName}' is not in the form of " +
+        "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
+        "Kafka's log directories (and children) should only contain Kafka topic data.")
     }
 
     val dirName = dir.getName
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
-    if (dirName.endsWith(DeleteDirSuffix) && !dirName.matches("^(\\S+)-(\\S+)\\.(\\S+)" + DeleteDirSuffix))
+    if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.indexOf('.'))
+      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')
     val topic = name.substring(0, index)
-    val partition = name.substring(index + 1)
-    if (topic.length < 1 || partition.length < 1)
+    val partitionString = name.substring(index + 1)
+    if (topic.isEmpty || partitionString.isEmpty)
       throw exception(dir)
 
-    new TopicPartition(topic, partition.toInt)
+    val partition =
+      try partitionString.toInt
+      catch { case _: NumberFormatException => throw exception(dir) }
+
+    new TopicPartition(topic, partition)
   }
 
 }
