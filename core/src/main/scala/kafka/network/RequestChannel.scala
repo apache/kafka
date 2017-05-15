@@ -41,7 +41,7 @@ import scala.reflect.{ClassTag, classTag}
 
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
-    buffer = shutdownReceive, startTimeMs = 0, listenerName = new ListenerName(""),
+    buffer = shutdownReceive, startTimeNanos = 0, listenerName = new ListenerName(""),
     securityProtocol = SecurityProtocol.PLAINTEXT)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
@@ -57,14 +57,15 @@ object RequestChannel extends Logging {
   }
 
   case class Request(processor: Int, connectionId: String, session: Session, private var buffer: ByteBuffer,
-                     startTimeMs: Long, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
+                     startTimeNanos: Long, listenerName: ListenerName, securityProtocol: SecurityProtocol) {
     // These need to be volatile because the readers are in the network thread and the writers are in the request
     // handler threads or the purgatory threads
-    @volatile var requestDequeueTimeMs = -1L
-    @volatile var apiLocalCompleteTimeMs = -1L
-    @volatile var responseCompleteTimeMs = -1L
-    @volatile var responseDequeueTimeMs = -1L
-    @volatile var apiRemoteCompleteTimeMs = -1L
+    @volatile var requestDequeueTimeNanos = -1L
+    @volatile var apiLocalCompleteTimeNanos = -1L
+    @volatile var responseCompleteTimeNanos = -1L
+    @volatile var responseDequeueTimeNanos = -1L
+    @volatile var apiRemoteCompleteTimeNanos = -1L
+    @volatile var recordNetworkThreadTimeCallback: Option[Long => Unit] = None
 
     val requestId = buffer.getShort()
 
@@ -122,26 +123,33 @@ object RequestChannel extends Logging {
 
     trace("Processor %d received request : %s".format(processor, requestDesc(true)))
 
-    def updateRequestMetrics() {
-      val endTimeMs = Time.SYSTEM.milliseconds
-      // In some corner cases, apiLocalCompleteTimeMs may not be set when the request completes if the remote
+    def requestThreadTimeNanos = {
+      if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
+      math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
+    }
+
+    def updateRequestMetrics(networkThreadTimeNanos: Long) {
+      val endTimeNanos = Time.SYSTEM.nanoseconds
+      // In some corner cases, apiLocalCompleteTimeNanos may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
       // This may be read in a network thread before the actual update happens in KafkaApis which will cause us to
-      // see a negative value here. In that case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
-      if (apiLocalCompleteTimeMs < 0)
-        apiLocalCompleteTimeMs = responseCompleteTimeMs
-      // If the apiRemoteCompleteTimeMs is not set (i.e., for requests that do not go through a purgatory), then it is
-      // the same as responseCompleteTimeMs.
-      if (apiRemoteCompleteTimeMs < 0)
-        apiRemoteCompleteTimeMs = responseCompleteTimeMs
+      // see a negative value here. In that case, use responseCompleteTimeNanos as apiLocalCompleteTimeNanos.
+      if (apiLocalCompleteTimeNanos < 0)
+        apiLocalCompleteTimeNanos = responseCompleteTimeNanos
+      // If the apiRemoteCompleteTimeNanos is not set (i.e., for requests that do not go through a purgatory), then it is
+      // the same as responseCompleteTimeNans.
+      if (apiRemoteCompleteTimeNanos < 0)
+        apiRemoteCompleteTimeNanos = responseCompleteTimeNanos
 
-      val requestQueueTime = math.max(requestDequeueTimeMs - startTimeMs, 0)
-      val apiLocalTime = math.max(apiLocalCompleteTimeMs - requestDequeueTimeMs, 0)
-      val apiRemoteTime = math.max(apiRemoteCompleteTimeMs - apiLocalCompleteTimeMs, 0)
-      val apiThrottleTime = math.max(responseCompleteTimeMs - apiRemoteCompleteTimeMs, 0)
-      val responseQueueTime = math.max(responseDequeueTimeMs - responseCompleteTimeMs, 0)
-      val responseSendTime = math.max(endTimeMs - responseDequeueTimeMs, 0)
-      val totalTime = endTimeMs - startTimeMs
+      def nanosToMs(nanos: Long) = math.max(TimeUnit.NANOSECONDS.toMillis(nanos), 0)
+
+      val requestQueueTime = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
+      val apiLocalTime = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
+      val apiRemoteTime = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
+      val apiThrottleTime = nanosToMs(responseCompleteTimeNanos - apiRemoteCompleteTimeNanos)
+      val responseQueueTime = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
+      val responseSendTime = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+      val totalTime = nanosToMs(endTimeNanos - startTimeNanos)
       val fetchMetricNames =
         if (requestId == ApiKeys.FETCH.id) {
           val isFromFollower = body[FetchRequest].isFromFollower
@@ -164,16 +172,32 @@ object RequestChannel extends Logging {
         m.totalTimeHist.update(totalTime)
       }
 
+      // Records network handler thread usage. This is included towards the request quota for the
+      // user/client. Throttling is only performed when request handler thread usage
+      // is recorded, just before responses are queued for delivery.
+      // The time recorded here is the time spent on the network thread for receiving this request
+      // and sending the response. Note that for the first request on a connection, the time includes
+      // the total time spent on authentication, which may be significant for SASL/SSL.
+      recordNetworkThreadTimeCallback.foreach(record => record(networkThreadTimeNanos))
+
       if (requestLogger.isDebugEnabled) {
         val detailsEnabled = requestLogger.isTraceEnabled
-        requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d,securityProtocol:%s,principal:%s,listener:%s"
-          .format(requestDesc(detailsEnabled), connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime, securityProtocol, session.principal, listenerName.value))
+        def nanosToMs(nanos: Long) = TimeUnit.NANOSECONDS.toMicros(math.max(nanos, 0)).toDouble / TimeUnit.MILLISECONDS.toMicros(1)
+        val totalTimeMs = nanosToMs(endTimeNanos - startTimeNanos)
+        val requestQueueTimeMs = nanosToMs(requestDequeueTimeNanos - startTimeNanos)
+        val apiLocalTimeMs = nanosToMs(apiLocalCompleteTimeNanos - requestDequeueTimeNanos)
+        val apiRemoteTimeMs = nanosToMs(apiRemoteCompleteTimeNanos - apiLocalCompleteTimeNanos)
+        val responseQueueTimeMs = nanosToMs(responseDequeueTimeNanos - responseCompleteTimeNanos)
+        val responseSendTimeMs = nanosToMs(endTimeNanos - responseDequeueTimeNanos)
+        requestLogger.trace("Completed request:%s from connection %s;totalTime:%f,requestQueueTime:%f,localTime:%f,remoteTime:%f,responseQueueTime:%f,sendTime:%f,securityProtocol:%s,principal:%s,listener:%s"
+          .format(requestDesc(detailsEnabled), connectionId, totalTimeMs, requestQueueTimeMs, apiLocalTimeMs, apiRemoteTimeMs, responseQueueTimeMs, responseSendTimeMs, securityProtocol, session.principal, listenerName.value))
       }
     }
   }
 
   case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
-    request.responseCompleteTimeMs = Time.SYSTEM.milliseconds
+    request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
+    if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
 
     def this(request: Request, responseSend: Send) =
       this(request.processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
@@ -253,7 +277,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def receiveResponse(processor: Int): RequestChannel.Response = {
     val response = responseQueues(processor).poll()
     if (response != null)
-      response.request.responseDequeueTimeMs = Time.SYSTEM.milliseconds
+      response.request.responseDequeueTimeNanos = Time.SYSTEM.nanoseconds
     response
   }
 

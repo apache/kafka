@@ -42,6 +42,10 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
             this.consumerGroupId = consumerGroupId;
         }
 
+        public String consumerGroupId() {
+            return consumerGroupId;
+        }
+
         @Override
         public AddOffsetsToTxnRequest build(short version) {
             return new AddOffsetsToTxnRequest(version, transactionalId, producerId, producerEpoch, consumerGroupId);
@@ -96,8 +100,8 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     @Override
-    public AddOffsetsToTxnResponse getErrorResponse(Throwable e) {
-        return new AddOffsetsToTxnResponse(Errors.forException(e));
+    public AddOffsetsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new AddOffsetsToTxnResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static AddOffsetsToTxnRequest parse(ByteBuffer buffer, short version) {

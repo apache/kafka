@@ -141,18 +141,18 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[coordinator] def valueToBytes(txnMetadata: TransactionMetadata): Array[Byte] = {
+  private[coordinator] def valueToBytes(txnMetadata: TransactionMetadataTransition): Array[Byte] = {
     val value = new Struct(CURRENT_VALUE_SCHEMA)
-    value.set(VALUE_SCHEMA_PID_FIELD, txnMetadata.pid)
+    value.set(VALUE_SCHEMA_PID_FIELD, txnMetadata.producerId)
     value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.producerEpoch)
     value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, txnMetadata.txnTimeoutMs)
-    value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.state.byte)
-    value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.lastUpdateTimestamp)
-    value.set(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD, txnMetadata.transactionStartTime)
+    value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.txnState.byte)
+    value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.txnLastUpdateTimestamp)
+    value.set(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD, txnMetadata.txnStartTimestamp)
 
-    if (txnMetadata.state == Empty) {
+    if (txnMetadata.txnState == Empty) {
       if (txnMetadata.topicPartitions.nonEmpty)
-        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.state}: $txnMetadata")
+        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
       value.set(VALUE_SCHEMA_TXN_PARTITIONS_FIELD, null)
     } else {

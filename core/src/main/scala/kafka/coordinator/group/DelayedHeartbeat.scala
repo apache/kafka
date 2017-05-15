@@ -34,7 +34,7 @@ private[group] class DelayedHeartbeat(coordinator: GroupCoordinator,
   // call purgatory operations while holding the group lock.
   override def safeTryComplete(): Boolean = tryComplete()
 
-  override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, member, heartbeatDeadline, forceComplete)
+  override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, member, heartbeatDeadline, forceComplete _)
   override def onExpiration() = coordinator.onExpireHeartbeat(group, member, heartbeatDeadline)
   override def onComplete() = coordinator.onCompleteHeartbeat()
 }

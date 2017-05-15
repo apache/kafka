@@ -18,10 +18,10 @@ package kafka.controller
 
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
+import kafka.common.{LeaderElectionNotNeededException, NoReplicaOnlineException, StateChangeFailedException, TopicAndPartition}
 import kafka.log.LogConfig
-import kafka.utils.Logging
-import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.server.{ConfigType, KafkaConfig}
+import kafka.utils.Logging
 
 trait PartitionLeaderSelector {
 

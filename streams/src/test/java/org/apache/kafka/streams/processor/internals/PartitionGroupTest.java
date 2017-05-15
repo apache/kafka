@@ -51,7 +51,7 @@ public class PartitionGroupTest {
             put(partition1, queue1);
             put(partition2, queue2);
         }
-    }, timestampExtractor);
+    });
 
     @Test
     public void testTimeTracking() {

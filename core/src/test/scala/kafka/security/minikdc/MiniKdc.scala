@@ -108,6 +108,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   private var _port = config.getProperty(MiniKdc.KdcPort).toInt
   private var ds: DirectoryService = null
   private var kdc: KdcServer = null
+  private var closed = false
 
   def port: Int = _port
 
@@ -116,6 +117,8 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   def start() {
     if (kdc != null)
       throw new RuntimeException("KDC already started")
+    if (closed)
+      throw new RuntimeException("KDC is closed")
     initDirectoryService()
     initKdcServer()
     initJvmKerberosConfig()
@@ -261,13 +264,16 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
   }
 
   def stop() {
-    if (kdc != null) {
-      System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
-      System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
-      kdc.stop()
-      try ds.shutdown()
-      catch {
-        case ex: Exception => error("Could not shutdown ApacheDS properly", ex)
+    if (!closed) {
+      closed = true
+      if (kdc != null) {
+        System.clearProperty(MiniKdc.JavaSecurityKrb5Conf)
+        System.clearProperty(MiniKdc.SunSecurityKrb5Debug)
+        kdc.stop()
+        try ds.shutdown()
+        catch {
+          case ex: Exception => error("Could not shutdown ApacheDS properly", ex)
+        }
       }
     }
   }

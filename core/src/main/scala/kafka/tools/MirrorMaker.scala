@@ -43,6 +43,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
 import org.apache.kafka.clients.consumer.{ConsumerConfig => NewConsumerConfig}
+import org.apache.kafka.common.header.internals.RecordHeaders
 import org.apache.kafka.common.record.RecordBatch
 
 /**
@@ -559,7 +560,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                          messageAndMetadata.timestamp,
                          messageAndMetadata.timestampType,
                          messageAndMetadata.key,
-                         messageAndMetadata.message)
+                         messageAndMetadata.message,
+                         new RecordHeaders())
     }
 
     override def stop() {

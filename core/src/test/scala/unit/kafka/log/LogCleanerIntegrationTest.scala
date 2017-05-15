@@ -259,7 +259,7 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends AbstractLogCle
     for(_ <- 0 until numDups; key <- startKey until (startKey + numKeys)) yield {
       val value = counter.toString
       val appendInfo = log.appendAsLeader(TestUtils.singletonRecords(value = value.toString.getBytes, codec = codec,
-        key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
+              key = key.toString.getBytes, magicValue = magicValue), leaderEpoch = 0)
       counter += 1
       (key, value, appendInfo.firstOffset)
     }

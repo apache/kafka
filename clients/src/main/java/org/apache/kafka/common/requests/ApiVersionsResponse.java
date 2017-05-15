@@ -31,7 +31,8 @@ import java.util.Map;
 
 public class ApiVersionsResponse extends AbstractResponse {
 
-    public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse();
+    public static final ApiVersionsResponse API_VERSIONS_RESPONSE = createApiVersionsResponse(DEFAULT_THROTTLE_TIME);
+    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     public static final String ERROR_CODE_KEY_NAME = "error_code";
     public static final String API_VERSIONS_KEY_NAME = "api_versions";
     public static final String API_KEY_NAME = "api_key";
@@ -44,6 +45,7 @@ public class ApiVersionsResponse extends AbstractResponse {
      * UNSUPPORTED_VERSION (33)
      */
     private final Errors error;
+    private final int throttleTimeMs;
     private final Map<Short, ApiVersion> apiKeyToApiVersion;
 
     public static final class ApiVersion {
@@ -72,11 +74,17 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public ApiVersionsResponse(Errors error, List<ApiVersion> apiVersions) {
+        this(DEFAULT_THROTTLE_TIME, error, apiVersions);
+    }
+
+    public ApiVersionsResponse(int throttleTimeMs, Errors error, List<ApiVersion> apiVersions) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.apiKeyToApiVersion = buildApiKeyToApiVersion(apiVersions);
     }
 
     public ApiVersionsResponse(Struct struct) {
+        this.throttleTimeMs = struct.hasField(THROTTLE_TIME_KEY_NAME) ? struct.getInt(THROTTLE_TIME_KEY_NAME) : DEFAULT_THROTTLE_TIME;
         this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
         List<ApiVersion> tempApiVersions = new ArrayList<>();
         for (Object apiVersionsObj : struct.getArray(API_VERSIONS_KEY_NAME)) {
@@ -92,6 +100,8 @@ public class ApiVersionsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.API_VERSIONS.responseSchema(version));
+        if (struct.hasField(THROTTLE_TIME_KEY_NAME))
+            struct.set(THROTTLE_TIME_KEY_NAME, throttleTimeMs);
         struct.set(ERROR_CODE_KEY_NAME, error.code());
         List<Struct> apiVersionList = new ArrayList<>();
         for (ApiVersion apiVersion : apiKeyToApiVersion.values()) {
@@ -105,13 +115,24 @@ public class ApiVersionsResponse extends AbstractResponse {
         return struct;
     }
 
+    public static ApiVersionsResponse apiVersionsResponse(short version, int throttleTimeMs) {
+        if (throttleTimeMs == 0 || version == 0)
+            return API_VERSIONS_RESPONSE;
+        else
+            return createApiVersionsResponse(throttleTimeMs);
+    }
+
     /**
      * Returns Errors.UNSUPPORTED_VERSION response with version 0 since we don't support the requested version.
      */
     public static Send unsupportedVersionSend(String destination, RequestHeader requestHeader) {
-        ApiVersionsResponse response = new ApiVersionsResponse(Errors.UNSUPPORTED_VERSION,
+        ApiVersionsResponse response = new ApiVersionsResponse(DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION,
                 Collections.<ApiVersion>emptyList());
         return response.toSend(destination, (short) 0, requestHeader.toResponseHeader());
+    }
+
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public Collection<ApiVersion> apiVersions() {
@@ -127,15 +148,15 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
-        return new ApiVersionsResponse(ApiKeys.API_VERSIONS.responseSchema(version).read(buffer));
+        return new ApiVersionsResponse(ApiKeys.API_VERSIONS.parseResponse(version, buffer));
     }
 
-    private static ApiVersionsResponse createApiVersionsResponse() {
+    public static ApiVersionsResponse createApiVersionsResponse(int throttleTimeMs) {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             versionList.add(new ApiVersion(apiKey));
         }
-        return new ApiVersionsResponse(Errors.NONE, versionList);
+        return new ApiVersionsResponse(throttleTimeMs, Errors.NONE, versionList);
     }
 
     private Map<Short, ApiVersion> buildApiKeyToApiVersion(List<ApiVersion> apiVersions) {

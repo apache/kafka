@@ -45,7 +45,7 @@ class ReplicaFetcherThreadFatalErrorTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     Exit.resetExitProcedure()
-    brokers.foreach(_.shutdown())
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 

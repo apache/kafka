@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 
@@ -55,6 +56,9 @@ public abstract class AbstractRecords implements Records {
         int totalSizeEstimate = 0;
 
         for (RecordBatch batch : batches) {
+            if (toMagic < RecordBatch.MAGIC_VALUE_V2 && batch.isControlBatch())
+                continue;
+
             if (batch.magic() <= toMagic) {
                 totalSizeEstimate += batch.sizeInBytes();
                 recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
@@ -93,12 +97,8 @@ public abstract class AbstractRecords implements Records {
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
                 timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
-        for (Record record : recordBatchAndRecords.records) {
-            // control messages are only supported in v2 and above, so skip when down-converting
-            if (magic < RecordBatch.MAGIC_VALUE_V2 && record.isControlRecord())
-                continue;
+        for (Record record : recordBatchAndRecords.records)
             builder.append(record);
-        }
 
         builder.close();
         return builder.buffer();
@@ -164,9 +164,9 @@ public abstract class AbstractRecords implements Records {
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 
-    public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value) {
+    public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecordBatch.batchSizeUpperBound(key, value, Record.EMPTY_HEADERS);
+            return DefaultRecordBatch.batchSizeUpperBound(key, value, headers);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }

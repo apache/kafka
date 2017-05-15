@@ -735,7 +735,7 @@ public class ConfigDef {
                 return Utils.join(valueList, ",");
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
-                return clazz.getCanonicalName();
+                return clazz.getName();
             default:
                 throw new IllegalStateException("Unknown type.");
         }
@@ -896,6 +896,16 @@ public class ConfigDef {
 
         public String toString() {
             return "[" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
+    public static class NonEmptyString implements Validator {
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s != null && s.isEmpty()) {
+                throw new ConfigException(name, o, "String must be non-empty");
+            }
         }
     }
 

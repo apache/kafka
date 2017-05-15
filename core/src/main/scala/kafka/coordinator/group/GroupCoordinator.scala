@@ -25,11 +25,14 @@ import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse}
+import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse, TransactionResult}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, immutable}
+import scala.math.max
 
 
 /**
@@ -153,7 +156,6 @@ class GroupCoordinator(val brokerId: Int,
             // coordinator OR the group is in a transient unstable phase. Let the member retry
             // joining without the specified member id,
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
-
           case PreparingRebalance =>
             if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
               addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, group, responseCallback)
@@ -397,7 +399,9 @@ class GroupCoordinator(val brokerId: Int,
                           memberId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
+                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
+                          producerId: Long = RecordBatch.NO_PRODUCER_ID,
+                          producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH) {
     if (!isActive.get) {
       responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
     } else if (!isCoordinatorForGroup(groupId)) {
@@ -410,32 +414,41 @@ class GroupCoordinator(val brokerId: Int,
           if (generationId < 0) {
             // the group is not relying on Kafka for group management, so allow the commit
             val group = groupManager.addGroup(new GroupMetadata(groupId))
-            doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)
+            doCommitOffsets(group, memberId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
           } else {
             // or this is a request coming from an older generation. either way, reject the commit
             responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
           }
 
         case Some(group) =>
-          doCommitOffsets(group, memberId, generationId, offsetMetadata, responseCallback)
+          doCommitOffsets(group, memberId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
       }
     }
+  }
+
+  def handleTxnCompletion(producerId: Long,
+                          topicPartitions: Seq[TopicPartition],
+                          transactionResult: TransactionResult) {
+    val offsetPartitions = topicPartitions.filter(_.topic == Topic.GROUP_METADATA_TOPIC_NAME).map(_.partition).toSet
+    groupManager.handleTxnCompletion(producerId, offsetPartitions, transactionResult == TransactionResult.COMMIT)
   }
 
   private def doCommitOffsets(group: GroupMetadata,
                               memberId: String,
                               generationId: Int,
+                              producerId: Long,
+                              producerEpoch: Short,
                               offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                               responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
     var delayedOffsetStore: Option[DelayedStore] = None
-
     group synchronized {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
-      } else if (generationId < 0 && group.is(Empty)) {
+      } else if ((generationId < 0 && group.is(Empty)) || (producerId != RecordBatch.NO_PRODUCER_ID)) {
         // the group is only using Kafka to store offsets
+        // Also, for transactional offset commits we don't need to validate group membership and the generation.
         delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
-          offsetMetadata, responseCallback)
+          offsetMetadata, responseCallback, producerId, producerEpoch)
       } else if (group.is(AwaitingSync)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
       } else if (!group.has(memberId)) {
@@ -616,11 +629,14 @@ class GroupCoordinator(val brokerId: Int,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback) = {
-    // use the client-id with a random id suffix as the member-id
     val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
     member.awaitingJoinCallback = callback
+    // update the newMemberAdded flag to indicate that the join group can be further delayed
+    if (group.is(PreparingRebalance) && group.generationId == 0)
+      group.newMemberAdded = true
+
     group.add(member)
     maybePrepareRebalance(group)
     member
@@ -647,11 +663,19 @@ class GroupCoordinator(val brokerId: Int,
     if (group.is(AwaitingSync))
       resetAndPropagateAssignmentError(group, Errors.REBALANCE_IN_PROGRESS)
 
+    val delayedRebalance = if (group.is(Empty))
+      new InitialDelayedJoin(this,
+        joinPurgatory,
+        group,
+        groupConfig.groupInitialRebalanceDelayMs,
+        groupConfig.groupInitialRebalanceDelayMs,
+        max(group.rebalanceTimeoutMs - groupConfig.groupInitialRebalanceDelayMs, 0))
+    else
+      new DelayedJoin(this, group, group.rebalanceTimeoutMs)
+
     group.transitionTo(PreparingRebalance)
     info("Preparing to restabilize group %s with old generation %s".format(group.groupId, group.generationId))
 
-    val rebalanceTimeout = group.rebalanceTimeoutMs
-    val delayedRebalance = new DelayedJoin(this, group, rebalanceTimeout)
     val groupKey = GroupKey(group.groupId)
     joinPurgatory.tryCompleteElseWatch(delayedRebalance, Seq(groupKey))
   }
@@ -707,7 +731,11 @@ class GroupCoordinator(val brokerId: Int,
           for (member <- group.allMemberMetadata) {
             assert(member.awaitingJoinCallback != null)
             val joinResult = JoinGroupResult(
-              members = if (member.memberId == group.leaderId) { group.currentMemberMetadata } else { Map.empty },
+              members = if (member.memberId == group.leaderId) {
+                group.currentMemberMetadata
+              } else {
+                Map.empty
+              },
               memberId = member.memberId,
               generationId = group.generationId,
               subProtocol = group.protocol,
@@ -797,7 +825,8 @@ object GroupCoordinator {
             time: Time): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
-      groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs)
+      groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
+      groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, zkUtils, time)
@@ -807,7 +836,8 @@ object GroupCoordinator {
 }
 
 case class GroupConfig(groupMinSessionTimeoutMs: Int,
-                       groupMaxSessionTimeoutMs: Int)
+                       groupMaxSessionTimeoutMs: Int,
+                       groupInitialRebalanceDelayMs: Int)
 
 case class JoinGroupResult(members: Map[String, Array[Byte]],
                            memberId: String,

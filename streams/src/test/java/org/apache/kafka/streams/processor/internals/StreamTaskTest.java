@@ -126,7 +126,7 @@ public class StreamTaskTest {
                 setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
-                setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
+                setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
             }
         });
     }
@@ -365,8 +365,8 @@ public class StreamTaskTest {
 
         task.close();
 
-        task  = new StreamTask(taskId00, applicationId, partitions,
-                                                     topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
+        task  = new StreamTask(taskId00, applicationId, Utils.mkSet(partition1),
+                topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
         final int offset = 20;
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -407,7 +407,7 @@ public class StreamTaskTest {
             fail("Should've thrown StreamsException");
         } catch (final StreamsException e) {
             final String message = e.getMessage();
-            assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
     }
@@ -445,8 +445,13 @@ public class StreamTaskTest {
                 return true;
             }
         };
+        Map<String, SourceNode> sourceByTopics =  new HashMap() { {
+                put(partition1.topic(), source1);
+                put(partition2.topic(), source2);
+            }
+        };
         final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                                                 Collections.<String, SourceNode>emptyMap(),
+                                                                 sourceByTopics,
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>singletonList(inMemoryStore),
                                                                  Collections.singletonMap(storeName, changelogTopic),
@@ -555,14 +560,14 @@ public class StreamTaskTest {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
         final StreamsConfig config = new StreamsConfig(properties);
 
-        final MockedProducer producer = new MockedProducer(null);
+        final MockProducer producer = new MockProducer();
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
             changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
 
         task.close();
 
-        assertTrue(producer.closed);
+        assertTrue(producer.closed());
     }
 
     @SuppressWarnings("unchecked")
@@ -583,8 +588,8 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-        return new StreamTask(taskId00, applicationId, partitions,
-                              topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
+        return new StreamTask(taskId00, applicationId, Utils.mkSet(partition1),
+                topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
     }
 
     private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {

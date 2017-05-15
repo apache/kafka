@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
@@ -26,6 +25,7 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 
+import kafka.common.TopicAlreadyMarkedForDeletionException
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, LeaderNotAvailableException, ReplicaNotAvailableException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
@@ -39,6 +39,7 @@ import scala.collection.mutable
 import collection.Map
 import collection.Set
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.apache.kafka.common.internals.Topic
 
 trait AdminUtilities {
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)
@@ -567,7 +568,7 @@ object AdminUtils extends Logging with AdminUtilities {
     // create the change notification
     val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
     val content = Json.encode(getConfigChangeZnodeData(sanitizedEntityPath))
-    zkUtils.zkClient.createPersistentSequential(seqNode, content)
+    zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
   def getConfigChangeZnodeData(sanitizedEntityPath: String) : Map[String, Any] = {
@@ -588,7 +589,8 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
-    val str: String = zkUtils.zkClient.readData(entityConfigPath, true)
+    // readDataMaybeNull returns Some(null) if the path exists, but there is no data
+    val str: String = zkUtils.readDataMaybeNull(entityConfigPath)._1.orNull
     val props = new Properties()
     if (str != null) {
       Json.parseFull(str) match {

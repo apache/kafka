@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
@@ -37,6 +39,7 @@ public class ConsumerRecord<K, V> {
     private final long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
+    private final Headers headers;
     private final K key;
     private final V value;
 
@@ -62,7 +65,8 @@ public class ConsumerRecord<K, V> {
 
 
     /**
-     * Creates a record to be received from a specified topic and partition
+     * Creates a record to be received from a specified topic and partition (provided for
+     * compatibility with Kafka 0.10 before the message format supported headers).
      *
      * @param topic The topic this record is received from
      * @param partition The partition of the topic this record is received from
@@ -85,6 +89,35 @@ public class ConsumerRecord<K, V> {
                           int serializedValueSize,
                           K key,
                           V value) {
+        this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize, key, value, new RecordHeaders());
+    }
+
+    /**
+     * Creates a record to be received from a specified topic and partition
+     *
+     * @param topic The topic this record is received from
+     * @param partition The partition of the topic this record is received from
+     * @param offset The offset of this record in the corresponding Kafka partition
+     * @param timestamp The timestamp of the record.
+     * @param timestampType The timestamp type
+     * @param checksum The checksum (CRC32) of the full record
+     * @param serializedKeySize The length of the serialized key
+     * @param serializedValueSize The length of the serialized value
+     * @param key The key of the record, if one exists (null is allowed)
+     * @param value The record contents
+     * @param headers The headers of the record.
+     */
+    public ConsumerRecord(String topic,
+                          int partition,
+                          long offset,
+                          long timestamp,
+                          TimestampType timestampType,
+                          long checksum,
+                          int serializedKeySize,
+                          int serializedValueSize,
+                          K key,
+                          V value,
+                          Headers headers) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         this.topic = topic;
@@ -97,6 +130,7 @@ public class ConsumerRecord<K, V> {
         this.serializedValueSize = serializedValueSize;
         this.key = key;
         this.value = value;
+        this.headers = headers;
     }
 
     /**
@@ -113,6 +147,13 @@ public class ConsumerRecord<K, V> {
         return this.partition;
     }
 
+    /**
+     * The headers
+     */
+    public Headers headers() {
+        return headers;
+    }
+    
     /**
      * The key (or null if no key is specified)
      */
@@ -177,6 +218,7 @@ public class ConsumerRecord<K, V> {
                + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum
                + ", serialized key size = "  + serializedKeySize
                + ", serialized value size = " + serializedValueSize
+               + ", headers = " + headers
                + ", key = " + key + ", value = " + value + ")";
     }
 }

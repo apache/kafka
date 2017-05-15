@@ -127,7 +127,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
         Map<TopicPartition, EpochEndOffset> errorResponse = new HashMap();
         for (TopicPartition tp : epochsByPartition.keySet()) {
