@@ -156,6 +156,7 @@ class LogSegment(val log: FileRecords,
         updateTxnIndex(completedTxn, lastStableOffset)
       }
     }
+    producerStateManager.updateMapEndOffset(batch.lastOffset)
   }
 
   /**
