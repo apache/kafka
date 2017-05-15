@@ -134,7 +134,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public void schedule(final long interval) {
         schedule(interval, PunctuationType.STREAM_TIME, new Punctuator() {
             @Override
-            public void punctuate (long timestamp) {
+            public void punctuate(long timestamp) {
                 currentNode().processor().punctuate(timestamp);
             }
         });

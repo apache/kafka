@@ -18,6 +18,6 @@ package org.apache.kafka.streams.processor;
 
 public interface Cancellable {
 
-   void cancel();
+    void cancel();
 
 }

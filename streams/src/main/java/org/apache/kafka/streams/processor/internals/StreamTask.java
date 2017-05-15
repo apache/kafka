@@ -224,7 +224,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws IllegalStateException if the current node is not null
      */
     @Override
-    public void punctuate (final ProcessorNode node, final long timestamp, PunctuationType type, Punctuator punctuator) {
+    public void punctuate(final ProcessorNode node, final long timestamp, PunctuationType type, Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
             throw new IllegalStateException(String.format("%s Current node is not null", logPrefix));
         }
@@ -499,20 +499,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         final PunctuationSchedule schedule = new PunctuationSchedule(processorContext.currentNode(), interval, punctuator);
 
-        switch(type) {
-        case STREAM_TIME:
-            streamTimePunctuationQueue.schedule(schedule);
-            break;
-        case SYSTEM_TIME:
-            systemTimePunctuationQueue.schedule(schedule);
-            break;
-        default:
-            throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
+        switch (type) {
+            case STREAM_TIME:
+                streamTimePunctuationQueue.schedule(schedule);
+                break;
+            case SYSTEM_TIME:
+                systemTimePunctuationQueue.schedule(schedule);
+                break;
+            default:
+                throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
 
         return new Cancellable() {
             @Override
-            public void cancel () {
+            public void cancel() {
                 schedule.cancel();
             }
         };

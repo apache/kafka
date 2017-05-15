@@ -44,7 +44,7 @@ public class PunctuationQueue {
                 PunctuationSchedule sched = top;
                 pq.poll();
 
-                if(!sched.isCancelled) {
+                if (!sched.isCancelled) {
                     processorNodePunctuator.punctuate(sched.node(), timestamp, type, sched.punctuator());
                     pq.add(sched.next(timestamp));
                 }

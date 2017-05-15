@@ -62,7 +62,7 @@ public class WordCountProcessorDemo {
                     this.context = context;
                     this.context.schedule(1000, PunctuationType.STREAM_TIME, new Punctuator() {
                         @Override
-                        public void punctuate (long timestamp) {
+                        public void punctuate(long timestamp) {
                             try (KeyValueIterator<String, Integer> iter = kvStore.all()) {
                                 System.out.println("----------- " + timestamp + " ----------- ");
 

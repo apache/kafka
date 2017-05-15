@@ -21,6 +21,6 @@ package org.apache.kafka.streams.processor;
  */
 public interface Punctuator {
 
-   void punctuate(long timestamp);
+    void punctuate(long timestamp);
 
 }
