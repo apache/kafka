@@ -30,6 +30,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -69,6 +70,7 @@ public class StreamsResetter {
     private static OptionSpec<String> applicationIdOption;
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
+    private static OptionSpec<String> consumerConfigOption;
 
     private OptionSet options = null;
     private final Properties consumerConfig = new Properties();
@@ -88,6 +90,10 @@ public class StreamsResetter {
         ZkUtils zkUtils = null;
         try {
             parseArguments(args);
+            if (options.has(consumerConfigOption)) {
+                final Properties consumerPropertyConfig = Utils.loadProps(options.valueOf(consumerConfigOption));
+                consumerConfig.putAll(consumerPropertyConfig);
+            }
 
             adminClient = AdminClient.createSimplePlaintext(options.valueOf(bootstrapServerOption));
             final String groupId = options.valueOf(applicationIdOption);
@@ -148,6 +154,11 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
+        consumerConfigOption = optionParser.accepts("consumer-config", "Consumer configuration Property file")
+                .withRequiredArg()
+                .ofType(String.class)
+                .describedAs("Consumer config property file");
+
 
         try {
             options = optionParser.parse(args);
