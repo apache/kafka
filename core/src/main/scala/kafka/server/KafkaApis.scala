@@ -1656,12 +1656,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleOffsetForLeaderEpochRequest(request: RequestChannel.Request): Unit = {
-    val offsetForEpoch = request.body[OffsetsForLeaderEpochRequest]
-    val requestInfo = offsetForEpoch.epochsByTopicPartition()
+    val offsetForLeaderEpoch = request.body[OffsetsForLeaderEpochRequest]
+    val requestInfo = offsetForLeaderEpoch.epochsByTopicPartition()
     authorizeClusterAction(request)
 
     val responseBody = new OffsetsForLeaderEpochResponse(
-      replicaManager.getResponseFor(requestInfo)
+      replicaManager.lastOffsetForLeaderEpoch(requestInfo.asScala).asJava
     )
     sendResponseExemptThrottle(request, new RequestChannel.Response(request, responseBody))
   }
