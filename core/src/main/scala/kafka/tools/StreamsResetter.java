@@ -118,7 +118,7 @@ public class StreamsResetter {
             if (dryRun) {
                 System.out.println("----Dry run displays the actions which will be performed when running Streams Reset Tool----");
             }
-            maybeResetInputAndInternalAndSeekToEndIntermediateTopicOffsets();
+            maybeResetInputAndSeekToEndIntermediateTopicOffsets();
             maybeDeleteInternalTopics(zkUtils);
 
         } catch (final Throwable e) {
@@ -173,11 +173,10 @@ public class StreamsResetter {
         }
     }
 
-    private void maybeResetInputAndInternalAndSeekToEndIntermediateTopicOffsets() {
+    private void maybeResetInputAndSeekToEndIntermediateTopicOffsets() {
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
 
-        final List<String> internalTopics = new ArrayList<>();
 
         final List<String> notFoundInputTopics = new ArrayList<>();
         final List<String> notFoundIntermediateTopics = new ArrayList<>();
@@ -191,7 +190,7 @@ public class StreamsResetter {
 
         if (!dryRun) {
             if (inputTopics.size() != 0) {
-                System.out.println("Seek-to-beginning for input topics " + inputTopics + " and all internal topics.");
+                System.out.println("Seek-to-beginning for input topics " + inputTopics);
             }
             if (intermediateTopics.size() != 0) {
                 System.out.println("Seek-to-end for intermediate topics " + intermediateTopics);
@@ -214,12 +213,6 @@ public class StreamsResetter {
                 topicsToSubscribe.add(topic);
             }
         }
-        for (final String topic : allTopics) {
-            if (isInternalTopic(topic)) {
-                topicsToSubscribe.add(topic);
-                internalTopics.add(topic);
-            }
-        }
 
         final Properties config = new Properties();
         config.putAll(consumerConfig);
@@ -232,13 +225,13 @@ public class StreamsResetter {
             client.poll(1);
 
             final Set<TopicPartition> partitions = client.assignment();
-            final Set<TopicPartition> inputAndInternalTopicPartitions = new HashSet<>();
+            final Set<TopicPartition> inputTopicPartitions = new HashSet<>();
             final Set<TopicPartition> intermediateTopicPartitions = new HashSet<>();
 
             for (final TopicPartition p : partitions) {
                 final String topic = p.topic();
-                if (isInputTopic(topic) || isInternalTopic(topic)) {
-                    inputAndInternalTopicPartitions.add(p);
+                if (isInputTopic(topic)) {
+                    inputTopicPartitions.add(p);
                 } else if (isIntermediateTopic(topic)) {
                     intermediateTopicPartitions.add(p);
                 } else {
@@ -246,7 +239,7 @@ public class StreamsResetter {
                 }
             }
 
-            maybeSeekToBeginning(client, inputAndInternalTopicPartitions, internalTopics);
+            maybeSeekToBeginning(client, inputTopicPartitions);
 
             maybeSeekToEnd(client, intermediateTopicPartitions);
 
@@ -299,25 +292,20 @@ public class StreamsResetter {
     }
 
     private void maybeSeekToBeginning(final KafkaConsumer<byte[], byte[]> client,
-                                      final Set<TopicPartition> inputAndInternalTopicPartitions,
-                                      final List<String> internalTopics) {
+                                      final Set<TopicPartition> inputTopicPartitions) {
 
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final String groupId = options.valueOf(applicationIdOption);
 
-        if (inputAndInternalTopicPartitions.size() > 0) {
+        if (inputTopicPartitions.size() > 0) {
             if (!dryRun) {
-                client.seekToBeginning(inputAndInternalTopicPartitions);
+                client.seekToBeginning(inputTopicPartitions);
             } else {
                 System.out.println("Following input topics offsets will be reset to beginning (for consumer group " + groupId + ")");
                 for (final String topic : inputTopics) {
                     if (allTopics.contains(topic)) {
                         System.out.println("Topic: " + topic);
                     }
-                }
-                System.out.println("Following internal topics offsets will be reset to beginning (for consumer group " + groupId + ")");
-                for (final String topic : internalTopics) {
-                    System.out.println("Topic: " + topic);
                 }
             }
         }
