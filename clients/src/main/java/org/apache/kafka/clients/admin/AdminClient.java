@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
@@ -34,11 +35,11 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a new AdminClient with the given configuration.
      *
-     * @param conf          The configuration.
+     * @param props         The configuration.
      * @return              The new KafkaAdminClient.
      */
-    public static AdminClient create(AdminClientConfig conf) {
-        return KafkaAdminClient.createInternal(conf);
+    public static AdminClient create(Properties props) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props));
     }
 
     /**
