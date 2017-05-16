@@ -63,6 +63,17 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  * It is initialized with the producer's state after the last successful append, and transitively validates the
  * sequence numbers and epochs of each new record. Additionally, this class accumulates transaction metadata
  * as the incoming records are validated.
+ *
+ * @param producerId The id of the producer appending to the log
+ * @param initialEntry The last entry associated with the producer id. Validation of the first append will be
+ *                     based off of this entry initially
+ * @param validateSequenceNumbers Whether or not sequence numbers should be validated. The only current use
+ *                                of this is the consumer offsets topic which uses producer ids from incoming
+ *                                TxnOffsetCommit, but has no sequence number to validate and does not depend
+ *                                on the deduplication which sequence numbers provide.
+ * @param loadingFromLog This parameter indicates whether the new append is from . The only difference in behavior is
+ *                       that we do not validate the sequence number of the first append since we may have lost previous
+ *                       sequence numbers when segments were removed due to log retention enforcement.
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       initialEntry: ProducerIdEntry,
