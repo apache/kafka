@@ -71,6 +71,7 @@ public class StreamsResetter {
     private static OptionSpec<String> inputTopicsOption;
     private static OptionSpec<String> intermediateTopicsOption;
     private static OptionSpec<String> consumerConfigOption;
+    private static OptionSpec<String> consumerPropertyOption;
 
     private OptionSet options = null;
     private final Properties consumerConfig = new Properties();
@@ -93,6 +94,10 @@ public class StreamsResetter {
             if (options.has(consumerConfigOption)) {
                 final Properties consumerPropertyConfig = Utils.loadProps(options.valueOf(consumerConfigOption));
                 consumerConfig.putAll(consumerPropertyConfig);
+            }
+            if (options.has(consumerPropertyOption)) {
+                final List<String> consumerProperty = options.valuesOf(consumerPropertyOption);
+                consumerConfig.putAll(parseKeyValues(consumerProperty));
             }
 
             adminClient = AdminClient.createSimplePlaintext(options.valueOf(bootstrapServerOption));
@@ -127,6 +132,22 @@ public class StreamsResetter {
         return exitCode;
     }
 
+    private Properties parseKeyValues(List<String> consumerProperties) {
+
+        Properties parsedConsumerProperties = new Properties();
+        for (String val: consumerProperties) {
+            String[] property = val.split("=");
+            if (property.length == 2) {
+                parsedConsumerProperties.put(property[0], property[1]);
+            } else {
+                System.err.println("Invalid command line properties: " + consumerProperties.toString());
+                System.exit(1);
+            }
+        }
+
+        return parsedConsumerProperties;
+    }
+
     private void parseArguments(final String[] args) throws IOException {
         final OptionParser optionParser = new OptionParser();
         applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id)")
@@ -154,7 +175,11 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        consumerConfigOption = optionParser.accepts("consumer-config", "Consumer configuration properties file")
+        consumerPropertyOption = optionParser.accepts("consumer-property", "A mechanism to pass user-defined properties in the form key=value to the consumer")
+                .withRequiredArg()
+                .ofType(String.class)
+                .describedAs("consumer property");
+        consumerConfigOption = optionParser.accepts("consumer.config", "Consumer configuration properties file, Note that " + consumerPropertyOption.toString() + " takes precedence over this config")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("Consumer config property file");
