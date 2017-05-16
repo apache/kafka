@@ -21,7 +21,6 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,6 +30,7 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -233,17 +233,15 @@ public class StickyAssignorTest {
 
         String consumer2 = "consumer2";
         subscriptions.put(consumer2, topics(topic));
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Arrays.asList(tp(topic, 1), tp(topic, 2)), assignment.get(consumer1));
         assertEquals(Arrays.asList(tp(topic, 0)), assignment.get(consumer2));
 
         verifyValidityAndBalance(subscriptions, assignment);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
 
         subscriptions.remove(consumer1);
-        oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertTrue(assignment.get(consumer2).contains(tp(topic, 0)));
         assertTrue(assignment.get(consumer2).contains(tp(topic, 1)));
@@ -251,7 +249,7 @@ public class StickyAssignorTest {
 
         verifyValidityAndBalance(subscriptions, assignment);
         assertTrue(isFullyBalanced(assignment));
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     /**
@@ -315,7 +313,6 @@ public class StickyAssignorTest {
         partitionsPerTopic.put(topic2, 3);
         subscriptions.put(consumer1, topics(topic, topic2));
         subscriptions.put(consumer2, topics(topic, topic2));
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
         verifyValidityAndBalance(subscriptions, assignment);
@@ -326,12 +323,11 @@ public class StickyAssignorTest {
         assertTrue(consumer1assignment.size() == 3 && consumer2assignment.size() == 3);
         assertTrue(consumer1assignment.containsAll(consumer1Assignment1));
         assertTrue(consumer2assignment.containsAll(consumer2Assignment1));
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
 
         partitionsPerTopic.remove(topic);
         subscriptions.put(consumer1, topics(topic2));
         subscriptions.put(consumer2, topics(topic2));
-        oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         // verify balance
         verifyValidityAndBalance(subscriptions, assignment);
@@ -343,7 +339,7 @@ public class StickyAssignorTest {
                    (consumer1Assignment3.size() == 2 && consumer2Assignment3.size() == 1));
         assertTrue(consumer1assignment.containsAll(consumer1Assignment3));
         assertTrue(consumer2assignment.containsAll(consumer2Assignment3));
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -364,10 +360,9 @@ public class StickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment);
 
         subscriptions.remove("consumer10");
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -383,10 +378,9 @@ public class StickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment);
 
         subscriptions.put("consumer10", Collections.singletonList("topic"));
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -407,10 +401,9 @@ public class StickyAssignorTest {
         verifyValidityAndBalance(subscriptions, assignment);
 
         subscriptions.remove("consumer05");
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -439,10 +432,9 @@ public class StickyAssignorTest {
             subscriptions.remove(c);
         }
 
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -464,10 +456,9 @@ public class StickyAssignorTest {
 
         subscriptions.get("consumer00").add("topic01");
 
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
     }
 
     @Test
@@ -507,10 +498,9 @@ public class StickyAssignorTest {
                 subscriptions.put(getConsumerName(i, maxNumConsumers), sub);
             }
 
-            Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
             assignment = assignor.assign(partitionsPerTopic, subscriptions);
             verifyValidityAndBalance(subscriptions, assignment);
-            assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+            assertTrue(assignor.isSticky());
         }
     }
 
@@ -583,10 +573,9 @@ public class StickyAssignorTest {
         // removing the potential group leader
         subscriptions.remove("consumer01");
 
-        Map<String, List<TopicPartition>> oldAssignment = assignor.deepCopy(assignment);
         assignment = assignor.assign(partitionsPerTopic, subscriptions);
         verifyValidityAndBalance(subscriptions, assignment);
-        assertTrue(PartitionMovements.verifyStickiness(oldAssignment, assignment));
+        assertTrue(assignor.isSticky());
 
         assignments = assignment.entrySet();
         for (Map.Entry<String, List<TopicPartition>> entry: assignments) {
@@ -594,7 +583,7 @@ public class StickyAssignorTest {
             List<TopicPartition> topicPartitions = entry.getValue();
             assertEquals("Consumer " + consumer + " is assigned more topic partitions than expected.", 1, topicPartitions.size());
             assertTrue("Stickiness was not honored for consumer " + consumer,
-                    (!partitionsAssigned.containsKey(consumer)) || (assignment.get(consumer).contains(partitionsAssigned.get(consumer))));
+                (!partitionsAssigned.containsKey(consumer)) || (assignment.get(consumer).contains(partitionsAssigned.get(consumer))));
         }
     }
 
@@ -676,8 +665,8 @@ public class StickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = asMap(partitions);
-                Map<String, List<Integer>> otherMap = asMap(otherPartitions);
+                Map<String, List<Integer>> map = ConsumerProtocol.asMap(partitions);
+                Map<String, List<Integer>> otherMap = ConsumerProtocol.asMap(otherPartitions);
 
                 if (len > otherLen) {
                     for (String topic: map.keySet())
@@ -696,19 +685,5 @@ public class StickyAssignorTest {
                 }
             }
         }
-    }
-
-    private static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
-        Map<String, List<Integer>> partitionMap = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            String topic = partition.topic();
-            List<Integer> topicPartitions = partitionMap.get(topic);
-            if (topicPartitions == null) {
-                topicPartitions = new ArrayList<>();
-                partitionMap.put(topic, topicPartitions);
-            }
-            topicPartitions.add(partition.partition());
-        }
-        return partitionMap;
     }
 }

@@ -20,6 +20,7 @@ import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -33,6 +34,11 @@ import java.util.TreeSet;
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.SchemaException;
+import org.apache.kafka.common.protocol.types.Struct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -168,6 +174,12 @@ import org.slf4j.LoggerFactory;
  */
 public class StickyAssignor extends AbstractPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(StickyAssignor.class);
+
+    // this schema is used for preserving consumer's assigned partitions list and
+    // sending it to the leader during a rebalance
+    public static final Schema TOPIC_PARTITION_ASSIGNMENT_V0 = new Schema(
+            new Field(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(ConsumerProtocol.TOPIC_ASSIGNMENT_V0)));
+
     protected Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;
@@ -178,7 +190,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             dest.put(entry.getKey(), new ArrayList<>(entry.getValue()));
     }
 
-    protected Map<String, List<TopicPartition>> deepCopy(Map<String, List<TopicPartition>> assignment) {
+    private Map<String, List<TopicPartition>> deepCopy(Map<String, List<TopicPartition>> assignment) {
         Map<String, List<TopicPartition>> copy = new HashMap<>();
         deepCopy(assignment, copy);
         return copy;
@@ -277,7 +289,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData != null && userData.hasRemaining())
-                currentAssignment.put(subscriptionEntry.getKey(), ConsumerProtocol.deserializeTopicPartitionAssignment(userData));
+                currentAssignment.put(subscriptionEntry.getKey(), deserializeTopicPartitionAssignment(userData));
         }
     }
 
@@ -291,7 +303,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         if (memberAssignment == null)
             return new Subscription(new ArrayList<>(topics));
 
-        return new Subscription(new ArrayList<>(topics), ConsumerProtocol.serializeTopicPartitionAssignment(memberAssignment));
+        return new Subscription(new ArrayList<>(topics), serializeTopicPartitionAssignment(memberAssignment));
     }
 
     @Override
@@ -306,7 +318,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      * @param allSubscriptions: a mapping of all consumers to all potential topic partitions that can be assigned to them
      * @return
      */
-    protected boolean isBalanced(TreeSet<String> sortedCurrentSubscriptions, Map<String, List<TopicPartition>> allSubscriptions) {
+    private boolean isBalanced(TreeSet<String> sortedCurrentSubscriptions, Map<String, List<TopicPartition>> allSubscriptions) {
         int min = currentAssignment.get(sortedCurrentSubscriptions.first()).size();
         int max = currentAssignment.get(sortedCurrentSubscriptions.last()).size();
         if (min >= max - 1)
@@ -356,7 +368,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      * A perfectly balanced assignment (with all consumers getting the same number of partitions) has a balance score of 0.
      * Lower balance score indicates a more balanced assignment.
      */
-    protected int getBalanceScore(Map<String, List<TopicPartition>> assignment) {
+    private int getBalanceScore(Map<String, List<TopicPartition>> assignment) {
         int score = 0;
 
         Map<String, Integer> consumer2AssignmentSize = new HashMap<>();
@@ -528,12 +540,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
 
         // narrow down the reassignment scope to only those partitions that can actually be reassigned
-        Set<TopicPartition> reassignablePartitions = new HashSet<>(partition2AllPotentialConsumers.keySet());
         Set<TopicPartition> fixedPartitions = new HashSet<>();
-        for (TopicPartition partition: reassignablePartitions)
+        for (TopicPartition partition: partition2AllPotentialConsumers.keySet())
             if (!canParticipateInReassignment(partition, partition2AllPotentialConsumers))
                 fixedPartitions.add(partition);
-        reassignablePartitions.removeAll(fixedPartitions);
         sortedPartitions.removeAll(fixedPartitions);
 
         // narrow down the reassignment scope to only those consumers that are subject to reassignment
@@ -569,7 +579,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         fixedAssignments.clear();
     }
 
-    private boolean performReassignments(List<TopicPartition> sortedPartitions, TreeSet<String> sortedCurrentSubscriptions,
+    private boolean performReassignments(List<TopicPartition> reassignablePartitions, TreeSet<String> sortedCurrentSubscriptions,
                                          HashMap<String, List<TopicPartition>> consumer2AllPotentialPartitions,
                                          HashMap<TopicPartition, List<String>> partition2AllPotentialConsumers,
                                          HashMap<TopicPartition, String> currentPartitionConsumer) {
@@ -581,7 +591,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             modified = false;
             // reassign all reassignable partitions (starting from the partition with least potential consumers and if needed)
             // until the full list is processed or a balance is achieved
-            Iterator<TopicPartition> partitionIterator = sortedPartitions.iterator();
+            Iterator<TopicPartition> partitionIterator = reassignablePartitions.iterator();
             while (partitionIterator.hasNext() && !isBalanced(sortedCurrentSubscriptions, consumer2AllPotentialPartitions)) {
                 TopicPartition partition = partitionIterator.next();
 
@@ -649,8 +659,48 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.add(oldConsumer);
     }
 
-    @SuppressWarnings("serial")
+    public boolean isSticky() {
+        return partitionMovements.isSticky();
+    }
+
+    private static ByteBuffer serializeTopicPartitionAssignment(List<TopicPartition> partitions) {
+        Struct struct = new Struct(TOPIC_PARTITION_ASSIGNMENT_V0);
+        List<Struct> topicAssignments = new ArrayList<>();
+        for (Map.Entry<String, List<Integer>> topicEntry : ConsumerProtocol.asMap(partitions).entrySet()) {
+            Struct topicAssignment = new Struct(ConsumerProtocol.TOPIC_ASSIGNMENT_V0);
+            topicAssignment.set(ConsumerProtocol.TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(ConsumerProtocol.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+            topicAssignments.add(topicAssignment);
+        }
+        struct.set(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+        ByteBuffer buffer = ByteBuffer.allocate(ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_V0.sizeOf() +
+                                                TOPIC_PARTITION_ASSIGNMENT_V0.sizeOf(struct));
+        ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
+        TOPIC_PARTITION_ASSIGNMENT_V0.write(buffer, struct);
+        buffer.flip();
+        return buffer;
+    }
+
+    private static List<TopicPartition> deserializeTopicPartitionAssignment(ByteBuffer buffer) {
+        Struct header = ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
+        Short version = header.getShort(ConsumerProtocol.VERSION_KEY_NAME);
+        if (version < ConsumerProtocol.CONSUMER_PROTOCOL_V0)
+            throw new SchemaException("Unsupported subscription version: " + version);
+        Struct struct = TOPIC_PARTITION_ASSIGNMENT_V0.read(buffer);
+        List<TopicPartition> partitions = new ArrayList<>();
+        for (Object structObj : struct.getArray(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME)) {
+            Struct assignment = (Struct) structObj;
+            String topic = assignment.getString(ConsumerProtocol.TOPIC_KEY_NAME);
+            for (Object partitionObj : assignment.getArray(ConsumerProtocol.PARTITIONS_KEY_NAME)) {
+                Integer partition = (Integer) partitionObj;
+                partitions.add(new TopicPartition(topic, partition));
+            }
+        }
+        return partitions;
+    }
+
     private static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
+        private static final long serialVersionUID = 1L;
         private Map<TopicPartition, List<String>> map;
 
         PartitionComparator(Map<TopicPartition, List<String>> map) {
@@ -669,8 +719,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    @SuppressWarnings("serial")
     protected static class SubscriptionComparator implements Comparator<String>, Serializable {
+        private static final long serialVersionUID = 1L;
         private Map<String, List<TopicPartition>> map;
 
         SubscriptionComparator(Map<String, List<TopicPartition>> map) {
@@ -686,8 +736,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    @SuppressWarnings("serial")
     protected static class PartitionAssignmentComparator implements Comparator<String>, Serializable {
+        private static final long serialVersionUID = 1L;
         private Map<String, List<TopicPartition>> map;
 
         PartitionAssignmentComparator(Map<String, List<TopicPartition>> map) {
@@ -703,4 +753,199 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
+    /**
+     * This class maintains some data structures to simplify lookup of partition movements among consumers. At each point of
+     * time during a partition rebalance it keeps track of partition movements corresponding to each topic, and also possible
+     * movement (in form a <code>ConsumerPair</code> object) for each partition.
+     */
+    private static class PartitionMovements {
+        private Map<String, Map<ConsumerPair, Set<TopicPartition>>> partitionMovementsByTopic = new HashMap<>();
+        private Map<TopicPartition, ConsumerPair> partitionMovements = new HashMap<>();
+
+        private ConsumerPair removeMovementRecordOfPartition(TopicPartition partition) {
+            ConsumerPair pair = partitionMovements.remove(partition);
+
+            String topic = partition.topic();
+            Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
+            partitionMovementsForThisTopic.get(pair).remove(partition);
+            if (partitionMovementsForThisTopic.get(pair).isEmpty())
+                partitionMovementsForThisTopic.remove(pair);
+            if (partitionMovementsByTopic.get(topic).isEmpty())
+                partitionMovementsByTopic.remove(topic);
+
+            return pair;
+        }
+
+        private void addPartitionMovementRecord(TopicPartition partition, ConsumerPair pair) {
+            partitionMovements.put(partition, pair);
+
+            String topic = partition.topic();
+            if (!partitionMovementsByTopic.containsKey(topic))
+                partitionMovementsByTopic.put(topic, new HashMap<ConsumerPair, Set<TopicPartition>>());
+
+            Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
+            if (!partitionMovementsForThisTopic.containsKey(pair))
+                partitionMovementsForThisTopic.put(pair, new HashSet<TopicPartition>());
+
+            partitionMovementsForThisTopic.get(pair).add(partition);
+        }
+
+        private void movePartition(TopicPartition partition, String oldConsumer, String newConsumer) {
+            ConsumerPair pair = new ConsumerPair(oldConsumer, newConsumer);
+
+            if (partitionMovements.containsKey(partition)) {
+                // this partition has previously moved
+                ConsumerPair existingPair = removeMovementRecordOfPartition(partition);
+                assert existingPair.dst.equals(oldConsumer);
+                if (!existingPair.src.equals(newConsumer)) {
+                    // the partition is not moving back to its previous consumer
+                    // return new ConsumerPair2(existingPair.src, newConsumer);
+                    addPartitionMovementRecord(partition, new ConsumerPair(existingPair.src, newConsumer));
+                }
+            } else
+                addPartitionMovementRecord(partition, pair);
+        }
+
+        private TopicPartition getTheActualPartitionToBeMoved(TopicPartition partition, String oldConsumer, String newConsumer) {
+            String topic = partition.topic();
+
+            if (!partitionMovementsByTopic.containsKey(topic))
+                return partition;
+
+            if (partitionMovements.containsKey(partition)) {
+                // this partition has previously moved
+                assert oldConsumer.equals(partitionMovements.get(partition).dst);
+                oldConsumer = partitionMovements.get(partition).src;
+            }
+
+            Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
+            ConsumerPair reversePair = new ConsumerPair(newConsumer, oldConsumer);
+            if (!partitionMovementsForThisTopic.containsKey(reversePair))
+                return partition;
+
+            return partitionMovementsForThisTopic.get(reversePair).iterator().next();
+        }
+
+        private boolean isLinked(String src, String dst, Set<ConsumerPair> pairs, List<String> currentPath) {
+            if (src.equals(dst))
+                return false;
+
+            if (pairs.isEmpty())
+                return false;
+
+            if (new ConsumerPair(src, dst).in(pairs)) {
+                currentPath.add(src);
+                currentPath.add(dst);
+                return true;
+            }
+
+            for (ConsumerPair pair: pairs)
+                if (pair.src.equals(src)) {
+                    Set<ConsumerPair> reducedSet = new HashSet<>(pairs);
+                    reducedSet.remove(pair);
+                    currentPath.add(pair.src);
+                    return isLinked(pair.dst, dst, reducedSet, currentPath);
+                }
+
+            return false;
+        }
+
+        private boolean in(List<String> cycle, Set<List<String>> cycles) {
+            List<String> superCycle = new ArrayList<>(cycle);
+            superCycle.remove(superCycle.size() - 1);
+            superCycle.addAll(cycle);
+            Iterator<List<String>> it = cycles.iterator();
+            while (it.hasNext()) {
+                List<String> next = it.next();
+                if (next.size() == cycle.size() && Collections.indexOfSubList(superCycle, next) != -1)
+                    return true;
+            }
+            return false;
+        }
+
+        private boolean hasCycles(Set<ConsumerPair> pairs) {
+            Set<List<String>> cycles = new HashSet<>();
+            for (ConsumerPair pair: pairs) {
+                Set<ConsumerPair> reducedPairs = new HashSet<>(pairs);
+                reducedPairs.remove(pair);
+                List<String> path = new ArrayList<>(Collections.singleton(pair.src));
+                if (isLinked(pair.dst, pair.src, reducedPairs, path) && !in(path, cycles)) {
+                    cycles.add(new ArrayList<>(path));
+                    log.error("A cycle of length " + (path.size() - 1) + " was found: " + path.toString());
+                }
+            }
+
+            // for now we want to make sure there is no partition movements of the same topic between a pair of consumers.
+            // the odds of finding a cycle among more than two consumers seem to be very low (according to various randomized
+            // tests with the given sticky algorithm) that it should not worth the added complexity of handling those cases.
+            for (List<String> cycle: cycles)
+                if (cycle.size() == 3) // indicates a cycle of length 2
+                    return true;
+            return false;
+        }
+
+        private boolean isSticky() {
+            for (Map.Entry<String, Map<ConsumerPair, Set<TopicPartition>>> topicMovements: this.partitionMovementsByTopic.entrySet()) {
+                Set<ConsumerPair> topicMovementPairs = topicMovements.getValue().keySet();
+                if (hasCycles(topicMovementPairs)) {
+                    log.error("Stickiness is violated for topic " + topicMovements.getKey()
+                            + "\nPartition movements for this topic occurred among the following consumer pairs:"
+                            + "\n" + topicMovements.getValue().toString());
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    }
+
+    /**
+     * <code>ConsumerPair</code> represents a pair of Kafka consumer ids involved in a partition reassignment. Each
+     * <code>ConsumerPair</code> object, which contains a source (<code>src</code>) and a destination (<code>dst</code>)
+     * element, normally corresponds to a particular partition or topic, and indicates that the particular partition or some
+     * partition of the particular topic was moved from the source consumer to the destination consumer during the rebalance.
+     * This class is used, through the <code>PartitionMovements</code> class, by the sticky assignor and helps in determining
+     * whether a partition reassignment results in cycles among the generated graph of consumer pairs.
+     */
+    private static class ConsumerPair {
+        private final String src;
+        private final String dst;
+
+        ConsumerPair(String src, String dst) {
+            this.src = src;
+            this.dst = dst;
+        }
+
+        public String toString() {
+            return this.src + "->" + this.dst;
+        }
+
+        @Override
+        public int hashCode() {
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + ((this.src == null) ? 0 : this.src.hashCode());
+            result = prime * result + ((this.dst == null) ? 0 : this.dst.hashCode());
+            return result;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (obj == null)
+                return false;
+
+            if (!getClass().isInstance(obj))
+                return false;
+
+            ConsumerPair otherPair = (ConsumerPair) obj;
+            return this.src.equals(otherPair.src) && this.dst.equals(otherPair.dst);
+        }
+
+        private boolean in(Set<ConsumerPair> pairs) {
+            for (ConsumerPair pair: pairs)
+                if (this.equals(pair))
+                    return true;
+            return false;
+        }
+    }
 }
