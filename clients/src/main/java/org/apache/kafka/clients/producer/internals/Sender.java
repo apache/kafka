@@ -42,7 +42,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -491,14 +490,11 @@ public class Sender implements Runnable {
         if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1) {
             // If the batch is too large, we split the batch and send the split batches again. We do not decrement
             // the retry attempts in this case.
-            log.warn("Got RecordBatchTooLargeException in correlation id {} on topic-partition {}, spitting and retrying ({} attempts left). Error: {}",
+            log.warn("Got error produce response in correlation id {} on topic-partition {}, spitting and retrying ({} attempts left). Error: {}",
                      correlationId,
                      batch.topicPartition,
                      this.retries - batch.attempts(),
                      error);
-            // Reset the estimated compression ratio to the initial value. There are several different ways to do the
-            // reset. We chose the most conservative one to ensure the split doesn't happen too often.
-            CompressionRatioEstimator.resetEstimation(batch.topicPartition.topic());
             this.accumulator.splitAndReenqueue(batch);
             this.accumulator.deallocate(batch);
             this.sensors.recordBatchSplit();

@@ -537,7 +537,6 @@ public class SenderTest {
         int maxRetries = 1;
         String topic = "testSplitBatchAndSend";
         // Set a good compression ratio.
-        CompressionRatioEstimator.initializeEstimationForTopic(topic);
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         Metrics m = new Metrics();
         accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,

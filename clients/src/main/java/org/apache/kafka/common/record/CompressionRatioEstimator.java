@@ -32,14 +32,6 @@ public class CompressionRatioEstimator {
     private static final ConcurrentMap<String, float[]> COMPRESSION_RATIO = new ConcurrentHashMap<>();
 
     /**
-     * Initialize the compression ratio estimation for a topic.
-     */
-    public static void initializeEstimationForTopic(String topic) {
-        if (COMPRESSION_RATIO.get(topic) == null)
-            COMPRESSION_RATIO.putIfAbsent(topic, initialCompressionRatio());
-    }
-
-    /**
      * Update the compression ratio estimation for a topic and compression type.
      *
      * @param topic         the topic to update compression ratio estimation.
@@ -48,7 +40,7 @@ public class CompressionRatioEstimator {
      * @return the compression ratio estimation after the update.
      */
     public static float updateEstimation(String topic, CompressionType type, float observedRatio) {
-        float[] compressionRatioForTopic = getEstimationOrThrow(topic);
+        float[] compressionRatioForTopic = getAndCreateEstimationIfAbsent(topic);
         float currentEstimation = compressionRatioForTopic[type.id];
         synchronized (compressionRatioForTopic) {
             if (observedRatio > currentEstimation)
@@ -64,7 +56,7 @@ public class CompressionRatioEstimator {
      * Get the compression ratio estimation for a topic and compression type.
      */
     public static float estimation(String topic, CompressionType type) {
-        float[] compressionRatioForTopic = getEstimationOrThrow(topic);
+        float[] compressionRatioForTopic = getAndCreateEstimationIfAbsent(topic);
         return compressionRatioForTopic[type.id];
     }
 
@@ -72,7 +64,7 @@ public class CompressionRatioEstimator {
      * Reset the compression ratio estimation to the initial values for a topic.
      */
     public static void resetEstimation(String topic) {
-        float[] compressionRatioForTopic = getEstimationOrThrow(topic);
+        float[] compressionRatioForTopic = getAndCreateEstimationIfAbsent(topic);
         synchronized (compressionRatioForTopic) {
             for (CompressionType type : CompressionType.values()) {
                 compressionRatioForTopic[type.id] = type.rate;
@@ -91,16 +83,20 @@ public class CompressionRatioEstimator {
      * Set the compression estimation for a topic compression type combination. This method is for unit test purpose.
      */
     public static void setEstimation(String topic, CompressionType type, float ratio) {
-        float[] compressionRatioForTopic = getEstimationOrThrow(topic);
+        float[] compressionRatioForTopic = getAndCreateEstimationIfAbsent(topic);
         synchronized (compressionRatioForTopic) {
             compressionRatioForTopic[type.id] = ratio;
         }
     }
 
-    private static float[] getEstimationOrThrow(String topic) {
+    private static float[] getAndCreateEstimationIfAbsent(String topic) {
         float[] compressionRatioForTopic = COMPRESSION_RATIO.get(topic);
         if (compressionRatioForTopic == null) {
-            throw new IllegalStateException("Estimation of topic " + topic + " has not been initialized.");
+            compressionRatioForTopic = initialCompressionRatio();
+            float[] existingCompressionRatio = COMPRESSION_RATIO.putIfAbsent(topic, compressionRatioForTopic);
+            // Someone created the compression ratio array before us, use it.
+            if (existingCompressionRatio != null)
+                return existingCompressionRatio;
         }
         return compressionRatioForTopic;
     }

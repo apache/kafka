@@ -66,7 +66,7 @@ public class MemoryRecordsBuilder {
     private int baseSequence;
     private long writtenUncompressed = 0;
     private int numRecords = 0;
-    private float compressionRatio = 1;
+    private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
@@ -123,7 +123,7 @@ public class MemoryRecordsBuilder {
         this.initPos = buffer.position();
         this.numRecords = 0;
         this.writtenUncompressed = 0;
-        this.compressionRatio = 1;
+        this.actualCompressionRatio = 1;
         this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -157,7 +157,7 @@ public class MemoryRecordsBuilder {
     }
 
     public double compressionRatio() {
-        return compressionRatio;
+        return actualCompressionRatio;
     }
 
     public CompressionType compressionType() {
@@ -281,9 +281,9 @@ public class MemoryRecordsBuilder {
             builtRecords = MemoryRecords.EMPTY;
         } else {
             if (magic > RecordBatch.MAGIC_VALUE_V1)
-                writeDefaultBatchHeader();
+                this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.writtenUncompressed;
             else if (compressionType != CompressionType.NONE)
-                writeLegacyCompressedWrapperHeader();
+                this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.writtenUncompressed;
 
             ByteBuffer buffer = buffer().duplicate();
             buffer.flip();
@@ -292,7 +292,11 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    private void writeDefaultBatchHeader() {
+    /**
+     * Write the header to the default batch.
+     * @return the written compressed bytes.
+     */
+    private int writeDefaultBatchHeader() {
         ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
@@ -316,12 +320,14 @@ public class MemoryRecordsBuilder {
                 partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
-
-        // update the compression ratio
-        this.compressionRatio = (float) writtenCompressed / this.writtenUncompressed;
+        return writtenCompressed;
     }
 
-    private void writeLegacyCompressedWrapperHeader() {
+    /**
+     * Write the header to the legacy batch.
+     * @return the written compressed bytes.
+     */
+    private int writeLegacyCompressedWrapperHeader() {
         ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
@@ -335,9 +341,7 @@ public class MemoryRecordsBuilder {
         LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
 
         buffer.position(pos);
-
-        // update the compression ratio
-        this.compressionRatio = (float) writtenCompressed / this.writtenUncompressed;
+        return writtenCompressed;
     }
 
     private long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
@@ -678,6 +682,7 @@ public class MemoryRecordsBuilder {
             recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, Record.EMPTY_HEADERS);
         }
 
+        // Be conservative and not take compression of the new record into consideration.
         return numRecords == 0 ?
                 this.initialCapacity >= recordSize :
                 this.writeLimit >= estimatedBytesWritten() + recordSize;

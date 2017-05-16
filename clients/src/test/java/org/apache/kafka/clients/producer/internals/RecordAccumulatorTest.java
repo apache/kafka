@@ -563,7 +563,7 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, 10, 100L, metrics, time,
                                                         new ApiVersions(), null);
         // Create a big batch
-        ProducerBatch batch = ProducerBatch.createBatchOffTheBook(tp1, CompressionType.NONE, 4096, now);
+        ProducerBatch batch = ProducerBatch.createBatchOffAccumulator(tp1, CompressionType.NONE, 4096, now);
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);
         Callback cb = new Callback() {
@@ -604,22 +604,61 @@ public class RecordAccumulatorTest {
     }
 
     @Test
-    public void testSplitFrequency() throws InterruptedException {
+    public void testSplitBatchOffAccumulator() throws InterruptedException {
+        long seed = System.currentTimeMillis();
         Random random = new Random();
+        random.setSeed(seed);
+        final int batchSize = 1024;
+        final int bufferCapacity = 3 * 1024;
+
+        // First set the compression ratio estimation to be good.
+        CompressionRatioEstimator.setEstimation(tp1.topic(), CompressionType.GZIP, 0.1f);
+        RecordAccumulator accum = new RecordAccumulator(batchSize, bufferCapacity, CompressionType.GZIP, 0L, 100L,
+                                                        metrics, time, new ApiVersions(), null);
+        // Append 20 records of 100 bytes size with poor compression ratio should make the batch too big.
+        for (int i = 0; i < 20; i++) {
+            accum.append(tp1, 0L, null, bytesWithPoorCompression(random), Record.EMPTY_HEADERS, null, 0);
+        }
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(1, batches.size());
+        assertEquals(1, batches.values().size());
+        assertEquals("The memory of the batch should be allocated from the accumulator",
+                     bufferCapacity - batchSize, accum.bufferPoolAvailableMemory());
+        ProducerBatch batch = batches.values().iterator().next().get(0);
+        accum.splitAndReenqueue(batch);
+        accum.deallocate(batch);
+        // Drain all the split batches.
+        int drained = 0;
+        while (!accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty()) {
+            accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+            drained++;
+        }
+        assertTrue("There should be some split batches", drained > 0);
+        assertEquals("The split batches should be allocated off the accumulator",
+                     bufferCapacity, accum.bufferPoolAvailableMemory());
+    }
+
+    @Test
+    public void testSplitFrequency() throws InterruptedException {
+        long seed = System.currentTimeMillis();
+        Random random = new Random();
+        random.setSeed(seed);
         final int batchSize = 1024;
         final int numMessages = 1000;
-        CompressionRatioEstimator.initializeEstimationForTopic(topic);
+
         RecordAccumulator accum = new RecordAccumulator(batchSize, 3 * 1024, CompressionType.GZIP, 10, 100L,
                                                         metrics, time, new ApiVersions(), null);
         // Adjust the high and low compression ratio message percentage
-        for (int highCompRatioPercentage = 1; highCompRatioPercentage < 100; highCompRatioPercentage++) {
+        for (int goodCompRatioPercentage = 1; goodCompRatioPercentage < 100; goodCompRatioPercentage++) {
             int numSplit = 0;
             int numBatches = 0;
             CompressionRatioEstimator.resetEstimation(topic);
+            System.out.println("High compression ratio percentage: " + goodCompRatioPercentage);
             for (int i = 0; i < numMessages; i++) {
                 int dice = random.nextInt(100);
-                byte[] value = (dice < highCompRatioPercentage) ?
-                        highCompressionRatioBytes(random) : lowCompressionRatioBytes(random);
+                byte[] value = (dice < goodCompRatioPercentage) ?
+                        bytesWithGoodCompression(random) : bytesWithPoorCompression(random);
                 accum.append(tp1, 0L, null, value, Record.EMPTY_HEADERS, null, 0);
                 BatchDrainedResult result = completeOrSplitBatches(accum, batchSize);
                 numSplit += result.numSplit;
@@ -629,8 +668,9 @@ public class RecordAccumulatorTest {
             BatchDrainedResult result = completeOrSplitBatches(accum, batchSize);
             numSplit += result.numSplit;
             numBatches += result.numBatches;
-            assertTrue(String.format("Total num batches = %d, split batches = %d, more than 10%% of the batch splits",
-                    numBatches, numSplit), (double) numSplit / numBatches < 0.1f);
+            assertTrue(String.format("Total num batches = %d, split batches = %d, more than 10%% of the batch splits. "
+                                         + "Random seed is " + seed,
+                                     numBatches, numSplit), (double) numSplit / numBatches < 0.1f);
         }
     }
 
@@ -646,9 +686,8 @@ public class RecordAccumulatorTest {
                 for (ProducerBatch batch : batchList) {
                     batchDrained = true;
                     numBatches++;
-                    if (batch.sizeInBytes() > batchSize) {
+                    if (batch.sizeInBytes() > batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD) {
                         accum.splitAndReenqueue(batch);
-                        CompressionRatioEstimator.resetEstimation(topic);
                         // release the resource of the original big batch.
                         numSplit++;
                     } else {
@@ -664,7 +703,7 @@ public class RecordAccumulatorTest {
     /**
      * Generates the compression ratio at about 0.6
      */
-    private byte[] highCompressionRatioBytes(Random random) {
+    private byte[] bytesWithGoodCompression(Random random) {
         byte[] value = new byte[100];
         ByteBuffer buffer = ByteBuffer.wrap(value);
         while (buffer.remaining() > 0)
@@ -675,7 +714,7 @@ public class RecordAccumulatorTest {
     /**
      * Generates the compression ratio at about 0.9
      */
-    private byte[] lowCompressionRatioBytes(Random random) {
+    private byte[] bytesWithPoorCompression(Random random) {
         byte[] value = new byte[100];
         random.nextBytes(value);
         return value;

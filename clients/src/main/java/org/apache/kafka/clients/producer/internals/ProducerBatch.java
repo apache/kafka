@@ -83,7 +83,6 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
         this.retry = false;
-        CompressionRatioEstimator.initializeEstimationForTopic(topicPartition.topic());
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
@@ -117,7 +116,7 @@ public final class ProducerBatch {
      +     * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
      +     * @return true if the record has been successfully appended, false otherwise.
      +     */
-    private boolean tryAppend(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+    private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
             return false;
         } else {
@@ -173,7 +172,7 @@ public final class ProducerBatch {
         produceFuture.done();
     }
 
-    public Deque<ProducerBatch> split(int batchSize) {
+    public Deque<ProducerBatch> split(int splitBatchSize) {
         Deque<ProducerBatch> batches = new ArrayDeque<>();
         MemoryRecords memoryRecords = recordsBuilder.build();
         Iterator<MutableRecordBatch> recordBatchIter = memoryRecords.batches().iterator();
@@ -191,17 +190,17 @@ public final class ProducerBatch {
             assert thunkIter.hasNext();
             Thunk thunk = thunkIter.next();
             if (batch == null) {
-                batch = createBatchOffTheBookForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
-                                                       record, batchSize, this.createdMs);
+                batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
+                                                           record, splitBatchSize, this.createdMs);
             }
 
             // A newly created batch can always host the first message.
-            if (!batch.tryAppend(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
                 batch.close();
                 batches.add(batch);
-                batch = createBatchOffTheBookForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
-                                                       record, batchSize, this.createdMs);
-                batch.tryAppend(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+                batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
+                                                           record, splitBatchSize, this.createdMs);
+                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
             }
         }
         // Close the last batch and add it to the batch list after split.
@@ -214,24 +213,24 @@ public final class ProducerBatch {
         return batches;
     }
 
-    private ProducerBatch createBatchOffTheBookForRecord(TopicPartition tp,
-                                                         CompressionType compressionType,
-                                                         Record record,
-                                                         int batchSize,
-                                                         long createdMs) {
+    private ProducerBatch createBatchOffAccumulatorForRecord(TopicPartition tp,
+                                                             CompressionType compressionType,
+                                                             Record record,
+                                                             int batchSize,
+                                                             long createdMs) {
         int initialSize = Math.max(Records.LOG_OVERHEAD + AbstractRecords.sizeInBytesUpperBound(magic(),
                                                                                                 record.key(),
                                                                                                 record.value(),
                                                                                                 record.headers()),
                                    batchSize);
-        return createBatchOffTheBook(tp, compressionType, initialSize, createdMs);
+        return createBatchOffAccumulator(tp, compressionType, initialSize, createdMs);
     }
 
     // package private for testing purpose.
-    static ProducerBatch createBatchOffTheBook(TopicPartition tp,
-                                               CompressionType compressionType,
-                                               int batchSize,
-                                               long createdMs) {
+    static ProducerBatch createBatchOffAccumulator(TopicPartition tp,
+                                                   CompressionType compressionType,
+                                                   int batchSize,
+                                                   long createdMs) {
         ByteBuffer buffer = ByteBuffer.allocate(batchSize);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
                                                              compressionType,

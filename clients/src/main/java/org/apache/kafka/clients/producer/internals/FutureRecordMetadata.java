@@ -77,18 +77,16 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     }
 
     /**
-     +     * This method is used when we have to split a large batch in smaller ones. A chained metadata will allow the
-     +     * future that has already returned to the users to wait on the newly created split batches even after the
-     +     * old big batch has been deemed as done.
-     +     */
+     * This method is used when we have to split a large batch in smaller ones. A chained metadata will allow the
+     * future that has already returned to the users to wait on the newly created split batches even after the
+     * old big batch has been deemed as done.
+     */
     void chain(FutureRecordMetadata futureRecordMetadata) {
         if (nextRecordMetadata == null)
             nextRecordMetadata = futureRecordMetadata;
         else
             nextRecordMetadata.chain(futureRecordMetadata);
     }
-
-
 
     RecordMetadata valueOrError() throws ExecutionException {
         if (this.result.error() != null)
