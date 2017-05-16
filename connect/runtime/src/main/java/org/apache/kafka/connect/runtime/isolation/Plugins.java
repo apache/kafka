@@ -33,7 +33,6 @@ import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -43,17 +42,13 @@ import java.util.Set;
 public class Plugins {
     private static final Logger log = LoggerFactory.getLogger(Plugins.class);
 
-    private final List<String> pluginTopPaths;
     private final Map<PluginClassLoader, URL[]> loaders;
     private final DelegatingClassLoader delegatingLoader;
 
     public Plugins(Map<String, String> props) {
         loaders = new HashMap<>();
-        String pathList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
-        pluginTopPaths = pathList == null
-                         ? new ArrayList<String>()
-                         : Arrays.asList(pathList.trim().split("\\s*,\\s*", -1));
-        delegatingLoader = newDelegatingClassLoader(pluginTopPaths);
+        List<String> pluginLocations = WorkerConfig.pluginLocations(props);
+        delegatingLoader = newDelegatingClassLoader(pluginLocations);
         delegatingLoader.initLoaders();
     }
 

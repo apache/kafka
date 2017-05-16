@@ -21,7 +21,8 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -125,9 +126,16 @@ public class WorkerConfig extends AbstractConfig {
     protected static final String ACCESS_CONTROL_ALLOW_METHODS_DEFAULT = "";
 
     public static final String PLUGIN_PATH_CONFIG = "plugin.path";
-    protected static final String PLUGIN_PATH_DOC = "List of locations that contain "
-        + "Connect plugins (Connectors, Transformations, Converters). Two or more locations "
-        + "should be separated by commas";
+    protected static final String PLUGIN_PATH_DOC = "List of paths separated by commas (,) that "
+            + "contain plugins (connectors, converters, transformations). The list should consist"
+            + " of top level directories that include any combination of: \n"
+            + "a) directories immediately containing jars with plugins and their dependencies\n"
+            + "b) uber-jars with plugins and their dependencies\n"
+            + "c) directories immediately containing the package directory structure of classes of "
+            + "plugins and their dependencies\n"
+            + "Note: symlinks will be followed to discover dependencies or plugins.\n"
+            + "Examples: plugin.path=/usr/local/share/java,/usr/local/share/kafka/plugins,"
+            + "/opt/connectors";
 
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
@@ -172,13 +180,11 @@ public class WorkerConfig extends AbstractConfig {
                 );
     }
 
-    public List<String> pluginLocations() {
-        List<String> pluginLocations = getList(PLUGIN_PATH_CONFIG);
-        if (pluginLocations == null || pluginLocations.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        return pluginLocations;
+    public static List<String> pluginLocations(Map<String, String> props) {
+        String locationList = props.get(WorkerConfig.PLUGIN_PATH_CONFIG);
+        return locationList == null
+                         ? new ArrayList<String>()
+                         : Arrays.asList(locationList.trim().split("\\s*,\\s*", -1));
     }
 
     public WorkerConfig(ConfigDef definition, Map<String, String> props) {
