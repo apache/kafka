@@ -28,7 +28,6 @@ import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Ignore, Test}
 
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConversions._
 import org.junit.Assert._
 
@@ -50,8 +49,11 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
   overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
   overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 3.toString)
-  overridingProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
+  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+  overridingProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 3.toString)
+  overridingProps.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+  overridingProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
+  overridingProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 3.toString)
   overridingProps.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
   overridingProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
 
@@ -70,58 +72,12 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  private def createConsumerAndSubscribeToTopics(groupId: String, topics: List[String], readCommitted: Boolean = false) = {
-    val props = new Properties()
-    if (readCommitted)
-      props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
-    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "200")
-    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    props.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
-    props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "10000")
-    props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = groupId,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
-    consumer.subscribe(topics)
-    consumer
-  }
-
-  private def createTopics() =  {
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkUtils, inputTopic, numPartitions, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, outputTopic, numPartitions, numServers, servers, topicConfig)
-  }
-
-    // Verifies that the record was intended to be committed by checking the suffix of the value. If true, this
-  // will return the value with the '-committed' suffix removed.
-  private def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : Int = {
-    val recordValue = new String(record.value(), "UTF-8")
-    assertTrue(recordValue.endsWith("committed"))
-    recordValue.replace("-committed", "").toInt
-  }
-
-  private def recordValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : Int = {
-    val recordValue = new String(record.value(), "UTF-8")
-    recordValue.replace("-committed", "").replace("-aborted", "").toInt
-  }
-
-  private def producerRecord(topic: String, consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], willBeCommitted: Boolean) = {
-    val value = new String(consumerRecord.value(), "UTF-8")
-    val suffixedValue = if (willBeCommitted)
-      value + "-committed"
-    else
-      value + "-aborted"
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, consumerRecord.key(), suffixedValue.getBytes("UTF-8"))
-  }
-
   @Ignore @Test
   def testBrokerFailure() {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
     val consumerGroup=  "myGroup"
-    val numInputRecords = 10000
+    val numInputRecords = 5000
     createTopics()
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
@@ -180,6 +136,51 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     consumer.close()
     producer.close()
     verifyingConsumer.close()
+  }
+
+  private def createConsumerAndSubscribeToTopics(groupId: String, topics: List[String], readCommitted: Boolean = false) = {
+    val props = new Properties()
+    if (readCommitted)
+      props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
+    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "200")
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "10000")
+    props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+
+    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = groupId,
+      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+    consumer.subscribe(topics)
+    consumer
+  }
+
+  private def createTopics() =  {
+    val topicConfig = new Properties()
+    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    TestUtils.createTopic(zkUtils, inputTopic, numPartitions, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, outputTopic, numPartitions, numServers, servers, topicConfig)
+  }
+
+    // Verifies that the record was intended to be committed by checking the suffix of the value. If true, this
+  // will return the value with the '-committed' suffix removed.
+  private def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : Int = {
+    val recordValue = new String(record.value(), "UTF-8")
+    assertTrue(recordValue.endsWith("committed"))
+    recordValue.replace("-committed", "").toInt
+  }
+
+  private def recordValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : Int = {
+    val recordValue = new String(record.value(), "UTF-8")
+    recordValue.replace("-committed", "").replace("-aborted", "").toInt
+  }
+
+  private def producerRecord(topic: String, consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], willBeCommitted: Boolean) = {
+    val value = new String(consumerRecord.value(), "UTF-8")
+    val suffixedValue = if (willBeCommitted)
+      value + "-committed"
+    else
+      value + "-aborted"
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, consumerRecord.key(), suffixedValue.getBytes("UTF-8"))
   }
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
