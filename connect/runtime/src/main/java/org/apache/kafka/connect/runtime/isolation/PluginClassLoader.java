@@ -24,16 +24,16 @@ import java.net.URLClassLoader;
 
 public class PluginClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
-    private final String pluginPath;
+    private final URL pluginLocation;
 
-    public PluginClassLoader(URL[] urls, ClassLoader parent) {
+    public PluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
         super(urls, parent);
-        pluginPath = path();
+        this.pluginLocation = pluginLocation;
     }
 
-    public PluginClassLoader(URL[] urls) {
+    public PluginClassLoader(URL pluginLocation, URL[] urls) {
         super(urls);
-        pluginPath = path();
+        this.pluginLocation = pluginLocation;
     }
 
     @Override
@@ -69,6 +69,6 @@ public class PluginClassLoader extends URLClassLoader {
 
     @Override
     public String toString() {
-        return "PluginClassLoader{pluginPath=" + pluginPath + "}";
+        return "PluginClassLoader{pluginLocation=" + pluginLocation + "}";
     }
 }

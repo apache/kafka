@@ -37,6 +37,7 @@ import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -141,8 +142,10 @@ public class DelegatingClassLoader extends URLClassLoader {
                     for (Path dir : pluginDirs(pluginPath)) {
                         log.info("Loading dir: {}", dir);
                         URL[] jars = jarPaths(dir).toArray(new URL[0]);
-                        // log.info("Loading jars: " + Arrays.toString(jars));
-                        PluginClassLoader loader = newPluginClassLoader(jars);
+                        if (log.isDebugEnabled()) {
+                            log.debug("Loading jars: {}", Arrays.toString(jars));
+                        }
+                        PluginClassLoader loader = newPluginClassLoader(dir.toUri().toURL(), jars);
                         log.info("Using loader: {}", loader);
                         PluginScanResult plugins = scanPluginPath(loader, jars);
 
@@ -170,12 +173,15 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
-    private static PluginClassLoader newPluginClassLoader(final URL[] jars) {
+    private static PluginClassLoader newPluginClassLoader(
+            final URL pluginLocation,
+            final URL[] jars
+    ) {
         return (PluginClassLoader) AccessController.doPrivileged(
                 new PrivilegedAction() {
                     @Override
                     public Object run() {
-                        return new PluginClassLoader(jars);
+                        return new PluginClassLoader(pluginLocation, jars);
                     }
                 }
         );
@@ -237,13 +243,22 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    public PluginClassLoader connectorLoader(Connector connector) {
-        return connectorLoader(connector.getClass().getCanonicalName());
+    public ClassLoader connectorLoader(Connector connector) {
+        return connectorLoader(connector.getClass().getName());
     }
 
-    public PluginClassLoader connectorLoader(String connectorClassOrAlias) {
+    public ClassLoader connectorLoader(String connectorClassOrAlias) {
+        log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
         SortedMap<PluginDesc<?>, PluginClassLoader> inner =
                 pluginLoaders.get(connectorClassOrAlias);
+        if (inner == null) {
+            log.error(
+                    "Plugin class loader for connector: '{}' was not found. Returning: {}",
+                    connectorClassOrAlias,
+                    this
+            );
+            return this;
+        }
         return inner.get(inner.lastKey());
     }
 

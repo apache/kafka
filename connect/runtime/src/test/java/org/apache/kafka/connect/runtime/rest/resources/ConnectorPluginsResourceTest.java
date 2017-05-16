@@ -464,12 +464,12 @@ public class ConnectorPluginsResourceTest {
     }
 
     public static class MockPluginClassLoader extends PluginClassLoader {
-        public MockPluginClassLoader(URL[] urls, ClassLoader parent) {
-            super(urls, parent);
+        public MockPluginClassLoader(URL pluginLocation, URL[] urls, ClassLoader parent) {
+            super(pluginLocation, urls, parent);
         }
 
-        public MockPluginClassLoader(URL[] urls) {
-            super(urls);
+        public MockPluginClassLoader(URL pluginLocation, URL[] urls) {
+            super(pluginLocation, urls);
         }
 
         @Override
@@ -481,11 +481,15 @@ public class ConnectorPluginsResourceTest {
     public static class MockConnectorPluginDesc extends PluginDesc<Connector> {
         public MockConnectorPluginDesc(Class<? extends Connector> klass, String version)
                 throws Exception {
-            super(klass, version, new MockPluginClassLoader(new URL[0]));
+            super(klass, version, new MockPluginClassLoader(null, new URL[0]));
         }
 
         public MockConnectorPluginDesc(Class<? extends Connector> klass) throws Exception {
-            super(klass, klass.newInstance().version(), new MockPluginClassLoader(new URL[0]));
+            super(
+                    klass,
+                    klass.newInstance().version(),
+                    new MockPluginClassLoader(null, new URL[0])
+            );
         }
     }
 
