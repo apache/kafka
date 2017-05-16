@@ -99,7 +99,7 @@ public class PartitionGroupTest {
         assertEquals(2, group.numBuffered(partition2));
         assertEquals(3L, group.timestamp());
 
-        // add three 3 records with timestamp 2, 4, 6 to partition-1 again
+        // add three 3 records with timestamp 2, 4 to partition-1 again
         List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 4L, recordKey, recordValue));
@@ -118,34 +118,34 @@ public class PartitionGroupTest {
         assertEquals(5, group.numBuffered());
         assertEquals(3, group.numBuffered(partition1));
         assertEquals(2, group.numBuffered(partition2));
-        assertEquals(3L, group.timestamp());
-
-        // get one more record, now time should be advanced
-        record = group.nextRecord(info);
-        assertEquals(partition1, info.partition());
-        assertEquals(5L, record.timestamp);
-        assertEquals(4, group.numBuffered());
-        assertEquals(2, group.numBuffered(partition1));
-        assertEquals(2, group.numBuffered(partition2));
-        assertEquals(3L, group.timestamp());
-
-        // get one more record, time should not be advanced
-        record = group.nextRecord(info);
-        assertEquals(partition1, info.partition());
-        assertEquals(2L, record.timestamp);
-        assertEquals(3, group.numBuffered());
-        assertEquals(1, group.numBuffered(partition1));
-        assertEquals(2, group.numBuffered(partition2));
         assertEquals(4L, group.timestamp());
 
         // get one more record, now time should be advanced
         record = group.nextRecord(info);
         assertEquals(partition2, info.partition());
         assertEquals(4L, record.timestamp);
+        assertEquals(4, group.numBuffered());
+        assertEquals(3, group.numBuffered(partition1));
+        assertEquals(1, group.numBuffered(partition2));
+        assertEquals(5L, group.timestamp());
+
+        // get one more record, time should not be advanced
+        record = group.nextRecord(info);
+        assertEquals(partition1, info.partition());
+        assertEquals(5L, record.timestamp);
+        assertEquals(3, group.numBuffered());
+        assertEquals(2, group.numBuffered(partition1));
+        assertEquals(1, group.numBuffered(partition2));
+        assertEquals(5L, group.timestamp());
+
+        // get one more record, now time should be advanced
+        record = group.nextRecord(info);
+        assertEquals(partition1, info.partition());
+        assertEquals(2L, record.timestamp);
         assertEquals(2, group.numBuffered());
         assertEquals(1, group.numBuffered(partition1));
         assertEquals(1, group.numBuffered(partition2));
-        assertEquals(4L, group.timestamp());
+        assertEquals(5L, group.timestamp());
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
@@ -154,7 +154,7 @@ public class PartitionGroupTest {
         assertEquals(1, group.numBuffered());
         assertEquals(0, group.numBuffered(partition1));
         assertEquals(1, group.numBuffered(partition2));
-        assertEquals(4L, group.timestamp());
+        assertEquals(5L, group.timestamp());
 
         // get one more record, time should not be advanced
         record = group.nextRecord(info);
@@ -163,7 +163,6 @@ public class PartitionGroupTest {
         assertEquals(0, group.numBuffered());
         assertEquals(0, group.numBuffered(partition1));
         assertEquals(0, group.numBuffered(partition2));
-        assertEquals(4L, group.timestamp());
-
+        assertEquals(5L, group.timestamp());
     }
 }

@@ -38,7 +38,7 @@ public class RecordQueue {
     private final TimestampExtractor timestampExtractor;
     private final TopicPartition partition;
     private final ArrayDeque<StampedRecord> fifoQueue;
-    private final TimestampTracker<ConsumerRecord<Object, Object>> timeTracker;
+    private long prevTimestamp = TimestampTracker.NOT_KNOWN;
     private final RecordDeserializer recordDeserializer;
 
     private long partitionTime = TimestampTracker.NOT_KNOWN;
@@ -50,7 +50,6 @@ public class RecordQueue {
         this.source = source;
         this.timestampExtractor = timestampExtractor;
         this.fifoQueue = new ArrayDeque<>();
-        this.timeTracker = new MinTimestampTracker<>();
         this.recordDeserializer = new SourceNodeRecordDeserializer(source);
     }
 
@@ -82,7 +81,7 @@ public class RecordQueue {
     public int addRawRecords(Iterable<ConsumerRecord<byte[], byte[]>> rawRecords) {
         for (ConsumerRecord<byte[], byte[]> rawRecord : rawRecords) {
             ConsumerRecord<Object, Object> record = recordDeserializer.deserialize(rawRecord);
-            long timestamp = timestampExtractor.extract(record, timeTracker.get());
+            long timestamp = timestampExtractor.extract(record, prevTimestamp);
             log.trace("Source node {} extracted timestamp {} for record {}", source.name(), timestamp, record);
 
             // drop message if TS is invalid, i.e., negative
@@ -90,20 +89,26 @@ public class RecordQueue {
                 continue;
             }
 
+
             StampedRecord stampedRecord = new StampedRecord(record, timestamp);
             fifoQueue.addLast(stampedRecord);
-            timeTracker.addElement(stampedRecord);
         }
 
         // update the partition timestamp if its currently
         // tracked min timestamp has exceed its value; this will
         // usually only take effect for the first added batch
-        long timestamp = timeTracker.get();
-
-        if (timestamp > partitionTime)
-            partitionTime = timestamp;
+        advanceTime();
 
         return size();
+    }
+
+    private void advanceTime() {
+        StampedRecord elem = fifoQueue.peekFirst();
+        if (elem != null) {
+            prevTimestamp = elem.timestamp;
+        }
+        if (prevTimestamp > partitionTime)
+            partitionTime = prevTimestamp;
     }
 
     /**
@@ -117,14 +122,9 @@ public class RecordQueue {
         if (elem == null)
             return null;
 
-        timeTracker.removeElement(elem);
-
         // only advance the partition timestamp if its currently
         // tracked min timestamp has exceeded its value
-        long timestamp = timeTracker.get();
-
-        if (timestamp > partitionTime)
-            partitionTime = timestamp;
+        advanceTime();
 
         return elem;
     }
