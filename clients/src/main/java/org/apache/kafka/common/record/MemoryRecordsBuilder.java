@@ -618,10 +618,6 @@ public class MemoryRecordsBuilder {
     private void ensureOpenForRecordAppend() {
         if (appendStreamIsClosed)
             throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
-        if (isClosed())
-            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed");
-        if (aborted)
-            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is aborted");
     }
 
     private void ensureOpenForRecordBatchWrite() {
