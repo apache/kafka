@@ -62,7 +62,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testBasicTransactions() = {
-    val producer = transactionalProducer("my-hello-world-transactional-id")
+    val producer = TestUtils.createTransactionalProducer("my-hello-world-transactional-id", servers)
     val consumer = transactionalConsumer("transactional-group")
     val unCommittedConsumer = nonTransactionalConsumer("non-transactional-group")
     try {
@@ -115,9 +115,10 @@ class TransactionsTest extends KafkaServerTestHarness {
     val transactionalId = "foobar-id"
     val consumerGroupId = "foobar-consumer-group"
     val numSeedMessages = 500
-    seedTopicWithRecords(topic1, numSeedMessages)
 
-    val producer = transactionalProducer(transactionalId)
+    TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, servers)
+
+    val producer = TestUtils.createTransactionalProducer(transactionalId, servers)
 
     var consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1))
@@ -131,14 +132,14 @@ class TransactionsTest extends KafkaServerTestHarness {
         producer.beginTransaction()
         shouldCommit = !shouldCommit
 
-        val records = pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
+        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
         records.zipWithIndex.foreach { case (record, i) =>
           val key = new String(record.key(), "UTF-8")
           val value = new String(record.value(), "UTF-8")
           producer.send(producerRecord(topic2, key, value, willBeCommitted = shouldCommit))
         }
 
-        producer.sendOffsetsToTransaction(offsetsToCommit(consumer), consumerGroupId)
+        producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer), consumerGroupId)
         if (shouldCommit) {
           producer.commitTransaction()
           recordsProcessed += records.size
@@ -165,7 +166,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumer("foobargroup")
     verifyingConsumer.subscribe(List(topic2))
-    val valueSeq = pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
+    val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
       assertCommittedAndGetValue(record).toInt
     }
     verifyingConsumer.close()
@@ -177,8 +178,8 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testFencingOnCommit() = {
     val transactionalId = "my-t.id"
-    val producer1 = transactionalProducer(transactionalId)
-    val producer2 = transactionalProducer(transactionalId)
+    val producer1 = TestUtils.createTransactionalProducer(transactionalId, servers)
+    val producer2 = TestUtils.createTransactionalProducer(transactionalId, servers)
     val consumer = transactionalConsumer()
     consumer.subscribe(List(topic1, topic2))
 
@@ -223,8 +224,8 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Ignore @Test
   def testFencingOnSend() {
     val transactionalId = "my-t.id"
-    val producer1 = transactionalProducer(transactionalId)
-    val producer2 = transactionalProducer(transactionalId)
+    val producer1 = TestUtils.createTransactionalProducer(transactionalId, servers)
+    val producer2 = TestUtils.createTransactionalProducer(transactionalId, servers)
     val consumer = transactionalConsumer()
     consumer.subscribe(List(topic1, topic2))
 
@@ -276,8 +277,8 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Ignore @Test
   def testFencingOnAddPartitions(): Unit = {
     val transactionalId = "my-t.id"
-    val producer1 = transactionalProducer(transactionalId)
-    val producer2 = transactionalProducer(transactionalId)
+    val producer1 = TestUtils.createTransactionalProducer(transactionalId, servers)
+    val producer2 = TestUtils.createTransactionalProducer(transactionalId, servers)
     val consumer = transactionalConsumer()
     consumer.subscribe(List(topic1, topic2))
 
@@ -364,14 +365,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     serverProps
   }
 
-  private def transactionalProducer(transactionalId: String) = {
-    val props = new Properties()
-    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
-    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
-  }
-
   private def transactionalConsumer(group: String = "group", maxPollRecords: Int = 500) = {
     val props = new Properties()
     props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
@@ -402,49 +395,4 @@ class TransactionsTest extends KafkaServerTestHarness {
     records
   }
 
-  private def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) : Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(50)
-      records.size >= numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
-    records
-  }
-
-  private def seedTopicWithRecords(topic: String, numRecords: Int): Unit = {
-    val props = new Properties()
-    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    var recordsWritten = 0
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
-    try {
-      for (i <- 0 until numRecords) {
-        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, i.toString.getBytes("UTF-8"), i.toString.getBytes("UTF-8"))).get()
-        recordsWritten += 1
-      }
-    } catch {
-      case e : Exception =>
-        fail("Producer failed to send record with exception", e)
-    } finally {
-      producer.close()
-    }
-    debug(s"Wrote $recordsWritten records to $topic.")
-  }
-
-  private def offsetsToCommit(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
-    val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
-    consumer.assignment().foreach{ topicPartition =>
-      offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
-    }
-    offsetsToCommit.toMap
-  }
-
-  private def resetToLastCommittedPosition(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
-    consumer.assignment().foreach { topicPartition =>
-      val committedOffset = consumer.committed(topicPartition)
-      if (committedOffset == null)
-        consumer.seekToBeginning(List(topicPartition))
-      else
-        consumer.seek(topicPartition, committedOffset.offset())
-    }
-  }
 }

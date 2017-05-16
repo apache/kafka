@@ -40,7 +40,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.ZkUtils._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, RangeAssignor}
+import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -55,8 +55,9 @@ import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
 
+import scala.collection.JavaConversions._
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.util.Try
 
@@ -1330,6 +1331,51 @@ object TestUtils extends Logging {
     assertEquals("Consumed more records than expected", numMessages, records.size)
     records
   }
+
+  def createTransactionalProducer(transactionalId: String, servers: Seq[KafkaServer]) = {
+    val props = new Properties()
+    props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+    props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+  }
+
+  // Seeds the given topic with records with keys and values in the range [0..numRecords)
+  def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Int = {
+    val props = new Properties()
+    props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    var recordsWritten = 0
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    try {
+      for (i <- 0 until numRecords) {
+        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, i.toString.getBytes("UTF-8"), i.toString.getBytes("UTF-8")))
+        recordsWritten += 1
+      }
+      producer.flush()
+    } finally {
+      producer.close()
+    }
+    recordsWritten
+  }
+
+  // Collect the current positions for all partition in the consumers current assignment.
+  def consumerPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) : Map[TopicPartition, OffsetAndMetadata]  = {
+    val offsetsToCommit = new mutable.HashMap[TopicPartition, OffsetAndMetadata]()
+    consumer.assignment.foreach{ topicPartition =>
+      offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
+    }
+    offsetsToCommit.toMap
+  }
+
+  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) : Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
+    TestUtils.waitUntilTrue(() => {
+      records ++= consumer.poll(50)
+      records.size >= numRecords
+    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
+    records
+  }
+
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
