@@ -355,8 +355,12 @@ public class StreamTaskTest {
         };
 
         final List<ProcessorNode> processorNodes = Collections.<ProcessorNode>singletonList(processorNode);
-        final Map<String, SourceNode> sourceNodes
-                = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final Map<String, SourceNode> sourceNodes = new HashMap() {
+            {
+                put(topic1[0], processorNode);
+                put(topic2[0], processorNode);
+            }
+        };
         final ProcessorTopology topology = new ProcessorTopology(processorNodes,
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),
@@ -700,8 +704,12 @@ public class StreamTaskTest {
             }
         };
         final List<ProcessorNode> processorNodes = Arrays.asList(processorNode, processor, source1, source2);
-        final Map<String, SourceNode> sourceNodes
-                = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final Map<String, SourceNode> sourceNodes = new HashMap() {
+            {
+                put(topic1[0], processorNode);
+                put(topic2[0], processorNode);
+            }
+        };
         final ProcessorTopology topology = new ProcessorTopology(processorNodes,
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),

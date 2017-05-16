@@ -381,6 +381,8 @@ public class StreamThreadTest {
                 .persistent()
                 .build()
         );
+        builder.addSource("source", TOPIC);
+
         clientSupplier.consumer.assign(Arrays.asList(new TopicPartition(TOPIC, 0), new TopicPartition(TOPIC, 1)));
 
         final StreamThread thread1 = new StreamThread(
@@ -768,6 +770,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled() {
+        builder.addSource("source1", "someTopic");
+
         final StreamThread thread = new StreamThread(
             builder,
             config,
@@ -799,6 +803,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldInjectProducerPerTaskUsingClientSupplierOnCreateIfEosEnable() {
+        builder.addSource("source1", "someTopic");
+
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
             builder,
@@ -834,6 +840,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseAllTaskProducersOnCloseIfEosEnabled() {
+        builder.addSource("source1", "someTopic");
+
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
             builder,
@@ -864,6 +872,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseThreadProducerOnCloseIfEosDisabled() {
+        builder.addSource("source1", "someTopic");
+
         final StreamThread thread = new StreamThread(
             builder,
             config,
@@ -1220,6 +1230,8 @@ public class StreamThreadTest {
 
     @Test
     public void shouldCloseTaskAsZombieAndRemoveFromActiveTasksIfProducerGotFencedAtBeginTransactionWhenTaskIsResumed() throws Exception {
+        builder.addSource("name", "topic").addSink("out", "output");
+
         final MockClientSupplier clientSupplier = new MockClientSupplier(applicationId);
         final StreamThread thread = new StreamThread(
             builder,
