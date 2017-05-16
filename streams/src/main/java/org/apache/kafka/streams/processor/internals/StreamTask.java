@@ -539,7 +539,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (timestamp == TimestampTracker.NOT_KNOWN) {
             return punctuated;
         } else {
-            return punctuated || streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
+            return punctuated | streamTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.STREAM_TIME, this);
         }
     }
 
