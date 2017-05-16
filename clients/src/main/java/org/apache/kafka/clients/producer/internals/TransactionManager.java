@@ -247,7 +247,7 @@ public class TransactionManager {
     }
 
     public boolean isInErrorState() {
-        return currentState == State.ERROR;
+        return currentState == State.ERROR || currentState == State.FENCED;
     }
 
     public synchronized void setError(Exception exception) {
@@ -502,6 +502,7 @@ public class TransactionManager {
                             "transactional.id has been started: producerId: {}. epoch: {}.",
                     producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
             result.setError(Errors.INVALID_PRODUCER_EPOCH.exception());
+            lastError = Errors.INVALID_PRODUCER_EPOCH.exception();
             transitionTo(State.FENCED, Errors.INVALID_PRODUCER_EPOCH.exception());
             result.done();
         }

@@ -22,16 +22,15 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before, Ignore, Test}
 import org.junit.Assert._
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -274,7 +273,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Ignore @Test
+  @Test
   def testFencingOnAddPartitions(): Unit = {
     val transactionalId = "my-t.id"
     val producer1 = TestUtils.createTransactionalProducer(transactionalId, servers)
