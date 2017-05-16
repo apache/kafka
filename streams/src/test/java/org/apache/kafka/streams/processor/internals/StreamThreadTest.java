@@ -192,8 +192,8 @@ public class StreamThreadTest {
         }
 
         @Override
-        public void commit(final boolean startNewTransaction) {
-            super.commit(startNewTransaction);
+        void commitImpl(final boolean startNewTransaction) {
+            super.commitImpl(startNewTransaction);
             committed = true;
         }
 
@@ -202,8 +202,8 @@ public class StreamThreadTest {
 
         @Override
         public void close(final boolean clean) {
-            closed = true;
             super.close(clean);
+            closed = true;
         }
 
         @Override

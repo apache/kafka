@@ -86,7 +86,7 @@ public class AbstractTaskTest {
             public void resume() {}
 
             @Override
-            public void commit(final boolean startNewTransaction) {}
+            public void commit() {}
 
             @Override
             public void suspend() {}

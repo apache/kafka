@@ -87,10 +87,9 @@ public class StandbyTask extends AbstractTask {
      * - checkpoint store
      * - update offset limits
      * </pre>
-     * @param startNewTransaction ignored by {@code StandbyTask}s
      */
     @Override
-    public void commit(final boolean startNewTransaction) {
+    public void commit() {
         log.trace("{} Committing", logPrefix);
         stateMgr.flush();
         stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
@@ -113,7 +112,7 @@ public class StandbyTask extends AbstractTask {
 
     /**
      * <pre>
-     * - {@link #commit(boolean) commit(noNewTransaction)}
+     * - {@link #commit()}
      * - close state
      * <pre>
      * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
@@ -124,7 +123,7 @@ public class StandbyTask extends AbstractTask {
         log.debug("{} Closing", logPrefix);
         boolean committedSuccessfully = false;
         try {
-            commit(false);
+            commit();
             committedSuccessfully = true;
         } finally {
             closeStateManager(committedSuccessfully);

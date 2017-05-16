@@ -242,11 +242,16 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * <pre>
      * - flush state and producer
      * - if(!eos) write checkpoint
-     * - commit offsets and maybe start new transaction
+     * - commit offsets and start new transaction
      * </pre>
      */
     @Override
-    public void commit(final boolean startNewTransaction) {
+    public void commit() {
+        commitImpl(true);
+    }
+
+    // visible for testing
+    void commitImpl(final boolean startNewTransaction) {
         log.trace("{} Committing", logPrefix);
         metrics.metrics.measureLatencyNs(
             time,
@@ -322,7 +327,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     /**
      * <pre>
      * - close topology
-     * - {@link #commit(boolean) commit(noNewTransaction)}
+     * - {@link #commit()}
      *   - flush state and producer
      *   - if (!eos) write checkpoint
      *   - commit offsets
@@ -336,7 +341,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
     /**
      * <pre>
      * - close topology
-     * - if (clean) {@link #commit(boolean) commit(noNewTransaction)}
+     * - if (clean) {@link #commit()}
      *   - flush state and producer
      *   - if (!eos) write checkpoint
      *   - commit offsets
@@ -346,7 +351,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
         log.debug("{} Suspending", logPrefix);
         closeTopology(); // should we call this only on clean suspend?
         if (clean) {
-            commit(false);
+            commitImpl(false);
         }
     }
 
@@ -378,7 +383,7 @@ public class StreamTask extends AbstractTask implements Punctuator {
      * <pre>
      * - {@link #suspend(boolean) suspend(clean)}
      *   - close topology
-     *   - if (clean) {@link #commit(boolean) commit(noNewTransaction)}
+     *   - if (clean) {@link #commit()}
      *     - flush state and producer
      *     - commit offsets
      * - close state

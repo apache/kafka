@@ -251,7 +251,7 @@ public class ProcessorTopologyTestDriver {
             // Process the record ...
             task.process();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(timestamp, offset, tp.partition(), topicName));
-            task.commit(true);
+            task.commit();
 
             // Capture all the records sent to the producer ...
             for (final ProducerRecord<byte[], byte[]> record : producer.history()) {

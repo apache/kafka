@@ -804,7 +804,7 @@ public class StreamThread extends Thread {
     private void commitOne(final AbstractTask task) {
         log.info("{} Committing task {} {}", logPrefix, task.getClass().getSimpleName(), task.id());
         try {
-            task.commit(true);
+            task.commit();
         } catch (final CommitFailedException e) {
             // commit failed. Just log it.
             log.warn("{} Failed to commit {} {} state: ", logPrefix, task.getClass().getSimpleName(), task.id(), e);

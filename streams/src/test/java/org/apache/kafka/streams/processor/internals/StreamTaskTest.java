@@ -492,7 +492,7 @@ public class StreamTaskTest {
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
-        streamTask.commit(true);
+        streamTask.commit();
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId00),
                                                                           ProcessorStateManager.CHECKPOINT_FILE_NAME));
 
@@ -643,7 +643,7 @@ public class StreamTaskTest {
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
         task.process();
 
-        task.commit(true);
+        task.commit();
         assertTrue(producer.transactionInFlight());
     }
 
@@ -657,7 +657,7 @@ public class StreamTaskTest {
             new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
         task.process();
 
-        task.commit(true);
+        task.commit();
         assertFalse(producer.transactionInFlight());
     }
 

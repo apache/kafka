@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthorizationException;
@@ -93,11 +92,7 @@ public abstract class AbstractTask {
 
     public abstract void resume();
 
-    /**
-     * @param startNewTransaction {@link Producer#beginTransaction() start a new transaction} after successful commit
-     *                            (eos only -- otherwise ignored)
-     */
-    public abstract void commit(final boolean startNewTransaction);
+    public abstract void commit();
     public abstract void suspend();
     public abstract void close(final boolean clean);
 
