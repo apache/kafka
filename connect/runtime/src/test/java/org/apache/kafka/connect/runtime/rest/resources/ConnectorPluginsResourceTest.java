@@ -473,7 +473,7 @@ public class ConnectorPluginsResourceTest {
         }
 
         @Override
-        public String path() {
+        public String location() {
             return "/tmp/mockpath";
         }
     }

@@ -28,7 +28,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
     private final DefaultArtifactVersion encodedVersion;
     private final PluginType type;
     private final String typeName;
-    private final String path;
+    private final String location;
 
     public PluginDesc(Class<? extends T> klass, String version, PluginClassLoader loader) {
         this.klass = klass;
@@ -37,7 +37,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         this.encodedVersion = new DefaultArtifactVersion(version);
         this.type = PluginType.from(klass);
         this.typeName = type.toString();
-        this.path = loader.path();
+        this.location = loader.location();
     }
 
     @Override
@@ -49,7 +49,7 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
                 ", encodedVersion=" + encodedVersion +
                 ", type=" + type +
                 ", typeName='" + typeName + '\'' +
-                ", path='" + path + '\'' +
+                ", location='" + location + '\'' +
                 '}';
     }
 
@@ -76,9 +76,9 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         return typeName;
     }
 
-    @JsonProperty("path")
-    public String path() {
-        return typeName;
+    @JsonProperty("location")
+    public String location() {
+        return location;
     }
 
     @Override

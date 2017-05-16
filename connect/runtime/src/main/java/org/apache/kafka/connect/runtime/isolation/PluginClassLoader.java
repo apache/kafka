@@ -57,14 +57,8 @@ public class PluginClassLoader extends URLClassLoader {
         return klass;
     }
 
-    public String path() {
-        URL[] urls = getURLs();
-        if (urls.length == 0) {
-            return "";
-        }
-
-        String first = urls[0].toString();
-        return first.substring(0, first.lastIndexOf("/"));
+    public String location() {
+        return pluginLocation.toString();
     }
 
     @Override
