@@ -48,13 +48,11 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
 
-    private final ConcurrentMap<String, SortedMap<PluginDesc<?>, PluginClassLoader>> pluginLoaders;
+    private final Map<String, SortedMap<PluginDesc<?>, PluginClassLoader>> pluginLoaders;
     private final SortedSet<PluginDesc<Connector>> connectors;
     private final SortedSet<PluginDesc<Converter>> converters;
     private final SortedSet<PluginDesc<Transformation>> transformations;
@@ -65,12 +63,14 @@ public class DelegatingClassLoader extends URLClassLoader {
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
-        this.pluginLoaders = new ConcurrentHashMap<>();
+        this.pluginLoaders = new HashMap<>();
         this.activePaths = new HashMap<>();
         this.inactivePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.transformations = new TreeSet<>();
+        initLoaders();
+        addAllAliases();
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
@@ -115,13 +115,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         return jars;
     }
 
-    public void addAlias(PluginDesc<?> plugin, String alias) {
-        SortedMap<PluginDesc<?>, PluginClassLoader> inner = pluginLoaders.get(plugin.className());
-        if (inner != null) {
-            pluginLoaders.putIfAbsent(alias, inner);
-        }
-    }
-
     private <T> void addPlugins(Collection<PluginDesc<T>> plugins, PluginClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
             String pluginClassName = plugin.className();
@@ -129,12 +122,14 @@ public class DelegatingClassLoader extends URLClassLoader {
             if (inner == null) {
                 inner = new TreeMap<>();
                 pluginLoaders.put(pluginClassName, inner);
+                // TODO: once versioning is enabled this line should be moved outside this if branch
+                log.info("Added plugin '{}'", pluginClassName);
             }
             inner.put(plugin, loader);
         }
     }
 
-    public void initLoaders() {
+    private void initLoaders() {
         for (String path : pluginPaths) {
             try {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
@@ -164,11 +159,11 @@ public class DelegatingClassLoader extends URLClassLoader {
                     }
                 }
             } catch (InvalidPathException | MalformedURLException e) {
-                log.warn("Invalid path in plugin path: {}. Ignoring.", path);
+                log.error("Invalid path in plugin path: {}. Ignoring.", path);
             } catch (IOException e) {
-                log.warn("Could not get listing for plugin path: {}. Ignoring.", path);
+                log.error("Could not get listing for plugin path: {}. Ignoring.", path);
             } catch (InstantiationException | IllegalAccessException e) {
-                log.warn("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
+                log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
             }
         }
     }
@@ -271,7 +266,7 @@ public class DelegatingClassLoader extends URLClassLoader {
 
         SortedMap<PluginDesc<?>, PluginClassLoader> inner = pluginLoaders.get(name);
         if (inner != null) {
-            log.warn("Class has been found before: {} by {}", name, inner.get(inner.lastKey()));
+            log.trace("Retrieving loaded class '{}' from '{}'", name, inner.get(inner.lastKey()));
             return inner.get(inner.lastKey()).loadClass(name, resolve);
         }
 
@@ -288,5 +283,51 @@ public class DelegatingClassLoader extends URLClassLoader {
             return super.loadClass(name, resolve);
         }
         return klass;
+    }
+
+    private void addAllAliases() {
+        addAliases(connectors);
+        addAliases(converters);
+        addAliases(transformations);
+    }
+
+    private <S> void addAliases(Collection<PluginDesc<S>> plugins) {
+        for (PluginDesc<S> plugin : plugins) {
+            if (isAliasUnique(plugin, plugins)) {
+                String simple = PluginUtils.simpleName(plugin);
+                String pruned = PluginUtils.prunedName(plugin);
+                SortedMap<PluginDesc<?>, PluginClassLoader> inner =
+                        pluginLoaders.get(plugin.className());
+                pluginLoaders.put(simple, inner);
+                if (simple.equals(pruned)) {
+                    log.info("Added alias '{}' to plugin '{}'", simple, plugin.className());
+                } else {
+                    pluginLoaders.put(pruned, inner);
+                    log.info(
+                            "Added aliases '{}' and '{}' to plugin '{}'",
+                            simple,
+                            pruned,
+                            plugin.className()
+                    );
+                }
+            }
+        }
+    }
+
+    private static <U> boolean isAliasUnique(
+            PluginDesc<U> alias,
+            Collection<PluginDesc<U>> plugins
+    ) {
+        boolean oneMatch = false;
+        for (PluginDesc<U> plugin : plugins) {
+            if (PluginUtils.simpleName(alias).equals(PluginUtils.simpleName(plugin))
+                    || PluginUtils.prunedName(alias).equals(PluginUtils.prunedName(plugin))) {
+                if (oneMatch) {
+                    return false;
+                }
+                oneMatch = true;
+            }
+        }
+        return true;
     }
 }

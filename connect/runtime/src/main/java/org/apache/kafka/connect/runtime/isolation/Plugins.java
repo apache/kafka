@@ -45,7 +45,6 @@ public class Plugins {
     public Plugins(Map<String, String> props) {
         List<String> pluginLocations = WorkerConfig.pluginLocations(props);
         delegatingLoader = newDelegatingClassLoader(pluginLocations);
-        delegatingLoader.initLoaders();
     }
 
     private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
@@ -160,8 +159,6 @@ public class Plugins {
             }
 
             PluginDesc<Connector> entry = matches.get(0);
-            log.debug("Adding alias: " + connectorClassOrAlias);
-            delegatingLoader.addAlias(entry, connectorClassOrAlias);
             klass = entry.pluginClass();
         }
         return newPlugin(klass);

@@ -38,4 +38,30 @@ public class PluginUtils {
     public static boolean shouldLoadInIsolation(String name) {
         return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
     }
+
+    public static String simpleName(PluginDesc<?> plugin) {
+        return plugin.pluginClass().getSimpleName();
+    }
+
+    public static String prunedName(PluginDesc<?> plugin) {
+        // It's currently simpler to switch on type than do pattern matching.
+        switch (plugin.type()) {
+            case SOURCE:
+            case SINK:
+            case CONNECTOR:
+                return prunePluginName(plugin, "Connector");
+            default:
+                return prunePluginName(plugin, plugin.type().simpleName());
+        }
+    }
+
+    private static String prunePluginName(PluginDesc<?> plugin, String suffix) {
+        String simple = plugin.pluginClass().getSimpleName();
+        int pos = simple.lastIndexOf(suffix);
+        if (pos > 0) {
+            return simple.substring(0, pos);
+        }
+        return simple;
+    }
+
 }
