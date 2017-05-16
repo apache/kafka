@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.storage;
 
 import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -31,7 +30,6 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
-import org.apache.kafka.connect.util.KafkaBasedLog.TopicSupplier;
 import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,7 +60,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private HashMap<ByteBuffer, ByteBuffer> data;
 
     @Override
-    public void configure(WorkerConfig config) {
+    public void configure(final WorkerConfig config) {
         String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
         if (topic.equals(""))
             throw new ConfigException("Offset storage topic must be specified");
@@ -80,29 +78,29 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        final Map<String, Object> adminProps = new HashMap<>(config.originals());
-        final NewTopic topicDescription = TopicAdmin.defineTopic(topic).
+        Map<String, Object> adminProps = new HashMap<>(config.originals());
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).
                 replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
                 build();
-        TopicSupplier topicSupplier = new TopicSupplier() {
-            @Override
-            public TopicDescription getOrCreateTopic(String topicName) {
-                try (TopicAdmin topicMaker = new TopicAdmin(adminProps)) {
-                    return topicMaker.createTopicIfMissing(topicDescription);
-                }
-            }
-        };
 
-        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicSupplier);
+        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminProps);
     }
 
     private KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
                                                               Map<String, Object> consumerProps,
                                                               Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
-                                                              TopicSupplier topicSupplier) {
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, topicSupplier);
+                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
+        Runnable createTopics = new Runnable() {
+            @Override
+            public void run() {
+                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
+                    admin.createTopics(topicDescription);
+                }
+            }
+        };
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     @Override
