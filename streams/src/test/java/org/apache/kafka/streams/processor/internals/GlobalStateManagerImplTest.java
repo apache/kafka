@@ -426,6 +426,18 @@ public class GlobalStateManagerImplTest {
         assertThat(stateRestoreCallback.restored, equalTo(Collections.singletonList(KeyValue.pair(restoredKv.key, restoredKv.value))));
     }
 
+    @Test
+    public void shouldCheckpointRestoredOffsetsToFile() throws IOException {
+        stateManager.initialize(context);
+        final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+        initializeConsumer(10, 1, t1);
+        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.close(Collections.<TopicPartition, Long>emptyMap());
+
+        final Map<TopicPartition, Long> checkpointMap = stateManager.checkpointed();
+        assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, 11L)));
+        assertThat(readOffsetsCheckpoint(), equalTo(checkpointMap));
+    }
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
