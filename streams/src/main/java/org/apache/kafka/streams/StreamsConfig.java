@@ -161,8 +161,7 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code key.serde} */
     @Deprecated
     public static final String KEY_SERDE_CLASS_CONFIG = "key.serde";
-    @Deprecated
-    private static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface. This config is deprecated, use \"default.key.serde\" instead";
+    private static final String KEY_SERDE_CLASS_DOC = "Serializer / deserializer class for key that implements the <code>Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_KEY_SERDE_CLASS_CONFIG + "</code> instead";
 
     /** {@code metadata.max.age.ms} */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
@@ -207,7 +206,6 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code reconnect.backoff.max} */
     public static final String RECONNECT_BACKOFF_MAX_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG;
-    private static final String RECONNECT_BACKOFF_MAX_MS_DOC = CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC;
 
     /** {@code replication.factor} */
     public static final String REPLICATION_FACTOR_CONFIG = "replication.factor";
@@ -240,14 +238,12 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code timestamp.extractor} */
     @Deprecated
     public static final String TIMESTAMP_EXTRACTOR_CLASS_CONFIG = "timestamp.extractor";
-    @Deprecated
-    private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface. This config is deprecated, use \"default.timestamp.extractor\" instead";
+    private static final String TIMESTAMP_EXTRACTOR_CLASS_DOC = "Timestamp extractor class that implements the <code>TimestampExtractor</code> interface. This config is deprecated, use <code>" + DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG + "</code> instead";
 
     /** {@code value.serde} */
     @Deprecated
     public static final String VALUE_SERDE_CLASS_CONFIG = "value.serde";
-    @Deprecated
-    private static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface. This config is deprecated, use \"default.value.serde\" instead";
+    private static final String VALUE_SERDE_CLASS_DOC = "Serializer / deserializer class for value that implements the <code>Serde</code> interface. This config is deprecated, use <code>" + DEFAULT_VALUE_SERDE_CLASS_CONFIG + "</code> instead";
 
     /** {@code windowstore.changelog.additional.retention.ms} */
     public static final String WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG = "windowstore.changelog.additional.retention.ms";
@@ -263,6 +259,9 @@ public class StreamsConfig extends AbstractConfig {
 
     static {
         CONFIG = new ConfigDef()
+
+            // HIGH
+
             .define(APPLICATION_ID_CONFIG, // required with no default value
                     Type.STRING,
                     Importance.HIGH,
@@ -286,15 +285,33 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.HIGH,
                     ZOOKEEPER_CONNECT_DOC)
+
+            // MEDIUM
+
             .define(CACHE_MAX_BYTES_BUFFERING_CONFIG,
                     Type.LONG,
                     10 * 1024 * 1024L,
                     atLeast(0),
                     Importance.MEDIUM,
                     CACHE_MAX_BYTES_BUFFERING_DOC)
-            .define(KEY_SERDE_CLASS_CONFIG,
+            .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
                     Type.CLASS,
                     Serdes.ByteArraySerde.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_KEY_SERDE_CLASS_DOC)
+            .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
+                    Type.CLASS,
+                    FailOnInvalidTimestamp.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
+            .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
+                    Type.CLASS,
+                    Serdes.ByteArraySerde.class.getName(),
+                    Importance.MEDIUM,
+                    DEFAULT_VALUE_SERDE_CLASS_DOC)
+            .define(KEY_SERDE_CLASS_CONFIG,
+                    Type.CLASS,
+                    null,
                     Importance.MEDIUM,
                     KEY_SERDE_CLASS_DOC)
             .define(NUM_STANDBY_REPLICAS_CONFIG,
@@ -309,8 +326,8 @@ public class StreamsConfig extends AbstractConfig {
                     NUM_STREAM_THREADS_DOC)
             .define(PROCESSING_GUARANTEE_CONFIG,
                     Type.STRING,
-                    "at_least_once",
-                    in("at_least_once", "exactly_once"),
+                    AT_LEAST_ONCE,
+                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
             .define(SECURITY_PROTOCOL_CONFIG,
@@ -320,51 +337,17 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.SECURITY_PROTOCOL_DOC)
             .define(TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
                     Type.CLASS,
-                    FailOnInvalidTimestamp.class.getName(),
+                    null,
                     Importance.MEDIUM,
                     TIMESTAMP_EXTRACTOR_CLASS_DOC)
-            .define(DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
-                        Type.CLASS,
-                        FailOnInvalidTimestamp.class.getName(),
-                        Importance.MEDIUM,
-                        DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC)
-            .define(DEFAULT_KEY_SERDE_CLASS_CONFIG,
-                        Type.CLASS,
-                        Serdes.ByteArraySerde.class.getName(),
-                        Importance.MEDIUM,
-                        DEFAULT_KEY_SERDE_CLASS_DOC)
-                    null,
-            .define(DEFAULT_VALUE_SERDE_CLASS_CONFIG,
-                        Type.CLASS,
-                        Serdes.ByteArraySerde.class.getName(),
-                        Importance.MEDIUM,
-                        DEFAULT_VALUE_SERDE_CLASS_DOC)
-//<<<<<<< HEAD
-            .define(COMMIT_INTERVAL_MS_CONFIG,
-                    Type.LONG,
-                    DEFAULT_COMMIT_INTERVAL_MS,
-                    Importance.LOW,
-                    COMMIT_INTERVAL_MS_DOC)
-            .define(POLL_MS_CONFIG,
-                    Type.LONG,
-                    100,
-                    Importance.LOW,
-                    POLL_MS_DOC)
-            .define(NUM_STREAM_THREADS_CONFIG,
-                    Type.INT,
-                    1,
-                    Importance.MEDIUM,
-                    NUM_STREAM_THREADS_DOC)
-            .define(NUM_STANDBY_REPLICAS_CONFIG,
-                    Type.INT,
-                    0,
-=======
             .define(VALUE_SERDE_CLASS_CONFIG,
                     Type.CLASS,
-                    Serdes.ByteArraySerde.class.getName(),
->>>>>>> code cleanup
+                    null,
                     Importance.MEDIUM,
                     VALUE_SERDE_CLASS_DOC)
+
+            // LOW
+
             .define(APPLICATION_SERVER_CONFIG,
                     Type.STRING,
                     "",
@@ -382,31 +365,31 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.CLIENT_ID_DOC)
             .define(COMMIT_INTERVAL_MS_CONFIG,
                     Type.LONG,
-                    30000,
+                    DEFAULT_COMMIT_INTERVAL_MS,
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                     ConfigDef.Type.LONG,
                     9 * 60 * 1000,
-                    Importance.LOW,
+                    ConfigDef.Importance.LOW,
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(METADATA_MAX_AGE_CONFIG,
-                    Type.LONG,
+                    ConfigDef.Type.LONG,
                     5 * 60 * 1000,
                     atLeast(0),
-                    Importance.LOW,
+                    ConfigDef.Importance.LOW,
                     CommonClientConfigs.METADATA_MAX_AGE_DOC)
-            .define(METRIC_REPORTER_CLASSES_CONFIG,
-                    Type.LIST,
-                    "",
-                    Importance.LOW,
-                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_NUM_SAMPLES_CONFIG,
                     Type.INT,
                     2,
                     atLeast(1),
                     Importance.LOW,
                     CommonClientConfigs.METRICS_NUM_SAMPLES_DOC)
+            .define(METRIC_REPORTER_CLASSES_CONFIG,
+                    Type.LIST,
+                    "",
+                    Importance.LOW,
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
             .define(METRICS_RECORDING_LEVEL_CONFIG,
                     Type.STRING,
                     Sensor.RecordingLevel.INFO.toString(),
@@ -441,46 +424,29 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0L),
                     Importance.LOW,
                     CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
-            .define(REQUEST_TIMEOUT_MS_CONFIG,
-                    Type.INT,
-                    40 * 1000,
-                    atLeast(0),
-                    Importance.LOW,
-                    CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
+            .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                    Type.LONG,
+                    50L,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
             .define(RETRY_BACKOFF_MS_CONFIG,
                     Type.LONG,
                     100L,
                     atLeast(0L),
-<<<<<<< HEAD
                     ConfigDef.Importance.LOW,
-                    RETRY_BACKOFF_MS_DOC)
-            .define(METADATA_MAX_AGE_CONFIG,
-                    ConfigDef.Type.LONG,
-                    5 * 60 * 1000,
+                    CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(REQUEST_TIMEOUT_MS_CONFIG,
+                    Type.INT,
+                    40 * 1000,
                     atLeast(0),
                     ConfigDef.Importance.LOW,
-                    METADATA_MAX_AGE_DOC)
-            .define(RECONNECT_BACKOFF_MS_CONFIG,
-                    ConfigDef.Type.LONG,
-                    50L,
-                    atLeast(0L),
-                    ConfigDef.Importance.LOW,
-                    RECONNECT_BACKOFF_MS_DOC)
-            .define(RECONNECT_BACKOFF_MAX_MS_CONFIG,
-                    ConfigDef.Type.LONG,
-                    50L,
-                    atLeast(0L),
-                    ConfigDef.Importance.LOW,
-                    RECONNECT_BACKOFF_MAX_MS_DOC)
-=======
-                    Importance.LOW,
-                    CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                    CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC)
             .define(ROCKSDB_CONFIG_SETTER_CLASS_CONFIG,
                     Type.CLASS,
                     null,
                     Importance.LOW,
                     ROCKSDB_CONFIG_SETTER_CLASS_DOC)
->>>>>>> code cleanup
             .define(SEND_BUFFER_CONFIG,
                     Type.INT,
                     128 * 1024,
@@ -496,13 +462,7 @@ public class StreamsConfig extends AbstractConfig {
                     Type.LONG,
                     24 * 60 * 60 * 1000,
                     Importance.LOW,
-                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC)
-            .define(PROCESSING_GUARANTEE_CONFIG,
-                    ConfigDef.Type.STRING,
-                    AT_LEAST_ONCE,
-                    in(AT_LEAST_ONCE, EXACTLY_ONCE),
-                    Importance.MEDIUM,
-                    PROCESSING_GUARANTEE_DOC);
+                    WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_DOC);
     }
 
     // this is the list of configs for underlying clients
