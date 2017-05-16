@@ -249,15 +249,11 @@ public class TransactionManager {
         return currentState == State.ERROR;
     }
 
-    public synchronized boolean maybeSetError(Exception exception) {
-        if (isTransactional() && isInTransaction()) {
-            if (exception instanceof ProducerFencedException)
-                transitionTo(State.FENCED, exception);
-            else
-                transitionTo(State.ERROR, exception);
-            return true;
-        }
-        return false;
+    public synchronized void setError(Exception exception) {
+        if (exception instanceof ProducerFencedException)
+            transitionTo(State.FENCED, exception);
+        else
+            transitionTo(State.ERROR, exception);
     }
 
     /**
@@ -579,6 +575,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
             }
@@ -605,27 +603,43 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
-            Errors error = addPartitionsToTxnResponse.error();
-            if (error == Errors.NONE) {
+            Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
+            boolean hasPartitionErrors = false;
+            for (TopicPartition topicPartition : pendingPartitionsToBeAddedToTransaction) {
+                final Errors error = errors.get(topicPartition);
+                if (error == Errors.NONE || error == null) {
+                    continue;
+                }
+
+                if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
+                    lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                    reenqueue();
+                    return;
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+                    reenqueue();
+                    return;
+                } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+                    fenced();
+                    return;
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                    fatal(error.exception());
+                    return;
+                } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING
+                        || error == Errors.INVALID_TXN_STATE) {
+                    fatal(new KafkaException(error.exception()));
+                    return;
+                } else {
+                    log.error("Could not add partitions to transaction due to partition error. partition={}, error={}", topicPartition, error);
+                    hasPartitionErrors = true;
+                }
+            }
+
+            if (hasPartitionErrors) {
+                fatal(new KafkaException("Could not add partitions to transaction due to partition level errors"));
+            } else {
                 partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
                 pendingPartitionsToBeAddedToTransaction.clear();
                 result.done();
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-                reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
-                reenqueue();
-            } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING) {
-                fatal(new KafkaException(error.exception()));
-            } else if (error == Errors.INVALID_TXN_STATE) {
-                fatal(new KafkaException(error.exception()));
-            } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                fenced();
-            } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                fatal(error.exception());
-            } else {
-                fatal(new KafkaException("Could not add partitions to transaction due to unknown error: " +
-                        error.message()));
             }
         }
     }
@@ -718,6 +732,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
             }
@@ -758,6 +774,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }

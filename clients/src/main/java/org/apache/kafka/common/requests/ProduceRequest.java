@@ -109,6 +109,8 @@ public class ProduceRequest extends AbstractRequest {
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
+    private boolean transactional = false;
+    private boolean idempotent = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(version);
@@ -165,6 +167,8 @@ public class ProduceRequest extends AbstractRequest {
             if (iterator.hasNext())
                 throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
                         "contain exactly one record batch");
+            idempotent = entry.hasProducerId();
+            transactional = entry.isTransactional();
         }
 
         // Note that we do not do similar validation for older versions to ensure compatibility with
@@ -262,6 +266,14 @@ public class ProduceRequest extends AbstractRequest {
 
     public String transactionalId() {
         return transactionalId;
+    }
+
+    public boolean isTransactional() {
+        return transactional;
+    }
+
+    public boolean isIdempotent() {
+        return idempotent;
     }
 
     /**
