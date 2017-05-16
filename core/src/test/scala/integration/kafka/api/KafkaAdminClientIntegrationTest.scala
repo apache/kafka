@@ -22,7 +22,8 @@ import java.util.concurrent.ExecutionException
 
 import org.apache.kafka.common.utils.Utils
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.log.LogConfig
+import kafka.server.{Defaults, KafkaConfig}
 import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.NewTopic
@@ -104,13 +105,12 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   def testListNodes(): Unit = {
     client = AdminClient.create(createConfig())
     val brokerStrs = brokerList.split(",").toList.sorted
-    var nodeStrs : List[String] = null
+    var nodeStrs: List[String] = null
     do {
-      var nodes = client.describeCluster().nodes().get().asScala
+      val nodes = client.describeCluster().nodes().get().asScala
       nodeStrs = nodes.map ( node => s"${node.host}:${node.port}" ).toList.sorted
     } while (nodeStrs.size < brokerStrs.size)
     assertEquals(brokerStrs.mkString(","), nodeStrs.mkString(","))
-    client.close()
   }
 
   @Test
@@ -153,7 +153,78 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
       assertTrue(s"Unknown host:port pair $hostStr in brokerVersionInfos", brokers.contains(hostStr))
       assertEquals(1, brokerVersionInfo.usableVersion(ApiKeys.API_VERSIONS))
     }
-    client.close()
+  }
+
+  @Test
+  def testDescribeAndAlterConfigs(): Unit = {
+    client = AdminClient.create(createConfig)
+    val topic1 = "describe-alter-configs-topic-1"
+    val configResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
+    val topicConfig1 = new Properties
+    topicConfig1.setProperty(LogConfig.MaxMessageBytesProp, "500000")
+    topicConfig1.setProperty(LogConfig.RetentionMsProp, "60000000")
+    TestUtils.createTopic(zkUtils, topic1, 1, 1, servers, topicConfig1)
+
+    val topic2 = "describe-alter-configs-topic-2"
+    val configResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
+    TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
+
+    val configResource3 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
+    val configResource4 = new ConfigResource(ConfigResource.Type.BROKER, servers(2).config.brokerId.toString)
+    val configResources = Seq(configResource1, configResource2, configResource3, configResource4)
+    var describeResult = client.describeConfigs(configResources.asJava)
+    var configs = describeResult.all.get
+
+    assertEquals(4, configs.size)
+
+    assertEquals(topicConfig1.get(LogConfig.MaxMessageBytesProp),
+      configs.get(configResource1).get(LogConfig.MaxMessageBytesProp).value)
+    assertEquals(topicConfig1.get(LogConfig.RetentionMsProp),
+      configs.get(configResource1).get(LogConfig.RetentionMsProp).value)
+
+    assertEquals(Defaults.MessageMaxBytes.toString,
+      configs.get(configResource2).get(LogConfig.MaxMessageBytesProp).value)
+
+    assertEquals(servers(1).config.values.size, configs.get(configResource3).entries.size)
+    assertEquals(servers(1).config.brokerId.toString, configs.get(configResource3).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(servers(1).config.controllerSocketTimeoutMs.toString,
+      configs.get(configResource3).get(KafkaConfig.ControllerSocketTimeoutMsProp).value)
+
+    assertEquals(servers(2).config.values.size, configs.get(configResource4).entries.size)
+    assertEquals(servers(2).config.brokerId.toString, configs.get(configResource4).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(servers(2).config.logCleanerThreads.toString,
+      configs.get(configResource4).get(KafkaConfig.LogCleanerThreadsProp).value)
+
+    val topicConfigEntries1 = Seq(
+      new ConfigEntry(LogConfig.FlushMsProp, "1000")
+    ).asJava
+
+    val topicConfigEntries2 = Seq(
+      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
+      new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
+    ).asJava
+
+    val alterResult = client.alterConfigs(Map(
+      configResource1 -> new Config(topicConfigEntries1),
+      configResource2 -> new Config(topicConfigEntries2)
+    ).asJava)
+
+    assertEquals(Set(configResource1, configResource2).asJava, alterResult.results.keySet)
+    alterResult.all.get
+
+    describeResult = client.describeConfigs(Seq(configResource1, configResource2).asJava)
+    configs = describeResult.all.get
+
+    assertEquals(2, configs.size)
+
+    assertEquals("1000", configs.get(configResource1).get(LogConfig.FlushMsProp).value)
+    assertEquals(Defaults.MessageMaxBytes.toString,
+      configs.get(configResource1).get(LogConfig.MaxMessageBytesProp).value)
+    assertEquals((Defaults.LogRetentionHours * 60 * 60 * 1000).toString,
+      configs.get(configResource1).get(LogConfig.RetentionMsProp).value)
+
+    assertEquals("0.9", configs.get(configResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals("lz4", configs.get(configResource2).get(LogConfig.CompressionTypeProp).value)
   }
 
   val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
