@@ -1646,9 +1646,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
     val currentTimestamp = time.milliseconds
     val defaultExpireTimestamp = offsetRetention + currentTimestamp
-    offsetsMap.values.map { partitionData =>
+    offsetsMap.map { case (topicPartition, partitionData) =>
       val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
-      new OffsetAndMetadata(
+      topicPartition -> new OffsetAndMetadata(
         offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
         commitTimestamp = currentTimestamp,
         expireTimestamp = defaultExpireTimestamp)
