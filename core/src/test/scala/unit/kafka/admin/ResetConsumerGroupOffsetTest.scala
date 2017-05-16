@@ -516,7 +516,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     TestUtils.waitUntilTrue(() => {
       val assignmentsToReset = consumerGroupCommand.resetOffsets()
       val bw = new BufferedWriter(new FileWriter(file))
-      bw.write(consumerGroupCommand.exportAssignmentsToReset(assignmentsToReset))
+      bw.write(consumerGroupCommand.exportOffsetsToReset(assignmentsToReset))
       bw.close()
       assignmentsToReset.exists { assignment => assignment._2.offset() == 0 } && file.exists()
     }, "Expected the consume all messages and save reset offsets plan to file")
