@@ -207,6 +207,11 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case DELETE_ACLS:
                 request = new DeleteAclsRequest(struct, version);
+            case DESCRIBE_CONFIGS:
+                request = new DescribeConfigsRequest(struct, version);
+                break;
+            case ALTER_CONFIGS:
+                request = new AlterConfigsRequest(struct, version);
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +

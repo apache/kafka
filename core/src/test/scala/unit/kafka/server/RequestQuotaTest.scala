@@ -30,9 +30,8 @@ import org.apache.kafka.common.network.{Authenticator, ListenerName, TransportLa
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{Resource => _, ResourceType => _, _}
 import org.apache.kafka.common.security.auth.{DefaultPrincipalBuilder, KafkaPrincipal}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}

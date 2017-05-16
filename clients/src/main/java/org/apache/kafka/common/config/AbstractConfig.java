@@ -126,6 +126,13 @@ public class AbstractConfig {
         return (String) get(key);
     }
 
+    public ConfigDef.Type typeOf(String key) {
+        ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+        if (configKey == null)
+            return null;
+        return configKey.type;
+    }
+
     public Password getPassword(String key) {
         return (Password) get(key);
     }

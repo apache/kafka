@@ -43,10 +43,10 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -126,6 +126,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
+        case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
+        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1894,11 +1896,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (mayThrottle) {
-        val clientId : String =
-          if (request.requestObj.isInstanceOf[ControlledShutdownRequest])
-            request.requestObj.asInstanceOf[ControlledShutdownRequest].clientId.getOrElse("")
-          else
+        val clientId: String = request.requestObj match {
+          case r: ControlledShutdownRequest => r.clientId.getOrElse("")
+          case _ =>
             throw new IllegalStateException("Old style requests should only be used for ControlledShutdownRequest")
+        }
         sendResponseMaybeThrottle(request, clientId, sendResponseCallback)
       } else
         sendResponseExemptThrottle(request, () => sendResponseCallback(0))
@@ -1918,6 +1920,21 @@ class KafkaApis(val requestChannel: RequestChannel,
       else
         sendResponseExemptThrottle(request, new RequestChannel.Response(request, createResponse(0)))
     }
+  }
+
+  def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
+    val alterConfigsRequest = request.body[AlterConfigsRequest]
+    //TODO Authorization
+    val result = adminManager.alterConfigs(alterConfigsRequest.configs.asScala)
+    sendResponseMaybeThrottle(request, new AlterConfigsResponse(_, result.asJava))
+  }
+
+
+  def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
+    val describeConfigsRequest = request.body[DescribeConfigsRequest]
+    //TODO Authorization
+    val configs = adminManager.describeConfigs(describeConfigsRequest.resources.asScala)
+    sendResponseMaybeThrottle(request, new DescribeConfigsResponse(_, configs.asJava))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
