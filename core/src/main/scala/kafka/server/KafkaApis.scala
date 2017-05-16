@@ -475,32 +475,28 @@ class KafkaApis(val requestChannel: RequestChannel,
         FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
-    def convertedPartitionData(responsePartitionData: util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]) = {
-      responsePartitionData.asScala.foreach { case (tp, data) =>
+    def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData) = {
 
-        // Down-conversion of the fetched records is needed when the stored magic version is
-        // greater than that supported by the client (as indicated by the fetch request version). If the
-        // configured magic version for the topic is less than or equal to that supported by the version of the
-        // fetch request, we skip the iteration through the records in order to check the magic version since we
-        // know it must be supported. However, if the magic version is changed from a higher version back to a
-        // lower version, this check will no longer be valid and we will fail to down-convert the messages
-        // which were written in the new format prior to the version downgrade.
-        val convertedData = replicaManager.getMagic(tp) match {
-          case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0) =>
-            trace(s"Down converting message to V0 for fetch request from $clientId")
-            new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
+      // Down-conversion of the fetched records is needed when the stored magic version is
+      // greater than that supported by the client (as indicated by the fetch request version). If the
+      // configured magic version for the topic is less than or equal to that supported by the version of the
+      // fetch request, we skip the iteration through the records in order to check the magic version since we
+      // know it must be supported. However, if the magic version is changed from a higher version back to a
+      // lower version, this check will no longer be valid and we will fail to down-convert the messages
+      // which were written in the new format prior to the version downgrade.
+      replicaManager.getMagic(tp) match {
+        case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0) =>
+          trace(s"Down converting message to V0 for fetch request from $clientId")
+          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
 
-          case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1) =>
-            trace(s"Down converting message to V1 for fetch request from $clientId")
-            new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-                data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
+        case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1) =>
+          trace(s"Down converting message to V1 for fetch request from $clientId")
+          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
 
-          case _ => data
-        }
-        responsePartitionData.put(tp, convertedData)
+        case _ => data
       }
-      responsePartitionData
     }
 
     // the callback for process a fetch response, invoked before throttling
@@ -528,7 +524,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       // fetch response callback invoked after any throttling
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): RequestChannel.Response = {
-          val response = new FetchResponse(convertedPartitionData(fetchedPartitionData), 0)
+          val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
+          fetchedPartitionData.asScala.foreach(e => convertedData.put(e._1, convertedPartitionData(e._1, e._2)))
+          val response = new FetchResponse(convertedData, 0)
           val responseStruct = response.toStruct(versionId)
 
           trace(s"Sending fetch response to client $clientId of ${responseStruct.sizeOf} bytes.")
