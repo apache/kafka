@@ -200,7 +200,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             final FetchRequest.Builder request = fetchEntry.getValue();
             final Node fetchTarget = fetchEntry.getKey();
 
-            log.debug("Sending fetch for partitions {} to broker {}", request.fetchData(), fetchTarget);
+            log.debug("Sending fetch for partitions {} to broker {}", request.fetchData().keySet(), fetchTarget);
             client.send(fetchTarget, request)
                     .addListener(new RequestFutureListener<ClientResponse>() {
                         @Override
@@ -791,7 +791,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 long position = this.subscriptions.position(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize));
-                log.trace("Added fetch request for partition {} at offset {} to node {}", partition, position, node);
+                log.debug("Added fetch request for partition {} at offset {} to node {}", partition, position, node);
             } else {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             }
