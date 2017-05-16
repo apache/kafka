@@ -32,16 +32,12 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
 
     public PluginDesc(Class<? extends T> klass, String version, PluginClassLoader loader) {
         this.klass = klass;
-        this.name = klass.getCanonicalName();
+        this.name = klass.getName();
         this.version = version;
         this.encodedVersion = new DefaultArtifactVersion(version);
         this.type = PluginType.from(klass);
         this.typeName = type.toString();
         this.path = loader.path();
-    }
-
-    public Class<? extends T> pluginClass() {
-        return klass;
     }
 
     @Override
@@ -55,6 +51,10 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
                 ", typeName='" + typeName + '\'' +
                 ", path='" + path + '\'' +
                 '}';
+    }
+
+    public Class<? extends T> pluginClass() {
+        return klass;
     }
 
     @JsonProperty("class")
@@ -89,21 +89,15 @@ public class PluginDesc<T> implements Comparable<PluginDesc<T>> {
         if (!(o instanceof PluginDesc)) {
             return false;
         }
-
         PluginDesc<?> that = (PluginDesc<?>) o;
-
-        if (klass != null ? !klass.equals(that.klass) : that.klass != null) {
-            return false;
-        }
-        if (name != null ? !name.equals(that.name) : that.name != null) {
-            return false;
-        }
-        return version != null ? version.equals(that.version) : that.version == null;
+        return Objects.equals(klass, that.klass) &&
+                Objects.equals(version, that.version) &&
+                type == that.type;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(klass, name, version);
+        return Objects.hash(klass, version, type);
     }
 
     @Override
