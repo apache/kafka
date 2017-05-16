@@ -260,4 +260,40 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                  The DeleteAclsResult.
      */
     public abstract DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
+
+
+    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> resources) {
+        return describeConfigs(resources, new DescribeConfigsOptions());
+    }
+
+    public abstract DescribeConfigsResults describeConfigs(Collection<ConfigResource> resources,
+                                                           DescribeConfigsOptions options);
+
+    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs) {
+        return alterConfigs(configs, new AlterConfigsOptions());
+    }
+
+    public abstract AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+
 }
+/*
+
+
+
+public class DescribeConfigsResult {
+    public Map<ConfigResource, KafkaFuture<Config>> results()
+    public KafkaFuture<Map<ConfigResource, Config>> all();
+}
+
+public class AlterConfigsOptions {
+    public AlterConfigsOptions timeoutMs(Integer timeout);
+    public AlterConfigsOptions validateOnly(boolean validateOnly);
+}
+
+public class AlterConfigsResult {
+    public KafkaFuture<Void> all();
+    public Map<ConfigResource, KafkaFuture<Void>> results();
+}
+
+
+ */

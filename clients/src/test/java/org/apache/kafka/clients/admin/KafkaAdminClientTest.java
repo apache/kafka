@@ -60,8 +60,7 @@ import static org.junit.Assert.fail;
 /**
  * A unit test for KafkaAdminClient.
  *
- * See for an integration test of the KafkaAdminClient.
- * Also see KafkaAdminClientIntegrationTest for a unit test of the admin client.
+ * See KafkaAdminClientIntegrationTest for an integration test of the KafkaAdminClient.
  */
 public class KafkaAdminClientTest {
     @Rule
@@ -160,8 +159,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testCloseAdminClient() throws Exception {
-        try (MockKafkaAdminClientContext ctx = new MockKafkaAdminClientContext(newStrMap())) {
-        }
+        new MockKafkaAdminClientContext(newStrMap()).close();
     }
 
     private static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
@@ -191,7 +189,7 @@ public class KafkaAdminClientTest {
                 }}));
             KafkaFuture<Void> future = ctx.client.
                 createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
-                        put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
+                        put(0, Arrays.asList(new Integer[]{0, 1, 2}));
                     }})), new CreateTopicsOptions().timeoutMs(1000)).all();
             assertFutureError(future, TimeoutException.class);
         }
@@ -208,7 +206,7 @@ public class KafkaAdminClientTest {
                 }}));
             KafkaFuture<Void> future = ctx.client.
                 createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
-                        put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
+                        put(0, Arrays.asList(new Integer[]{0, 1, 2}));
                     }})), new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
