@@ -473,14 +473,15 @@ public enum Errors {
                 return new TransactionCoordinatorFencedException(message);
             }
         }),
-    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transaction Id authorization failed",
+    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transactional Id authorization failed",
                                                   new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {
             return new TransactionalIdAuthorizationException(message);
         }
     }),
-    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer is not authorized to use producer Ids",
+    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer is not authorized to use producer Ids, " +
+            "which is required to write idempotent data.",
                                              new ApiExceptionBuilder() {
         @Override
         public ApiException build(String message) {

@@ -522,7 +522,6 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
 
         sender.run(time.milliseconds());  // get pid.
-        sender.run(time.milliseconds());
 
         assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
@@ -541,6 +540,7 @@ public class TransactionManagerTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
+                assertTrue(body instanceof AddPartitionsToTxnRequest);
                 return true;
             }
         }, new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, error)));

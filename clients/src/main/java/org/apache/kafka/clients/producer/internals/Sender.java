@@ -200,10 +200,11 @@ public class Sender implements Runnable {
         maybeWaitForPid();
 
         if (transactionManager != null && transactionManager.isInErrorState()) {
-            final RuntimeException exception = transactionManager.lastError() instanceof RuntimeException
-                    ? (RuntimeException) transactionManager.lastError()
+            final KafkaException exception = transactionManager.lastError() instanceof KafkaException
+                    ? (KafkaException) transactionManager.lastError()
                     : new KafkaException(transactionManager.lastError());
             this.accumulator.abortBatches(exception);
+            return Long.MAX_VALUE;
         }
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
@@ -390,8 +391,9 @@ public class Sender implements Runnable {
 
                     if (response.hasResponse() && (response.responseBody() instanceof InitProducerIdResponse)) {
                         InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
-                        if (initProducerIdResponse.error() == Errors.PRODUCER_ID_AUTHORIZATION_FAILED) {
-                            transactionManager.setError(initProducerIdResponse.error().exception());
+                        Exception exception = initProducerIdResponse.error().exception();
+                        if (exception != null && !(exception instanceof  RetriableException)) {
+                            transactionManager.setError(exception);
                             return;
                         }
                         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(

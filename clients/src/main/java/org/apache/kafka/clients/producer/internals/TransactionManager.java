@@ -619,11 +619,10 @@ public class TransactionManager {
                 } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                     reenqueue();
                     return;
-                }
-                else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+                } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                     fenced();
                     return;
-                } else if(error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                     fatal(error.exception());
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING

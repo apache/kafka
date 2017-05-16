@@ -257,6 +257,9 @@ public class MemoryRecordsBuilder {
     }
 
     public void close() {
+        if (aborted)
+            throw new IllegalStateException("Cannot close MemoryRecordsBuilder as it has already been aborted");
+
         if (builtRecords != null)
             return;
 
@@ -617,11 +620,15 @@ public class MemoryRecordsBuilder {
             throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
         if (isClosed())
             throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed");
+        if (aborted)
+            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is aborted");
     }
 
     private void ensureOpenForRecordBatchWrite() {
         if (isClosed())
             throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is closed");
+        if (aborted)
+            throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is aborted");
     }
 
     /**

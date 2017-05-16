@@ -59,9 +59,9 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         this.throttleTimeMs = struct.getInt(THROTTLE_TIME_KEY_NAME);
         errors = new HashMap<>();
         for (Object topic : struct.getArray(ERRORS_KEY_NAME)) {
-            Struct topicStruct = (Struct)topic;
+            Struct topicStruct = (Struct) topic;
             final String topicName = topicStruct.getString(TOPIC_NAME);
-            for(Object partition : topicStruct.getArray(PARTITION_ERRORS)) {
+            for (Object partition : topicStruct.getArray(PARTITION_ERRORS)) {
                 Struct partitionStruct = (Struct) partition;
                 TopicPartition topicPartition = new TopicPartition(topicName, partitionStruct.getInt(PARTITION));
                 errors.put(topicPartition, Errors.forCode(partitionStruct.getShort(ERROR_CODE_KEY_NAME)));

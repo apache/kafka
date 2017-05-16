@@ -696,7 +696,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (transactionManager.isInErrorState()) {
             String errorMessage =
-                    "Cannot perform a transactional send because at least one previous transactional request has failed with errors.";
+                    "Cannot perform send because at least one previous transactional or idempotent request has failed with errors.";
             Exception lastError = transactionManager.lastError();
             if (lastError != null)
                 throw new KafkaException(errorMessage, lastError);
