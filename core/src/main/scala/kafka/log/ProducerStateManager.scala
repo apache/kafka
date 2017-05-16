@@ -66,8 +66,8 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       initialEntry: ProducerIdEntry,
-                                      validateSequenceNumbers: Boolean = true,
-                                      loadingFromLog: Boolean = false) {
+                                      validateSequenceNumbers: Boolean,
+                                      loadingFromLog: Boolean) {
   private var producerEpoch = initialEntry.producerEpoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
@@ -76,9 +76,6 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   private var currentTxnFirstOffset = initialEntry.currentTxnFirstOffset
   private var coordinatorEpoch = initialEntry.coordinatorEpoch
   private val transactions = ListBuffer.empty[TxnMetadata]
-
-  def this(producerId: Long, initialEntry: Option[ProducerIdEntry], validateSequenceNumbers: Boolean, loadingFromLog: Boolean) =
-    this(producerId, initialEntry.getOrElse(ProducerIdEntry.Empty), validateSequenceNumbers, loadingFromLog)
 
   private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
     if (this.producerEpoch > producerEpoch) {
@@ -452,9 +449,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     }
   }
 
-  def prepareUpdate(producerId: Long, loadingFromLog: Boolean): ProducerAppendInfo = {
-    new ProducerAppendInfo(producerId, lastEntry(producerId), validateSequenceNumbers, loadingFromLog)
-  }
+  def prepareUpdate(producerId: Long, loadingFromLog: Boolean): ProducerAppendInfo =
+    new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.Empty), validateSequenceNumbers,
+      loadingFromLog)
 
   /**
    * Update the mapping with the given append information
