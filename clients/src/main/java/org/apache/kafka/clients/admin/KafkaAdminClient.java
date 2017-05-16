@@ -238,7 +238,7 @@ public class KafkaAdminClient extends AdminClient {
         return throwable.getClass().getSimpleName();
     }
 
-    static KafkaAdminClient create(AdminClientConfig config) {
+    static KafkaAdminClient createInternal(AdminClientConfig config) {
         Metadata metadata = null;
         Metrics metrics = null;
         NetworkClient networkClient = null;
