@@ -190,9 +190,8 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         long pollTimeout = retryBackoffMs;
-        if (!maybeSendTransactionalRequest(now)) {
+        if (!maybeSendTransactionalRequest(now))
             pollTimeout = sendProducerData(now);
-        }
 
         log.trace("waiting {}ms in poll", pollTimeout);
         this.client.poll(pollTimeout, now);
@@ -301,7 +300,6 @@ public class Sender implements Runnable {
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
-
         if (nextRequestHandler.isEndTxn() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
@@ -317,10 +315,9 @@ public class Sender implements Runnable {
             return false;
         }
 
-        Node targetNode = null;
-
-        while (targetNode == null) {
+        while (true) {
             try {
+                Node targetNode;
                 if (nextRequestHandler.needsCoordinator()) {
                     targetNode = transactionManager.coordinator(nextRequestHandler.coordinatorType());
                     if (targetNode == null) {
@@ -340,8 +337,8 @@ public class Sender implements Runnable {
                                 transactionManager.transactionalId(), retryBackoffMs, nextRequestHandler.requestBuilder());
                         time.sleep(retryBackoffMs);
                     }
-                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequestHandler.requestBuilder(),
-                            now, true, nextRequestHandler);
+                    ClientRequest clientRequest = client.newClientRequest(targetNode.idString(),
+                            nextRequestHandler.requestBuilder(), now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
                     log.trace("TransactionalId: {} -- Sending transactional request {} to node {}", transactionManager.transactionalId(),
                             nextRequestHandler.requestBuilder(), clientRequest.destination());
@@ -349,9 +346,9 @@ public class Sender implements Runnable {
                     return true;
                 }
             } catch (IOException e) {
-                targetNode = null;
-                log.warn("TransactionalId: " + transactionManager.transactionalId() + " -- Got an exception when trying " +
-                        "to find a node to send transactional request " + nextRequestHandler.requestBuilder() + ". Going to back off and retry", e);
+                log.warn("TransactionalId: {} -- Got an exception when trying to find a node to send transactional " +
+                                "request {}. Going to back off and retry", transactionManager.transactionalId(),
+                        nextRequestHandler.requestBuilder(), e);
             }
             log.trace("TransactionalId: {}. About to wait for {}ms before trying to send another transactional request.",
                     transactionManager.transactionalId(), retryBackoffMs);

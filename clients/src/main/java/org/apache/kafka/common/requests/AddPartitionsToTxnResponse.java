@@ -43,7 +43,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
     //   InvalidTxnState
-    //   InvalidPidMapping
+    //   InvalidProducerIdMapping
     //   TopicAuthorizationFailed
     //   InvalidProducerEpoch
     //   UnknownTopicOrPartition

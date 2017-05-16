@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
-public class ProducerIdAuthorizationException extends ApiException {
+public class ProducerIdAuthorizationException extends AuthorizationException {
     public ProducerIdAuthorizationException(final String message) {
         super(message);
     }
