@@ -132,11 +132,11 @@ public class StreamsResetter {
         return exitCode;
     }
 
-    private Properties parseKeyValues(List<String> consumerProperties) {
+    private Properties parseKeyValues(final List<String> consumerProperties) {
 
-        Properties parsedConsumerProperties = new Properties();
-        for (String val: consumerProperties) {
-            String[] property = val.split("=");
+        final Properties parsedConsumerProperties = new Properties();
+        for (final String val: consumerProperties) {
+            final String[] property = val.split("=");
             if (property.length == 2) {
                 parsedConsumerProperties.put(property[0], property[1]);
             } else {
