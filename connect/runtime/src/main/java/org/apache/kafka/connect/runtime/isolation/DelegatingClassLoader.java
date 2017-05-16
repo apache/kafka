@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -75,11 +74,6 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     public DelegatingClassLoader(List<String> pluginPaths) {
         this(pluginPaths, ClassLoader.getSystemClassLoader());
-    }
-
-    private static boolean isConcrete(Class<?> cls) {
-        final int mod = cls.getModifiers();
-        return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
     }
 
     private static List<Path> pluginDirs(Path topDir) throws IOException {
@@ -220,7 +214,7 @@ public class DelegatingClassLoader extends URLClassLoader {
 
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
-            if (isConcrete(plugin)) {
+            if (PluginUtils.isConcrete(plugin)) {
                 // Temporary workaround until all the plugins are versioned.
                 if (Connector.class.isAssignableFrom(plugin)) {
                     result.add(

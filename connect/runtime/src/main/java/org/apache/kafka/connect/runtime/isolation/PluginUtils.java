@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.lang.reflect.Modifier;
+
 public class PluginUtils {
     private static final String BLACKLIST = "^(?:"
             + "java"
@@ -37,6 +39,11 @@ public class PluginUtils {
 
     public static boolean shouldLoadInIsolation(String name) {
         return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
+    }
+
+    public static boolean isConcrete(Class<?> klass) {
+        int mod = klass.getModifiers();
+        return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
     }
 
     public static String simpleName(PluginDesc<?> plugin) {
