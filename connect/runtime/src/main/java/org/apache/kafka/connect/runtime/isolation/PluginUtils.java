@@ -35,7 +35,7 @@ public class PluginUtils {
             + "|storage\\.StringConverter"
             + ")$";
 
-    public static boolean validate(String name) {
+    public static boolean shouldLoadInIsolation(String name) {
         return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
     }
 }

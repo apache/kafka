@@ -264,7 +264,7 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-        if (!PluginUtils.validate(name)) {
+        if (!PluginUtils.shouldLoadInIsolation(name)) {
             // There are no paths in this classloader, will attempt to load with the parent.
             return super.loadClass(name, resolve);
         }

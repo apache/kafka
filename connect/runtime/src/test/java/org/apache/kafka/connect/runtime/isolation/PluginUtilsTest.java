@@ -34,57 +34,94 @@ public class PluginUtilsTest {
 
     @Test
     public void testJavaLibraryClasses() throws Exception {
-        assertFalse(PluginUtils.validate("java."));
-        assertFalse(PluginUtils.validate("java.lang.Object"));
-        assertFalse(PluginUtils.validate("java.lang.String"));
-        assertFalse(PluginUtils.validate("java.util.HashMap$Entry"));
-        assertFalse(PluginUtils.validate("java.io.Serializable"));
-        assertFalse(PluginUtils.validate("javax."));
-        assertFalse(PluginUtils.validate("javax.management.loading.ClassLoaderRepository"));
-        assertFalse(PluginUtils.validate("org.omg."));
-        assertFalse(PluginUtils.validate("org.omg.CORBA.Object"));
-        assertFalse(PluginUtils.validate("org.w3c.dom."));
-        assertFalse(PluginUtils.validate("org.w3c.dom.traversal.TreeWalker"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("java."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("java.lang.Object"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("java.lang.String"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("java.util.HashMap$Entry"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("java.io.Serializable"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("javax."));
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "javax.management.loading.ClassLoaderRepository")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.omg."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.omg.CORBA.Object"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.w3c.dom."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.w3c.dom.traversal.TreeWalker"));
     }
 
     @Test
     public void testThirdPartyClasses() throws Exception {
-        assertFalse(PluginUtils.validate("org.apache.log4j."));
-        assertFalse(PluginUtils.validate("org.apache.log4j.Level"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.log4j."));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.log4j.Level"));
     }
 
     @Test
     public void testConnectFrameworkClasses() throws Exception {
-        assertFalse(PluginUtils.validate("org.apache.kafka.common."));
-        assertFalse(PluginUtils.validate("org.apache.kafka.common.config.AbstractConfig"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.common.config.ConfigDef$Type"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.common.serialization.Deserializer"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect."));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.connector.Connector"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.source.SourceConnector"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.sink.SinkConnector"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.connector.Task"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.source.SourceTask"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.sink.SinkTask"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.transforms.Transformation"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.storage.Converter"));
-        assertFalse(PluginUtils.validate("org.apache.kafka.connect.storage.OffsetBackingStore"));
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.kafka.common."));
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.AbstractConfig")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.ConfigDef$Type")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.serialization.Deserializer")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect."));
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.Connector")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.source.SourceConnector")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.sink.SinkConnector")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.connector.Task"));
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.source.SourceTask")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.sink.SinkTask"));
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.transforms.Transformation")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.Converter")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.OffsetBackingStore")
+        );
     }
 
     @Test
     public void testAllowedConnectFrameworkClasses() throws Exception {
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.transforms."));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.transforms.ExtractField"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.transforms"
-                + ".ExtractField$Key"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.json."));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.json.JsonConverter"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.json.JsonConverter$21"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.file."));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.file.FileStreamSourceTask"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.file.FileStreamSinkConnector"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.converters."));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.converters.ByteArrayConverter"));
-        assertTrue(PluginUtils.validate("org.apache.kafka.connect.storage.StringConverter"));
+        assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.transforms."));
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.transforms.ExtractField")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.transforms.ExtractField$Key")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.json."));
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.json.JsonConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.json.JsonConverter$21")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.file."));
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.file.FileStreamSourceTask")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.file.FileStreamSinkConnector")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.converters."));
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.ByteArrayConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.StringConverter")
+        );
     }
 }

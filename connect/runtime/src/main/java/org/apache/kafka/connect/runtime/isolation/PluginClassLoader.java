@@ -40,7 +40,7 @@ public class PluginClassLoader extends URLClassLoader {
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         Class<?> klass = findLoadedClass(name);
         if (klass == null) {
-            if (PluginUtils.validate(name)) {
+            if (PluginUtils.shouldLoadInIsolation(name)) {
                 try {
                     klass = findClass(name);
                 } catch (ClassNotFoundException e) {
