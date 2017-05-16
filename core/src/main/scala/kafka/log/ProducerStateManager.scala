@@ -71,9 +71,11 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  *                                of this is the consumer offsets topic which uses producer ids from incoming
  *                                TxnOffsetCommit, but has no sequence number to validate and does not depend
  *                                on the deduplication which sequence numbers provide.
- * @param loadingFromLog This parameter indicates whether the new append is from . The only difference in behavior is
- *                       that we do not validate the sequence number of the first append since we may have lost previous
- *                       sequence numbers when segments were removed due to log retention enforcement.
+ * @param loadingFromLog This parameter indicates whether the new append is being loaded directly from the log.
+ *                       This is used to repopulate producer state when the broker is initialized. The only
+ *                       difference in behavior is that we do not validate the sequence number of the first append
+ *                       since we may have lost previous sequence numbers when segments were removed due to log
+ *                       retention enforcement.
  */
 private[log] class ProducerAppendInfo(val producerId: Long,
                                       initialEntry: ProducerIdEntry,
