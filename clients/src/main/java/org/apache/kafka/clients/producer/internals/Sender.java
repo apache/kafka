@@ -199,6 +199,13 @@ public class Sender implements Runnable {
         Cluster cluster = metadata.fetch();
         maybeWaitForProducerId();
 
+        if (transactionManager != null && transactionManager.isInErrorState()) {
+            final KafkaException exception = transactionManager.lastError() instanceof KafkaException
+                    ? (KafkaException) transactionManager.lastError()
+                    : new KafkaException(transactionManager.lastError());
+            this.accumulator.abortBatches(exception);
+            return Long.MAX_VALUE;
+        }
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -376,13 +383,19 @@ public class Sender implements Runnable {
         if (transactionManager == null || transactionManager.isTransactional())
             return;
 
-        while (!transactionManager.hasProducerId()) {
+        while (!transactionManager.hasProducerId() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
+
                     if (response.hasResponse() && (response.responseBody() instanceof InitProducerIdResponse)) {
                         InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
+                        Exception exception = initProducerIdResponse.error().exception();
+                        if (exception != null && !(exception instanceof  RetriableException)) {
+                            transactionManager.setError(exception);
+                            return;
+                        }
                         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
                                 initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
                         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
@@ -401,6 +414,7 @@ public class Sender implements Runnable {
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
+
     }
 
     /**
