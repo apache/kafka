@@ -80,6 +80,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
     private static final int TTL_SECONDS = TTL_NOT_USED;
     private static final int MAX_WRITE_BUFFERS = 3;
     private static final String DB_FILE_DIR = "rocksdb";
+    private static final int BITS_PER_KEY = 10;
 
     private final String name;
     private final String parentDir;
@@ -119,7 +120,7 @@ public class RocksDBStore<K, V> implements KeyValueStore<K, V> {
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
-        tableConfig.setFilter(new BloomFilter(10));
+        tableConfig.setFilter(new BloomFilter(BITS_PER_KEY));
 
         options.setTableFormatConfig(tableConfig);
         options.setWriteBufferSize(WRITE_BUFFER_SIZE);
