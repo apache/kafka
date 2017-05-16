@@ -1454,12 +1454,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
       errors.put(producerId, responseStatus.mapValues(_.error).asJava)
 
-      val offsetsPartitions = responseStatus.filterKeys(_.topic == GROUP_METADATA_TOPIC_NAME)
-      if (offsetsPartitions.nonEmpty) {
-        val successfulOffsetsPartitions = offsetsPartitions.filter { case (_, partitionResponse) =>
-          partitionResponse.error == Errors.NONE
-        }.keys
+      val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
+        topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
+      }.keys
 
+      if (successfulOffsetsPartitions.nonEmpty) {
+        // as soon as the end transaction marker has been written for a transactional offset commit,
+        // call to the group coordinator to materialize the offsets into the cache
         try {
           groupCoordinator.handleTxnCompletion(producerId, successfulOffsetsPartitions, result)
         } catch {
@@ -1602,7 +1603,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (!authorizedForDescribe && exists)
               debug(s"TxnOffsetCommit with correlation id ${header.correlationId} from client ${header.clientId} " +
                 s"on partition $topicPartition failing due to user not having DESCRIBE authorization, but returning " +
-                s"UNKNOWN_TOPIC_OR_PARTITION")
+                s"${Errors.UNKNOWN_TOPIC_OR_PARTITION.name}")
           authorizedForDescribe && exists
       }
 
@@ -1645,13 +1646,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
     val currentTimestamp = time.milliseconds
     val defaultExpireTimestamp = offsetRetention + currentTimestamp
-    offsetsMap.mapValues { partitionData =>
+    offsetsMap.values.map { partitionData =>
       val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
       new OffsetAndMetadata(
         offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
         commitTimestamp = currentTimestamp,
-        expireTimestamp = defaultExpireTimestamp
-      )
+        expireTimestamp = defaultExpireTimestamp)
     }
   }
 
