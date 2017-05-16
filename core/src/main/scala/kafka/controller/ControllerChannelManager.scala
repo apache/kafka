@@ -284,7 +284,11 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
-      result.put(topicPartition, PartitionStateInfo(leaderIsrAndControllerEpoch, replicas.toSet))
+      if (!result.get(topicPartition).exists(
+        x => x.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch >= leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch))
+      {
+        result.put(topicPartition, PartitionStateInfo(leaderIsrAndControllerEpoch, replicas.toSet))
+      }
     }
 
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq,
