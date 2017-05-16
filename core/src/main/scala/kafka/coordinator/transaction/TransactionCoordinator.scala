@@ -197,7 +197,7 @@ class TransactionCoordinator(brokerId: Int,
 
         case Ongoing =>
           // indicate to abort the current ongoing txn first
-          Right(coordinatorEpoch, txnMetadata.prepareNoTransit())
+          Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
       }
     }
   }

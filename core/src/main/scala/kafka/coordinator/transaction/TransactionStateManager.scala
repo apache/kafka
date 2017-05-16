@@ -76,6 +76,9 @@ class TransactionStateManager(brokerId: Int,
   /** partitions of transaction topic that are being loaded, partition lock should be called BEFORE accessing this set */
   private val loadingPartitions: mutable.Set[Int] = mutable.Set()
 
+  /** partitions of transaction topic that are being removed, partition lock should be called BEFORE accessing this set */
+  private val leavingPartitions: mutable.Set[Int] = mutable.Set()
+
   /** transaction metadata cache indexed by assigned transaction topic partition ids */
   private val transactionMetadataCache: mutable.Map[Int, TxnMetadataCacheEntry] = mutable.Map()
 
@@ -278,6 +281,7 @@ class TransactionStateManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
 
     inLock(stateLock) {
+      leavingPartitions.remove(partitionId)
       loadingPartitions.add(partitionId)
     }
 
@@ -285,29 +289,32 @@ class TransactionStateManager(brokerId: Int,
       info(s"Loading transaction metadata from $topicPartition")
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
-      loadedTransactions.foreach {
-        case (transactionalId, txnMetadata) =>
-          val result = txnMetadata synchronized {
-            // if state is PrepareCommit or PrepareAbort we need to complete the transaction
-            txnMetadata.state match {
-              case PrepareAbort =>
-                Some(TransactionResult.ABORT, txnMetadata.prepareComplete(time.milliseconds()))
-              case PrepareCommit =>
-                Some(TransactionResult.COMMIT, txnMetadata.prepareComplete(time.milliseconds()))
-              case _ =>
-                // nothing need to be done
-                None
-            }
-          }
-
-          result.foreach { case (command, newMetadata) =>
-            sendTxnMarkers(transactionalId, coordinatorEpoch, command, txnMetadata, newMetadata)
-          }
-      }
-
       inLock(stateLock) {
-        addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
-        loadingPartitions.remove(partitionId)
+        if (loadingPartitions.contains(partitionId)) {
+          addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
+
+          loadedTransactions.foreach {
+            case (transactionalId, txnMetadata) =>
+              val result = txnMetadata synchronized {
+                // if state is PrepareCommit or PrepareAbort we need to complete the transaction
+                txnMetadata.state match {
+                  case PrepareAbort =>
+                    Some(TransactionResult.ABORT, txnMetadata.prepareComplete(time.milliseconds()))
+                  case PrepareCommit =>
+                    Some(TransactionResult.COMMIT, txnMetadata.prepareComplete(time.milliseconds()))
+                  case _ =>
+                    // nothing need to be done
+                    None
+                }
+              }
+
+              result.foreach { case (command, newMetadata) =>
+                sendTxnMarkers(transactionalId, coordinatorEpoch, command, txnMetadata, newMetadata)
+              }
+          }
+
+          loadingPartitions.remove(partitionId)
+        }
       }
     }
 
@@ -323,18 +330,25 @@ class TransactionStateManager(brokerId: Int,
 
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
 
+    inLock(stateLock) {
+      loadingPartitions.remove(partitionId)
+      leavingPartitions.add(partitionId)
+    }
+
     def removeTransactions() {
       inLock(stateLock) {
-        transactionMetadataCache.remove(partitionId) match {
-          case Some(txnMetadataCacheEntry) =>
-            info(s"Removed ${txnMetadataCacheEntry.metadataPerTransactionalId.size} cached transaction metadata for $topicPartition on follower transition")
+        if (leavingPartitions.contains(partitionId)) {
+          transactionMetadataCache.remove(partitionId) match {
+            case Some(txnMetadataCacheEntry) =>
+              info(s"Removed ${txnMetadataCacheEntry.metadataPerTransactionalId.size} cached transaction metadata for $topicPartition on follower transition")
 
-          case None =>
-            info(s"Trying to remove cached transaction metadata for $topicPartition on follower transition but there is no entries remaining; " +
-              s"it is likely that another process for removing the cached entries has just executed earlier before")
+            case None =>
+              info(s"Trying to remove cached transaction metadata for $topicPartition on follower transition but there is no entries remaining; " +
+                s"it is likely that another process for removing the cached entries has just executed earlier before")
+          }
+
+          leavingPartitions.remove(partitionId)
         }
-
-        loadingPartitions.remove(partitionId)
       }
     }
 
