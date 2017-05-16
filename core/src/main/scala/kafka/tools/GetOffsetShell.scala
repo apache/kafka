@@ -21,10 +21,10 @@ package kafka.tools
 import java.util.Properties
 
 import joptsimple._
-import kafka.common.Topic.InternalTopics
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, ToolsUtils}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, KafkaConsumer, OffsetAndTimestamp}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic.isInternal
 
 import scala.collection.JavaConversions._
 
@@ -242,7 +242,7 @@ object GetOffsetShell extends Logging {
     if (includeInternalTopics)
       partitions
     else
-      partitions.filterNot(tp => InternalTopics.contains(tp.topic))
+      partitions.filterNot(tp => isInternal(tp.topic))
   }
 
   private def getNonExistingPartitions(partitions: Set[Int],
