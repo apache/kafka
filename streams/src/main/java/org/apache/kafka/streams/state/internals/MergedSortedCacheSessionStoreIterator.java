@@ -32,12 +32,15 @@ import org.apache.kafka.streams.state.StateSerdes;
 class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSortedCacheStoreIterator<Windowed<K>, Windowed<Bytes>, AGG, byte[]> {
 
     private final StateSerdes<K, AGG> serdes;
+    private final SegmentedCacheFunction cacheFunction;
 
     MergedSortedCacheSessionStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
                                           final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator,
-                                          final StateSerdes<K, AGG> serdes) {
+                                          final StateSerdes<K, AGG> serdes,
+                                          final SegmentedCacheFunction cacheFunction) {
         super(cacheIterator, storeIterator);
         this.serdes = serdes;
+        this.cacheFunction = cacheFunction;
     }
 
     @Override
@@ -47,7 +50,8 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
 
     @Override
     Windowed<K> deserializeCacheKey(final Bytes cacheKey) {
-        return SessionKeySerde.from(cacheKey.get(), serdes.keyDeserializer(), serdes.topic());
+        byte[] binaryKey = cacheFunction.key(cacheKey).get();
+        return SessionKeySerde.from(binaryKey, serdes.keyDeserializer(), serdes.topic());
     }
 
 
@@ -65,7 +69,6 @@ class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSorted
     @Override
     public int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
         Bytes storeKeyBytes = SessionKeySerde.bytesToBinary(storeKey);
-        return cacheKey.compareTo(storeKeyBytes);
+        return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }
-

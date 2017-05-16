@@ -22,6 +22,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import static org.apache.kafka.streams.state.internals.SegmentedCacheFunction.bytesFromCacheKey;
+
 /**
  * Merges two iterators. Assumes each of them is sorted by key
  *
@@ -45,7 +47,9 @@ class MergedSortedCacheWindowStoreIterator<V> extends AbstractMergedSortedCacheS
 
     @Override
     Long deserializeCacheKey(final Bytes cacheKey) {
-        return WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
+        byte[] binaryKey = bytesFromCacheKey(cacheKey);
+
+        return WindowStoreUtils.timestampFromBinaryKey(binaryKey);
     }
 
     @Override
@@ -60,7 +64,9 @@ class MergedSortedCacheWindowStoreIterator<V> extends AbstractMergedSortedCacheS
 
     @Override
     public int compare(final Bytes cacheKey, final Long storeKey) {
-        final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
+        byte[] binaryKey = bytesFromCacheKey(cacheKey);
+
+        final Long cacheTimestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
         return cacheTimestamp.compareTo(storeKey);
     }
 }

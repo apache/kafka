@@ -86,7 +86,7 @@ public interface SegmentedBytesStore extends StateStore {
         void init(final String topic);
 
         /**
-         * Given a record-key and a time, construct a Segmented key that represents
+         * Given a range of record keys and a time, construct a Segmented key that represents
          * the upper range of keys to search when performing range queries.
          * @see SessionKeySchema#upperRange
          * @see WindowKeySchema#upperRange
@@ -97,7 +97,7 @@ public interface SegmentedBytesStore extends StateStore {
         Bytes upperRange(final Bytes key, final long to);
 
         /**
-         * Given a record-key and a time, construct a Segmented key that represents
+         * Given a range of record keys and a time, construct a Segmented key that represents
          * the lower range of keys to search when performing range queries.
          * @see SessionKeySchema#lowerRange
          * @see WindowKeySchema#lowerRange

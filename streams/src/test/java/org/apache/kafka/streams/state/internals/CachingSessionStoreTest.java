@@ -63,11 +63,15 @@ public class CachingSessionStoreTest {
     public void setUp() throws Exception {
         final SessionKeySchema schema = new SessionKeySchema();
         schema.init("topic");
-        underlying = new RocksDBSegmentedBytesStore("test", 60000, 3, schema);
+        final int retention = 60000;
+        final int numSegments = 3;
+        underlying = new RocksDBSegmentedBytesStore("test", retention, numSegments, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore,
                                                  Serdes.String(),
-                                                 Serdes.Long());
+                                                 Serdes.Long(),
+                                                 Segments.segmentInterval(retention, numSegments)
+                                                 );
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic"));

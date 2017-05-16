@@ -28,16 +28,19 @@ class MergedSortedCacheWindowStoreKeyValueIterator<K, V>
 
     private final StateSerdes<K, V> serdes;
     private final long windowSize;
+    private final SegmentedCacheFunction cacheFunction;
 
     MergedSortedCacheWindowStoreKeyValueIterator(
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator,
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator,
         final StateSerdes<K, V> serdes,
-        final long windowSize
+        final long windowSize,
+        final SegmentedCacheFunction cacheFunction
     ) {
         super(filteredCacheIterator, underlyingIterator);
         this.serdes = serdes;
         this.windowSize = windowSize;
+        this.cacheFunction = cacheFunction;
     }
 
     @Override
@@ -52,8 +55,10 @@ class MergedSortedCacheWindowStoreKeyValueIterator<K, V>
 
     @Override
     Windowed<K> deserializeCacheKey(final Bytes cacheKey) {
-        final long timestamp = WindowStoreUtils.timestampFromBinaryKey(cacheKey.get());
-        final K key = WindowStoreUtils.keyFromBinaryKey(cacheKey.get(), serdes);
+        byte[] binaryKey = cacheFunction.key(cacheKey).get();
+
+        final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
+        final K key = WindowStoreUtils.keyFromBinaryKey(binaryKey, serdes);
         return new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
     }
 
@@ -65,6 +70,6 @@ class MergedSortedCacheWindowStoreKeyValueIterator<K, V>
     @Override
     int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
         Bytes storeKeyBytes = WindowStoreUtils.toBinaryKey(storeKey.key().get(), storeKey.window().start(), 0);
-        return cacheKey.compareTo(storeKeyBytes);
+        return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }

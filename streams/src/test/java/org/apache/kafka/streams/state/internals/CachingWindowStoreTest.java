@@ -64,13 +64,16 @@ public class CachingWindowStoreTest {
     @Before
     public void setUp() throws Exception {
         keySchema = new WindowKeySchema();
-        underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
+        final int retention = 30000;
+        final int numSegments = 3;
+        underlying = new RocksDBSegmentedBytesStore("test", retention, numSegments, keySchema);
         final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false, WINDOW_SIZE);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
         cachingStore = new CachingWindowStore<>(windowStore,
                                                 Serdes.String(),
                                                 Serdes.String(),
-                                                WINDOW_SIZE);
+                                                WINDOW_SIZE,
+                                                Segments.segmentInterval(retention, numSegments));
         cachingStore.setFlushListener(cacheListener);
         cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
@@ -239,7 +242,7 @@ public class CachingWindowStoreTest {
 
         assertThat(
             toList(cachingStore.fetch("a", "aa", 0, Long.MAX_VALUE)),
-            equalTo(Utils.mkList(windowedPair("a", "0001", 0), windowedPair("a", "0003", 1), windowedPair("a", "0005", 60000L), windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1)))
+            equalTo(Utils.mkList(windowedPair("a", "0001", 0), windowedPair("a", "0003", 1), windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1), windowedPair("a", "0005", 60000L)))
         );
     }
 

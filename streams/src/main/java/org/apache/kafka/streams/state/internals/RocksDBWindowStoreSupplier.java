@@ -37,6 +37,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
     private final long retentionPeriod;
     private final boolean retainDuplicates;
     private final int numSegments;
+    private final long segmentInterval;
     private final long windowSize;
     private final boolean enableCaching;
 
@@ -51,6 +52,7 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
         this.numSegments = numSegments;
         this.windowSize = windowSize;
         this.enableCaching = enableCaching;
+        this.segmentInterval = Segments.segmentInterval(retentionPeriod, numSegments);
     }
 
     public String name() {
@@ -87,6 +89,6 @@ public class RocksDBWindowStoreSupplier<K, V> extends AbstractStoreSupplier<K, V
             return new RocksDBWindowStore<>(metered, keySerde, valueSerde, retainDuplicates, windowSize);
         }
         final RocksDBWindowStore<Bytes, byte[]> windowed = RocksDBWindowStore.bytesStore(metered, retainDuplicates, windowSize);
-        return new CachingWindowStore<>(windowed, keySerde, valueSerde, windowSize);
+        return new CachingWindowStore<>(windowed, keySerde, valueSerde, windowSize, segmentInterval);
     }
 }

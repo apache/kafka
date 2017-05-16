@@ -35,27 +35,32 @@ import java.util.List;
 
 class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
 
+
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final long windowSize;
     private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
 
+
     private String name;
     private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
     private CacheFlushListener<Windowed<K>, V> flushListener;
+    private final SegmentedCacheFunction cacheFunction;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde,
-                       final long windowSize) {
+                       final long windowSize,
+                       final long segmentInterval) {
         super(underlying);
         this.underlying = underlying;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.windowSize = windowSize;
+        this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
     }
 
     @SuppressWarnings("unchecked")
@@ -80,7 +85,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
                 for (ThreadCache.DirtyEntry entry : entries) {
-                    final byte[] binaryWindowKey = entry.key().get();
+                    final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
                     final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryWindowKey);
 
                     final Windowed<K> windowedKey = new Windowed<>(WindowStoreUtils.keyFromBinaryKey(binaryWindowKey, serdes),
@@ -140,7 +145,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final Bytes keyBytes = WindowStoreUtils.toBinaryKey(key, timestamp, 0, serdes);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       timestamp, context.partition(), context.topic());
-        cache.put(name, keyBytes, entry);
+        cache.put(name, cacheFunction.cacheKey(keyBytes), entry);
     }
 
     @Override
@@ -149,17 +154,19 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         // if store is open outside as well.
         validateStoreOpen();
 
-        Bytes fromBytes = WindowStoreUtils.toBinaryKey(key, timeFrom, 0, serdes);
-        Bytes toBytes = WindowStoreUtils.toBinaryKey(key, timeTo, 0, serdes);
-
         final Bytes keyBytes = Bytes.wrap(serdes.rawKey(key));
         final WindowStoreIterator<byte[]> underlyingIterator = underlying.fetch(keyBytes, timeFrom, timeTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, fromBytes, toBytes);
+
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyBytes, timeFrom));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyBytes, timeTo));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyBytes,
                                                                              timeFrom,
                                                                              timeTo);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
+            cacheIterator, hasNextCondition, cacheFunction
+        );
 
         return new MergedSortedCacheWindowStoreIterator<>(filteredCacheIterator,
                                                           underlyingIterator,
@@ -172,25 +179,26 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         // if store is open outside as well.
         validateStoreOpen();
 
-        Bytes fromBytes = WindowStoreUtils.toBinaryKey(from, timeFrom, 0, serdes);
-        Bytes toBytes = WindowStoreUtils.toBinaryKey(to, timeTo, 0, serdes);
-
         final Bytes keyFromBytes = Bytes.wrap(serdes.rawKey(from));
         final Bytes keyToBytes = Bytes.wrap(serdes.rawKey(to));
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = underlying.fetch(keyFromBytes, keyToBytes, timeFrom, timeTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, fromBytes, toBytes);
+
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFromBytes, timeFrom));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyToBytes, timeTo));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFromBytes,
                                                                              keyToBytes,
                                                                              timeFrom,
                                                                              timeTo);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator<>(
             filteredCacheIterator,
             underlyingIterator,
             serdes,
-            windowSize
+            windowSize,
+            cacheFunction
         );
     }
 
