@@ -605,7 +605,7 @@ public class StreamThread extends Thread {
 
                         if (task == null) {
                             log.error("Unexpected error: fetched partition {} does not belong to the active task partitions." +
-                                    "\n\t tasksByPartition: {}\n\t assignedPartitions: {}", partition, activeTasksByPartition, consumer.assignment());
+                                    "\n\t tasksByPartition: {}\n\t activeTasks: {}\n\t activeTasks: {}\n\tassignedPartitions: {}", partition, activeTasksByPartition, activeTasks, standbyTasks, consumer.assignment());
                         } else {
                             numAddedRecords += task.addRecords(partition, records.records(partition));
                         }
@@ -1241,7 +1241,7 @@ public class StreamThread extends Thread {
 
     class TaskCreator extends AbstractTaskCreator {
         void createTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-            log.debug("{} creating new task {}", logPrefix, taskId);
+            log.debug("{} creating new task {} with partitions {}", logPrefix, taskId, partitions);
             final StreamTask task = createStreamTask(taskId, partitions);
 
             activeTasks.put(taskId, task);
