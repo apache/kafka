@@ -60,7 +60,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
                                                            final long earliestSessionEndTime,
                                                            final long latestSessionStartTime) {
         validateStoreOpen();
-        final Bytes binarySessionId = Bytes.wrap(keySerde.serializer().serialize(topic, key));
+        final Bytes binarySessionId = Bytes.wrap(serdes.rawKey(key));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName,
                                                                                   keySchema.lowerRange(binarySessionId,
                                                                                                        earliestSessionEndTime).get(),
@@ -81,7 +81,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
 
     public void put(final Windowed<K> key, AGG value) {
         validateStoreOpen();
-        final Bytes binaryKey = SessionKeySerde.toBinary(key, keySerde.serializer(), topic);
+        final Bytes binaryKey = SessionKeySerde.toBinary(key, serdes.keySerializer(), topic);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
         cache.put(cacheName, binaryKey.get(), entry);
@@ -127,7 +127,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractWrappedState
         final RecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {
-            final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), keySerde.deserializer(), topic);
+            final Windowed<K> key = SessionKeySerde.from(binaryKey.get(), serdes.keyDeserializer(), topic);
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());
                 final AGG oldValue = fetchPrevious(binaryKey);

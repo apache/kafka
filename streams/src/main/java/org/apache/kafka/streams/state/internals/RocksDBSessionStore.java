@@ -62,7 +62,7 @@ class RocksDBSessionStore<K, AGG> implements SessionStore<K, AGG> {
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), aggSerde.serializer().serialize(bytesStore.name(), aggregate));
+        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), serdes.rawValue(aggregate));
     }
 
     @Override
