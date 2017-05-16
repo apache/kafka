@@ -247,6 +247,10 @@ public final class ProducerBatch {
         recordsBuilder.close();
     }
 
+    public void abort() {
+        recordsBuilder.abort();
+    }
+
     public boolean isClosed() {
         return recordsBuilder.isClosed();
     }

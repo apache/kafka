@@ -19,12 +19,13 @@ package kafka.coordinator.group
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.common.{OffsetAndMetadata, Topic}
+import kafka.common.OffsetAndMetadata
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse, TransactionResult}
@@ -428,7 +429,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleTxnCompletion(producerId: Long,
                           topicPartitions: Seq[TopicPartition],
                           transactionResult: TransactionResult) {
-    val offsetPartitions = topicPartitions.filter(_.topic() == Topic.GroupMetadataTopicName).map(_.partition).toSet
+    val offsetPartitions = topicPartitions.filter(_.topic == Topic.GROUP_METADATA_TOPIC_NAME).map(_.partition).toSet
     groupManager.handleTxnCompletion(producerId, offsetPartitions, transactionResult == TransactionResult.COMMIT)
   }
 

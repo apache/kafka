@@ -17,7 +17,6 @@
 
 package kafka.admin
 
-import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
@@ -26,6 +25,7 @@ import kafka.utils.ZkUtils._
 import java.util.Random
 import java.util.Properties
 
+import kafka.common.TopicAlreadyMarkedForDeletionException
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidReplicationFactorException, InvalidTopicException, LeaderNotAvailableException, ReplicaNotAvailableException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
@@ -39,6 +39,7 @@ import scala.collection.mutable
 import collection.Map
 import collection.Set
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.apache.kafka.common.internals.Topic
 
 trait AdminUtilities {
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties)

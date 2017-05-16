@@ -24,13 +24,14 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 public class AddPartitionsToTxnRequest extends AbstractRequest {
     private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_EPOCH_KEY_NAME = "producer_epoch";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITIONS_KEY_NAME = "partitions";
@@ -72,8 +73,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     public AddPartitionsToTxnRequest(Struct struct, short version) {
         super(version);
         this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.producerId = struct.getLong(PID_KEY_NAME);
-        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
+        this.producerId = struct.getLong(PRODUCER_ID_KEY_NAME);
+        this.producerEpoch = struct.getShort(PRODUCER_EPOCH_KEY_NAME);
 
         List<TopicPartition> partitions = new ArrayList<>();
         Object[] topicPartitionsArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
@@ -107,8 +108,8 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.ADD_PARTITIONS_TO_TXN.requestSchema(version()));
         struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(PID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, producerEpoch);
+        struct.set(PRODUCER_ID_KEY_NAME, producerId);
+        struct.set(PRODUCER_EPOCH_KEY_NAME, producerEpoch);
 
         Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(partitions);
         Object[] partitionsArray = new Object[mappedPartitions.size()];
@@ -126,7 +127,11 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     @Override
     public AddPartitionsToTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return new AddPartitionsToTxnResponse(throttleTimeMs, Errors.forException(e));
+        final HashMap<TopicPartition, Errors> errors = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            errors.put(partition, Errors.forException(e));
+        }
+        return new AddPartitionsToTxnResponse(throttleTimeMs, errors);
     }
 
     public static AddPartitionsToTxnRequest parse(ByteBuffer buffer, short version) {

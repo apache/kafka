@@ -37,7 +37,6 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
@@ -114,7 +113,7 @@ public class TransactionManager {
 
 
     // We use the priority to determine the order in which requests need to be sent out. For instance, if we have
-    // a pending FindCoordinator request, that must always go first. Next, If we need a PID, that must go second.
+    // a pending FindCoordinator request, that must always go first. Next, If we need a producer id, that must go second.
     // The endTxn request must always go last.
     private enum Priority {
         FIND_COORDINATOR(0),
@@ -250,29 +249,25 @@ public class TransactionManager {
         return currentState == State.ERROR;
     }
 
-    public synchronized boolean maybeSetError(Exception exception) {
-        if (isTransactional() && isInTransaction()) {
-            if (exception instanceof ProducerFencedException)
-                transitionTo(State.FENCED, exception);
-            else
-                transitionTo(State.ERROR, exception);
-            return true;
-        }
-        return false;
+    public synchronized void setError(Exception exception) {
+        if (exception instanceof ProducerFencedException)
+            transitionTo(State.FENCED, exception);
+        else
+            transitionTo(State.ERROR, exception);
     }
 
     /**
-     * Get the current pid and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
+     * Get the current producer id and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
      * verify that the result is valid.
      *
      * @return the current ProducerIdAndEpoch.
      */
-    ProducerIdAndEpoch pidAndEpoch() {
+    ProducerIdAndEpoch producerIdAndEpoch() {
         return producerIdAndEpoch;
     }
 
     /**
-     * Set the pid and epoch atomically.
+     * Set the producer id and epoch atomically.
      */
     void setProducerIdAndEpoch(ProducerIdAndEpoch producerIdAndEpoch) {
         this.producerIdAndEpoch = producerIdAndEpoch;
@@ -291,7 +286,7 @@ public class TransactionManager {
      * messages will return an OutOfOrderSequenceException.
      *
      * Note that we can't reset the producer state for the transactional producer as this would mean bumping the epoch
-     * for the same pid. This might involve aborting the ongoing transaction during the initPidRequest, and the user
+     * for the same producer id. This might involve aborting the ongoing transaction during the initPidRequest, and the user
      * would not have any way of knowing this happened. So for the transactional producer, it's best to return the
      * produce error to the user and let them abort the transaction and close the producer explicitly.
      */
@@ -461,7 +456,7 @@ public class TransactionManager {
             pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(consumerGroupId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, OffsetCommitRequest.DEFAULT_RETENTION_TIME,
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
                 pendingTxnOffsetCommits);
         return new TxnOffsetCommitHandler(result, builder);
     }
@@ -580,6 +575,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
                 reenqueue();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unexpected error in InitProducerIdResponse; " + error.message()));
             }
@@ -606,27 +603,43 @@ public class TransactionManager {
         @Override
         public void handleResponse(AbstractResponse response) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
-            Errors error = addPartitionsToTxnResponse.error();
-            if (error == Errors.NONE) {
+            Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
+            boolean hasPartitionErrors = false;
+            for (TopicPartition topicPartition : pendingPartitionsToBeAddedToTransaction) {
+                final Errors error = errors.get(topicPartition);
+                if (error == Errors.NONE || error == null) {
+                    continue;
+                }
+
+                if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
+                    lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+                    reenqueue();
+                    return;
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+                    reenqueue();
+                    return;
+                } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
+                    fenced();
+                    return;
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                    fatal(error.exception());
+                    return;
+                } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING
+                        || error == Errors.INVALID_TXN_STATE) {
+                    fatal(new KafkaException(error.exception()));
+                    return;
+                } else {
+                    log.error("Could not add partitions to transaction due to partition error. partition={}, error={}", topicPartition, error);
+                    hasPartitionErrors = true;
+                }
+            }
+
+            if (hasPartitionErrors) {
+                fatal(new KafkaException("Could not add partitions to transaction due to partition level errors"));
+            } else {
                 partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
                 pendingPartitionsToBeAddedToTransaction.clear();
                 result.done();
-            } else if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
-                lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-                reenqueue();
-            } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
-                reenqueue();
-            } else if (error == Errors.INVALID_PRODUCER_ID_MAPPING) {
-                fatal(new KafkaException(error.exception()));
-            } else if (error == Errors.INVALID_TXN_STATE) {
-                fatal(new KafkaException(error.exception()));
-            } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
-                fenced();
-            } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                fatal(error.exception());
-            } else {
-                fatal(new KafkaException("Could not add partitions to transaction due to unknown error: " +
-                        error.message()));
             }
         }
     }
@@ -719,6 +732,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
             }
@@ -759,6 +774,8 @@ public class TransactionManager {
                 reenqueue();
             } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                 fenced();
+            } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                fatal(error.exception());
             } else {
                 fatal(new KafkaException("Unexpected error in AddOffsetsToTxnResponse: " + error.message()));
             }

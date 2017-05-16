@@ -18,11 +18,11 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 
-import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.CompressionType
 import org.apache.kafka.common.utils.Utils
@@ -41,7 +41,7 @@ class TransactionCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
   @Test
   def shouldCommitTransaction(): Unit = {
-    TestUtils.createTopic(zkUtils, Topic.TransactionStateTopicName, 1, 1, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
+    TestUtils.createTopic(zkUtils, Topic.TRANSACTION_STATE_TOPIC_NAME, 1, 1, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
     val topic = "foo"
     TestUtils.createTopic(this.zkUtils, topic, 1, 1, servers)
 

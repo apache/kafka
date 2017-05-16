@@ -22,13 +22,14 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
-import kafka.common.{KafkaException, Topic}
+import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.IsolationLevel
@@ -103,7 +104,7 @@ class TransactionStateManager(brokerId: Int,
   }
 
   def enablePidExpiration() {
-    // TODO: add pid expiration logic
+    // TODO: add producer id expiration logic
   }
 
   /**
@@ -182,7 +183,7 @@ class TransactionStateManager(brokerId: Int,
    * If the topic does not exist, the default partition count is returned.
    */
   private def getTransactionTopicPartitionCount: Int = {
-    zkUtils.getTopicPartitionCount(Topic.TransactionStateTopicName).getOrElse(config.transactionLogNumPartitions)
+    zkUtils.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
   }
 
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
@@ -274,7 +275,7 @@ class TransactionStateManager(brokerId: Int,
   def loadTransactionsForTxnTopicPartition(partitionId: Int, coordinatorEpoch: Int, sendTxnMarkers: SendTxnMarkersCallback) {
     validateTransactionTopicPartitionCountIsStable()
 
-    val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partitionId)
+    val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
 
     inLock(stateLock) {
       loadingPartitions.add(partitionId)
@@ -320,7 +321,7 @@ class TransactionStateManager(brokerId: Int,
   def removeTransactionsForTxnTopicPartition(partitionId: Int) {
     validateTransactionTopicPartitionCountIsStable()
 
-    val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partitionId)
+    val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
 
     def removeTransactions() {
       inLock(stateLock) {
@@ -359,7 +360,7 @@ class TransactionStateManager(brokerId: Int,
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
 
-    val topicPartition = new TopicPartition(Topic.TransactionStateTopicName, partitionFor(transactionalId))
+    val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val recordsPerPartition = Map(topicPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed

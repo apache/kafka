@@ -592,7 +592,7 @@ object KafkaConfig {
   val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
     "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
   val TransactionsTopicMinISRDoc = "Overridden " + MinInSyncReplicasProp + " config for the transaction topic."
-  val TransactionsLoadBufferSizeDoc = "Batch size for reading from the transaction log segments when loading pid and transactions into the cache."
+  val TransactionsLoadBufferSizeDoc = "Batch size for reading from the transaction log segments when loading producer ids and transactions into the cache."
   val TransactionsTopicReplicationFactorDoc = "The replication factor for the transaction topic (set higher to ensure availability). " +
     "Internal topic creation will fail until the cluster size meets this replication factor requirement."
   val TransactionsTopicPartitionsDoc = "The number of partitions for the transaction topic (should not change after deployment)."
@@ -610,9 +610,9 @@ object KafkaConfig {
   val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
   /** ********* Transaction Configuration ***********/
   val TransactionIdExpirationMsDoc = "The maximum time of inactivity before a transactional id is expired by the " +
-    "transaction coordinator. Note that this also influences PID expiration: PIDs are guaranteed to expire " +
-    "after expiration of this timeout from the last write by the PID (they may expire sooner if the last write " +
-    "from the PID is deleted due to the topic's retention settings)."
+    "transaction coordinator. Note that this also influences producer id expiration: Producer ids are guaranteed to expire " +
+    "after expiration of this timeout from the last write by the producer id (they may expire sooner if the last write " +
+    "from the producer id is deleted due to the topic's retention settings)."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +

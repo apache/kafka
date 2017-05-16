@@ -286,8 +286,8 @@ public class TransactionManagerTest {
 
         assertTrue(initPidResult.isCompleted()); // The future should only return after the second round of retries succeed.
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(pid, transactionManager.pidAndEpoch().producerId);
-        assertEquals(epoch, transactionManager.pidAndEpoch().epoch);
+        assertEquals(pid, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals(epoch, transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test
@@ -499,6 +499,53 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.isReadyForTransaction());  // make sure we are ready for a transaction now.
     }
 
+    @Test
+    public void shouldNotAddPartitionsToTransactionWhenTopicAuthorizationFailed() throws Exception {
+        verifyAddPartitionsFailsWithPartitionLevelError(Errors.TOPIC_AUTHORIZATION_FAILED);
+    }
+
+    @Test
+    public void shouldNotAddPartitionsToTransactionWhenUnknownTopicOrPartition() throws Exception {
+        verifyAddPartitionsFailsWithPartitionLevelError(Errors.UNKNOWN_TOPIC_OR_PARTITION);
+    }
+
+    private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
+        client.setNode(brokerNode);
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+
+        final long pid = 1L;
+        final short epoch = 1;
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+
+        sender.run(time.milliseconds());  // get pid.
+
+        assertTrue(transactionManager.hasProducerId());
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                                                                   "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnPartitionErrorResponse(tp0, error);
+        sender.run(time.milliseconds());  // attempt send addPartitions.
+        assertTrue(transactionManager.isInErrorState());
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+    }
+
+    private void prepareAddPartitionsToTxnPartitionErrorResponse(final TopicPartition tp0, final Errors error) {
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                assertTrue(body instanceof AddPartitionsToTxnRequest);
+                return true;
+            }
+        }, new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, error)));
+    }
+
     private static class MockCallback implements Callback {
         private final TransactionManager transactionManager;
         public MockCallback(TransactionManager transactionManager) {
@@ -507,7 +554,7 @@ public class TransactionManagerTest {
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
             if (exception != null && transactionManager != null) {
-                transactionManager.maybeSetError(exception);
+                transactionManager.setError(exception);
             }
         }
     }
@@ -570,7 +617,7 @@ public class TransactionManagerTest {
                 assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
                 return true;
             }
-        }, new AddPartitionsToTxnResponse(0, error));
+        }, new AddPartitionsToTxnResponse(0, Collections.singletonMap(topicPartition, error)));
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {

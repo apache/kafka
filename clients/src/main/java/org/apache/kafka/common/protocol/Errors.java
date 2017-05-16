@@ -56,6 +56,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.ProducerIdAuthorizationException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -64,6 +65,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
@@ -439,8 +441,8 @@ public enum Errors {
                 return new InvalidTxnStateException(message);
             }
         }),
-    INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producerId which is not currently assigned to " +
-            "its transactionalId",
+    INVALID_PRODUCER_ID_MAPPING(49, "The producer attempted to use a producer id which is not currently assigned to " +
+            "its transactional id",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
@@ -470,7 +472,24 @@ public enum Errors {
             public ApiException build(String message) {
                 return new TransactionCoordinatorFencedException(message);
             }
-        });
+        }),
+    TRANSACTIONAL_ID_AUTHORIZATION_FAILED(53, "Transactional Id authorization failed",
+                                                  new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new TransactionalIdAuthorizationException(message);
+        }
+    }),
+    PRODUCER_ID_AUTHORIZATION_FAILED(54, "Producer is not authorized to use producer Ids, " +
+            "which is required to write idempotent data.",
+                                             new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new ProducerIdAuthorizationException(message);
+        }
+    });
+
+
              
     private interface ApiExceptionBuilder {
         ApiException build(String message);

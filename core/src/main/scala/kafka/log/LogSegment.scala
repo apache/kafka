@@ -73,7 +73,7 @@ class LogSegment(val log: FileRecords,
 
   def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time,
            fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false) =
-    this(FileRecords.open(Log.logFilename(dir, startOffset), fileAlreadyExists, initFileSize, preallocate),
+    this(FileRecords.open(Log.logFile(dir, startOffset), fileAlreadyExists, initFileSize, preallocate),
          new OffsetIndex(Log.offsetIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          new TimeIndex(Log.timeIndexFile(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          new TransactionIndex(startOffset, Log.transactionIndexFile(dir, startOffset)),
@@ -156,6 +156,7 @@ class LogSegment(val log: FileRecords,
         updateTxnIndex(completedTxn, lastStableOffset)
       }
     }
+    producerStateManager.updateMapEndOffset(batch.lastOffset + 1)
   }
 
   /**
