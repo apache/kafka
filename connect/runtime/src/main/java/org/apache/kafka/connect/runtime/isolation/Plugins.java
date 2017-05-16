@@ -29,12 +29,10 @@ import org.apache.kafka.connect.transforms.Transformation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -42,11 +40,9 @@ import java.util.Set;
 public class Plugins {
     private static final Logger log = LoggerFactory.getLogger(Plugins.class);
 
-    private final Map<PluginClassLoader, URL[]> loaders;
     private final DelegatingClassLoader delegatingLoader;
 
     public Plugins(Map<String, String> props) {
-        loaders = new HashMap<>();
         List<String> pluginLocations = WorkerConfig.pluginLocations(props);
         delegatingLoader = newDelegatingClassLoader(pluginLocations);
         delegatingLoader.initLoaders();
@@ -63,12 +59,54 @@ public class Plugins {
         );
     }
 
-    public DelegatingClassLoader delegatingLoader() {
-        return delegatingLoader;
+    private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
+        return Utils.join(plugins, ", ");
     }
 
-    public Map<PluginClassLoader, URL[]> getLoaders() {
-        return loaders;
+    protected static <T> T newPlugin(Class<T> klass) {
+        try {
+            return Utils.newInstance(klass);
+        } catch (Throwable t) {
+            throw new ConnectException("Instantiation error", t);
+        }
+    }
+
+    protected static <T> T newConfiguredPlugin(AbstractConfig config, Class<T> klass) {
+        T plugin = Utils.newInstance(klass);
+        if (plugin instanceof Configurable) {
+            ((Configurable) plugin).configure(config.originals());
+        }
+        return plugin;
+    }
+
+    @SuppressWarnings("unchecked")
+    protected static <U> Class<? extends U> pluginClass(
+            DelegatingClassLoader loader,
+            String classOrAlias,
+            Class<U> pluginClass
+    ) throws ClassNotFoundException {
+        Class<?> klass = loader.loadClass(classOrAlias, false);
+        if (pluginClass.isAssignableFrom(klass)) {
+            return (Class<? extends U>) klass;
+        }
+
+        throw new ClassNotFoundException(
+                "Requested class: "
+                        + classOrAlias
+                        + " does not extend " + pluginClass.getSimpleName()
+        );
+    }
+
+    public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+        if (!current.equals(loader)) {
+            Thread.currentThread().setContextClassLoader(loader);
+        }
+        return current;
+    }
+
+    public DelegatingClassLoader delegatingLoader() {
+        return delegatingLoader;
     }
 
     public Set<PluginDesc<Connector>> connectors() {
@@ -106,37 +144,27 @@ public class Plugins {
             if (matches.isEmpty()) {
                 throw new ConnectException(
                         "Failed to find any class that implements Connector and which name matches "
-                        + connectorClassOrAlias
-                        + ", available connectors are: "
-                        + pluginNames(delegatingLoader.connectors())
+                                + connectorClassOrAlias
+                                + ", available connectors are: "
+                                + pluginNames(delegatingLoader.connectors())
                 );
             }
             if (matches.size() > 1) {
                 throw new ConnectException(
                         "More than one connector matches alias "
-                        + connectorClassOrAlias
-                        +
-                        ". Please use full package and class name instead. Classes found: "
-                        + pluginNames(matches)
+                                + connectorClassOrAlias
+                                +
+                                ". Please use full package and class name instead. Classes found: "
+                                + pluginNames(matches)
                 );
             }
 
             PluginDesc<Connector> entry = matches.get(0);
+            log.debug("Adding alias: " + connectorClassOrAlias);
             delegatingLoader.addAlias(entry, connectorClassOrAlias);
             klass = entry.pluginClass();
         }
         return newPlugin(klass);
-    }
-
-    private static <T> String pluginNames(Collection<PluginDesc<T>> plugins) {
-        StringBuilder names = new StringBuilder();
-        for (PluginDesc<T> plugin : plugins) {
-            names.append(plugin.className()).append(", ");
-        }
-        String result = names.toString();
-        return result.isEmpty()
-               ? ""
-               : result.substring(0, result.length() - 2);
     }
 
     public Task newTask(Class<? extends Task> taskClass) {
@@ -172,40 +200,6 @@ public class Plugins {
         return null;
     }
 
-    protected static <T> T newPlugin(Class<T> klass) {
-        try {
-            return Utils.newInstance(klass);
-        } catch (Throwable t) {
-            throw new ConnectException("Instantiation error", t);
-        }
-    }
-
-    protected static <T> T newConfiguredPlugin(AbstractConfig config, Class<T> klass) {
-        T plugin = Utils.newInstance(klass);
-        if (plugin instanceof Configurable) {
-            ((Configurable) plugin).configure(config.originals());
-        }
-        return plugin;
-    }
-
-    @SuppressWarnings("unchecked")
-    protected static <U> Class<? extends U> pluginClass(
-            DelegatingClassLoader loader,
-            String classOrAlias,
-            Class<U> pluginClass
-    ) throws ClassNotFoundException {
-        Class<?> klass = loader.loadClass(classOrAlias, false);
-        if (pluginClass.isAssignableFrom(klass)) {
-            return (Class<? extends U>) klass;
-        }
-
-        throw new ClassNotFoundException(
-                "Requested class: "
-                + classOrAlias
-                + " does not extend " + pluginClass.getSimpleName()
-        );
-    }
-
     public ClassLoader currentThreadLoader() {
         return Thread.currentThread().getContextClassLoader();
     }
@@ -221,14 +215,6 @@ public class Plugins {
     public ClassLoader compareAndSwapLoaders(Connector connector) {
         ClassLoader connectorLoader = delegatingLoader.connectorLoader(connector);
         return compareAndSwapLoaders(connectorLoader);
-    }
-
-    public static ClassLoader compareAndSwapLoaders(ClassLoader loader) {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (!current.equals(loader)) {
-            Thread.currentThread().setContextClassLoader(loader);
-        }
-        return current;
     }
 
 }
