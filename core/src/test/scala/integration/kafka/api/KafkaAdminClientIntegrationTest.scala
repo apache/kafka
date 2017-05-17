@@ -158,6 +158,8 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribeAndAlterConfigs(): Unit = {
     client = AdminClient.create(createConfig)
+
+    // Create topics
     val topic1 = "describe-alter-configs-topic-1"
     val configResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
     val topicConfig1 = new Properties
@@ -169,6 +171,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     val configResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     TestUtils.createTopic(zkUtils, topic2, 1, 1, servers, new Properties)
 
+    // Describe topics and broker
     val configResource3 = new ConfigResource(ConfigResource.Type.BROKER, servers(1).config.brokerId.toString)
     val configResource4 = new ConfigResource(ConfigResource.Type.BROKER, servers(2).config.brokerId.toString)
     val configResources = Seq(configResource1, configResource2, configResource3, configResource4)
@@ -195,16 +198,17 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     assertEquals(servers(2).config.logCleanerThreads.toString,
       configs.get(configResource4).get(KafkaConfig.LogCleanerThreadsProp).value)
 
-    val topicConfigEntries1 = Seq(
+    // Alter topics
+    var topicConfigEntries1 = Seq(
       new ConfigEntry(LogConfig.FlushMsProp, "1000")
     ).asJava
 
-    val topicConfigEntries2 = Seq(
+    var topicConfigEntries2 = Seq(
       new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"),
       new ConfigEntry(LogConfig.CompressionTypeProp, "lz4")
     ).asJava
 
-    val alterResult = client.alterConfigs(Map(
+    var alterResult = client.alterConfigs(Map(
       configResource1 -> new Config(topicConfigEntries1),
       configResource2 -> new Config(topicConfigEntries2)
     ).asJava)
@@ -212,6 +216,7 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
     assertEquals(Set(configResource1, configResource2).asJava, alterResult.results.keySet)
     alterResult.all.get
 
+    // Verify that topics were updated correctly
     describeResult = client.describeConfigs(Seq(configResource1, configResource2).asJava)
     configs = describeResult.all.get
 
@@ -225,6 +230,33 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
 
     assertEquals("0.9", configs.get(configResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
     assertEquals("lz4", configs.get(configResource2).get(LogConfig.CompressionTypeProp).value)
+
+    // Alter topics with validateOnly=true
+    topicConfigEntries1 = Seq(
+      new ConfigEntry(LogConfig.MaxMessageBytesProp, "10")
+    ).asJava
+
+    topicConfigEntries2 = Seq(
+      new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.3")
+    ).asJava
+
+    alterResult = client.alterConfigs(Map(
+      configResource1 -> new Config(topicConfigEntries1),
+      configResource2 -> new Config(topicConfigEntries2)
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertEquals(Set(configResource1, configResource2).asJava, alterResult.results.keySet)
+    alterResult.all.get
+
+    // Verify that topics were not updated due to validateOnly = true
+    describeResult = client.describeConfigs(Seq(configResource1, configResource2).asJava)
+    configs = describeResult.all.get
+
+    assertEquals(2, configs.size)
+
+    assertEquals(Defaults.MessageMaxBytes.toString,
+      configs.get(configResource1).get(LogConfig.MaxMessageBytesProp).value)
+    assertEquals("0.9", configs.get(configResource2).get(LogConfig.MinCleanableDirtyRatioProp).value)
   }
 
   val ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),

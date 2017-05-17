@@ -249,18 +249,20 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config]): Map[Resource, ApiError] = {
+  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[Resource, ApiError] = {
     configs.map { case (resource, config) =>
       try {
         resource.`type` match {
           case ResourceType.TOPIC =>
             val topic = resource.name
-            Topic.validate(topic)
             val properties = new Properties
             config.entries.asScala.foreach { configEntry =>
               properties.setProperty(configEntry.name(), configEntry.value())
             }
-            AdminUtils.changeTopicConfig(zkUtils, topic, properties)
+            if (validateOnly)
+              AdminUtils.validateTopicConfig(zkUtils, topic, properties)
+            else
+              AdminUtils.changeTopicConfig(zkUtils, topic, properties)
             resource -> new ApiError(Errors.NONE, null)
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics, but resource type is $resourceType")

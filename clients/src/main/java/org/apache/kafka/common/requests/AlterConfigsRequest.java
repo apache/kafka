@@ -124,6 +124,10 @@ public class AlterConfigsRequest extends AbstractRequest {
         return configs;
     }
 
+    public boolean validateOnly() {
+        return validateOnly;
+    }
+
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.requestSchema(version()));
