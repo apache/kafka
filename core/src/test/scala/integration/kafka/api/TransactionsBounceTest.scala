@@ -72,6 +72,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
+  @Ignore  // need to fix KAFKA-5268 and KAFKA-5269 before re-enabling
   @Test
   def testBrokerFailure() {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
