@@ -433,7 +433,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -442,6 +442,8 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // send produce.
 
+        assertTrue(responseFuture.isDone());
+        assertTrue(transactionManager.isInErrorState());
         responseFuture.get();
     }
 

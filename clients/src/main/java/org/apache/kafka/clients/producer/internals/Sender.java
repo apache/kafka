@@ -205,7 +205,7 @@ public class Sender implements Runnable {
             final KafkaException exception = transactionManager.lastError() instanceof KafkaException
                     ? (KafkaException) transactionManager.lastError()
                     : new KafkaException(transactionManager.lastError());
-            log.error("aborting producer batches because the transaction manager is in an error state: {}", exception);
+            log.error("aborting producer batches because the transaction manager is in an error state.", exception);
             this.accumulator.abortBatches(exception);
             return Long.MAX_VALUE;
         }
@@ -288,12 +288,13 @@ public class Sender implements Runnable {
             return false;
 
         if (transactionManager.hasInflightRequest()) {
-            log.trace("There is already an inflight transactional request. Going to wait for the response.");
+            log.trace("TransactionalId: {} -- There is already an inflight transactional request. Going to wait for the response.",
+                    transactionManager.transactionalId());
             return true;
         }
 
         if (!transactionManager.hasPendingTransactionalRequests()) {
-            log.trace("There are no pending transactional requests to send");
+            log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionManager.transactionalId());
             return false;
         }
 
@@ -303,15 +304,16 @@ public class Sender implements Runnable {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
             transactionManager.reenqueue(nextRequestHandler);
-            log.trace("Going to wait for pending ProducerBatches to flush before sending an end transaction request");
+            log.trace("TransactionalId: {} -- Going to wait for pending ProducerBatches to flush before sending an " +
+                    "end transaction request", transactionManager.transactionalId());
             return false;
         }
 
         if (transactionManager.maybeTerminateRequestWithError(nextRequestHandler)) {
-            log.trace("Not sending a transactional request because we are in an error state");
+            log.trace("TransactionalId: {} -- Not sending a transactional request because we are in an error state",
+                    transactionManager.transactionalId());
             return false;
         }
-
 
         Node targetNode = null;
 
@@ -325,7 +327,6 @@ public class Sender implements Runnable {
                     }
                     if (!NetworkClientUtils.awaitReady(client, targetNode, time, requestTimeout)) {
                         transactionManager.lookupCoordinator(nextRequestHandler);
-                        targetNode = null;
                         break;
                     }
                 } else {
@@ -333,21 +334,25 @@ public class Sender implements Runnable {
                 }
                 if (targetNode != null) {
                     if (nextRequestHandler.isRetry()) {
-                        log.trace("waiting " + retryBackoffMs + "ms before resending a transactional request: " + nextRequestHandler.requestBuilder());
+                        log.trace("TransactionalId: {} -- Waiting {}ms before resending a transactional request {}",
+                                transactionManager.transactionalId(), retryBackoffMs, nextRequestHandler.requestBuilder());
                         time.sleep(retryBackoffMs);
                     }
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequestHandler.requestBuilder(),
                             now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
-                    log.trace("sending transactional request {} to node {}", nextRequestHandler.requestBuilder(), clientRequest.destination());
+                    log.trace("TransactionalId: {} -- Sending transactional request {} to node {}", transactionManager.transactionalId(),
+                            nextRequestHandler.requestBuilder(), clientRequest.destination());
                     client.send(clientRequest, now);
                     return true;
                 }
             } catch (IOException e) {
                 targetNode = null;
-                log.warn("Got an exception when trying to find a node to send transactional request " + nextRequestHandler.requestBuilder() + ". Going to back off and retry", e);
+                log.warn("TransactionalId: " + transactionManager.transactionalId() + " -- Got an exception when trying " +
+                        "to find a node to send transactional request " + nextRequestHandler.requestBuilder() + ". Going to back off and retry", e);
             }
-            log.trace("About to wait for " + retryBackoffMs + "ms before trying to send another transational request.");
+            log.trace("TransactionalId: {}. About to wait for {}ms before trying to send another transactional request.",
+                    transactionManager.transactionalId(), retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }

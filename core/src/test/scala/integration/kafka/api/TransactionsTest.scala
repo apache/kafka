@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before, Ignore, Test}
@@ -90,9 +89,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       allRecords.zipWithIndex.foreach { case (record, i) =>
         assertTrue(expectedValues.contains(recordValue(record)))
       }
-    } catch {
-      case e @ (_ : KafkaException | _ : ProducerFencedException) =>
-        fail("Did not expect exception", e)
     } finally {
       consumer.close()
       producer.close()
@@ -153,9 +149,6 @@ class TransactionsTest extends KafkaServerTestHarness {
           consumer.subscribe(List(topic1))
         }
       }
-    } catch {
-      case e : Exception =>
-        fail ("Received an unexpected exception during the 'consume-process-produce' loop", e)
     } finally {
       producer.close()
       consumer.close()
@@ -211,9 +204,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       records.zipWithIndex.foreach { case (record, i) =>
         assertCommittedAndGetValue(record)
       }
-    } catch {
-      case e @ (_ : KafkaException | _ : ProducerFencedException) =>
-        fail("Did not expect exception", e)
     } finally {
       consumer.close()
       producer2.close()
@@ -264,9 +254,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       records.zipWithIndex.foreach { case (record, i) =>
         assertCommittedAndGetValue(record)
       }
-    } catch {
-      case e @ (_ : KafkaException | _ : ProducerFencedException) =>
-        fail("Did not expect exception", e)
     } finally {
       consumer.close()
       producer2.close()
@@ -319,9 +306,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       records.zipWithIndex.foreach { case (record, i) =>
         assertCommittedAndGetValue(record)
       }
-    } catch {
-      case e @ (_ : KafkaException | _ : ProducerFencedException) =>
-        fail("Did not expect exception", e)
     } finally {
       consumer.close()
       producer2.close()
