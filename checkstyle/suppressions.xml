@@ -19,7 +19,7 @@
               files=".*/requests/AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="KerberosLogin.java"/>
+              files="KerberosLogin.java|RequestResponseTest.java"/>
 
     <suppress checks="ParameterNumber"
               files="NetworkClient.java"/>

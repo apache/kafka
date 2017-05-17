@@ -1553,12 +1553,13 @@ public class Protocol {
 
     public static final Schema DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0 = new Schema(
             new Field("resource_type", INT8),
-            new Field("resource_name", STRING)
+            new Field("resource_name", STRING),
+            new Field("config_names", ArrayOf.nullable(STRING))
     );
 
     public static final Schema DESCRIBE_CONFIGS_REQUEST_V0 = new Schema(
-            new Field("resources", ArrayOf.nullable(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0),
-                    "An array of config resources to be returned, all config resources are returned if this is null."));
+            new Field("resources", new ArrayOf(DESCRIBE_CONFIGS_REQUEST_RESOURCE_V0),
+                    "An array of config resources to be returned."));
 
     public static final Schema DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0 = new Schema(
             new Field("error_code", INT16),

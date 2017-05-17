@@ -23,7 +23,7 @@ import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import org.apache.kafka.common.config.{ConfigDef, ConfigException}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -191,50 +191,47 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
-  def describeConfigs(resources: Iterable[Resource]): Map[Resource, DescribeConfigsResponse.Config] = {
-    resources.map { resource =>
+  def describeConfigs(resourceToConfigNames: Map[Resource, Option[Set[String]]]): Map[Resource, DescribeConfigsResponse.Config] = {
+    resourceToConfigNames.map { case (resource, configNames) =>
+
+      def createResponseConfig(config: AbstractConfig, isReadOnly: Boolean, isDefault: String => Boolean): DescribeConfigsResponse.Config = {
+        val filteredConfigPairs = config.values.asScala.filter { case (configName, _) =>
+          /* Always returns true if configNames is None */
+          configNames.map(_.contains(configName)).getOrElse(true)
+        }.toIndexedSeq
+
+        val configEntries = filteredConfigPairs.map { case (name, value) =>
+          val configEntryType = config.typeOf(name)
+          val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
+          val valueAsString =
+            if (isSensitive) null
+            else ConfigDef.convertToString(value, configEntryType)
+          new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault(name), isReadOnly)
+        }
+
+        new DescribeConfigsResponse.Config(new ApiError(Errors.NONE, null), configEntries.asJava)
+      }
+
       try {
         val resourceConfig = resource.`type` match {
+
           case ResourceType.TOPIC =>
             val topic = resource.name
             Topic.validate(topic)
             // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
             val topicProps = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
             val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
-
-            val configEntries = logConfig.values.asScala.toIndexedSeq.map { case (name, value) =>
-              val configEntryType = logConfig.typeOf(name)
-              val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-              val valueAsString =
-                if (isSensitive) null
-                else ConfigDef.convertToString(value, configEntryType)
-              val isDefault = !topicProps.contains(name)
-              val isReadOnly = false
-              new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault, isReadOnly)
-            }
-
-            new DescribeConfigsResponse.Config(new ApiError(Errors.NONE, null), configEntries.asJava)
+            createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.contains(name))
 
           case ResourceType.BROKER =>
             val brokerId = try resource.name.toInt catch {
               case _: NumberFormatException =>
                 throw new InvalidRequestException(s"Broker id must be an integer, but it is: ${resource.name}")
             }
-            if (brokerId == config.brokerId) {
-              val configEntries = config.values.asScala.toIndexedSeq.map { case (name, value) =>
-                val configEntryType = config.typeOf(name)
-                val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
-                val valueAsString =
-                  if (isSensitive) null
-                  else ConfigDef.convertToString(value, configEntryType)
-                val isDefault = !config.originals.containsKey(name)
-                val isReadOnly = true
-                new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault, isReadOnly)
-              }
-              new DescribeConfigsResponse.Config(new ApiError(Errors.NONE, null), configEntries.asJava)
-            } else {
+            if (brokerId == config.brokerId)
+              createResponseConfig(config, isReadOnly = true, name => !config.originals.containsKey(name))
+            else
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId}, but received $brokerId")
-            }
 
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }

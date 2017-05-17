@@ -1969,7 +1969,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
       }
     }
-    val authorizedConfigs = adminManager.describeConfigs(authorizedResources)
+    val authorizedConfigs = adminManager.describeConfigs(authorizedResources.map { resource =>
+      resource -> Option(describeConfigsRequest.configNames(resource)).map(_.asScala.toSet)
+    }.toMap)
     val unauthorizedConfigs = unauthorizedResources.map { resource =>
       val error = configsAuthorizationApiError(request.session, resource)
       resource -> new DescribeConfigsResponse.Config(error, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])

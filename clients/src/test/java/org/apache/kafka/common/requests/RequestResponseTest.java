@@ -59,7 +59,6 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -234,6 +233,7 @@ public class RequestResponseTest {
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException());
         checkResponse(createAlterConfigsResponse(), 0);
         checkRequest(createDescribeConfigsRequest());
+        checkRequest(createDescribeConfigsRequestWithConfigEntries());
         checkErrorResponse(createDescribeConfigsRequest(), new UnknownServerException());
         checkResponse(createDescribeConfigsResponse(), 0);
     }
@@ -1093,8 +1093,16 @@ public class RequestResponseTest {
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest() {
-        return new DescribeConfigsRequest((short) 0,
-                asList(new Resource(ResourceType.BROKER, "0"), new Resource(ResourceType.TOPIC, "topic")));
+        return new DescribeConfigsRequest.Builder(asList(new Resource(ResourceType.BROKER, "0"),
+                new Resource(ResourceType.TOPIC, "topic"))).build((short) 0);
+    }
+
+    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries() {
+        Map<Resource, Collection<String>> resources = new HashMap<>();
+        resources.put(new Resource(ResourceType.BROKER, "0"), asList("foo", "bar"));
+        resources.put(new Resource(ResourceType.TOPIC, "topic"), null);
+        resources.put(new Resource(ResourceType.TOPIC, "topic a"), Collections.<String>emptyList());
+        return new DescribeConfigsRequest.Builder(resources).build((short) 0);
     }
 
     private DescribeConfigsResponse createDescribeConfigsResponse() {
