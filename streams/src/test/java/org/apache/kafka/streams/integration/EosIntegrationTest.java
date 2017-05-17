@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -40,6 +42,7 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -64,6 +67,7 @@ public class EosIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
+    private static ZkUtils zkUtils = null;
 
     private static String applicationId;
     private final static String CONSUMER_GROUP_ID = "readCommitted";
@@ -78,6 +82,14 @@ public class EosIntegrationTest {
     private Throwable uncaughtException;
 
     private int testNumber = 0;
+
+    @BeforeClass
+    public static void prepare() {
+        zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
+            30000,
+            30000,
+            JaasUtils.isZkSecurityEnabled());
+    }
 
     @Before
     public void createTopics() throws Exception {
@@ -95,10 +107,24 @@ public class EosIntegrationTest {
             CLUSTER.deleteTopic(MULTI_PARTITION_OUTPUT_TOPIC);
         } catch (final Exception e) { }
 
+        TestUtils.waitForCondition(new TopicsGotDeletedCondition(), 120000, "Topics not deleted after 120 seconds.");
+
         CLUSTER.createTopic(SINGLE_PARTITION_INPUT_TOPIC);
         CLUSTER.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
         CLUSTER.createTopic(SINGLE_PARTITION_OUTPUT_TOPIC);
         CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
+    }
+
+    private final class TopicsGotDeletedCondition implements TestCondition {
+        @Override
+        public boolean conditionMet() {
+            final Set<String> allTopics = new HashSet<>();
+            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+            return !allTopics.contains(SINGLE_PARTITION_INPUT_TOPIC)
+                && !allTopics.contains(MULTI_PARTITION_INPUT_TOPIC)
+                && !allTopics.contains(SINGLE_PARTITION_OUTPUT_TOPIC)
+                && !allTopics.contains(MULTI_PARTITION_OUTPUT_TOPIC);
+        }
     }
 
     @Test
@@ -193,7 +219,6 @@ public class EosIntegrationTest {
         }
     }
 
-    @Ignore
     @Test
     public void shouldBeAbleToPerformMultipleTransactions() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
