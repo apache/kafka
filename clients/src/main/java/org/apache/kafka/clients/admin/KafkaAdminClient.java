@@ -1290,7 +1290,8 @@ public class KafkaAdminClient extends AdminClient {
                     }
                     List<ConfigEntry> configEntries = new ArrayList<>();
                     for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                        configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value()));
+                        configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
+                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
                     }
                     future.complete(new Config(configEntries));
                 }
@@ -1324,7 +1325,8 @@ public class KafkaAdminClient extends AdminClient {
                     else {
                         List<ConfigEntry> configEntries = new ArrayList<>();
                         for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
-                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value()));
+                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
+                                    configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
                         }
                         brokerFuture.complete(new Config(configEntries));
                     }

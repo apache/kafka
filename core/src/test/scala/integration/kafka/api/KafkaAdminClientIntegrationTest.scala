@@ -180,18 +180,43 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
 
     assertEquals(4, configs.size)
 
-    assertEquals(topicConfig1.get(LogConfig.MaxMessageBytesProp),
-      configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp).value)
+    val maxMessageBytes1 = configs.get(topicResource1).get(LogConfig.MaxMessageBytesProp)
+    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes1.name)
+    assertEquals(topicConfig1.get(LogConfig.MaxMessageBytesProp), maxMessageBytes1.value)
+    assertFalse(maxMessageBytes1.isDefault)
+    assertFalse(maxMessageBytes1.isSensitive)
+    assertFalse(maxMessageBytes1.isReadOnly)
+
     assertEquals(topicConfig1.get(LogConfig.RetentionMsProp),
       configs.get(topicResource1).get(LogConfig.RetentionMsProp).value)
 
-    assertEquals(Defaults.MessageMaxBytes.toString,
-      configs.get(topicResource2).get(LogConfig.MaxMessageBytesProp).value)
+    val maxMessageBytes2 = configs.get(topicResource2).get(LogConfig.MaxMessageBytesProp)
+    assertEquals(Defaults.MessageMaxBytes.toString, maxMessageBytes2.value)
+    assertEquals(LogConfig.MaxMessageBytesProp, maxMessageBytes2.name)
+    assertTrue(maxMessageBytes2.isDefault)
+    assertFalse(maxMessageBytes2.isSensitive)
+    assertFalse(maxMessageBytes2.isReadOnly)
 
     assertEquals(servers(1).config.values.size, configs.get(brokerResource1).entries.size)
     assertEquals(servers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
-    assertEquals(servers(1).config.controllerSocketTimeoutMs.toString,
-      configs.get(brokerResource1).get(KafkaConfig.ControllerSocketTimeoutMsProp).value)
+    val controllerSocketTimeoutMs = configs.get(brokerResource1).get(KafkaConfig.ControllerSocketTimeoutMsProp)
+    assertEquals(servers(1).config.controllerSocketTimeoutMs.toString, controllerSocketTimeoutMs.value)
+    assertEquals(KafkaConfig.ControllerSocketTimeoutMsProp, controllerSocketTimeoutMs.name)
+    assertFalse(controllerSocketTimeoutMs.isDefault)
+    assertFalse(controllerSocketTimeoutMs.isSensitive)
+    assertTrue(controllerSocketTimeoutMs.isReadOnly)
+    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
+    assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
+    assertNull(truststorePassword.value)
+    assertFalse(truststorePassword.isDefault)
+    assertTrue(truststorePassword.isSensitive)
+    assertTrue(truststorePassword.isReadOnly)
+    val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
+    assertEquals(servers(1).config.compressionType.toString, compressionType.value)
+    assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
+    assertTrue(compressionType.isDefault)
+    assertFalse(compressionType.isSensitive)
+    assertTrue(compressionType.isReadOnly)
 
     assertEquals(servers(2).config.values.size, configs.get(brokerResource2).entries.size)
     assertEquals(servers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
@@ -364,7 +389,10 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
       config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
-      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true");
+      config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
+      // We set this in order to test that we don't expose it via describe configs. Subclasses with security enabled
+      // will override this with a real password via the serverConfig properties
+      config.setProperty(KafkaConfig.SslTruststorePasswordProp, "some.invalid.pass")
     }
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)

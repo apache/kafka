@@ -36,7 +36,6 @@ public class DescribeConfigsResponse extends AbstractResponse {
     private static final String RESOURCE_TYPE_KEY_NAME = "resource_type";
     private static final String RESOURCE_NAME_KEY_NAME = "resource_name";
 
-    private static final String ERROR_CODE_KEY_NAME = "error_code";
     private static final String CONFIG_ENTRIES_KEY_NAME = "config_entries";
 
     private static final String CONFIG_NAME = "config_name";

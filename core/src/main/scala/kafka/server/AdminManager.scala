@@ -221,7 +221,7 @@ class AdminManager(val config: KafkaConfig,
             // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
             val topicProps = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
             val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
-            createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.contains(name))
+            createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.containsKey(name))
 
           case ResourceType.BROKER =>
             val brokerId = try resource.name.toInt catch {
