@@ -36,7 +36,7 @@ public class MemoryRecords implements Records {
     // Construct a writable memory records
     private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int sizeLimit) {
         this.writable = writable;
-        this.capacity = buffer.capacity();
+        this.capacity = buffer.limit();
         this.sizeLimit = sizeLimit;
         if (this.writable) {
             this.buffer = null;

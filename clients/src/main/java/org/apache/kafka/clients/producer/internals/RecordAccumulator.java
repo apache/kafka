@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ * <p/>
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ * <p/>
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -13,11 +13,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -33,23 +29,17 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * This class acts as a queue that accumulates records into {@link org.apache.kafka.common.record.MemoryRecords}
  * instances to be sent to the server.
- * <p>
+ * <p/>
  * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless
  * this behavior is explicitly disabled.
  */
@@ -73,26 +63,27 @@ public final class RecordAccumulator {
 
     /**
      * Create a new record accumulator
-     * 
-     * @param batchSize The size to use when allocating {@link org.apache.kafka.common.record.MemoryRecords} instances
-     * @param totalSize The maximum memory the record accumulator can use.
-     * @param compression The compression codec for the records
-     * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
-     *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
-     *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
-     * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
-     *        exhausting all retries in a short period of time.
+     *
+     * @param batchSize         The size to use when allocating {@link org.apache.kafka.common.record.MemoryRecords} instances
+     * @param totalSize         The maximum memory the record accumulator can use.
+     * @param compression       The compression codec for the records
+     * @param lingerMs          An artificial delay time to add before declaring a records instance that isn't full ready for
+     *                          sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
+     *                          latency for potentially better throughput due to more batching (and hence fewer, larger requests).
+     * @param retryBackoffMs    An artificial delay time to retry the produce request upon receiving an error. This avoids
+     *                          exhausting all retries in a short period of time.
      * @param blockOnBufferFull If true block when we are out of memory; if false throw an exception when we are out of
-     *        memory
-     * @param metrics The metrics
-     * @param time The time instance to use
-     * @param metricTags additional key/value attributes of the metric
+     *                          memory
+     * @param metrics           The metrics
+     * @param time              The time instance to use
+     * @param metricTags        additional key/value attributes of the metric
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
+                             File backingFile,
                              boolean blockOnBufferFull,
                              Metrics metrics,
                              Time time,
@@ -107,7 +98,15 @@ public final class RecordAccumulator {
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
         String metricGrpName = "producer-metrics";
-        this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull, metrics, time , metricGrpName , metricTags);
+        if (backingFile == null) {
+            this.free = new ByteBufferPool(totalSize, batchSize, blockOnBufferFull, metrics, time, metricGrpName, metricTags);
+        } else {
+            try {
+                this.free = new MmapBufferPool(backingFile, totalSize, batchSize, blockOnBufferFull);
+            } catch (IOException e) {
+                throw new KafkaException("Failed to create mmap-based buffer.", e);
+            }
+        }
         this.incomplete = new IncompleteRecordBatches();
         this.time = time;
         registerMetrics(metrics, metricGrpName, metricTags);
@@ -145,13 +144,13 @@ public final class RecordAccumulator {
 
     /**
      * Add a record to the accumulator, return the append result
-     * <p>
+     * <p/>
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
-     * <p>
+     * <p/>
      *
-     * @param tp The topic/partition to which this record is being sent
-     * @param key The key for the record
-     * @param value The value for the record
+     * @param tp       The topic/partition to which this record is being sent
+     * @param key      The key for the record
+     * @param value    The value for the record
      * @param callback The user-supplied callback to execute when the request is complete
      */
     public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, Callback callback) throws InterruptedException {
@@ -218,7 +217,7 @@ public final class RecordAccumulator {
      * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.
-     * <p>
+     * <p/>
      * A destination node is ready to send data if ANY one of its partition is not backing off the send and ANY of the
      * following are true :
      * <ol>
@@ -286,11 +285,11 @@ public final class RecordAccumulator {
     /**
      * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
-     * 
+     *
      * @param cluster The current cluster metadata
-     * @param nodes The list of node to drain
+     * @param nodes   The list of node to drain
      * @param maxSize The maximum number of bytes to drain
-     * @param now The current unix time in milliseconds
+     * @param now     The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
      */
     public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
@@ -356,14 +355,14 @@ public final class RecordAccumulator {
         incomplete.remove(batch);
         free.deallocate(batch.records.buffer(), batch.records.capacity());
     }
-    
+
     /**
      * Are there any threads currently waiting on a flush?
      */
     private boolean flushInProgress() {
         return flushesInProgress.get() > 0;
     }
-    
+
     /**
      * Initiate the flushing of data from the accumulator...this makes all requests immediately ready
      */
@@ -382,7 +381,7 @@ public final class RecordAccumulator {
      * Mark all partitions as ready to send and block until the send is complete
      */
     public void awaitFlushCompletion() throws InterruptedException {
-        for (RecordBatch batch: this.incomplete.all())
+        for (RecordBatch batch : this.incomplete.all())
             batch.produceFuture.await();
         this.flushesInProgress.decrementAndGet();
     }
@@ -457,7 +456,7 @@ public final class RecordAccumulator {
             this.unknownLeadersExist = unknownLeadersExist;
         }
     }
-    
+
     /*
      * A threadsafe helper class to hold RecordBatches that haven't been ack'd yet
      */
@@ -467,13 +466,13 @@ public final class RecordAccumulator {
         public IncompleteRecordBatches() {
             this.incomplete = new HashSet<RecordBatch>();
         }
-        
+
         public void add(RecordBatch batch) {
             synchronized (incomplete) {
                 this.incomplete.add(batch);
             }
         }
-        
+
         public void remove(RecordBatch batch) {
             synchronized (incomplete) {
                 boolean removed = this.incomplete.remove(batch);
@@ -481,7 +480,7 @@ public final class RecordAccumulator {
                     throw new IllegalStateException("Remove from the incomplete set failed. This should be impossible.");
             }
         }
-        
+
         public Iterable<RecordBatch> all() {
             synchronized (incomplete) {
                 return new ArrayList<RecordBatch>(this.incomplete);

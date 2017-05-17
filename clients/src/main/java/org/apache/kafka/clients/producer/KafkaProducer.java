@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.io.File;
 import java.net.InetSocketAddress;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -213,6 +214,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+            boolean enableBufferBackingFile = config.getBoolean(ProducerConfig.FILE_BACKED_BUFFERS_CONFIG);
+            File backingFile = enableBufferBackingFile ? new File(config.getString(ProducerConfig.FILE_BACKED_BUFFERS_FILE_NAME_CONFIG)) : null;
+
+
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
             metricTags.put("client-id", clientId);
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -220,6 +225,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     this.compressionType,
                     config.getLong(ProducerConfig.LINGER_MS_CONFIG),
                     retryBackoffMs,
+                    backingFile,
                     config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                     metrics,
                     time,
