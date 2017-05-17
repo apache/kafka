@@ -28,7 +28,6 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -40,7 +39,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
@@ -76,38 +74,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(pluginPaths, ClassLoader.getSystemClassLoader());
     }
 
-    private static List<Path> pluginDirs(Path topDir) throws IOException {
-        DirectoryStream.Filter<Path> dirFilter = new DirectoryStream.Filter<Path>() {
-            public boolean accept(Path path) throws IOException {
-                return Files.isDirectory(path);
-            }
-        };
-
-        List<Path> dirs = new ArrayList<>();
-        // Non-recursive for now
-        try (DirectoryStream<Path> listing = Files.newDirectoryStream(topDir, dirFilter)) {
-            for (Path dir : listing) {
-                dirs.add(dir);
-            }
-        }
-        return dirs;
-    }
-
-    private static List<URL> jarPaths(Path pluginDir) throws IOException {
-        DirectoryStream.Filter<Path> jarFilter = new DirectoryStream.Filter<Path>() {
-            public boolean accept(Path file) throws IOException {
-                return file.toString().toLowerCase(Locale.ROOT).endsWith(".jar");
-            }
-        };
-
-        List<URL> jars = new ArrayList<>();
-        try (DirectoryStream<Path> listing = Files.newDirectoryStream(pluginDir, jarFilter)) {
-            for (Path jar : listing) {
-                jars.add(jar.toUri().toURL());
-            }
-        }
-        return jars;
-    }
 
     private <T> void addPlugins(Collection<PluginDesc<T>> plugins, PluginClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
@@ -127,21 +93,24 @@ public class DelegatingClassLoader extends URLClassLoader {
         for (String path : pluginPaths) {
             try {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
+                // Currently 'plugin.paths' property is a list of top-level directories
+                // containing plugins
                 if (Files.isDirectory(pluginPath)) {
-                    for (Path dir : pluginDirs(pluginPath)) {
-                        log.info("Loading dir: {}", dir);
-                        URL[] jars = jarPaths(dir).toArray(new URL[0]);
+                    for (Path pluginLocation : PluginUtils.pluginLocations(pluginPath)) {
+                        log.info("Loading plugin from: {}", pluginLocation);
+                        URL[] jars = PluginUtils.pluginUrls(pluginLocation).toArray(new URL[0]);
                         if (log.isDebugEnabled()) {
-                            log.debug("Loading jars: {}", Arrays.toString(jars));
+                            log.debug("Loading plugin urls: {}", Arrays.toString(jars));
                         }
-                        PluginClassLoader loader = newPluginClassLoader(dir.toUri().toURL(), jars);
-                        log.info("Using loader: {}", loader);
-                        PluginScanResult plugins = scanPluginPath(loader, jars);
+                        PluginClassLoader loader = newPluginClassLoader(
+                                pluginLocation.toUri().toURL(),
+                                jars
+                        );
 
-                        if (plugins.isEmpty()) {
-                            inactivePaths.put(dir, null);
-                        } else {
-                            activePaths.put(dir, loader);
+                        PluginScanResult plugins = scanPluginPath(loader, jars);
+                        log.info("Created loader: {}", loader);
+                        if (!plugins.isEmpty()) {
+                            activePaths.put(pluginLocation, loader);
                         }
 
                         addPlugins(plugins.connectors(), loader);

@@ -16,7 +16,15 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
+import java.io.IOException;
 import java.lang.reflect.Modifier;
+import java.net.URL;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 
 public class PluginUtils {
     private static final String BLACKLIST = "^(?:"
@@ -37,6 +45,14 @@ public class PluginUtils {
             + "|storage\\.StringConverter"
             + ")$";
 
+    private static final DirectoryStream.Filter<Path> PLUGIN_PATH_FILTER = new DirectoryStream
+            .Filter<Path>() {
+        @Override
+        public boolean accept(Path path) throws IOException {
+            return Files.isDirectory(path) || PluginUtils.isJar(path);
+        }
+    };
+
     public static boolean shouldLoadInIsolation(String name) {
         return !(name.matches(BLACKLIST) && !name.matches(WHITELIST));
     }
@@ -44,6 +60,45 @@ public class PluginUtils {
     public static boolean isConcrete(Class<?> klass) {
         int mod = klass.getModifiers();
         return !Modifier.isAbstract(mod) && !Modifier.isInterface(mod);
+    }
+
+    public static boolean isJar(Path path) {
+        return path.toString().toLowerCase(Locale.ROOT).endsWith(".jar");
+    }
+
+    public static List<URL> pluginUrls(Path pluginPath) throws IOException {
+        List<URL> urls = new ArrayList<>();
+        if (PluginUtils.isJar(pluginPath)) {
+            urls.add(pluginPath.toUri().toURL());
+        } else if (Files.isDirectory(pluginPath)) {
+            try (
+                    DirectoryStream<Path> listing = Files.newDirectoryStream(
+                            pluginPath,
+                            PLUGIN_PATH_FILTER
+                    )
+            ) {
+                for (Path jar : listing) {
+                    urls.add(jar.toUri().toURL());
+                }
+            }
+        }
+        return urls;
+    }
+
+    public static List<Path> pluginLocations(Path topPath) throws IOException {
+        List<Path> locations = new ArrayList<>();
+        // Non-recursive for now. Plugin directories or jars need to be exactly under the topPath.
+        try (
+                DirectoryStream<Path> listing = Files.newDirectoryStream(
+                        topPath,
+                        PLUGIN_PATH_FILTER
+                )
+        ) {
+            for (Path dir : listing) {
+                locations.add(dir);
+            }
+        }
+        return locations;
     }
 
     public static String simpleName(PluginDesc<?> plugin) {
