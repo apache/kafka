@@ -118,8 +118,13 @@ class TransactionStateManager(brokerId: Int,
   def getTransactionState(transactionalId: String): Option[CoordinatorEpochAndTxnMetadata] = {
     val partitionId = partitionFor(transactionalId)
 
-    // if it is in the leaving partitions set, return NONE even if it may not be the current coordinator epoch
-    // since it will get cleared later and clients will either abort the txn or retry later
+    // we only need to check leaving partition set but not loading partition set since there are three possible cases:
+    //    1) it is not in the loading partitions set, hence safe to return NONE
+    //    2) it is in the loading partitions with a smaller epoch, hence safe to return NONE
+    //    3) it is in the loading partition with a larger epoch, return NONE is also fine as it
+    //       indicates the metadata is not exist at least for now.
+    //
+    //    4) it is NOT possible to be in the loading partition with the same epoch
     if (leavingPartitions.exists(_.txnPartitionId == partitionId))
       return None
 
@@ -186,8 +191,13 @@ class TransactionStateManager(brokerId: Int,
   def isCoordinatorLoadingInProgress(transactionalId: String): Boolean = inLock(stateLock) {
     val partitionId = partitionFor(transactionalId)
 
-    // do not care if the partition is also in the leaving set as well,
-    // since in this case the partition will be soon removed either from the loading set or the leaving set
+    // we only need to check loading partition set but not leaving partition set since there are three possible cases:
+    //    1) it is not in the leaving partitions set, hence safe to return true
+    //    2) it is in the leaving partitions with a smaller epoch than the latest loading epoch, hence safe to return NONE
+    //    3) it is in the leaving partition with a larger epoch, return true is also OK since the client will then retry
+    //       later be notified that this coordinator is no longer be the transaction coordinator for him
+    //
+    //    4) it is NOT possible to be in the leaving partition with the same epoch
     loadingPartitions.exists(_.txnPartitionId == partitionId)
   }
 
@@ -199,7 +209,7 @@ class TransactionStateManager(brokerId: Int,
     zkUtils.getTopicPartitionCount(Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogNumPartitions)
   }
 
-  private def loadTransactionMetadata(topicPartition: TopicPartition): Pool[String, TransactionMetadata] =  {
+  private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
     def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     val startMs = time.milliseconds()
@@ -217,8 +227,9 @@ class TransactionStateManager(brokerId: Int,
 
         try {
           while (currOffset < logEndOffset
-            && inLock(stateLock) {loadingPartitions.exists(_.txnPartitionId == topicPartition.partition)}
-            && !shuttingDown.get()) {
+            && !shuttingDown.get()
+            && inLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
+              idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
               minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
             val memRecords = fetchDataInfo.records match {
@@ -298,7 +309,7 @@ class TransactionStateManager(brokerId: Int,
 
     def loadTransactions() {
       info(s"Loading transaction metadata from $topicPartition")
-      val loadedTransactions = loadTransactionMetadata(topicPartition)
+      val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
       inLock(stateLock) {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
