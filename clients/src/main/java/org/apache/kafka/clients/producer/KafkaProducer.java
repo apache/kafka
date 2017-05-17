@@ -694,19 +694,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (transactionManager.isFenced())
             throw new ProducerFencedException("The current producer has been fenced off by a another producer using the same transactional id.");
 
-        if (transactionManager.isInTransaction()) {
-            if (transactionManager.isInErrorState()) {
-                String errorMessage =
-                    "Cannot perform a transactional send because at least one previous transactional request has failed with errors.";
-                Exception lastError = transactionManager.lastError();
-                if (lastError != null)
-                    throw new KafkaException(errorMessage, lastError);
-                else
-                    throw new KafkaException(errorMessage);
-            }
-            if (transactionManager.isCompletingTransaction())
-                throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
+        if (transactionManager.isInErrorState()) {
+            String errorMessage =
+                    "Cannot perform send because at least one previous transactional or idempotent request has failed with errors.";
+            Exception lastError = transactionManager.lastError();
+            if (lastError != null)
+                throw new KafkaException(errorMessage, lastError);
+            else
+                throw new KafkaException(errorMessage);
         }
+        if (transactionManager.isCompletingTransaction())
+            throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
+
     }
 
     private void setReadOnly(Headers headers) {
@@ -1032,7 +1031,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.userCallback.onCompletion(metadata, exception);
 
             if (exception != null && transactionManager != null)
-                transactionManager.maybeSetError(exception);
+                transactionManager.setError(exception);
         }
     }
 }

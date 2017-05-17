@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
@@ -34,11 +35,21 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a new AdminClient with the given configuration.
      *
+     * @param props         The configuration.
+     * @return              The new KafkaAdminClient.
+     */
+    public static AdminClient create(Properties props) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props));
+    }
+
+    /**
+     * Create a new AdminClient with the given configuration.
+     *
      * @param conf          The configuration.
      * @return              The new KafkaAdminClient.
      */
     public static AdminClient create(Map<String, Object> conf) {
-        return KafkaAdminClient.create(new AdminClientConfig(conf));
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf));
     }
 
     /**
@@ -118,7 +129,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract ListTopicsResults listTopics(ListTopicsOptions options);
 
     /**
-     * Descripe an individual topic in the cluster, with the default options.
+     * Describe some topics in the cluster, with the default options.
      *
      * See {@link AdminClient#describeTopics(Collection<String>, DescribeTopicsOptions)}
      *
@@ -131,10 +142,10 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Descripe an individual topic in the cluster.
+     * Describe some topics in the cluster.
      *
      * Note that if auto.create.topics.enable is true on the brokers,
-     * AdminClient#describeTopic(topicName) may create a topic named topicName.
+     * describeTopics(topicName, ...) may create a topic named topicName.
      * There are two workarounds: either use AdminClient#listTopics and ensure
      * that the topic is present before describing, or disable
      * auto.create.topics.enable.

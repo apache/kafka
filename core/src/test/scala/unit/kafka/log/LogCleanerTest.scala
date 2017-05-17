@@ -187,7 +187,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     // cannot remove the marker in this pass because there are still valid records
-    var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = time.milliseconds())._1
+    var dirtyOffset = cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(1, 3, 2), keysInLog(log))
     assertEquals(List(0, 2, 3, 4, 5), offsetsInLog(log))
 
@@ -196,7 +196,7 @@ class LogCleanerTest extends JUnitSuite {
     log.roll()
 
     // the first cleaning preserves the commit marker (at offset 3) since there were still records for the transaction
-    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = time.milliseconds())._1
+    dirtyOffset = cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)._1
     assertEquals(List(2, 1, 3), keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
@@ -205,8 +205,8 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(2, 1, 3), keysInLog(log))
     assertEquals(List(3, 4, 5, 6, 7, 8), offsetsInLog(log))
 
-    // clean again with the delete horizon set back to the current time and verify the marker is removed
-    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = time.milliseconds())
+    // clean again with large delete horizon and verify the marker is removed
+    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)
     assertEquals(List(2, 1, 3), keysInLog(log))
     assertEquals(List(4, 5, 6, 7, 8), offsetsInLog(log))
   }
@@ -235,8 +235,8 @@ class LogCleanerTest extends JUnitSuite {
     assertEquals(List(3), keysInLog(log))
     assertEquals(List(3, 4, 5), offsetsInLog(log))
 
-    // clean again with the delete horizon set back to the current time and verify the marker is removed
-    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = time.milliseconds())
+    // clean again with large delete horizon and verify the marker is removed
+    cleaner.doClean(LogToClean(tp, log, dirtyOffset, 100L), deleteHorizonMs = Long.MaxValue)
     assertEquals(List(3), keysInLog(log))
     assertEquals(List(4, 5), offsetsInLog(log))
   }

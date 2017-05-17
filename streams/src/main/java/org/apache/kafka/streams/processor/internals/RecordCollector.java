@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -40,10 +41,21 @@ public interface RecordCollector {
                      final Serializer<V> valueSerializer,
                      final StreamPartitioner<? super K, ? super V> partitioner);
 
+    /**
+     * Flush the internal {@link Producer}.
+     */
     void flush();
 
+    /**
+     * Close the internal {@link Producer}.
+     */
     void close();
 
+    /**
+     * The last acked offsets from the internal {@link Producer}.
+     *
+     * @return the map from TopicPartition to offset
+     */
     Map<TopicPartition, Long> offsets();
 
     /**

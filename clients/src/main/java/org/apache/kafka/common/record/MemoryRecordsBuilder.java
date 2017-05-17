@@ -84,6 +84,7 @@ public class MemoryRecordsBuilder {
     private Long baseTimestamp = null;
 
     private MemoryRecords builtRecords;
+    private boolean aborted = false;
 
     /**
      * Construct a new builder.
@@ -175,6 +176,9 @@ public class MemoryRecordsBuilder {
      * @return The built log buffer
      */
     public MemoryRecords build() {
+        if (aborted) {
+            throw new KafkaException("Attempting to build an aborted record batch");
+        }
         close();
         return builtRecords;
     }
@@ -246,7 +250,16 @@ public class MemoryRecordsBuilder {
         }
     }
 
+    public void abort() {
+        closeForRecordAppends();
+        buffer().position(initPos);
+        aborted = true;
+    }
+
     public void close() {
+        if (aborted)
+            throw new IllegalStateException("Cannot close MemoryRecordsBuilder as it has already been aborted");
+
         if (builtRecords != null)
             return;
 
@@ -605,13 +618,13 @@ public class MemoryRecordsBuilder {
     private void ensureOpenForRecordAppend() {
         if (appendStreamIsClosed)
             throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
-        if (isClosed())
-            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed");
     }
 
     private void ensureOpenForRecordBatchWrite() {
         if (isClosed())
             throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is closed");
+        if (aborted)
+            throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is aborted");
     }
 
     /**

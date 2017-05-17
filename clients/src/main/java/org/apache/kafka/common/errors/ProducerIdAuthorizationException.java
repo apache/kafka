@@ -14,30 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
-
-class KStreamForeach<K, V> implements ProcessorSupplier<K, V> {
-
-    private final ForeachAction<K, V> action;
-
-    public KStreamForeach(ForeachAction<K, V> action) {
-        this.action = action;
-    }
-
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamForeachProcessor();
-    }
-
-    private class KStreamForeachProcessor extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            action.apply(key, value);
-        }
+public class ProducerIdAuthorizationException extends ApiException {
+    public ProducerIdAuthorizationException(final String message) {
+        super(message);
     }
 }

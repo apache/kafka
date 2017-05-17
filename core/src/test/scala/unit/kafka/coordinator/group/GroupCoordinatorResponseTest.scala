@@ -39,9 +39,6 @@ import scala.collection._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise, TimeoutException}
 
-/**
- * Test GroupCoordinator responses
- */
 class GroupCoordinatorResponseTest extends JUnitSuite {
   type JoinGroupCallback = JoinGroupResult => Unit
   type SyncGroupCallbackParams = (Array[Byte], Errors)
@@ -113,6 +110,15 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     if (groupCoordinator != null)
       groupCoordinator.shutdown()
+  }
+
+  @Test
+  def testOffsetsRetentionMsIntegerOverflow() {
+    val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    props.setProperty(KafkaConfig.OffsetsRetentionMinutesProp, Integer.MAX_VALUE.toString)
+    val config = KafkaConfig.fromProps(props)
+    val offsetConfig = GroupCoordinator.offsetConfig(config)
+    assertEquals(offsetConfig.offsetsRetentionMs, Integer.MAX_VALUE * 60L * 1000L)
   }
 
   @Test
@@ -1462,7 +1468,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V2)).anyTimes()
     EasyMock.replay(replicaManager)
 
-    groupCoordinator.handleCommitOffsets(groupId, null, -1, offsets, responseCallback, producerId, producerEpoch)
+    groupCoordinator.handleTxnCommitOffsets(groupId, producerId, producerEpoch, offsets, responseCallback)
     val result = Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
     EasyMock.reset(replicaManager)
     result

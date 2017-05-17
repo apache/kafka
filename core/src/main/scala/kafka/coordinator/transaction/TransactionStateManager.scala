@@ -170,7 +170,6 @@ class TransactionStateManager(brokerId: Int,
     props.put(LogConfig.UncleanLeaderElectionEnableProp, "false")
     props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
     props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
-
     props.put(LogConfig.MinInSyncReplicasProp, config.transactionLogMinInsyncReplicas.toString)
     props.put(LogConfig.SegmentBytesProp, config.transactionLogSegmentBytes.toString)
 

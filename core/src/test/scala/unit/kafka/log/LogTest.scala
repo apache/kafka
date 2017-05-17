@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io._
 import java.nio.ByteBuffer
+import java.nio.file.Files
 import java.util.Properties
 
 import org.apache.kafka.common.errors._
@@ -2270,7 +2271,7 @@ class LogTest {
   }
 
   @Test
-  def testRecoverTransactionIndex(): Unit = {
+  def testFullTransactionIndexRecovery(): Unit = {
     val log = createLog(128)
     val epoch = 0.toShort
 
@@ -2405,7 +2406,7 @@ class LogTest {
 
     // delete all snapshot files
     logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
-      file.delete()
+      Files.delete(file.toPath)
     }
 
     // delete the last offset and transaction index files to force recovery. this should force us to rebuild
@@ -2589,7 +2590,7 @@ class LogTest {
     new Log(logDir,
       config,
       logStartOffset = 0L,
-      recoveryPoint = 0L,
+      recoveryPoint = recoveryPoint,
       scheduler = time.scheduler,
       brokerTopicStats = brokerTopicStats,
       time = time,

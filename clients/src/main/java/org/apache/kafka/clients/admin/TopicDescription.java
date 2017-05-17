@@ -29,7 +29,7 @@ public class TopicDescription {
     private final boolean internal;
     private final NavigableMap<Integer, TopicPartitionInfo> partitions;
 
-    TopicDescription(String name, boolean internal,
+    public TopicDescription(String name, boolean internal,
                     NavigableMap<Integer, TopicPartitionInfo> partitions) {
         this.name = name;
         this.internal = internal;

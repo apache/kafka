@@ -147,8 +147,7 @@ class LogSegment(val log: FileRecords,
   private def updateProducerState(producerStateManager: ProducerStateManager, batch: RecordBatch): Unit = {
     if (batch.hasProducerId) {
       val producerId = batch.producerId
-      val lastEntry = producerStateManager.lastEntry(producerId)
-      val appendInfo = new ProducerAppendInfo(batch.producerId, lastEntry, loadingFromLog = true)
+      val appendInfo = producerStateManager.prepareUpdate(producerId, loadingFromLog = true)
       val maybeCompletedTxn = appendInfo.append(batch)
       producerStateManager.update(appendInfo)
       maybeCompletedTxn.foreach { completedTxn =>

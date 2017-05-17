@@ -14,31 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.clients.admin;
-
-/**
- * A listing of a topic in the cluster.
- */
-public class TopicListing {
-    private final String name;
-    private final boolean internal;
-
-    public TopicListing(String name, boolean internal) {
-        this.name = name;
-        this.internal = internal;
-    }
-
-    public String name() {
-        return name;
-    }
-
-    public boolean internal() {
-        return internal;
-    }
-
-    @Override
-    public String toString() {
-        return "(name=" + name + ", internal=" + internal + ")";
+public class TransactionalIdAuthorizationException extends ApiException {
+    public TransactionalIdAuthorizationException(final String message) {
+        super(message);
     }
 }

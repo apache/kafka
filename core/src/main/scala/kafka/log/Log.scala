@@ -446,10 +446,8 @@ class Log(@volatile var dir: File,
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      if (batch.hasProducerId) {
-        val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducers(batch, loadedProducers, completedTxns, lastEntry, loadingFromLog = true)
-      }
+      if (batch.hasProducerId)
+        updateProducers(batch, loadedProducers, completedTxns, loadingFromLog = true)
     }
     loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
@@ -695,7 +693,7 @@ class Log(@volatile var dir: File,
       // the last appended entry to the client.
       if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
         return (updatedProducers, completedTxns.toList, maybeLastEntry)
-      updateProducers(batch, updatedProducers, completedTxns, maybeLastEntry, loadingFromLog = false)
+      updateProducers(batch, updatedProducers, completedTxns, loadingFromLog = false)
     }
     (updatedProducers, completedTxns.toList, None)
   }
@@ -780,12 +778,10 @@ class Log(@volatile var dir: File,
   private def updateProducers(batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
                               completedTxns: ListBuffer[CompletedTxn],
-                              lastEntry: Option[ProducerIdEntry],
                               loadingFromLog: Boolean): Unit = {
     val producerId = batch.producerId
-    val appendInfo = producers.getOrElseUpdate(producerId, new ProducerAppendInfo(producerId, lastEntry, loadingFromLog))
-    val shouldValidateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
-    val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
+    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, loadingFromLog))
+    val maybeCompletedTxn = appendInfo.append(batch)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 
