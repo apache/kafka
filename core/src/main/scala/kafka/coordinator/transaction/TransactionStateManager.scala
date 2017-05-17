@@ -452,8 +452,8 @@ class TransactionStateManager(brokerId: Int,
           case None =>
             // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
             // return NOT_COORDINATOR to let the client re-discover the transaction coordinator
-            info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
-              s"has been appended to the log. The partition ${partitionFor(transactionalId)} may have migrated as the metadata is no longer in the cache")
+            info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
+              s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
 
             responseError = Errors.NOT_COORDINATOR
         }

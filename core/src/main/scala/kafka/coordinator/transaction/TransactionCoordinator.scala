@@ -374,8 +374,8 @@ class TransactionCoordinator(brokerId: Int,
                     throw new IllegalStateException("Cannot find the metadata in coordinator's cache while it is still the leader of the txn topic partition")
                   } else {
                     // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-                    info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
-                      s"has been appended to the log. The partition ${partitionFor(transactionalId)} may have migrated as the metadata is no longer in the cache")
+                    info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
+                      s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
 
                     Left(Errors.NOT_COORDINATOR)
                   }

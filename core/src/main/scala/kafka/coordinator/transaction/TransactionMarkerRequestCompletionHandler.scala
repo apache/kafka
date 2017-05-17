@@ -17,11 +17,10 @@
 
 package kafka.coordinator.transaction
 
-import kafka.server.DelayedOperationPurgatory
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, RequestCompletionHandler}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.WriteTxnMarkersResponse
 
 import scala.collection.mutable
@@ -32,19 +31,22 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
                                                 txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
   override def onComplete(response: ClientResponse): Unit = {
-    val correlationId = response.requestHeader.correlationId
+    val requestHeader = response.requestHeader
+    val correlationId = requestHeader.correlationId
     if (response.wasDisconnected) {
-      trace(s"Cancelled write marker request $response due to node ${response.destination} being disconnected")
+      val api = ApiKeys.forId(requestHeader.apiKey)
+      val correlation = requestHeader.correlationId
+      trace(s"Cancelled $api request $requestHeader with correlation id $correlation due to node ${response.destination} being disconnected")
+
       for (txnIdAndMarker: TxnIdAndMarkerEntry <- txnIdAndMarkerEntries) {
         val transactionalId = txnIdAndMarker.txnId
         val txnMarker = txnIdAndMarker.txnMarkerEntry
 
         txnStateManager.getTransactionState(transactionalId) match {
           case None =>
-            info(s"Transaction topic partition for $transactionalId may likely has emigrated, as the corresponding metadata do not exist in the cache" +
+            info(s"Transaction metadata for $transactionalId does not exist in the cache" +
               s"any more; cancel sending transaction markers $txnMarker to the brokers")
 
-            // txn topic partition has likely emigrated, just cancel it from the purgatory
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
           case Some(epochAndMetadata) =>
@@ -83,10 +85,9 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
         txnStateManager.getTransactionState(transactionalId) match {
           case None =>
-            info(s"Transaction topic partition for $transactionalId may likely has emigrated, as the corresponding metadata do not exist in the cache" +
+            info(s"Transaction metadata for $transactionalId does not exist in the cache" +
               s"any more; cancel sending transaction markers $txnMarker to the brokers")
 
-            // txn topic partition has likely emigrated, just cancel it from the purgatory
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
           case Some(epochAndMetadata) =>
