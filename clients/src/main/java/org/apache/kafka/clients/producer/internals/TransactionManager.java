@@ -257,7 +257,7 @@ public class TransactionManager {
             transitionTo(State.ERROR, exception);
     }
 
-    boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
+    private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
         if (isInErrorState() && requestHandler.isEndTxn()) {
             // We shouldn't terminate abort requests from error states.
             EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
@@ -337,18 +337,24 @@ public class TransactionManager {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
-    boolean hasPendingTransactionalRequests() {
-        return !(pendingRequests.isEmpty() && newPartitionsToBeAddedToTransaction.isEmpty());
-    }
-
     TxnRequestHandler nextRequestHandler() {
-        if (!hasPendingTransactionalRequests())
+        if (hasInflightRequest()) {
+            log.trace("TransactionalId: {} -- There is already an in-flight transactional request. Going to wait for the response.",
+                    transactionalId);
             return null;
+        }
 
         if (!newPartitionsToBeAddedToTransaction.isEmpty())
             pendingRequests.add(addPartitionsToTransactionHandler());
 
-        return pendingRequests.poll();
+        TxnRequestHandler nextRequestHandler = pendingRequests.poll();
+        if (nextRequestHandler != null && maybeTerminateRequestWithError(nextRequestHandler)) {
+            log.trace("TransactionalId: {} -- Not sending transactional request {} because we are in an error state",
+                    transactionalId, nextRequestHandler.requestBuilder());
+            return null;
+        }
+
+        return nextRequestHandler;
     }
 
     void retry(TxnRequestHandler request) {
@@ -859,6 +865,12 @@ public class TransactionManager {
                     }
                 } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     hadFailure = true;
+                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    fatal(new GroupAuthorizationException(builder.consumerGroupId()));
+                    return;
+                } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
+                    fatal(error.exception());
+                    return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                     fenced();
                     return;

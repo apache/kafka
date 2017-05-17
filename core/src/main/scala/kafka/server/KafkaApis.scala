@@ -1561,15 +1561,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         || unauthorizedForWriteRequestInfo.nonEmpty
         || internalTopics.nonEmpty) {
 
-        // Only send back error responses for the partitions that failed. We do not allow
-        val partitionErrors = unauthorizedForWriteRequestInfo.map { tp => (tp, Errors.TOPIC_AUTHORIZATION_FAILED) }.toMap ++
-          nonExistingOrUnauthorizedForDescribeTopics.map { tp => (tp, Errors.UNKNOWN_TOPIC_OR_PARTITION) }.toMap ++
-          internalTopics.map { tp => (tp, Errors.TOPIC_AUTHORIZATION_FAILED) }
+        // Any failed partition check causes the entire request to fail. We only send back error responses
+        // for the partitions that failed to avoid needing to send an ambiguous error code for the partitions
+        // which succeeded.
+        val partitionErrors = (unauthorizedForWriteRequestInfo.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          nonExistingOrUnauthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
+          internalTopics.map(_ ->Errors.TOPIC_AUTHORIZATION_FAILED)).toMap
 
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AddPartitionsToTxnResponse(requestThrottleMs, partitionErrors.asJava))
       } else {
-        // Send response callback
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
             val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,

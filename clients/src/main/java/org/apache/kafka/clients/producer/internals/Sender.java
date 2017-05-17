@@ -190,9 +190,9 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         if (transactionManager != null) {
-            if (!transactionManager.isTransactional())
+            if (!transactionManager.isTransactional()) {
                 maybeWaitForProducerId();
-            else if (maybeSendTransactionalRequest(now)) {
+            } else if (maybeSendTransactionalRequest(now)) {
                 client.poll(retryBackoffMs, now);
                 return;
             }
@@ -204,15 +204,6 @@ public class Sender implements Runnable {
     }
 
     private long sendProducerData(long now) {
-        if (transactionManager != null && transactionManager.isInErrorState()) {
-            final KafkaException exception = transactionManager.lastError() instanceof KafkaException
-                    ? (KafkaException) transactionManager.lastError()
-                    : new KafkaException(transactionManager.lastError());
-            log.error("aborting producer batches because the transaction manager is in an error state.", exception);
-            this.accumulator.abortBatches(exception);
-            return Long.MAX_VALUE;
-        }
-
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
@@ -289,12 +280,6 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager.hasInflightRequest()) {
-            log.trace("TransactionalId: {} -- There is already an inflight transactional request. Going to wait for the response.",
-                    transactionManager.transactionalId());
-            return true;
-        }
-
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
         if (nextRequestHandler == null) {
             log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionManager.transactionalId());
@@ -307,12 +292,6 @@ public class Sender implements Runnable {
             transactionManager.reenqueue(nextRequestHandler);
             log.trace("TransactionalId: {} -- Going to wait for pending ProducerBatches to flush before sending an " +
                     "end transaction request", transactionManager.transactionalId());
-            return false;
-        }
-
-        if (transactionManager.maybeTerminateRequestWithError(nextRequestHandler)) {
-            log.trace("TransactionalId: {} -- Not sending a transactional request because we are in an error state",
-                    transactionManager.transactionalId());
             return false;
         }
 
@@ -427,6 +406,14 @@ public class Sender implements Runnable {
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
+        }
+
+        if (transactionManager.isInErrorState()) {
+            Exception lastError = transactionManager.lastError();
+            this.accumulator.abortBatches(lastError instanceof KafkaException ?
+                    (KafkaException) lastError : new KafkaException(lastError));
+            log.error("TransactionalId: {} -- aborting producer batches because the transaction manager is in an error state.",
+                    transactionManager.transactionalId());
         }
     }
 

@@ -608,7 +608,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Implementation of asynchronously send a record to a topic.
      */
     private Future<RecordMetadata> doSend(ProducerRecord<K, V> record, Callback callback) {
-        ensureProperTransactionalState();
+        if (transactionManager != null)
+            ensureProperTransactionalState();
+
         TopicPartition tp = null;
         try {
             // first make sure the metadata for the topic is available
@@ -691,9 +693,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     private void ensureProperTransactionalState() {
-        if (transactionManager == null)
-            return;
-
         if (transactionManager.isTransactional() && !transactionManager.hasProducerId())
             throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
                     "when transactions are enabled.");

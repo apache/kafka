@@ -951,9 +951,11 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnEndTransaction(): Unit = {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), transactionalIdResource)
-    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     transactionalProducer.initTransactions()
     transactionalProducer.beginTransaction()
+    transactionalProducer.send(new ProducerRecord(tp.topic(), tp.partition(), "1".getBytes, "1".getBytes)).get
+    transactionalProducer.flush()
     removeAllAcls()
     try {
       transactionalProducer.commitTransaction()
@@ -966,7 +968,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   @Test
   def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnSendOffsetsToTxn(): Unit = {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), transactionalIdResource)
-    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), groupResource)
     transactionalProducer.initTransactions()
     transactionalProducer.beginTransaction()
@@ -979,7 +980,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       case _: TransactionalIdAuthorizationException => // ok
     }
   }
-
 
   @Test
   def shouldThrowProducerIdAuthorizationExceptionWhenAclNotSet(): Unit = {
