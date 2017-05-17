@@ -83,7 +83,7 @@ class WindowStoreIteratorWrapper<K, V> {
     }
 
 
-    final KeyValueIterator<Bytes, byte[]> bytesIterator;
+    protected final KeyValueIterator<Bytes, byte[]> bytesIterator;
     protected final StateSerdes<K, V> serdes;
     protected final long windowSize;
 

@@ -23,7 +23,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.util.NoSuchElementException;
 
-public class KeyValueIterators {
+class KeyValueIterators {
 
     private static class EmptyKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
 

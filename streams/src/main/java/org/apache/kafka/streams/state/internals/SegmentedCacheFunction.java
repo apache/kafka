@@ -22,14 +22,14 @@ import org.apache.kafka.streams.state.internals.SegmentedBytesStore.KeySchema;
 
 import java.nio.ByteBuffer;
 
-public class SegmentedCacheFunction implements CacheFunction {
+class SegmentedCacheFunction implements CacheFunction {
 
     private static final int SEGMENT_ID_BYTES = 8;
 
     private final KeySchema keySchema;
     private final long segmentInterval;
 
-    public SegmentedCacheFunction(KeySchema keySchema, long segmentInterval) {
+    SegmentedCacheFunction(KeySchema keySchema, long segmentInterval) {
         this.keySchema = keySchema;
         this.segmentInterval = segmentInterval;
     }
@@ -57,7 +57,7 @@ public class SegmentedCacheFunction implements CacheFunction {
         return keySchema.segmentTimestamp(key) / segmentInterval;
     }
 
-    public int compareSegmentedKeys(Bytes cacheKey, Bytes storeKey) {
+    int compareSegmentedKeys(Bytes cacheKey, Bytes storeKey) {
         long storeSegmentId = segmentId(storeKey);
         long cacheSegmentId = ByteBuffer.wrap(cacheKey.get()).getLong();
 
