@@ -23,7 +23,6 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
-import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before, Ignore, Test}
@@ -38,6 +37,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   val numServers = 3
   val topic1 = "topic1"
   val topic2 = "topic2"
+
 
   override def generateConfigs : Seq[KafkaConfig] = {
     TestUtils.createBrokerConfigs(numServers, zkConnect, true).map(KafkaConfig.fromProps(_, serverProps()))
@@ -67,13 +67,13 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer.initTransactions()
 
       producer.beginTransaction()
-      producer.send(producerRecord(topic2, "2", "2", willBeCommitted = false))
-      producer.send(producerRecord(topic1, "4", "4", willBeCommitted = false))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "2", willBeCommitted = false))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "4", "4", willBeCommitted = false))
       producer.abortTransaction()
 
       producer.beginTransaction()
-      producer.send(producerRecord(topic1, "1", "1", willBeCommitted = true))
-      producer.send(producerRecord(topic2, "3", "3", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = true))
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "3", "3", willBeCommitted = true))
       producer.commitTransaction()
 
       consumer.subscribe(List(topic1, topic2))
@@ -81,13 +81,13 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       val records = pollUntilExactlyNumRecords(consumer, 2)
       records.zipWithIndex.foreach { case (record, i) =>
-        assertCommittedAndGetValue(record)
+        TestUtils.assertCommittedAndGetValue(record)
       }
 
       val allRecords = pollUntilExactlyNumRecords(unCommittedConsumer, 4)
       val expectedValues = List("1", "2", "3", "4").toSet
       allRecords.zipWithIndex.foreach { case (record, i) =>
-        assertTrue(expectedValues.contains(recordValue(record)))
+        assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
       }
     } finally {
       consumer.close()
@@ -131,7 +131,7 @@ class TransactionsTest extends KafkaServerTestHarness {
         records.zipWithIndex.foreach { case (record, i) =>
           val key = new String(record.key(), "UTF-8")
           val value = new String(record.value(), "UTF-8")
-          producer.send(producerRecord(topic2, key, value, willBeCommitted = shouldCommit))
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, key, value, willBeCommitted = shouldCommit))
         }
 
         producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer), consumerGroupId)
@@ -159,7 +159,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val verifyingConsumer = transactionalConsumer("foobargroup")
     verifyingConsumer.subscribe(List(topic2))
     val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
-      assertCommittedAndGetValue(record).toInt
+      TestUtils.assertCommittedAndGetValue(record).toInt
     }
     verifyingConsumer.close()
     val valueSet = valueSeq.toSet
@@ -179,13 +179,13 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer1.initTransactions()
 
       producer1.beginTransaction()
-      producer1.send(producerRecord(topic1, "1", "1", willBeCommitted = false))
-      producer1.send(producerRecord(topic2, "3", "3", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "3", "3", willBeCommitted = false))
 
       producer2.initTransactions()  // ok, will abort the open transaction.
       producer2.beginTransaction()
-      producer2.send(producerRecord(topic1, "2", "4", willBeCommitted = true))
-      producer2.send(producerRecord(topic2, "2", "4", willBeCommitted = true))
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "4", willBeCommitted = true))
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "4", willBeCommitted = true))
 
       try {
         producer1.commitTransaction()
@@ -202,7 +202,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       val records = pollUntilExactlyNumRecords(consumer, 2)
       records.zipWithIndex.foreach { case (record, i) =>
-        assertCommittedAndGetValue(record)
+        TestUtils.assertCommittedAndGetValue(record)
       }
     } finally {
       consumer.close()
@@ -222,16 +222,16 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer1.initTransactions()
 
       producer1.beginTransaction()
-      producer1.send(producerRecord(topic1, "1", "1", willBeCommitted = false))
-      producer1.send(producerRecord(topic2, "3", "3", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "3", "3", willBeCommitted = false))
 
       producer2.initTransactions()  // ok, will abort the open transaction.
       producer2.beginTransaction()
-      producer2.send(producerRecord(topic1, "2", "4", willBeCommitted = true)).get()
-      producer2.send(producerRecord(topic2, "2", "4", willBeCommitted = true)).get()
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "4", willBeCommitted = true)).get()
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "4", willBeCommitted = true)).get()
 
       try {
-        val result =  producer1.send(producerRecord(topic1, "1", "5", willBeCommitted = false))
+        val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "5", willBeCommitted = false))
         val recordMetadata = result.get()
         error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic()}-${recordMetadata.partition()}. Grab the logs!!")
         servers.foreach { case (server) =>
@@ -252,7 +252,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       val records = pollUntilExactlyNumRecords(consumer, 2)
       records.zipWithIndex.foreach { case (record, i) =>
-        assertCommittedAndGetValue(record)
+        TestUtils.assertCommittedAndGetValue(record)
       }
     } finally {
       consumer.close()
@@ -272,18 +272,18 @@ class TransactionsTest extends KafkaServerTestHarness {
       producer1.initTransactions()
 
       producer1.beginTransaction()
-      producer1.send(producerRecord(topic1, "1", "1", willBeCommitted = false))
-      producer1.send(producerRecord(topic2, "3", "3", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "3", "3", willBeCommitted = false))
       producer1.abortTransaction()
 
       producer2.initTransactions()  // ok, will abort the open transaction.
       producer2.beginTransaction()
-      producer2.send(producerRecord(topic1, "2", "4", willBeCommitted = true)).get()
-      producer2.send(producerRecord(topic2, "2", "4", willBeCommitted = true)).get()
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "4", willBeCommitted = true)).get()
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "4", willBeCommitted = true)).get()
 
       try {
         producer1.beginTransaction()
-        val result =  producer1.send(producerRecord(topic1, "1", "5", willBeCommitted = false))
+        val result =  producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "5", willBeCommitted = false))
         val recordMetadata = result.get()
         error(s"Missed a producer fenced exception when writing to ${recordMetadata.topic()}-${recordMetadata.partition()}. Grab the logs!!")
         servers.foreach { case (server) =>
@@ -304,33 +304,12 @@ class TransactionsTest extends KafkaServerTestHarness {
 
       val records = pollUntilExactlyNumRecords(consumer, 2)
       records.zipWithIndex.foreach { case (record, i) =>
-        assertCommittedAndGetValue(record)
+        TestUtils.assertCommittedAndGetValue(record)
       }
     } finally {
       consumer.close()
       producer2.close()
     }
-  }
-
-  // Verifies that the record was intended to be committed by checking the suffix of the value. If true, this
-  // will return the value with the '-committed' suffix removed.
-  private def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
-    val recordValue = new String(record.value(), "UTF-8")
-    assertTrue(recordValue.endsWith("committed"))
-    recordValue.replace("-committed", "")
-  }
-
-  private def recordValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
-    val recordValue = new String(record.value(), "UTF-8")
-    recordValue.replace("-committed", "").replace("-aborted", "")
-  }
-
-  private def producerRecord(topic: String, key: String, value: String, willBeCommitted: Boolean) = {
-    val suffixedValue = if (willBeCommitted)
-      value + "-committed"
-    else
-      value + "-aborted"
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, key.getBytes("UTF-8"), suffixedValue.getBytes("UTF-8"))
   }
 
   private def serverProps() = {
@@ -369,10 +348,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
       records ++= consumer.poll(50)
-      if (logger.isDebugEnabled)
-        records.foreach { case (record) =>
-          debug(s"consumed record with value ${recordValue(record)}")
-        }
       records.size == numRecords
     }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
     records

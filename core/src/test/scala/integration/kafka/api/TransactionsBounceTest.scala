@@ -101,7 +101,9 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         producer.beginTransaction()
         val shouldAbort = iteration % 10 == 0
         records.zipWithIndex.foreach { case (record, i) =>
-          producer.send(producerRecord(outputTopic, record, !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key(), record.value(), true))
+          producer.send(
+            TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic,  record.key, record.value, !shouldAbort),
+            new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
         producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer), consumerGroup)
@@ -116,9 +118,9 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
           numMessagesProcessed += records.size
         }
         iteration += 1
-      } catch {
-        case e : Exception =>
-          fail (s"Unexpected exception occurred while copying messages from $inputTopic to $outputTopic", e)
+      } finally {
+        producer.close()
+        consumer.close()
       }
     }
 
@@ -126,7 +128,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
 
     val verifyingConsumer = createConsumerAndSubscribeToTopics("randoGroup", List(outputTopic), readCommitted = true)
     val outputRecords = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).map { case(record) =>
-      assertCommittedAndGetValue(record)
+      TestUtils.assertCommittedAndGetValue(record).toInt
     }
     val recordSet = outputRecords.toSet
     assertEquals(numInputRecords, recordSet.size)
@@ -134,8 +136,6 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     val expectedValues = (0 until numInputRecords).toSet
     assertEquals(s"Missing messages: ${expectedValues -- recordSet}", expectedValues, recordSet)
 
-    consumer.close()
-    producer.close()
     verifyingConsumer.close()
   }
 
@@ -162,38 +162,16 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, outputTopic, numPartitions, numServers, servers, topicConfig)
   }
 
-    // Verifies that the record was intended to be committed by checking the suffix of the value. If true, this
-  // will return the value with the '-committed' suffix removed.
-  private def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : Int = {
-    val recordValue = new String(record.value(), "UTF-8")
-    assertTrue(recordValue.endsWith("committed"))
-    recordValue.replace("-committed", "").toInt
-  }
-
-  private def recordValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : Int = {
-    val recordValue = new String(record.value(), "UTF-8")
-    recordValue.replace("-committed", "").replace("-aborted", "").toInt
-  }
-
-  private def producerRecord(topic: String, consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], willBeCommitted: Boolean) = {
-    val value = new String(consumerRecord.value(), "UTF-8")
-    val suffixedValue = if (willBeCommitted)
-      value + "-committed"
-    else
-      value + "-aborted"
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, consumerRecord.key(), suffixedValue.getBytes("UTF-8"))
-  }
-
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
     override def doWork(): Unit = {
       for (server <- servers) {
-        info("Shutting down server : %s".format(server.config.brokerId))
+        trace("Shutting down server : %s".format(server.config.brokerId))
         server.shutdown()
         server.awaitShutdown()
         Thread.sleep(500)
-        info("Server %s shut down. Starting it up again.".format(server.config.brokerId))
+        trace("Server %s shut down. Starting it up again.".format(server.config.brokerId))
         server.startup()
-        info("Restarted server: %s".format(server.config.brokerId))
+        trace("Restarted server: %s".format(server.config.brokerId))
         Thread.sleep(500)
       }
 

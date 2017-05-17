@@ -20,7 +20,7 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.nio.charset.Charset
+import java.nio.charset.{Charset, StandardCharsets}
 import java.security.cert.X509Certificate
 import java.util.{ArrayList, Collections, Properties}
 import java.util.concurrent.{Callable, Executors, TimeUnit}
@@ -43,6 +43,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer, OffsetAndMetadata, RangeAssignor}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -75,6 +76,10 @@ object TestUtils extends Logging {
   val MockZkPort = 1
   /** Zookeeper connection string to use for unit tests that mock/don't require a real ZK server. */
   val MockZkConnect = "127.0.0.1:" + MockZkPort
+
+  private val transactionStatusKey = "transactionStatus"
+  private val committedValue : Array[Byte] = "committed".getBytes(StandardCharsets.UTF_8)
+  private val abortedValue : Array[Byte] = "aborted".getBytes(StandardCharsets.UTF_8)
 
   /**
    * Create a temporary directory
@@ -1348,7 +1353,7 @@ object TestUtils extends Logging {
     val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
     try {
       for (i <- 0 until numRecords) {
-        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, i.toString.getBytes("UTF-8"), i.toString.getBytes("UTF-8")))
+        producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
         recordsWritten += 1
       }
       producer.flush()
@@ -1356,6 +1361,44 @@ object TestUtils extends Logging {
       producer.close()
     }
     recordsWritten
+  }
+
+  private def asString(bytes: Array[Byte]) = new String(bytes, StandardCharsets.UTF_8)
+
+  private def asBytes(string: String) = string.getBytes(StandardCharsets.UTF_8)
+
+  // Verifies that the record was intended to be committed by checking the the headers for an expected transaction status
+  // If true, this will return the value as a string. It is expected that the record in question should have been created
+  // by the `producerRecordWithExpectedTransactionStatus` method.
+  def assertCommittedAndGetValue(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+    record.headers.headers(transactionStatusKey).headOption match {
+      case Some(header) =>
+        assertEquals(s"Got ${asString(header.value)} but expected the value to indicate " +
+          s"committed status.", asString(committedValue), asString(header.value))
+      case None =>
+        fail("expected the record header to include an expected transaction status, but received nothing.")
+    }
+    recordValueAsString(record)
+  }
+
+  def recordValueAsString(record: ConsumerRecord[Array[Byte], Array[Byte]]) : String = {
+    asString(record.value)
+  }
+
+  def producerRecordWithExpectedTransactionStatus(topic: String, key: Array[Byte], value: Array[Byte],
+                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+    val header = new Header {override def key() = transactionStatusKey
+      override def value() = if (willBeCommitted)
+        committedValue
+      else
+        abortedValue
+    }
+    new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, List(header))
+  }
+
+  def producerRecordWithExpectedTransactionStatus(topic: String, key: String, value: String,
+                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+    producerRecordWithExpectedTransactionStatus(topic, asBytes(key), asBytes(value), willBeCommitted)
   }
 
   // Collect the current positions for all partition in the consumers current assignment.
