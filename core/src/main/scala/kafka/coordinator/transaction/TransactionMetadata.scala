@@ -135,7 +135,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   }
 
   def removePartition(topicPartition: TopicPartition): Unit = {
-    if (pendingState.isDefined || (state != PrepareCommit && state != PrepareAbort))
+    if (pendingState.isDefined && (state != PrepareCommit && state != PrepareAbort))
       throw new IllegalStateException(s"Transation metadata's current state is $state, and its pending state is $state " +
         s"while trying to remove partitions whose txn marker has been sent, this is not expected")
 

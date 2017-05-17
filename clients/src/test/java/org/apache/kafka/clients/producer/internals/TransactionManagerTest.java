@@ -433,7 +433,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -442,6 +442,8 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // send produce.
 
+        assertTrue(responseFuture.isDone());
+        assertTrue(transactionManager.isInErrorState());
         responseFuture.get();
     }
 
@@ -500,6 +502,48 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testAllowAbortOnProduceFailure() throws InterruptedException {
+        client.setNode(brokerNode);
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+        sender.run(time.milliseconds());  // get pid.
+
+        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        assertTrue(transactionManager.hasProducerId());
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
+
+        TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.OUT_OF_ORDER_SEQUENCE_NUMBER, pid, epoch);
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.ABORT, pid, epoch);
+
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest
+        assertFalse(abortResult.isCompleted());
+
+        sender.run(time.milliseconds());  // Send Produce Request, returns OutOfOrderSequenceException.
+        sender.run(time.milliseconds());  // try to abort
+        assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
+        assertTrue(transactionManager.isReadyForTransaction());  // make sure we are ready for a transaction now.
+    }
+
+
+    @Test
     public void shouldNotAddPartitionsToTransactionWhenTopicAuthorizationFailed() throws Exception {
         verifyAddPartitionsFailsWithPartitionLevelError(Errors.TOPIC_AUTHORIZATION_FAILED);
     }
@@ -519,6 +563,7 @@ public class TransactionManagerTest {
 
         final long pid = 1L;
         final short epoch = 1;
+
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
 
         sender.run(time.milliseconds());  // get pid.
