@@ -290,7 +290,13 @@ public class Worker {
             return false;
         }
 
-        connector.shutdown();
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(connector.connector());
+            connector.shutdown();
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
 
         log.info("Stopped connector {}", connName);
         return true;
@@ -425,7 +431,14 @@ public class Worker {
         log.info("Stopping task {}", task.id());
         if (task instanceof WorkerSourceTask)
             sourceTaskOffsetCommitter.remove(task.id());
-        task.stop();
+
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = Plugins.compareAndSwapLoaders(task.loader());
+            task.stop();
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
     }
 
     private void stopTasks(Collection<ConnectorTaskId> ids) {
@@ -529,7 +542,7 @@ public class Worker {
     private void transitionTo(Object connectorOrTask, TargetState state, ClassLoader loader) {
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
-            savedLoader = plugins.compareAndSwapLoaders(loader);
+            savedLoader = Plugins.compareAndSwapLoaders(loader);
             if (connectorOrTask instanceof WorkerConnector) {
                 ((WorkerConnector) connectorOrTask).transitionTo(state);
             } else if (connectorOrTask instanceof WorkerTask) {
