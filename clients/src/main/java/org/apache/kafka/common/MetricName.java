@@ -21,7 +21,7 @@ import java.util.Map;
 import org.apache.kafka.common.utils.Utils;
 
 /**
- * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.MetricName(...).
+ * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.metricName(...).
  * <p>
  * This class captures the following parameters
  * <pre>
@@ -106,38 +106,23 @@ public final class MetricName {
             return hash;
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((group == null) ? 0 : group.hashCode());
-        result = prime * result + ((name == null) ? 0 : name.hashCode());
-        result = prime * result + ((tags == null) ? 0 : tags.hashCode());
+        result = prime * result + group.hashCode();
+        result = prime * result + name.hashCode();
+        result = prime * result + tags.hashCode();
         this.hash = result;
         return result;
     }
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj)
-            return true;
-        if (obj == null)
-            return false;
-        if (getClass() != obj.getClass())
-            return false;
+        if (this == obj) return true;
+        if (obj == null || getClass() != obj.getClass()) return false;
+
         MetricName other = (MetricName) obj;
-        if (group == null) {
-            if (other.group != null)
-                return false;
-        } else if (!group.equals(other.group))
-            return false;
-        if (name == null) {
-            if (other.name != null)
-                return false;
-        } else if (!name.equals(other.name))
-            return false;
-        if (tags == null) {
-            if (other.tags != null)
-                return false;
-        } else if (!tags.equals(other.tags))
-            return false;
-        return true;
+
+        if (!name.equals(other.name)) return false;
+        if (!group.equals(other.group)) return false;
+        return tags.equals(other.tags);
     }
 
     @Override

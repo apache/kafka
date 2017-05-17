@@ -103,7 +103,7 @@ public final class ProducerBatch {
      */
     public void done(long baseOffset, long logAppendTime, RuntimeException exception) {
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
-                  topicPartition, baseOffset, exception);
+                  topicPartition, baseOffset, exception.getMessage());
 
         if (completed.getAndSet(true))
             throw new IllegalStateException("Batch has already been completed");
