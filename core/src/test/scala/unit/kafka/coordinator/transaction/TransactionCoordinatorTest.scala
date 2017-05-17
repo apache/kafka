@@ -521,11 +521,11 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRemoveTransactionsForPartitionOnEmigration(): Unit = {
-    EasyMock.expect(transactionManager.removeTransactionsForTxnTopicPartition(0))
+    EasyMock.expect(transactionManager.removeTransactionsForTxnTopicPartition(0, coordinatorEpoch))
     EasyMock.expect(transactionMarkerChannelManager.removeMarkersForTxnTopicPartition(0))
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    coordinator.handleTxnEmigration(0)
+    coordinator.handleTxnEmigration(0, coordinatorEpoch)
 
     EasyMock.verify(transactionManager, transactionMarkerChannelManager)
   }

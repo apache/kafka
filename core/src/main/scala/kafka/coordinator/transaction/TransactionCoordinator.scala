@@ -266,8 +266,8 @@ class TransactionCoordinator(brokerId: Int,
       txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
   }
 
-  def handleTxnEmigration(txnTopicPartitionId: Int) {
-      txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId)
+  def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
+      txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch)
       txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
   }
 

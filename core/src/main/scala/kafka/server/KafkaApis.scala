@@ -150,7 +150,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (partition.topic == GROUP_METADATA_TOPIC_NAME)
             groupCoordinator.handleGroupEmigration(partition.partitionId)
           else if (partition.topic == TRANSACTION_STATE_TOPIC_NAME)
-            txnCoordinator.handleTxnEmigration(partition.partitionId)
+            txnCoordinator.handleTxnEmigration(partition.partitionId, partition.getLeaderEpoch)
         }
       }
 
