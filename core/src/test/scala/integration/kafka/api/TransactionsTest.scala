@@ -17,7 +17,6 @@
 
 package kafka.api
 
-import java.util
 import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
@@ -49,7 +48,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   override def setUp(): Unit = {
     super.setUp()
     val numPartitions = 3
-    val topicConfig = new Properties();
+    val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
     TestUtils.createTopic(zkUtils, topic1, numPartitions, numServers, servers, topicConfig)
     TestUtils.createTopic(zkUtils, topic2, numPartitions, numServers, servers, topicConfig)

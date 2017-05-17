@@ -91,9 +91,8 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
 
     var numMessagesProcessed = 0
     var iteration = 0
-
-    while (numMessagesProcessed < numInputRecords) {
-      try {
+    try {
+      while (numMessagesProcessed < numInputRecords) {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
         trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead)
@@ -102,7 +101,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         val shouldAbort = iteration % 10 == 0
         records.zipWithIndex.foreach { case (record, i) =>
           producer.send(
-            TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic,  record.key, record.value, !shouldAbort),
+            TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value, !shouldAbort),
             new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
@@ -118,10 +117,10 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
           numMessagesProcessed += records.size
         }
         iteration += 1
-      } finally {
-        producer.close()
-        consumer.close()
       }
+    } finally {
+      producer.close()
+      consumer.close()
     }
 
     scheduler.shutdown()
