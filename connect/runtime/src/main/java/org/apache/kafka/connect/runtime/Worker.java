@@ -404,7 +404,7 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverter,
-                     valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, loader, time);
+                    valueConverter, transformationChain, producer, offsetReader, offsetWriter, config, loader, time);
         } else if (task instanceof SinkTask) {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations());
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, keyConverter,
@@ -512,20 +512,36 @@ public class Worker {
         log.info("Setting connector {} state to {}", connName, state);
 
         WorkerConnector workerConnector = connectors.get(connName);
-        // TODO: Make sure that tasks can't be around while a connector object is null
         if (workerConnector != null) {
-            ClassLoader savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
-            try {
-                workerConnector.transitionTo(state);
+            ClassLoader connectorLoader =
+                    plugins.delegatingLoader().connectorLoader(workerConnector.connector());
+            transitionTo(workerConnector, state, connectorLoader);
+        }
 
-                for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
-                    if (taskEntry.getKey().connector().equals(connName))
-                        taskEntry.getValue().transitionTo(state);
-                }
-            } finally {
-                Plugins.compareAndSwapLoaders(savedLoader);
+        for (Map.Entry<ConnectorTaskId, WorkerTask> taskEntry : tasks.entrySet()) {
+            if (taskEntry.getKey().connector().equals(connName)) {
+                WorkerTask workerTask = taskEntry.getValue();
+                transitionTo(workerTask, state, workerTask.loader());
             }
         }
     }
 
+    private void transitionTo(Object connectorOrTask, TargetState state, ClassLoader loader) {
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(loader);
+            if (connectorOrTask instanceof WorkerConnector) {
+                ((WorkerConnector) connectorOrTask).transitionTo(state);
+            } else if (connectorOrTask instanceof WorkerTask) {
+                ((WorkerTask) connectorOrTask).transitionTo(state);
+            } else {
+                throw new ConnectException(
+                        "Request for state transition on an object that is neither a "
+                                + "WorkerConnector nor a WorkerTask: "
+                                + connectorOrTask.getClass());
+            }
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
+    }
 }

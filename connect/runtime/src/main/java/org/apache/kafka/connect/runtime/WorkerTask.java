@@ -62,6 +62,10 @@ abstract class WorkerTask implements Runnable {
         return id;
     }
 
+    public ClassLoader loader() {
+        return loader;
+    }
+
     /**
      * Initialize the task for execution.
      * @param taskConfig initial configuration

@@ -104,6 +104,23 @@ public class Plugins {
         return current;
     }
 
+    public ClassLoader currentThreadLoader() {
+        return Thread.currentThread().getContextClassLoader();
+    }
+
+    public ClassLoader compareAndSwapWithDelegatingLoader() {
+        ClassLoader current = Thread.currentThread().getContextClassLoader();
+        if (!current.equals(delegatingLoader)) {
+            Thread.currentThread().setContextClassLoader(delegatingLoader);
+        }
+        return current;
+    }
+
+    public ClassLoader compareAndSwapLoaders(Connector connector) {
+        ClassLoader connectorLoader = delegatingLoader.connectorLoader(connector);
+        return compareAndSwapLoaders(connectorLoader);
+    }
+
     public DelegatingClassLoader delegatingLoader() {
         return delegatingLoader;
     }
@@ -195,23 +212,6 @@ public class Plugins {
             String transformationClassOrAlias
     ) {
         return null;
-    }
-
-    public ClassLoader currentThreadLoader() {
-        return Thread.currentThread().getContextClassLoader();
-    }
-
-    public ClassLoader compareAndSwapWithDelegatingLoader() {
-        ClassLoader current = Thread.currentThread().getContextClassLoader();
-        if (!current.equals(delegatingLoader)) {
-            Thread.currentThread().setContextClassLoader(delegatingLoader);
-        }
-        return current;
-    }
-
-    public ClassLoader compareAndSwapLoaders(Connector connector) {
-        ClassLoader connectorLoader = delegatingLoader.connectorLoader(connector);
-        return compareAndSwapLoaders(connectorLoader);
     }
 
 }
