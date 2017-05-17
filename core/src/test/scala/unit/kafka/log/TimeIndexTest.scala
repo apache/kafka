@@ -19,10 +19,10 @@ package kafka.log
 
 import java.io.File
 
-import kafka.common.InvalidOffsetException
 import kafka.utils.TestUtils
-import org.junit.{Test, After, Before}
-import org.junit.Assert.{assertEquals}
+import org.apache.kafka.common.errors.InvalidOffsetException
+import org.junit.{After, Before, Test}
+import org.junit.Assert.assertEquals
 import org.scalatest.junit.JUnitSuite
 
 /**

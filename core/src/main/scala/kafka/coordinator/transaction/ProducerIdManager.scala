@@ -16,8 +16,8 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.KafkaException
 import kafka.utils.{Json, Logging, ZkUtils}
+import org.apache.kafka.common.KafkaException
 
 /**
  * ProducerIdManager is the part of the transaction coordinator that provides ProducerIds in a unique way

@@ -17,7 +17,6 @@
 
 package kafka.tools
 
-import kafka.common._
 import kafka.message._
 import kafka.serializer._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
@@ -27,7 +26,9 @@ import java.io._
 import java.nio.charset.StandardCharsets
 
 import joptsimple._
+import kafka.common.MessageReader
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._

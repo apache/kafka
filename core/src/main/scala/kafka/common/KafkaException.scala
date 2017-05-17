@@ -19,7 +19,7 @@ package kafka.common
 /**
  * Generic Kafka exception
 */
-class KafkaException(message: String, t: Throwable) extends RuntimeException(message, t) {
+class KafkaException(message: String, t: Throwable) extends org.apache.kafka.common.KafkaException(message, t) {
   def this(message: String) = this(message, null)
   def this(t: Throwable) = this("", t)
 }

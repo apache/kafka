@@ -17,11 +17,10 @@
 
 package kafka.tools
 
-import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{ConsumerConfig, SimpleConsumer}
 import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.{KafkaException, TopicAndPartition}
-import kafka.utils.{CoreUtils, Exit, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{Exit, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.JaasUtils

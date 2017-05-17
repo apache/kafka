@@ -21,7 +21,7 @@ import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.common.{KafkaException, TopicAndPartition}
+import kafka.common.TopicAndPartition
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients._
@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest.EndPoint
 import org.apache.kafka.common.requests.{UpdateMetadataRequest, _}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Node, TopicPartition, requests}
+import org.apache.kafka.common.{KafkaException, Node, TopicPartition, requests}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap

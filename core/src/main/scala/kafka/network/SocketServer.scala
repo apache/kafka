@@ -26,11 +26,11 @@ import java.util.concurrent.atomic._
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
-import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Selector => KSelector}
