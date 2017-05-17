@@ -103,6 +103,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             binarySessionId, earliestSessionEndTime, latestSessionStartTime
         );
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionId,
+                                                                             binarySessionId,
                                                                              earliestSessionEndTime,
                                                                              latestSessionStartTime);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);

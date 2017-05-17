@@ -141,16 +141,6 @@ public interface SegmentedBytesStore extends StateStore {
 
         /**
          * Create an implementation of {@link HasNextCondition} that knows when
-         * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, long, long)} operations
-         * @param binaryKey     the record-key
-         * @param from          starting time range
-         * @param to            ending time range
-         * @return
-         */
-        HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to);
-
-        /**
-         * Create an implementation of {@link HasNextCondition} that knows when
          * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
          * @param binaryKeyFrom the first key in the range
          * @param binaryKeyTo   the last key in the range

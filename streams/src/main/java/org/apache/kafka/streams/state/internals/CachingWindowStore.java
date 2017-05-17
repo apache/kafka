@@ -162,6 +162,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyBytes,
+                                                                             keyBytes,
                                                                              timeFrom,
                                                                              timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(

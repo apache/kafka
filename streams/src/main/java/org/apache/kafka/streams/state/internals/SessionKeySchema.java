@@ -102,26 +102,6 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public HasNextCondition hasNextCondition(final Bytes binaryKey, final long from, final long to) {
-        return new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                while (iterator.hasNext()) {
-                    final Bytes bytes = iterator.peekNextKey();
-                    final Windowed<Bytes> windowedKey = SessionKeySerde.fromBytes(bytes);
-                    if (windowedKey.key().equals(binaryKey)
-                            && windowedKey.window().end() >= from
-                            && windowedKey.window().start() <= to) {
-                        return true;
-                    }
-                    iterator.next();
-                }
-                return false;
-            }
-        };
-    }
-
-    @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
         return new HasNextCondition() {
             @Override

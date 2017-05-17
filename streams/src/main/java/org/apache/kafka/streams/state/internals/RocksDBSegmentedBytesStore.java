@@ -50,7 +50,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
 
         return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(key, from, to),
+                                   keySchema.hasNextCondition(key, key, from, to),
                                    binaryFrom, binaryTo);
     }
 
