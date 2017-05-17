@@ -28,34 +28,104 @@ public class WindowKeySchemaTest {
     private final WindowKeySchema windowKeySchema = new WindowKeySchema();
 
     @Test
-    public void boundsSanity() throws Exception {
-        // easy
-        Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{1}), Long.MAX_VALUE);
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{1}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+    public void testUpperBoundWithLargeTimestamps() throws Exception {
+        Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
-        // hard
-        upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0, 1}), Long.MAX_VALUE);
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                WindowStoreUtils.toBinaryKey(
+                    new byte[]{0xA},
+                    Long.MAX_VALUE,
+                    Integer.MAX_VALUE
+                )
+            ) >= 0
+        );
 
-        upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xC, 0x0}), 0x7fffffffffffffffL);
-        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xC}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                WindowStoreUtils.toBinaryKey(
+                    new byte[]{0xA, 0xB},
+                    Long.MAX_VALUE,
+                    Integer.MAX_VALUE
+                )
+            ) >= 0
+        );
 
-        upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xC, 0xC, 0x9}), 0x0AffffffffffffffL);
+        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+    }
+
+    @Test
+    public void testUpperBoundWithKeyBytesLargerThanFirstTimestampByte() throws Exception {
+        Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
+
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                WindowStoreUtils.toBinaryKey(
+                    new byte[]{0xA, (byte) 0x8F},
+                    Long.MAX_VALUE,
+                    Integer.MAX_VALUE
+                )
+            ) >= 0
+        );
+
+        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}, Long.MAX_VALUE, Integer.MAX_VALUE)));
+    }
+
+
+    @Test
+    public void testUpperBoundWithKeyBytesLargerAndSmallerThanFirstTimestampByte() throws Exception {
+        Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xC, 0xC, 0x9}), 0x0AffffffffffffffL);
+
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                WindowStoreUtils.toBinaryKey(
+                    new byte[]{0xC, 0xC},
+                    0x0AffffffffffffffL,
+                    Integer.MAX_VALUE
+                )
+            ) >= 0
+        );
+
         assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xC, 0xC}, 0x0AffffffffffffffL, Integer.MAX_VALUE)));
+    }
 
+    @Test
+    public void testUpperBoundWithZeroTimestamp() throws Exception {
+        Bytes upper = windowKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
+        assertThat(upper, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, Integer.MAX_VALUE)));
+    }
 
-        // easy
-        Bytes lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0}), 0);
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0}, 0, 0)));
+    @Test
+    public void testLowerBoundWithZeroTimestamp() throws Exception {
+        Bytes lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
+        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
+    }
 
-        // hard
-        lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0}), 1);
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0}, 0, 0)));
+    @Test
+    public void testLowerBoundWithMonZeroTimestamp() throws Exception {
+        Bytes lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 42);
+        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
+    }
 
-        lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0xf}), 0x7fffffffffffffffL);
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xf}, 0, 0)));
+    @Test
+    public void testLowerBoundMatchesTrailingZeros() throws Exception {
+        Bytes lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE - 1);
 
-        lower = windowKeySchema.lowerRange(Bytes.wrap(new byte[]{0x0, 0xf}), 0x7fffffffffffffffL);
-        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0x0, 0xf}, 0, 0)));
+        assertThat(
+            "appending zeros to key should still be in range",
+            lower.compareTo(
+                WindowStoreUtils.toBinaryKey(
+                        new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+                        Long.MAX_VALUE - 1,
+                        0
+                )
+            ) < 0
+        );
+
+        assertThat(lower, equalTo(WindowStoreUtils.toBinaryKey(new byte[]{0xA, 0xB, 0xC}, 0, 0)));
     }
 }

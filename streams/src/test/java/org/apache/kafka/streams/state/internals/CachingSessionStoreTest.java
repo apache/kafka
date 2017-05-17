@@ -99,17 +99,35 @@ public class CachingSessionStoreTest {
         assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), b.next());
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
+    }
+
+    @Test
+    public void shouldPutFetchAllKeysFromCache() throws Exception {
+        cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
+
+        assertEquals(3, cache.size());
 
         final KeyValueIterator<Windowed<String>, Long> all = cachingStore.findSessions("a", "b", 0, 0);
         assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), all.next());
         assertEquals(KeyValue.pair(new Windowed<>("aa", new SessionWindow(0, 0)), 1L), all.next());
         assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), all.next());
         assertFalse(all.hasNext());
+    }
+
+    @Test
+    public void shouldPutFetchRangeFromCache() throws Exception {
+        cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
+        cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
+
+        assertEquals(3, cache.size());
 
         final KeyValueIterator<Windowed<String>, Long> some = cachingStore.findSessions("aa", "b", 0, 0);
         assertEquals(KeyValue.pair(new Windowed<>("aa", new SessionWindow(0, 0)), 1L), some.next());
         assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L),  some.next());
-        assertFalse(all.hasNext());
+        assertFalse(some.hasNext());
     }
 
     @Test

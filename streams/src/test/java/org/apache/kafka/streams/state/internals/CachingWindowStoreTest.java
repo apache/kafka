@@ -178,12 +178,19 @@ public class CachingWindowStoreTest {
     @Test
     public void shouldIterateCacheAndStore() throws Exception {
         final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP,     0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
+        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
         cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
         final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());
         assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP + WINDOW_SIZE, "b"), fetch.next());
         assertFalse(fetch.hasNext());
+    }
+
+    @Test
+    public void shouldIterateCacheAndStoreKeyRange() throws Exception {
+        final Bytes key = Bytes.wrap("1" .getBytes());
+        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
+        cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
         final KeyValueIterator<Windowed<String>, String> fetchRange =
             cachingStore.fetch("1", "2", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
@@ -218,7 +225,6 @@ public class CachingWindowStoreTest {
         cachingStore.put("a", "a");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldFetchAndIterateOverExactKeys() throws Exception {
         cachingStore.put("a", "0001", 0);
@@ -229,6 +235,15 @@ public class CachingWindowStoreTest {
 
         final List<KeyValue<Long, String>> expected = Utils.mkList(KeyValue.pair(0L, "0001"), KeyValue.pair(1L, "0003"), KeyValue.pair(60000L, "0005"));
         assertThat(toList(cachingStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
+    }
+
+    @Test
+    public void shouldFetchAndIterateOverKeyRange() throws Exception {
+        cachingStore.put("a", "0001", 0);
+        cachingStore.put("aa", "0002", 0);
+        cachingStore.put("a", "0003", 1);
+        cachingStore.put("aa", "0004", 1);
+        cachingStore.put("a", "0005", 60000);
 
         assertThat(
             toList(cachingStore.fetch("a", "a", 0, Long.MAX_VALUE)),

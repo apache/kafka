@@ -31,7 +31,6 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     private static final int SUFFIX_SIZE = 2 * WindowStoreUtils.TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
-    private static final int MIN_KEY_LENGTH = 1;
 
     private String topic;
 
@@ -54,46 +53,17 @@ class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes upperRange(Bytes key, long to) {
-        final byte[] bytes = key.get();
-        ByteBuffer rangeEnd = ByteBuffer.allocate(bytes.length + SUFFIX_SIZE);
-
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
             .putLong(to)
-            .putLong(Long.MAX_VALUE)
+            // start can at most be equal to end
+            .putLong(to)
             .array();
-
-        int i = 0;
-        while (i < bytes.length && (
-            i < MIN_KEY_LENGTH // assumes keys are at least one byte long
-            || bytes[i] >= maxSuffix[0]
-            )) {
-            rangeEnd.put(bytes[i++]);
-        }
-
-        rangeEnd.put(maxSuffix);
-        rangeEnd.flip();
-
-        byte[] res = new byte[rangeEnd.remaining()];
-        ByteBuffer.wrap(res).put(rangeEnd);
-        return Bytes.wrap(res);
+        return OrderedBytes.upperRange(key, maxSuffix);
     }
 
     @Override
     public Bytes lowerRange(Bytes key, long from) {
-        final byte[] bytes = key.get();
-        ByteBuffer rangeStart = ByteBuffer.allocate(bytes.length + SUFFIX_SIZE);
-        // any key in the range would start at least with the given prefix to be
-        // in the range, and have at least SUFFIX_SIZE number of trailing zero bytes.
-
-        // unless there is a maximum key length, you can keep appending more zero bytes
-        // to keyFrom to create a key that will match the range, yet that would precede
-        // WindowStoreUtils.toBinaryKey(keyFrom, from, 0) in byte order
-        return Bytes.wrap(
-            rangeStart
-                .put(bytes)
-                .put(MIN_SUFFIX)
-                .array()
-        );
+        return OrderedBytes.lowerRange(key, MIN_SUFFIX);
     }
 
     @Override

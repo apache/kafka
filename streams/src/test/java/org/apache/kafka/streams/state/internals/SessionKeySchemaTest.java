@@ -66,22 +66,87 @@ public class SessionKeySchemaTest {
     }
 
     @Test
-    public void boundsSanity() throws Exception {
-        // easy
-        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{1}), Long.MAX_VALUE);
-        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{1}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))));
+    public void testUpperBoundWithLargeTimestamps() throws Exception {
+        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
 
-        // hard
-        upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0, 1}), Long.MAX_VALUE);
-        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))));
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                SessionKeySerde.bytesToBinary(
+                    new Windowed<>(
+                        Bytes.wrap(new byte[]{0xA}),
+                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
+                )
+            ) >= 0
+        );
 
-        // easy
-        Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0}), Long.MAX_VALUE);
-        assertThat(lower, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0)))));
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                SessionKeySerde.bytesToBinary(
+                    new Windowed<>(
+                        Bytes.wrap(new byte[]{0xA, 0xB}),
+                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
+                )
+            ) >= 0
+        );
 
-        // hard
-        lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0, 1}), Long.MAX_VALUE);
-        assertThat(lower, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 1}), new SessionWindow(0, 0)))));
+        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(
+            new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
+        );
+    }
+
+    @Test
+    public void testUpperBoundWithKeyBytesLargerThanFirstTimestampByte() throws Exception {
+        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), Long.MAX_VALUE);
+
+        assertThat(
+            "shorter key with max timestamp should be in range",
+            upper.compareTo(
+                SessionKeySerde.bytesToBinary(
+                    new Windowed<>(
+                        Bytes.wrap(new byte[]{0xA, (byte) 0x8F}),
+                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
+                )
+            ) >= 0
+        );
+
+        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(
+            new Windowed<>(Bytes.wrap(new byte[]{0xA, (byte) 0x8F, (byte) 0x9F}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))))
+        );
+    }
+
+    @Test
+    public void testUpperBoundWithZeroTimestamp() throws Exception {
+        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
+
+        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(
+            new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))))
+        );
+    }
+
+    @Test
+    public void testLowerBoundWithZeroTimestamp() throws Exception {
+        Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
+        assertThat(lower, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
+    }
+
+    @Test
+    public void testLowerBoundMatchesTrailingZeros() throws Exception {
+        Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), Long.MAX_VALUE);
+
+        assertThat(
+            "appending zeros to key should still be in range",
+            lower.compareTo(
+                SessionKeySerde.bytesToBinary(
+                    new Windowed<>(
+                        Bytes.wrap(new byte[]{0xA, 0xB, 0xC, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+                        new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE))
+                )
+            ) < 0
+        );
+
+        assertThat(lower, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0)))));
     }
 
 
