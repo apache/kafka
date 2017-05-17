@@ -31,6 +31,7 @@ import java.util.Random;
 import java.util.Set;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.CollectionUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -503,29 +504,6 @@ public class StickyAssignorTest {
         }
     }
 
-    private String getTopicName(int i, int maxNum) {
-        return getCanonicalName("t", i, maxNum);
-    }
-
-    private String getConsumerName(int i, int maxNum) {
-        return getCanonicalName("c", i, maxNum);
-    }
-
-    private String getCanonicalName(String str, int i, int maxNum) {
-        return str + pad(i, Integer.toString(maxNum).length());
-    }
-
-    private String pad(int num, int digits) {
-        StringBuilder sb = new StringBuilder();
-        int iDigits = Integer.toString(num).length();
-
-        for (int i = 1; i <= digits - iDigits; ++i)
-            sb.append("0");
-
-        sb.append(num);
-        return sb.toString();
-    }
-
     @Test
     public void testMoveExistingAssignments() {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
@@ -586,11 +564,34 @@ public class StickyAssignorTest {
         }
     }
 
-    public static List<String> topics(String... topics) {
+    private String getTopicName(int i, int maxNum) {
+        return getCanonicalName("t", i, maxNum);
+    }
+
+    private String getConsumerName(int i, int maxNum) {
+        return getCanonicalName("c", i, maxNum);
+    }
+
+    private String getCanonicalName(String str, int i, int maxNum) {
+        return str + pad(i, Integer.toString(maxNum).length());
+    }
+
+    private String pad(int num, int digits) {
+        StringBuilder sb = new StringBuilder();
+        int iDigits = Integer.toString(num).length();
+
+        for (int i = 1; i <= digits - iDigits; ++i)
+            sb.append("0");
+
+        sb.append(num);
+        return sb.toString();
+    }
+
+    private static List<String> topics(String... topics) {
         return Arrays.asList(topics);
     }
 
-    public static TopicPartition tp(String topic, int partition) {
+    private static TopicPartition tp(String topic, int partition) {
         return new TopicPartition(topic, partition);
     }
 
@@ -664,8 +665,8 @@ public class StickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = StickyAssignor.asMap(partitions);
-                Map<String, List<Integer>> otherMap = StickyAssignor.asMap(otherPartitions);
+                Map<String, List<Integer>> map = CollectionUtils.groupDataByTopic(partitions);
+                Map<String, List<Integer>> otherMap = CollectionUtils.groupDataByTopic(otherPartitions);
 
                 if (len > otherLen) {
                     for (String topic: map.keySet())

@@ -38,6 +38,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.utils.CollectionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -279,6 +280,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         if (subscriptions == null)
             return;
 
+        currentAssignment.clear();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData != null && userData.hasRemaining())
@@ -652,14 +654,14 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.add(oldConsumer);
     }
 
-    public boolean isSticky() {
+    boolean isSticky() {
         return partitionMovements.isSticky();
     }
 
     private static ByteBuffer serializeTopicPartitionAssignment(List<TopicPartition> partitions) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : asMap(partitions).entrySet()) {
+        for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupDataByTopic(partitions).entrySet()) {
             Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
             topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
             topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
@@ -696,20 +698,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         Map<String, List<TopicPartition>> copy = new HashMap<>();
         deepCopy(assignment, copy);
         return copy;
-    }
-
-    public static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
-        Map<String, List<Integer>> partitionMap = new HashMap<>();
-        for (TopicPartition partition : partitions) {
-            String topic = partition.topic();
-            List<Integer> topicPartitions = partitionMap.get(topic);
-            if (topicPartitions == null) {
-                topicPartitions = new ArrayList<>();
-                partitionMap.put(topic, topicPartitions);
-            }
-            topicPartitions.add(partition.partition());
-        }
-        return partitionMap;
     }
 
     private static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
@@ -792,11 +780,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             if (partitionMovements.containsKey(partition)) {
                 // this partition has previously moved
                 ConsumerPair existingPair = removeMovementRecordOfPartition(partition);
-                assert existingPair.dst.equals(oldConsumer);
-                if (!existingPair.src.equals(newConsumer)) {
+                assert existingPair.dstMemberId.equals(oldConsumer);
+                if (!existingPair.srcMemberId.equals(newConsumer)) {
                     // the partition is not moving back to its previous consumer
                     // return new ConsumerPair2(existingPair.src, newConsumer);
-                    addPartitionMovementRecord(partition, new ConsumerPair(existingPair.src, newConsumer));
+                    addPartitionMovementRecord(partition, new ConsumerPair(existingPair.srcMemberId, newConsumer));
                 }
             } else
                 addPartitionMovementRecord(partition, pair);
@@ -810,8 +798,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
             if (partitionMovements.containsKey(partition)) {
                 // this partition has previously moved
-                assert oldConsumer.equals(partitionMovements.get(partition).dst);
-                oldConsumer = partitionMovements.get(partition).src;
+                assert oldConsumer.equals(partitionMovements.get(partition).dstMemberId);
+                oldConsumer = partitionMovements.get(partition).srcMemberId;
             }
 
             Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
@@ -836,11 +824,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
 
             for (ConsumerPair pair: pairs)
-                if (pair.src.equals(src)) {
+                if (pair.srcMemberId.equals(src)) {
                     Set<ConsumerPair> reducedSet = new HashSet<>(pairs);
                     reducedSet.remove(pair);
-                    currentPath.add(pair.src);
-                    return isLinked(pair.dst, dst, reducedSet, currentPath);
+                    currentPath.add(pair.srcMemberId);
+                    return isLinked(pair.dstMemberId, dst, reducedSet, currentPath);
                 }
 
             return false;
@@ -850,10 +838,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             List<String> superCycle = new ArrayList<>(cycle);
             superCycle.remove(superCycle.size() - 1);
             superCycle.addAll(cycle);
-            Iterator<List<String>> it = cycles.iterator();
-            while (it.hasNext()) {
-                List<String> next = it.next();
-                if (next.size() == cycle.size() && Collections.indexOfSubList(superCycle, next) != -1)
+            for (List<String> foundCycle: cycles) {
+                if (foundCycle.size() == cycle.size() && Collections.indexOfSubList(superCycle, foundCycle) != -1)
                     return true;
             }
             return false;
@@ -864,8 +850,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             for (ConsumerPair pair: pairs) {
                 Set<ConsumerPair> reducedPairs = new HashSet<>(pairs);
                 reducedPairs.remove(pair);
-                List<String> path = new ArrayList<>(Collections.singleton(pair.src));
-                if (isLinked(pair.dst, pair.src, reducedPairs, path) && !in(path, cycles)) {
+                List<String> path = new ArrayList<>(Collections.singleton(pair.srcMemberId));
+                if (isLinked(pair.dstMemberId, pair.srcMemberId, reducedPairs, path) && !in(path, cycles)) {
                     cycles.add(new ArrayList<>(path));
                     log.error("A cycle of length " + (path.size() - 1) + " was found: " + path.toString());
                 }
@@ -904,24 +890,24 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      * whether a partition reassignment results in cycles among the generated graph of consumer pairs.
      */
     private static class ConsumerPair {
-        private final String src;
-        private final String dst;
+        private final String srcMemberId;
+        private final String dstMemberId;
 
-        ConsumerPair(String src, String dst) {
-            this.src = src;
-            this.dst = dst;
+        ConsumerPair(String srcMemberId, String dstMemberId) {
+            this.srcMemberId = srcMemberId;
+            this.dstMemberId = dstMemberId;
         }
 
         public String toString() {
-            return this.src + "->" + this.dst;
+            return this.srcMemberId + "->" + this.dstMemberId;
         }
 
         @Override
         public int hashCode() {
             final int prime = 31;
             int result = 1;
-            result = prime * result + ((this.src == null) ? 0 : this.src.hashCode());
-            result = prime * result + ((this.dst == null) ? 0 : this.dst.hashCode());
+            result = prime * result + ((this.srcMemberId == null) ? 0 : this.srcMemberId.hashCode());
+            result = prime * result + ((this.dstMemberId == null) ? 0 : this.dstMemberId.hashCode());
             return result;
         }
 
@@ -934,7 +920,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 return false;
 
             ConsumerPair otherPair = (ConsumerPair) obj;
-            return this.src.equals(otherPair.src) && this.dst.equals(otherPair.dst);
+            return this.srcMemberId.equals(otherPair.srcMemberId) && this.dstMemberId.equals(otherPair.dstMemberId);
         }
 
         private boolean in(Set<ConsumerPair> pairs) {
