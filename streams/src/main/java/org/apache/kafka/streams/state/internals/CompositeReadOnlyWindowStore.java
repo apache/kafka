@@ -48,11 +48,11 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         IteratorType empty();
     }
 
-    public <ITERATORTYPE extends KeyValueIterator<?, V>> ITERATORTYPE fetch(Fetcher<K, V, ITERATORTYPE> fetcher) {
+    public <IteratorType extends KeyValueIterator<?, V>> IteratorType fetch(Fetcher<K, V, IteratorType> fetcher) {
         final List<ReadOnlyWindowStore<K, V>> stores = provider.stores(storeName, windowStoreType);
         for (ReadOnlyWindowStore<K, V> windowStore : stores) {
             try {
-                final ITERATORTYPE result = fetcher.fetch(windowStore);
+                final IteratorType result = fetcher.fetch(windowStore);
                 if (!result.hasNext()) {
                     result.close();
                 } else {
