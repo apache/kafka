@@ -18,8 +18,8 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils, CommandLineUtils}
+import org.apache.kafka.common.security._
+import kafka.utils.{CommandLineUtils, Exit, Logging, ZKGroupTopicDirs, ZkUtils}
 
 object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
@@ -38,7 +38,7 @@ object VerifyConsumerRebalance extends Logging {
 
     if (options.has("help")) {
       parser.printHelpOn(System.out)
-      System.exit(0)
+      Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
@@ -46,15 +46,18 @@ object VerifyConsumerRebalance extends Logging {
     val zkConnect = options.valueOf(zkConnectOpt)
     val group = options.valueOf(groupOpt)
 
-    var zkClient: ZkClient = null
+    var zkUtils: ZkUtils = null
     try {
-      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
+      zkUtils = ZkUtils(zkConnect,
+                        30000,
+                        30000, 
+                        JaasUtils.isZkSecurityEnabled())
 
       debug("zkConnect = %s; group = %s".format(zkConnect, group))
 
       // check if the rebalancing operation succeeded.
       try {
-        if(validateRebalancingOperation(zkClient, group))
+        if(validateRebalancingOperation(zkUtils, group))
           println("Rebalance operation successful !")
         else
           println("Rebalance operation failed !")
@@ -63,12 +66,12 @@ object VerifyConsumerRebalance extends Logging {
       }
     }
     finally {
-      if (zkClient != null)
-        zkClient.close()
+      if (zkUtils != null)
+        zkUtils.close()
     }
   }
 
-  private def validateRebalancingOperation(zkClient: ZkClient, group: String): Boolean = {
+  private def validateRebalancingOperation(zkUtils: ZkUtils, group: String): Boolean = {
     info("Verifying rebalancing operation for consumer group " + group)
     var rebalanceSucceeded: Boolean = true
     /**
@@ -76,15 +79,15 @@ object VerifyConsumerRebalance extends Logging {
      * This means that for each partition registered under /brokers/topics/[topic]/[broker-id], an owner exists
      * under /consumers/[consumer_group]/owners/[topic]/[broker_id-partition_id]
      */
-    val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group, excludeInternalTopics = false)
-    val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keySet.toSeq)
+    val consumersPerTopicMap = zkUtils.getConsumersPerTopic(group, excludeInternalTopics = false)
+    val partitionsPerTopicMap = zkUtils.getPartitionsForTopics(consumersPerTopicMap.keySet.toSeq)
 
     partitionsPerTopicMap.foreach { case (topic, partitions) =>
       val topicDirs = new ZKGroupTopicDirs(group, topic)
       info("Alive partitions for topic %s are %s ".format(topic, partitions.toString))
       info("Alive consumers for topic %s => %s ".format(topic, consumersPerTopicMap.get(topic)))
-      val partitionsWithOwners = ZkUtils.getChildrenParentMayNotExist(zkClient, topicDirs.consumerOwnerDir)
-      if(partitionsWithOwners.size == 0) {
+      val partitionsWithOwners = zkUtils.getChildrenParentMayNotExist(topicDirs.consumerOwnerDir)
+      if(partitionsWithOwners.isEmpty) {
         error("No owners for any partitions for topic " + topic)
         rebalanceSucceeded = false
       }
@@ -100,7 +103,7 @@ object VerifyConsumerRebalance extends Logging {
         }
         // try reading the partition owner path for see if a valid consumer id exists there
         val partitionOwnerPath = topicDirs.consumerOwnerDir + "/" + partition
-        val partitionOwner = ZkUtils.readDataMaybeNull(zkClient, partitionOwnerPath)._1 match {
+        val partitionOwner = zkUtils.readDataMaybeNull(partitionOwnerPath)._1 match {
           case Some(m) => m
           case None => null
         }
@@ -112,7 +115,7 @@ object VerifyConsumerRebalance extends Logging {
           // check if the owner is a valid consumer id
           consumerIdsForTopic match {
             case Some(consumerIds) =>
-              if(!consumerIds.contains(partitionOwner)) {
+              if(!consumerIds.map(c => c.toString).contains(partitionOwner)) {
                 error(("Owner %s for partition [%s,%d] is not a valid member of consumer " +
                   "group %s").format(partitionOwner, topic, partition, group))
                 rebalanceSucceeded = false

@@ -17,18 +17,19 @@
 
 package kafka.tools
 
+import kafka.utils.Exit
 import org.apache.zookeeper.ZooKeeperMain
 
 class ZooKeeperMainWrapper(args: Array[String]) extends ZooKeeperMain(args) {
   def runCmd(): Unit = {
     processCmd(this.cl)
-    System.exit(0)
+    Exit.exit(0)
   }
 }
 
 /**
  * ZooKeeper 3.4.6 broke being able to pass commands on command line.
- * See ZOOKEEPER-1897.  This class is a hack to restore this faclity.
+ * See ZOOKEEPER-1897.  This class is a hack to restore this facility.
  */
 object ZooKeeperMainWrapper {
 

@@ -17,6 +17,13 @@
 
 package kafka.message
 
+import org.apache.kafka.common.record.AbstractLegacyRecordBatch
+
+object MessageAndOffset {
+  def fromRecordBatch(recordBatch: AbstractLegacyRecordBatch): MessageAndOffset = {
+    MessageAndOffset(Message.fromRecord(recordBatch.outerRecord), recordBatch.lastOffset)
+  }
+}
 
 case class MessageAndOffset(message: Message, offset: Long) {
   
@@ -24,5 +31,6 @@ case class MessageAndOffset(message: Message, offset: Long) {
    * Compute the offset of the next message in the log
    */
   def nextOffset: Long = offset + 1
+
 }
 

@@ -21,6 +21,7 @@ import kafka.producer.KeyedMessage
 /**
  * Handler that dispatches the batched data from the queue.
  */
+@deprecated("This trait has been deprecated and will be removed in a future release.", "0.10.0.0")
 trait EventHandler[K,V] {
 
   /**

@@ -1,24 +1,27 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.utils.Utils;
 
 /**
- * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes
+ * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes. It should be constructed using metrics.MetricName(...).
  * <p>
  * This class captures the following parameters
  * <pre>
@@ -31,23 +34,27 @@ import org.apache.kafka.common.utils.Utils;
  * <p>
  * Ex: standard JMX MBean can be constructed like  <b>domainName:type=group,key1=val1,key2=val2</b>
  * <p>
+ *
  * Usage looks something like this:
  * <pre>{@code
  * // set up metrics:
- * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
- * Sensor sensor = metrics.sensor("message-sizes");
  *
  * Map<String, String> metricTags = new LinkedHashMap<String, String>();
  * metricTags.put("client-id", "producer-1");
  * metricTags.put("topic", "topic");
  *
- * MetricName metricName = new MetricName("message-size-avg", "producer-metrics", "average message size", metricTags);
+ * MetricConfig metricConfig = new MetricConfig().tags(metricTags);
+ * Metrics metrics = new Metrics(metricConfig); // this is the global repository of metrics and sensors
+ *
+ * Sensor sensor = metrics.sensor("message-sizes");
+ *
+ * MetricName metricName = metrics.metricName("message-size-avg", "producer-metrics", "average message size");
  * sensor.add(metricName, new Avg());
  *
- * metricName = new MetricName("message-size-max", "producer-metrics", metricTags);
+ * metricName = metrics.metricName("message-size-max", "producer-metrics");
  * sensor.add(metricName, new Max());
  *
- * metricName = new MetricName("message-size-min", "producer-metrics", "message minimum size", "client-id", "my-client", "topic", "my-topic");
+ * metricName = metrics.metricName("message-size-min", "producer-metrics", "message minimum size", "client-id", "my-client", "topic", "my-topic");
  * sensor.add(metricName, new Min());
  *
  * // as messages are sent we record the sizes
@@ -63,6 +70,8 @@ public final class MetricName {
     private int hash = 0;
 
     /**
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, Map)}
+     *
      * @param name        The name of the metric
      * @param group       logical group name of the metrics to which this metric belongs
      * @param description A human-readable description to include in the metric
@@ -73,52 +82,6 @@ public final class MetricName {
         this.group = Utils.notNull(group);
         this.description = Utils.notNull(description);
         this.tags = Utils.notNull(tags);
-    }
-
-    /**
-     * @param name          The name of the metric
-     * @param group         logical group name of the metrics to which this metric belongs
-     * @param description   A human-readable description to include in the metric
-     * @param keyValue      additional key/value attributes of the metric (must come in pairs)
-     */
-    public MetricName(String name, String group, String description, String... keyValue) {
-        this(name, group, description, getTags(keyValue));
-    }
-
-    private static Map<String, String> getTags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in paris");
-        Map<String, String> tags = new HashMap<String, String>();
-
-        for (int i = 0; i < keyValue.length / 2; i++)
-            tags.put(keyValue[i], keyValue[i + 1]);
-        return tags;
-    }
-
-    /**
-     * @param name  The name of the metric
-     * @param group logical group name of the metrics to which this metric belongs
-     * @param tags  key/value attributes of the metric
-     */
-    public MetricName(String name, String group, Map<String, String> tags) {
-        this(name, group, "", tags);
-    }
-
-    /**
-     * @param name        The name of the metric
-     * @param group       logical group name of the metrics to which this metric belongs
-     * @param description A human-readable description to include in the metric
-     */
-    public MetricName(String name, String group, String description) {
-        this(name, group, description, new HashMap<String, String>());
-    }
-
-    /**
-     * @param name  The name of the metric
-     * @param group logical group name of the metrics to which this metric belongs
-     */
-    public MetricName(String name, String group) {
-        this(name, group, "", new HashMap<String, String>());
     }
 
     public String name() {

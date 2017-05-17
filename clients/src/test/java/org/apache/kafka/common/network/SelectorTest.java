@@ -1,30 +1,33 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
+import java.util.HashMap;
+import java.util.Map;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.*;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -38,24 +41,31 @@ import org.junit.Test;
  */
 public class SelectorTest {
 
-    private static final int BUFFER_SIZE = 4 * 1024;
+    protected static final int BUFFER_SIZE = 4 * 1024;
 
-    private EchoServer server;
-    private Time time;
-    private Selectable selector;
+    protected EchoServer server;
+    protected Time time;
+    protected Selector selector;
+    protected ChannelBuilder channelBuilder;
+    private Metrics metrics;
 
     @Before
-    public void setup() throws Exception {
-        this.server = new EchoServer();
+    public void setUp() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        this.server = new EchoServer(SecurityProtocol.PLAINTEXT, configs);
         this.server.start();
         this.time = new MockTime();
-        this.selector = new Selector(5000, new Metrics(), time, "MetricGroup", new LinkedHashMap<String, String>());
+        this.channelBuilder = new PlaintextChannelBuilder();
+        this.channelBuilder.configure(configs);
+        this.metrics = new Metrics();
+        this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder);
     }
 
     @After
-    public void teardown() throws Exception {
+    public void tearDown() throws Exception {
         this.selector.close();
         this.server.close();
+        this.metrics.close();
     }
 
     /**
@@ -71,29 +81,12 @@ public class SelectorTest {
 
         // disconnect
         this.server.closeConnections();
-        while (!selector.disconnected().contains(node))
+        while (!selector.disconnected().containsKey(node))
             selector.poll(1000L);
 
         // reconnect and do another request
         blockingConnect(node);
         assertEquals("hello", blockingRequest(node, "hello"));
-    }
-
-    /**
-     * Validate that the client can intentionally disconnect and reconnect
-     */
-    @Test
-    public void testClientDisconnect() throws Exception {
-        String node = "0";
-        blockingConnect(node);
-        selector.disconnect(node);
-        selector.send(createSend(node, "hello1"));
-        selector.poll(10);
-        assertEquals("Request should not have succeeded", 0, selector.completedSends().size());
-        assertEquals("There should be a disconnect", 1, selector.disconnected().size());
-        assertTrue("The disconnect should be from our node", selector.disconnected().contains(node));
-        blockingConnect(node);
-        assertEquals("hello2", blockingRequest(node, "hello2"));
     }
 
     /**
@@ -122,7 +115,7 @@ public class SelectorTest {
      */
     @Test(expected = IOException.class)
     public void testNoRouteToHost() throws Exception {
-        selector.connect("0", new InetSocketAddress("asdf.asdf.dsc", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE);
     }
 
     /**
@@ -134,8 +127,10 @@ public class SelectorTest {
         ServerSocket nonListeningSocket = new ServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
         selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
-        while (selector.disconnected().contains(node))
+        while (selector.disconnected().containsKey(node)) {
+            assertEquals(ChannelState.NOT_CONNECTED, selector.disconnected().get(node));
             selector.poll(1000L);
+        }
         nonListeningSocket.close();
     }
 
@@ -151,7 +146,7 @@ public class SelectorTest {
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         for (int i = 0; i < conns; i++)
-            selector.connect(Integer.toString(i), addr, BUFFER_SIZE, BUFFER_SIZE);
+            connect(Integer.toString(i), addr);
         // send echo requests and receive responses
         Map<String, Integer> requests = new HashMap<String, Integer>();
         Map<String, Integer> responses = new HashMap<String, Integer>();
@@ -208,6 +203,19 @@ public class SelectorTest {
         assertEquals(big, blockingRequest(node, big));
     }
 
+    @Test
+    public void testLargeMessageSequence() throws Exception {
+        int bufferSize = 512 * 1024;
+        String node = "0";
+        int reqs = 50;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        connect(node, addr);
+        String requestPrefix = TestUtils.randomString(bufferSize);
+        sendAndReceive(node, requestPrefix, 0, reqs);
+    }
+
+
+
     /**
      * Test sending an empty string
      */
@@ -256,8 +264,10 @@ public class SelectorTest {
         time.sleep(6000); // The max idle time is 5000ms
         selector.poll(0);
 
-        assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
+        assertTrue("The idle connection should have been closed", selector.disconnected().containsKey(id));
+        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
+
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
@@ -265,91 +275,56 @@ public class SelectorTest {
         while (true) {
             selector.poll(1000L);
             for (NetworkReceive receive : selector.completedReceives())
-                if (receive.source() == node)
+                if (receive.source().equals(node))
                     return asString(receive);
         }
     }
 
+    protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
+    }
+
     /* connect and wait for the connection to complete */
     private void blockingConnect(String node) throws IOException {
-        selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        blockingConnect(node, new InetSocketAddress("localhost", server.port));
+    }
+    protected void blockingConnect(String node, InetSocketAddress serverAddr) throws IOException {
+        selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
+            selector.poll(10000L);
+        while (!selector.isChannelReady(node))
             selector.poll(10000L);
     }
 
-    private NetworkSend createSend(String node, String s) {
+    protected NetworkSend createSend(String node, String s) {
         return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
     }
 
-    private String asString(NetworkReceive receive) {
+    protected String asString(NetworkReceive receive) {
         return new String(Utils.toArray(receive.payload()));
     }
 
-    /**
-     * A simple server that takes size delimited byte arrays and just echos them back to the sender.
-     */
-    static class EchoServer extends Thread {
-        public final int port;
-        private final ServerSocket serverSocket;
-        private final List<Thread> threads;
-        private final List<Socket> sockets;
+    private void sendAndReceive(String node, String requestPrefix, int startIndex, int endIndex) throws Exception {
+        int requests = startIndex;
+        int responses = startIndex;
+        selector.send(createSend(node, requestPrefix + "-" + startIndex));
+        requests++;
+        while (responses < endIndex) {
+            // do the i/o
+            selector.poll(0L);
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
 
-        public EchoServer() throws Exception {
-            this.serverSocket = new ServerSocket(0);
-            this.port = this.serverSocket.getLocalPort();
-            this.threads = Collections.synchronizedList(new ArrayList<Thread>());
-            this.sockets = Collections.synchronizedList(new ArrayList<Socket>());
-        }
+            // handle requests and responses of the fast node
+            for (NetworkReceive receive : selector.completedReceives()) {
+                assertEquals(requestPrefix + "-" + responses, asString(receive));
+                responses++;
+            }
 
-        public void run() {
-            try {
-                while (true) {
-                    final Socket socket = serverSocket.accept();
-                    sockets.add(socket);
-                    Thread thread = new Thread() {
-                        public void run() {
-                            try {
-                                DataInputStream input = new DataInputStream(socket.getInputStream());
-                                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                                while (socket.isConnected() && !socket.isClosed()) {
-                                    int size = input.readInt();
-                                    byte[] bytes = new byte[size];
-                                    input.readFully(bytes);
-                                    output.writeInt(size);
-                                    output.write(bytes);
-                                    output.flush();
-                                }
-                            } catch (IOException e) {
-                                // ignore
-                            } finally {
-                                try {
-                                    socket.close();
-                                } catch (IOException e) {
-                                    // ignore
-                                }
-                            }
-                        }
-                    };
-                    thread.start();
-                    threads.add(thread);
-                }
-            } catch (IOException e) {
-                // ignore
+            for (int i = 0; i < selector.completedSends().size() && requests < endIndex; i++, requests++) {
+                selector.send(createSend(node, requestPrefix + "-" + requests));
             }
         }
-
-        public void closeConnections() throws IOException {
-            for (Socket socket : sockets)
-                socket.close();
-        }
-
-        public void close() throws IOException, InterruptedException {
-            this.serverSocket.close();
-            closeConnections();
-            for (Thread t : threads)
-                t.join();
-            join();
-        }
     }
+
 
 }

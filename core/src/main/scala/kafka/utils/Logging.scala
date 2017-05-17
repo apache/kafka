@@ -47,6 +47,8 @@ trait Logging {
     CoreUtils.swallow(logger.trace, action)
   }
 
+  def isDebugEnabled: Boolean = logger.isDebugEnabled
+
   def debug(msg: => String): Unit = {
     if (logger.isDebugEnabled())
       logger.debug(msgWithLogIdent(msg))

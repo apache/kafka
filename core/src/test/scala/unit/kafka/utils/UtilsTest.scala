@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,9 +17,11 @@
 
 package kafka.utils
 
-import java.util.Arrays
+import java.util.{Arrays, UUID}
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
+import java.util.regex.Pattern
+
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -28,10 +30,10 @@ import kafka.utils.CoreUtils.inLock
 import org.junit.Test
 import org.apache.kafka.common.utils.Utils
 
-
 class UtilsTest extends JUnitSuite {
-  
-  private val logger = Logger.getLogger(classOf[UtilsTest]) 
+
+  private val logger = Logger.getLogger(classOf[UtilsTest])
+  val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
   @Test
   def testSwallow() {
@@ -140,7 +142,6 @@ class UtilsTest extends JUnitSuite {
     }
   }
 
-
   @Test
   def testInLock() {
     val lock = new ReentrantLock()
@@ -153,52 +154,25 @@ class UtilsTest extends JUnitSuite {
   }
 
   @Test
-  def testDoublyLinkedList() {
-    val list = new DoublyLinkedList[Int]
+  def testUrlSafeBase64EncodeUUID() {
 
-    // test remove from a single-entry list.
-    list.add(new DoublyLinkedListNode[Int](0))
-    list.remove()
-    assert(list.size == 0)
-    assert(list.peek() == null)
+    // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
+    val clusterId1 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
+    assertEquals(clusterId1, "oUm0owbhS0moy4qcSln6Rg")
+    assertEquals(clusterId1.length, 22)
+    assertTrue(clusterIdPattern.matcher(clusterId1).matches())
 
-    // test add
-    for (i <- 0 to 2) {
-      list.add(new DoublyLinkedListNode[Int](i))
-    }
-    val toBeRemoved1 = new DoublyLinkedListNode[Int](3)
-    list.add(toBeRemoved1)
-    for (i <- 4 to 6) {
-      list.add(new DoublyLinkedListNode[Int](i))
-    }
-    val toBeRemoved2 = new DoublyLinkedListNode[Int](7)
-    list.add(toBeRemoved2)
-
-    // test iterator
-    val iter = list.iterator
-    for (i <- 0 to 7) {
-      assert(iter.hasNext)
-      assert(iter.next().element == i)
-    }
-    assert(!iter.hasNext)
-
-    // remove from head
-    list.remove()
-    assert(list.peek().element == 1)
-    // remove from middle
-    list.remove(toBeRemoved1)
-    // remove from tail
-    list.remove(toBeRemoved2)
-
-    // List = [1,2,4,5,6]
-    val iter2 = list.iterator
-    for (i <- Array[Int](1,2,4,5,6)) {
-      assert(iter2.hasNext)
-      assert(iter2.next().element == i)
-    }
-
-    // test size
-    assert(list.size == 5)
+    // Test a UUID that has + or / characters in base64 encoding [d418ec02-277e-4853-81e6-afe30259daec ->(base64)-> 1BjsAid+SFOB5q/jAlna7A==]
+    val clusterId2 = CoreUtils.urlSafeBase64EncodeNoPadding(CoreUtils.getBytesFromUuid(UUID.fromString("d418ec02-277e-4853-81e6-afe30259daec")))
+    assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
+    assertEquals(clusterId2.length, 22)
+    assertTrue(clusterIdPattern.matcher(clusterId2).matches())
   }
 
+  @Test
+  def testGenerateUuidAsBase64() {
+    val clusterId = CoreUtils.generateUuidAsBase64()
+    assertEquals(clusterId.length, 22)
+    assertTrue(clusterIdPattern.matcher(clusterId).matches())
+  }
 }

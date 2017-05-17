@@ -19,8 +19,7 @@ package kafka.javaapi
 
 import kafka.common.TopicAndPartition
 import kafka.api.{Request, PartitionOffsetRequestInfo}
-import scala.collection.mutable
-import java.nio.ByteBuffer
+import scala.collection.JavaConverters._
 
 
 class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffsetRequestInfo],
@@ -28,10 +27,7 @@ class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffse
                     clientId: String) {
 
   val underlying = {
-    val scalaMap = {
-      import collection.JavaConversions._
-      (requestInfo: mutable.Map[TopicAndPartition, PartitionOffsetRequestInfo]).toMap
-    }
+    val scalaMap = requestInfo.asScala.toMap
     kafka.api.OffsetRequest(
       requestInfo = scalaMap,
       versionId = versionId,
@@ -40,20 +36,15 @@ class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffse
     )
   }
 
-
-
   override def toString = underlying.toString
 
-
-  override def equals(other: Any) = canEqual(other) && {
-    val otherOffsetRequest = other.asInstanceOf[kafka.javaapi.OffsetRequest]
-    this.underlying.equals(otherOffsetRequest.underlying)
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case other: OffsetRequest => this.underlying.equals(other.underlying)
+      case _ => false
+    }
   }
 
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetRequest]
-
-
   override def hashCode = underlying.hashCode
-
 }

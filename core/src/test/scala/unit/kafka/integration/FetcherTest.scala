@@ -19,18 +19,17 @@ package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import org.junit.{Test, After, Before}
+
 import scala.collection._
-import junit.framework.Assert._
+import org.junit.Assert._
 
 import kafka.cluster._
 import kafka.server._
-import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
-import kafka.serializer._
-import kafka.producer.{KeyedMessage, Producer}
 import kafka.utils.TestUtils
 
-class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
+class FetcherTest extends KafkaServerTestHarness {
   val numNodes = 1
   def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
@@ -40,15 +39,18 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   var fetcher: ConsumerFetcherManager = null
 
+  @Before
   override def setUp() {
     super.setUp
-    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
 
-    val cluster = new Cluster(servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort())))
+    val cluster = new Cluster(servers.map { s =>
+      new Broker(s.config.brokerId, "localhost", boundPort(s), listenerName, securityProtocol)
+    })
 
-    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
+    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkUtils)
     fetcher.stopConnections()
-    val topicInfos = configs.map(c =>
+    val topicInfos = configs.map(_ =>
       new PartitionTopicInfo(topic,
         0,
         queue,
@@ -59,18 +61,20 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     fetcher.startConnections(topicInfos, cluster)
   }
 
+  @After
   override def tearDown() {
     fetcher.stopConnections()
     super.tearDown
   }
 
+  @Test
   def testFetcher() {
     val perNode = 2
-    var count = TestUtils.sendMessages(servers, topic, perNode).size
+    var count = TestUtils.produceMessages(servers, topic, perNode).size
 
     fetch(count)
     assertQueueEmpty()
-    count = TestUtils.sendMessages(servers, topic, perNode).size
+    count = TestUtils.produceMessages(servers, topic, perNode).size
     fetch(count)
     assertQueueEmpty()
   }
@@ -79,14 +83,10 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   def fetch(expected: Int) {
     var count = 0
-    while(true) {
+    while (count < expected) {
       val chunk = queue.poll(2L, TimeUnit.SECONDS)
       assertNotNull("Timed out waiting for data chunk " + (count + 1), chunk)
-      for(message <- chunk.messages)
-        count += 1
-      if(count == expected)
-        return
+      count += chunk.messages.size
     }
   }
-
 }

@@ -21,10 +21,12 @@ import joptsimple._
 import kafka.utils._
 import kafka.consumer._
 import kafka.client.ClientUtils
-import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
+import kafka.api.{FetchRequestBuilder, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
-import scala.collection.JavaConversions._
-import kafka.common.TopicAndPartition
+
+import scala.collection.JavaConverters._
+import kafka.common.{MessageFormatter, TopicAndPartition}
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.utils.Utils
 
 /**
@@ -99,7 +101,7 @@ object SimpleConsumerShell extends Logging {
       CommandLineUtils.printUsageAndDie(parser, "A low-level tool for fetching data directly from a particular replica.")
 
     val options = parser.parse(args : _*)
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, partitionIdOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
 
     val topic = options.valueOf(topicOpt)
     val partitionId = options.valueOf(partitionIdOpt).intValue()
@@ -110,12 +112,12 @@ object SimpleConsumerShell extends Logging {
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
     val maxMessages = options.valueOf(maxMessagesOpt).intValue
 
-    val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
-    val printOffsets = if(options.has(printOffsetOpt)) true else false
+    val skipMessageOnError = options.has(skipMessageOnErrorOpt)
+    val printOffsets = options.has(printOffsetOpt)
     val noWaitAtEndOfLog = options.has(noWaitAtEndOfLogOpt)
 
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
 
     val fetchRequestBuilder = new FetchRequestBuilder()
                        .clientId(clientId)
@@ -124,40 +126,40 @@ object SimpleConsumerShell extends Logging {
                        .minBytes(ConsumerConfig.MinFetchBytes)
 
     // getting topic metadata
-    info("Getting topic metatdata...")
+    info("Getting topic metadata...")
     val brokerList = options.valueOf(brokerListOpt)
     ToolsUtils.validatePortOrDie(parser,brokerList)
     val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
-    if(topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic)) {
+    if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // validating partition id
-    val partitionsMetadata = topicsMetadata(0).partitionsMetadata
+    val partitionsMetadata = topicsMetadata.head.partitionsMetadata
     val partitionMetadataOpt = partitionsMetadata.find(p => p.partitionId == partitionId)
-    if(!partitionMetadataOpt.isDefined) {
+    if (partitionMetadataOpt.isEmpty) {
       System.err.println("Error: partition %d does not exist for topic %s".format(partitionId, topic))
-      System.exit(1)
+      Exit.exit(1)
     }
 
     // validating replica id and initializing target broker
     var fetchTargetBroker: BrokerEndPoint = null
     var replicaOpt: Option[BrokerEndPoint] = null
-    if(replicaId == UseLeaderReplica) {
+    if (replicaId == UseLeaderReplica) {
       replicaOpt = partitionMetadataOpt.get.leader
-      if(!replicaOpt.isDefined) {
+      if (replicaOpt.isEmpty) {
         System.err.println("Error: user specifies to fetch from leader for partition (%s, %d) which has not been elected yet".format(topic, partitionId))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     else {
       val replicasForPartition = partitionMetadataOpt.get.replicas
       replicaOpt = replicasForPartition.find(r => r.id == replicaId)
-      if(!replicaOpt.isDefined) {
+      if(replicaOpt.isEmpty) {
         System.err.println("Error: replica %d does not exist for partition (%s, %d)".format(replicaId, topic, partitionId))
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     fetchTargetBroker = replicaOpt.get
@@ -165,7 +167,7 @@ object SimpleConsumerShell extends Logging {
     // initializing starting offset
     if(startingOffset < OffsetRequest.EarliestTime) {
       System.err.println("Invalid starting offset: %d".format(startingOffset))
-      System.exit(1)
+      Exit.exit(1)
     }
     if (startingOffset < 0) {
       val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host,
@@ -178,7 +180,7 @@ object SimpleConsumerShell extends Logging {
       } catch {
         case t: Throwable =>
           System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))
-          System.exit(1)
+          Exit.exit(1)
       } finally {
         if (simpleConsumer != null)
           simpleConsumer.close()
@@ -186,7 +188,7 @@ object SimpleConsumerShell extends Logging {
     }
 
     // initializing formatter
-    val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+    val formatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
     val replicaString = if(replicaId > 0) "leader" else "replica"
@@ -202,7 +204,7 @@ object SimpleConsumerShell extends Logging {
         var offset = startingOffset
         var numMessagesConsumed = 0
         try {
-          while(numMessagesConsumed < maxMessages) {
+          while (numMessagesConsumed < maxMessages) {
             val fetchRequest = fetchRequestBuilder
                     .addFetch(topic, partitionId, offset, fetchSize)
                     .build()
@@ -213,14 +215,18 @@ object SimpleConsumerShell extends Logging {
               return
             }
             debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
-            for(messageAndOffset <- messageSet if(numMessagesConsumed < maxMessages)) {
+            for (messageAndOffset <- messageSet if numMessagesConsumed < maxMessages) {
               try {
                 offset = messageAndOffset.nextOffset
-                if(printOffsets)
+                if (printOffsets)
                   System.out.println("next offset = " + offset)
                 val message = messageAndOffset.message
-                val key = if(message.hasKey) Utils.readBytes(message.key) else null
-                formatter.writeTo(key, if(message.isNull) null else Utils.readBytes(message.payload), System.out)
+                val key = if (message.hasKey) Utils.readBytes(message.key) else null
+                val value = if (message.isNull) null else Utils.readBytes(message.payload)
+                val serializedKeySize = if (message.hasKey) key.size else -1
+                val serializedValueSize = if (message.isNull) -1 else value.size
+                formatter.writeTo(new ConsumerRecord(topic, partitionId, offset, message.timestamp,
+                  message.timestampType, message.checksum, serializedKeySize, serializedValueSize, key, value), System.out)
                 numMessagesConsumed += 1
               } catch {
                 case e: Throwable =>
@@ -229,20 +235,20 @@ object SimpleConsumerShell extends Logging {
                   else
                     throw e
               }
-              if(System.out.checkError()) {
+              if (System.out.checkError()) {
                 // This means no one is listening to our output stream any more, time to shutdown
                 System.err.println("Unable to write to standard out, closing consumer.")
                 formatter.close()
                 simpleConsumer.close()
-                System.exit(1)
+                Exit.exit(1)
               }
             }
           }
         } catch {
           case e: Throwable =>
             error("Error consuming topic, partition, replica (%s, %d, %d) with offset [%d]".format(topic, partitionId, replicaId, offset), e)
-        }finally {
-          info("Consumed " + numMessagesConsumed + " messages")
+        } finally {
+          info(s"Consumed $numMessagesConsumed messages")
         }
       }
     }, false)

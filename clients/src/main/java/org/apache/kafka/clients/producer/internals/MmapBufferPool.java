@@ -31,13 +31,11 @@ public class MmapBufferPool implements BufferPool {
     
     private final long maxSize;
     private final int chunkSize;
-    private final boolean blockOnExhaustion;
     private final BlockingDeque<ByteBuffer> free;
     
-    public MmapBufferPool(File backingFileName, long maxSize, int chunkSize, boolean blockOnExhaustion) throws IOException {
+    public MmapBufferPool(File backingFileName, long maxSize, int chunkSize) throws IOException {
         this.maxSize = maxSize;
         this.chunkSize = chunkSize;
-        this.blockOnExhaustion = blockOnExhaustion;
         this.free = new LinkedBlockingDeque<ByteBuffer>();
         RandomAccessFile f = new RandomAccessFile(backingFileName, "rw");
         f.setLength(maxSize);
@@ -52,20 +50,21 @@ public class MmapBufferPool implements BufferPool {
     }
 
     @Override
-    public ByteBuffer allocate(int size) throws InterruptedException {
+    public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
         if (size > chunkSize)
             throw new IllegalArgumentException("Illegal allocation size.");
         ByteBuffer buffer;
-        if (blockOnExhaustion) {
-            buffer = this.free.take();
-        } else {
-            buffer = this.free.poll();
-            if (buffer == null) {
-                throw new BufferExhaustedException("You have exhausted the " + this.maxSize
-                        + " bytes of memory you configured for the client and the client is configured to error"
-                        + " rather than block when memory is exhausted.");
-            }
-        }
+//        if (blockOnExhaustion) {
+//            buffer = this.free.take();
+//        } else {
+//            buffer = this.free.poll();
+//            if (buffer == null) {
+//                throw new BufferExhaustedException("You have exhausted the " + this.maxSize
+//                        + " bytes of memory you configured for the client and the client is configured to error"
+//                        + " rather than block when memory is exhausted.");
+//            }
+//        }
+        buffer = this.free.poll();
             
         return buffer;
     }
@@ -86,6 +85,11 @@ public class MmapBufferPool implements BufferPool {
     public long availableMemory() {
         // TODO write me
         return 0;
+    }
+
+    // Protected for testing.
+    protected int freeSize() {
+        return this.free.size();
     }
 
     @Override

@@ -14,4 +14,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname $0)/kafka-run-class.sh kafka.tools.SimpleConsumerShell $@
+exec $(dirname $0)/kafka-run-class.sh kafka.tools.SimpleConsumerShell "$@"

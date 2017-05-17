@@ -17,88 +17,80 @@
 
 package kafka.integration
 
-import java.nio.ByteBuffer
+import java.io.File
 
-import junit.framework.Assert._
 import kafka.admin.AdminUtils
-import kafka.api.{TopicMetadataResponse, TopicMetadataRequest}
+import kafka.api.TopicMetadataResponse
 import kafka.client.ClientUtils
-import kafka.cluster.{Broker, BrokerEndPoint}
-import kafka.common.ErrorMapping
+import kafka.cluster.BrokerEndPoint
 import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.protocol.SecurityProtocol
-import org.scalatest.junit.JUnit3Suite
+import org.apache.kafka.common.protocol.Errors
+import org.junit.Assert._
+import org.junit.{Test, After, Before}
 
-class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
+class TopicMetadataTest extends ZooKeeperTestHarness {
   private var server1: KafkaServer = null
+  private var adHocServers: Seq[KafkaServer] = Seq()
   var brokerEndPoints: Seq[BrokerEndPoint] = null
   var adHocConfigs: Seq[KafkaConfig] = null
   val numConfigs: Int = 4
 
+  @Before
   override def setUp() {
     super.setUp()
     val props = createBrokerConfigs(numConfigs, zkConnect)
     val configs: Seq[KafkaConfig] = props.map(KafkaConfig.fromProps)
     adHocConfigs = configs.takeRight(configs.size - 1) // Started and stopped by individual test cases
     server1 = TestUtils.createServer(configs.head)
-    brokerEndPoints = Seq(new Broker(server1.config.brokerId, server1.config.hostName, server1.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+    brokerEndPoints = Seq(
+      // We are using the Scala clients and they don't support SSL. Once we move to the Java ones, we should use
+      // `securityProtocol` instead of PLAINTEXT below
+      new BrokerEndPoint(server1.config.brokerId, server1.config.hostName, TestUtils.boundPort(server1))
+    )
   }
 
+  @After
   override def tearDown() {
-    server1.shutdown()
+    TestUtils.shutdownServers(adHocServers :+ server1)
     super.tearDown()
   }
 
-  def testTopicMetadataRequest {
-    // create topic
-    val topic = "test"
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-
-    // create a topic metadata request
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
-
-    val serializedMetadataRequest = ByteBuffer.allocate(topicMetadataRequest.sizeInBytes + 2)
-    topicMetadataRequest.writeTo(serializedMetadataRequest)
-    serializedMetadataRequest.rewind()
-    val deserializedMetadataRequest = TopicMetadataRequest.readFrom(serializedMetadataRequest)
-
-    assertEquals(topicMetadataRequest, deserializedMetadataRequest)
-  }
-
+  @Test
   def testBasicTopicMetadata {
     // create topic
     val topic = "test"
-    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
 
-    var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
-      2000,0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
+      2000, 0).topicsMetadata
+    assertEquals(Errors.NONE, topicsMetadata.head.error)
+    assertEquals(Errors.NONE, topicsMetadata.head.partitionsMetadata.head.error)
     assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicsMetadata.head.topic)
-    var partitionMetadata = topicsMetadata.head.partitionsMetadata
+    val partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
     assertEquals(1, partitionMetadata.head.replicas.size)
   }
 
+  @Test
   def testGetAllTopicMetadata {
     // create topic
     val topic1 = "testGetAllTopicMetadata1"
     val topic2 = "testGetAllTopicMetadata2"
-    createTopic(zkClient, topic1, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
-    createTopic(zkClient, topic2, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkUtils, topic1, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkUtils, topic2, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
 
     // issue metadata request with empty list of topics
-    var topicsMetadata = ClientUtils.fetchTopicMetadata(Set.empty, brokerEndPoints, "TopicMetadataTest-testGetAllTopicMetadata",
+    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set.empty, brokerEndPoints, "TopicMetadataTest-testGetAllTopicMetadata",
       2000, 0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
+    assertEquals(Errors.NONE, topicsMetadata.head.error)
     assertEquals(2, topicsMetadata.size)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.last.partitionsMetadata.head.errorCode)
+    assertEquals(Errors.NONE, topicsMetadata.head.partitionsMetadata.head.error)
+    assertEquals(Errors.NONE, topicsMetadata.last.partitionsMetadata.head.error)
     val partitionMetadataTopic1 = topicsMetadata.head.partitionsMetadata
     val partitionMetadataTopic2 = topicsMetadata.last.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadataTopic1.size)
@@ -109,53 +101,78 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(1, partitionMetadataTopic2.head.replicas.size)
   }
 
+  @Test
   def testAutoCreateTopic {
     // auto create topic
     val topic = "testAutoCreateTopic"
     var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testAutoCreateTopic",
       2000,0).topicsMetadata
-    assertEquals(ErrorMapping.LeaderNotAvailableCode, topicsMetadata.head.errorCode)
+    assertEquals(Errors.LEADER_NOT_AVAILABLE, topicsMetadata.head.error)
     assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
     assertEquals("Expecting metadata for the test topic", topic, topicsMetadata.head.topic)
     assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
 
     // wait for leader to be elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0)
 
     // retry the metadata for the auto created topic
     topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
       2000,0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
-    var partitionMetadata = topicsMetadata.head.partitionsMetadata
+    assertEquals(Errors.NONE, topicsMetadata.head.error)
+    assertEquals(Errors.NONE, topicsMetadata.head.partitionsMetadata.head.error)
+    val partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
     assertEquals(1, partitionMetadata.head.replicas.size)
     assertTrue(partitionMetadata.head.leader.isDefined)
   }
 
+  @Test
+  def testAutoCreateTopicWithInvalidReplication {
+    val adHocProps = createBrokerConfig(2, zkConnect)
+    // Set default replication higher than the number of live brokers
+    adHocProps.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
+    // start adHoc brokers with replication factor too high
+    val adHocServer = createServer(new KafkaConfig(adHocProps))
+    adHocServers = Seq(adHocServer)
+    // We are using the Scala clients and they don't support SSL. Once we move to the Java ones, we should use
+    // `securityProtocol` instead of PLAINTEXT below
+    val adHocEndpoint = new BrokerEndPoint(adHocServer.config.brokerId, adHocServer.config.hostName,
+      TestUtils.boundPort(adHocServer))
+
+    // auto create topic on "bad" endpoint
+    val topic = "testAutoCreateTopic"
+    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), Seq(adHocEndpoint), "TopicMetadataTest-testAutoCreateTopic",
+      2000, 0).topicsMetadata
+    assertEquals(Errors.INVALID_REPLICATION_FACTOR, topicsMetadata.head.error)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
+    assertEquals("Expecting metadata for the test topic", topic, topicsMetadata.head.topic)
+    assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
+  }
+
+  @Test
   def testAutoCreateTopicWithCollision {
     // auto create topic
     val topic1 = "testAutoCreate_Topic"
     val topic2 = "testAutoCreate.Topic"
     var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic1, topic2), brokerEndPoints, "TopicMetadataTest-testAutoCreateTopic",
-      2000,0).topicsMetadata
+      2000, 0).topicsMetadata
     assertEquals("Expecting metadata for 2 topics", 2, topicsMetadata.size)
     assertEquals("Expecting metadata for topic1", topic1, topicsMetadata.head.topic)
-    assertEquals(ErrorMapping.LeaderNotAvailableCode, topicsMetadata.head.errorCode)
+    assertEquals(Errors.LEADER_NOT_AVAILABLE, topicsMetadata.head.error)
     assertEquals("Expecting metadata for topic2", topic2, topicsMetadata(1).topic)
-    assertEquals("Expecting InvalidTopicCode for topic2 metadata", ErrorMapping.InvalidTopicCode, topicsMetadata(1).errorCode)
+    assertEquals("Expecting InvalidTopicCode for topic2 metadata", Errors.INVALID_TOPIC_EXCEPTION, topicsMetadata(1).error)
 
     // wait for leader to be elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic1, 0)
     TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic1, 0)
 
     // retry the metadata for the first auto created topic
     topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic1), brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata",
-      2000,0).topicsMetadata
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
-    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+      2000, 0).topicsMetadata
+    assertEquals(Errors.NONE, topicsMetadata.head.error)
+    assertEquals(Errors.NONE, topicsMetadata.head.partitionsMetadata.head.error)
     var partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
@@ -165,27 +182,24 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def checkIsr(servers: Seq[KafkaServer]): Unit = {
     val activeBrokers: Seq[KafkaServer] = servers.filter(x => x.brokerState.currentState != NotRunning.state)
-    val expectedIsr: Seq[BrokerEndPoint] = activeBrokers.map(
-      x => new BrokerEndPoint(x.config.brokerId,
-                              if (x.config.hostName.nonEmpty) x.config.hostName else "localhost",
-                              x.boundPort())
-    )
+    val expectedIsr: Seq[BrokerEndPoint] = activeBrokers.map { x =>
+      new BrokerEndPoint(x.config.brokerId,
+        if (x.config.hostName.nonEmpty) x.config.hostName else "localhost",
+        TestUtils.boundPort(x))
+    }
 
     // Assert that topic metadata at new brokers is updated correctly
     activeBrokers.foreach(x => {
       var metadata: TopicMetadataResponse = new TopicMetadataResponse(Seq(), Seq(), -1)
       waitUntilTrue(() => {
-        metadata = ClientUtils.fetchTopicMetadata(
-                                Set.empty,
-                                Seq(new BrokerEndPoint(
-                                                  x.config.brokerId,
-                                                  if (x.config.hostName.nonEmpty) x.config.hostName else "localhost",
-                                                  x.boundPort())),
-                                "TopicMetadataTest-testBasicTopicMetadata",
-                                2000, 0)
+        metadata = ClientUtils.fetchTopicMetadata(Set.empty,
+                                Seq(new BrokerEndPoint(x.config.brokerId,
+                                                       if (x.config.hostName.nonEmpty) x.config.hostName else "localhost",
+                                                       TestUtils.boundPort(x))),
+                                "TopicMetadataTest-testBasicTopicMetadata", 2000, 0)
         metadata.topicsMetadata.nonEmpty &&
           metadata.topicsMetadata.head.partitionsMetadata.nonEmpty &&
-          expectedIsr == metadata.topicsMetadata.head.partitionsMetadata.head.isr
+          expectedIsr.sortBy(_.id) == metadata.topicsMetadata.head.partitionsMetadata.head.isr.sortBy(_.id)
       },
         "Topic metadata is not correctly updated for broker " + x + ".\n" +
         "Expected ISR: " + expectedIsr + "\n" +
@@ -193,21 +207,21 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
                                 metadata.topicsMetadata.head.partitionsMetadata.nonEmpty)
                               metadata.topicsMetadata.head.partitionsMetadata.head.isr
                             else
-                              ""))
+                              ""), 8000L)
     })
   }
 
-
+  @Test
   def testIsrAfterBrokerShutDownAndJoinsBack {
     val numBrokers = 2 //just 2 brokers are enough for the test
 
     // start adHoc brokers
-    val adHocServers = adHocConfigs.take(numBrokers - 1).map(p => createServer(p))
+    adHocServers = adHocConfigs.take(numBrokers - 1).map(p => createServer(p))
     val allServers: Seq[KafkaServer] = Seq(server1) ++ adHocServers
 
     // create topic
     val topic: String = "test"
-    AdminUtils.createTopic(zkClient, topic, 1, numBrokers)
+    AdminUtils.createTopic(zkUtils, topic, 1, numBrokers)
 
     // shutdown a broker
     adHocServers.last.shutdown()
@@ -218,9 +232,6 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // check metadata is still correct and updated at all brokers
     checkIsr(allServers)
-
-    // shutdown adHoc brokers
-    adHocServers.map(p => p.shutdown())
   }
 
   private def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
@@ -237,23 +248,25 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // Assert that topic metadata at new brokers is updated correctly
     servers.filter(x => x.brokerState.currentState != NotRunning.state).foreach(x =>
-      waitUntilTrue(() =>
-        topicMetadata == ClientUtils.fetchTopicMetadata(
-          Set.empty,
-          Seq(new Broker(x.config.brokerId,
-            x.config.hostName,
-            x.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT)),
-          "TopicMetadataTest-testBasicTopicMetadata",
-          2000, 0), "Topic metadata is not correctly updated"))
+      waitUntilTrue(() => {
+          val foundMetadata = ClientUtils.fetchTopicMetadata(
+            Set.empty,
+            Seq(new BrokerEndPoint(x.config.brokerId, x.config.hostName, TestUtils.boundPort(x))),
+            "TopicMetadataTest-testBasicTopicMetadata", 2000, 0)
+          topicMetadata.brokers.sortBy(_.id) == foundMetadata.brokers.sortBy(_.id) &&
+            topicMetadata.topicsMetadata.sortBy(_.topic) == foundMetadata.topicsMetadata.sortBy(_.topic)
+        },
+        s"Topic metadata is not correctly updated"))
   }
 
-
+  @Test
   def testAliveBrokerListWithNoTopics {
     checkMetadata(Seq(server1), 1)
   }
 
+  @Test
   def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup {
-    var adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
+    adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
 
     checkMetadata(adHocServers, numConfigs - 1)
 
@@ -261,12 +274,12 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     adHocServers = adHocServers ++ Seq(createServer(adHocConfigs.head))
 
     checkMetadata(adHocServers, numConfigs)
-    adHocServers.map(p => p.shutdown())
   }
 
 
+  @Test
   def testAliveBrokersListWithNoTopicsAfterABrokerShutdown {
-    val adHocServers = adHocConfigs.map(p => createServer(p))
+    adHocServers = adHocConfigs.map(p => createServer(p))
 
     checkMetadata(adHocServers, numConfigs)
 
@@ -275,7 +288,5 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     adHocServers.last.awaitShutdown()
 
     checkMetadata(adHocServers, numConfigs - 1)
-
-    adHocServers.map(p => p.shutdown())
   }
 }

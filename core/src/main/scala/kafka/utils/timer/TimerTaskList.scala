@@ -16,10 +16,11 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{TimeUnit, Delayed}
-import java.util.concurrent.atomic.{AtomicLong, AtomicInteger}
+import java.util.concurrent.{Delayed, TimeUnit}
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 
-import kafka.utils.{SystemTime, threadsafe}
+import kafka.utils.threadsafe
+import org.apache.kafka.common.utils.Time
 
 import scala.math._
 
@@ -29,7 +30,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
   // TimerTaskList forms a doubly linked cyclic list using a dummy root entry
   // root.next points to the head
   // root.prev points to the tail
-  private[this] val root = new TimerTaskEntry(null)
+  private[this] val root = new TimerTaskEntry(null, -1)
   root.next = root
   root.prev = root
 
@@ -117,7 +118,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
   }
 
   def getDelay(unit: TimeUnit): Long = {
-    unit.convert(max(getExpiration - SystemTime.milliseconds, 0), TimeUnit.MILLISECONDS)
+    unit.convert(max(getExpiration - Time.SYSTEM.hiResClockMs, 0), TimeUnit.MILLISECONDS)
   }
 
   def compareTo(d: Delayed): Int = {
@@ -131,7 +132,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
 
 }
 
-private[timer] class TimerTaskEntry(val timerTask: TimerTask) {
+private[timer] class TimerTaskEntry(val timerTask: TimerTask, val expirationMs: Long) extends Ordered[TimerTaskEntry] {
 
   @volatile
   var list: TimerTaskList = null
@@ -157,5 +158,8 @@ private[timer] class TimerTaskEntry(val timerTask: TimerTask) {
     }
   }
 
+  override def compare(that: TimerTaskEntry): Int = {
+    this.expirationMs compare that.expirationMs
+  }
 }
 

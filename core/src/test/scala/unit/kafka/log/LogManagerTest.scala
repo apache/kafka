@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,14 +19,17 @@ package kafka.log
 
 import java.io._
 import java.util.Properties
-import junit.framework.Assert._
-import org.junit.Test
-import org.scalatest.junit.JUnit3Suite
-import kafka.server.{BrokerState, OffsetCheckpoint}
-import kafka.common._
-import kafka.utils._
 
-class LogManagerTest extends JUnit3Suite {
+import kafka.common._
+import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.utils._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.OffsetOutOfRangeException
+import org.apache.kafka.common.utils.Utils
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+
+class LogManagerTest {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
@@ -35,37 +38,38 @@ class LogManagerTest extends JUnit3Suite {
   logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
   logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
   logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
+  logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
   val logConfig = LogConfig(logProps)
   var logDir: File = null
   var logManager: LogManager = null
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
 
-  override def setUp() {
-    super.setUp()
+  @Before
+  def setUp() {
     logDir = TestUtils.tempDir()
     logManager = createLogManager()
     logManager.startup
     logDir = logManager.logDirs(0)
   }
 
-  override def tearDown() {
+  @After
+  def tearDown() {
     if(logManager != null)
       logManager.shutdown()
-    CoreUtils.rm(logDir)
-    logManager.logDirs.foreach(CoreUtils.rm(_))
-    super.tearDown()
+    Utils.delete(logDir)
+    logManager.logDirs.foreach(Utils.delete)
   }
-  
+
   /**
    * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
    */
   @Test
   def testCreateLog() {
-    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
+    val log = logManager.createLog(new TopicPartition(name, 0), logConfig)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    log.append(TestUtils.singleMessageSet("test".getBytes()))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
   /**
@@ -73,7 +77,7 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testGetNonExistentLog() {
-    val log = logManager.getLog(TopicAndPartition(name, 0))
+    val log = logManager.getLog(new TopicPartition(name, 0))
     assertEquals("No log should be found.", None, log)
     val logFile = new File(logDir, name + "-0")
     assertTrue(!logFile.exists)
@@ -84,31 +88,33 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testCleanupExpiredSegments() {
-    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
+    val log = logManager.createLog(new TopicPartition(name, 0), logConfig)
     var offset = 0L
-    for(i <- 0 until 200) {
-      var set = TestUtils.singleMessageSet("test".getBytes())
-      val info = log.append(set)
+    for(_ <- 0 until 200) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.lastOffset
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
-    
+
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
-    
+
     time.sleep(maxLogAgeMs + 1)
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).messageSet.sizeInBytes)
+
+    // there should be a log file, two indexes, and the leader epoch checkpoint
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 1, log.dir.list.length)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).records.sizeInBytes)
 
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
     } catch {
-      case e: OffsetOutOfRangeException => "This is good."
+      case _: OffsetOutOfRangeException => // This is good.
     }
     // log should still be appendable
-    log.append(TestUtils.singleMessageSet("test".getBytes()))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
   /**
@@ -116,7 +122,7 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testCleanupSegmentsToMaintainSize() {
-    val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
+    val setSize = TestUtils.singletonRecords("test".getBytes()).sizeInBytes
     logManager.shutdown()
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 10 * setSize: java.lang.Integer)
@@ -127,14 +133,14 @@ class LogManagerTest extends JUnit3Suite {
     logManager.startup
 
     // create a log
-    val log = logManager.createLog(TopicAndPartition(name, 0), config)
+    val log = logManager.createLog(new TopicPartition(name, 0), config)
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
     val numMessages = 200
-    for(i <- 0 until numMessages) {
-      val set = TestUtils.singleMessageSet("test".getBytes())
-      val info = log.append(set)
+    for (_ <- 0 until numMessages) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
       offset = info.firstOffset
     }
 
@@ -144,16 +150,44 @@ class LogManagerTest extends JUnit3Suite {
     time.sleep(logManager.InitialTaskDelayMs)
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
-    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
-    assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).messageSet.sizeInBytes)
+
+    // there should be a log file, two indexes (the txn index is created lazily),
+    // the leader epoch checkpoint and two pid mapping files (one for the active and previous segments)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 3 + 3, log.dir.list.length)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).records.sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
     } catch {
-      case e: OffsetOutOfRangeException => "This is good."
+      case _: OffsetOutOfRangeException => // This is good.
     }
     // log should still be appendable
-    log.append(TestUtils.singleMessageSet("test".getBytes()))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  /**
+    * Ensures that LogManager only runs on logs with cleanup.policy=delete
+    * LogCleaner.CleanerThread handles all logs where compaction is enabled.
+    */
+  @Test
+  def testDoesntCleanLogsWithCompactDeletePolicy() {
+    val logProps = new Properties()
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact + "," + LogConfig.Delete)
+    val log = logManager.createLog(new TopicPartition(name, 0), LogConfig.fromProps(logConfig.originals, logProps))
+    var offset = 0L
+    for (_ <- 0 until 200) {
+      val set = TestUtils.singletonRecords("test".getBytes(), key="test".getBytes())
+      val info = log.appendAsLeader(set, leaderEpoch = 0)
+      offset = info.lastOffset
+    }
+
+    val numSegments = log.numberOfSegments
+    assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+
+    log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
+
+    time.sleep(maxLogAgeMs + 1)
+    assertEquals("number of segments shouldn't have changed", numSegments, log.numberOfSegments)
   }
 
   /**
@@ -168,37 +202,37 @@ class LogManagerTest extends JUnit3Suite {
 
     logManager = createLogManager()
     logManager.startup
-    val log = logManager.createLog(TopicAndPartition(name, 0), config)
+    val log = logManager.createLog(new TopicPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
-    for(i <- 0 until 200) {
-      var set = TestUtils.singleMessageSet("test".getBytes())
-      log.append(set)
+    for (_ <- 0 until 200) {
+      val set = TestUtils.singletonRecords("test".getBytes())
+      log.appendAsLeader(set, leaderEpoch = 0)
     }
     time.sleep(logManager.InitialTaskDelayMs)
     assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
   }
-  
+
   /**
    * Test that new logs that are created are assigned to the least loaded log directory
    */
   @Test
   def testLeastLoadedAssignment() {
     // create a log manager with multiple data directories
-    val dirs = Array(TestUtils.tempDir(), 
-                     TestUtils.tempDir(), 
+    val dirs = Array(TestUtils.tempDir(),
+                     TestUtils.tempDir(),
                      TestUtils.tempDir())
     logManager.shutdown()
-    logManager = createLogManager()
+    logManager = createLogManager(dirs)
 
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
-      logManager.createLog(TopicAndPartition("test", partition), logConfig)
+      logManager.createLog(new TopicPartition("test", partition), logConfig)
       assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
     }
   }
-  
+
   /**
    * Test that it is not possible to open two log managers using the same data directory
    */
@@ -208,7 +242,7 @@ class LogManagerTest extends JUnit3Suite {
       createLogManager()
       fail("Should not be able to create a second log manager instance with the same data directory")
     } catch {
-      case e: KafkaException => // this is good 
+      case _: KafkaException => // this is good
     }
   }
 
@@ -217,7 +251,7 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testCheckpointRecoveryPoints() {
-    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1), TopicAndPartition("test-b", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1), new TopicPartition("test-b", 1)), logManager)
   }
 
   /**
@@ -230,7 +264,7 @@ class LogManagerTest extends JUnit3Suite {
     logManager = TestUtils.createLogManager(
       logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
     logManager.startup
-    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
   /**
@@ -244,24 +278,24 @@ class LogManagerTest extends JUnit3Suite {
     logDir.deleteOnExit()
     logManager = createLogManager()
     logManager.startup
-    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
+    verifyCheckpointRecovery(Seq(new TopicPartition("test-a", 1)), logManager)
   }
 
 
-  private def verifyCheckpointRecovery(topicAndPartitions: Seq[TopicAndPartition],
+  private def verifyCheckpointRecovery(topicPartitions: Seq[TopicPartition],
                                        logManager: LogManager) {
-    val logs = topicAndPartitions.map(this.logManager.createLog(_, logConfig))
+    val logs = topicPartitions.map(this.logManager.createLog(_, logConfig))
     logs.foreach(log => {
-      for(i <- 0 until 50)
-        log.append(TestUtils.singleMessageSet("test".getBytes()))
+      for (_ <- 0 until 50)
+        log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
 
       log.flush()
     })
 
     logManager.checkpointRecoveryPointOffsets()
-    val checkpoints = new OffsetCheckpoint(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
 
-    topicAndPartitions.zip(logs).foreach {
+    topicPartitions.zip(logs).foreach {
       case(tp, log) => {
         assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
       }

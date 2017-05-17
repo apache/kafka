@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io._
-import junit.framework.Assert._
+import org.junit.Assert._
 import java.util.{Collections, Arrays}
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -34,7 +34,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Before
   def setup() {
-    this.idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -95,7 +95,29 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(51, 0)
     idx.append(50, 1)
   }
-  
+
+  @Test
+  def testFetchUpperBoundOffset() {
+    val first = OffsetPosition(0, 0)
+    val second = OffsetPosition(1, 10)
+    val third = OffsetPosition(2, 23)
+    val fourth = OffsetPosition(3, 37)
+
+    assertEquals(None, idx.fetchUpperBoundOffset(first, 5))
+
+    for (offsetPosition <- Seq(first, second, third, fourth))
+      idx.append(offsetPosition.offset, offsetPosition.position)
+
+    assertEquals(Some(second), idx.fetchUpperBoundOffset(first, 5))
+    assertEquals(Some(second), idx.fetchUpperBoundOffset(first, 10))
+    assertEquals(Some(third), idx.fetchUpperBoundOffset(first, 23))
+    assertEquals(Some(third), idx.fetchUpperBoundOffset(first, 22))
+    assertEquals(Some(fourth), idx.fetchUpperBoundOffset(second, 24))
+    assertEquals(None, idx.fetchUpperBoundOffset(fourth, 1))
+    assertEquals(None, idx.fetchUpperBoundOffset(first, 200))
+    assertEquals(None, idx.fetchUpperBoundOffset(second, 200))
+  }
+
   @Test
   def testReopen() {
     val first = OffsetPosition(51, 0)
@@ -103,7 +125,7 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(first.offset, first.position)
     idx.append(sec.offset, sec.position)
     idx.close()
-    val idxRo = new OffsetIndex(file = idx.file, baseOffset = idx.baseOffset)
+    val idxRo = new OffsetIndex(idx.file, baseOffset = idx.baseOffset)
     assertEquals(first, idxRo.lookup(first.offset))
     assertEquals(sec, idxRo.lookup(sec.offset))
     assertEquals(sec.offset, idxRo.lastOffset)
@@ -113,7 +135,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Test
   def truncate() {
-	val idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
+	val idx = new OffsetIndex(nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
 	idx.truncate()
     for(i <- 1 until 10)
       idx.append(i, i)
@@ -140,7 +162,7 @@ class OffsetIndexTest extends JUnitSuite {
     idx.append(5, 5)
     
     idx.truncate()
-    assertEquals("Full truncation should leave no entries", 0, idx.entries())
+    assertEquals("Full truncation should leave no entries", 0, idx.entries)
     idx.append(0, 0)
   }
   
@@ -157,7 +179,7 @@ class OffsetIndexTest extends JUnitSuite {
     val rand = new Random(1L)
     val vals = new mutable.ArrayBuffer[Int](len)
     var last = base
-    for (i <- 0 until len) {
+    for (_ <- 0 until len) {
       last += rand.nextInt(15) + 1
       vals += last
     }

@@ -1,3 +1,4 @@
+#!/usr/bin/env bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -12,9 +13,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-# see kafka.server.KafkaConfig for additional details and defaults
-
-#!/bin/bash
 
 # This script can be used to set up a driver machine on aws from which you will run tests
 # or bring up your mini Kafka cluster.
@@ -27,7 +25,7 @@ base_dir=`dirname $0`/../..
 
 if [ -z `which vagrant` ]; then
     echo "Installing vagrant..."
-    wget https://dl.bintray.com/mitchellh/vagrant/vagrant_1.7.2_x86_64.deb
+    wget https://releases.hashicorp.com/vagrant/1.7.2/vagrant_1.7.2_x86_64.deb
     sudo dpkg -i vagrant_1.7.2_x86_64.deb
     rm -f vagrant_1.7.2_x86_64.deb
 fi
@@ -46,7 +44,7 @@ done
 
 # Create Vagrantfile.local as a convenience
 if [ ! -e "$base_dir/Vagrantfile.local" ]; then
-    cp $base_dir/aws/aws-example-Vagrantfile.local $base_dir/Vagrantfile.local
+    cp $base_dir/vagrant/aws/aws-example-Vagrantfile.local $base_dir/Vagrantfile.local
 fi
 
 gradle="gradle-2.2.1"
@@ -70,4 +68,3 @@ if [[ ${LOCAL_HOSTNAME} =~ .*\.compute\.internal ]]; then
     source ~/.bashrc
   fi
 fi
-

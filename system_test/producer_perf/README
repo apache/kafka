@@ -1,9 +1,0 @@
-This test produces a large number of messages to a broker. It measures the throughput and tests
-the amount of data received is expected.
-
-To run this test, do
-bin/run-test.sh
-
-The expected output is given in expected.out. There are 2 things to pay attention to:
-1. The output should have a line "test passed".
-2. The throughput from the producer should be around 300,000 Messages/sec on a typical machine.

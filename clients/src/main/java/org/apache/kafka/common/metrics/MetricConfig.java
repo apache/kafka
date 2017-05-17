@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -27,7 +29,8 @@ public class MetricConfig {
     private int samples;
     private long eventWindow;
     private long timeWindowMs;
-    private TimeUnit unit;
+    private Map<String, String> tags;
+    private Sensor.RecordingLevel recordingLevel;
 
     public MetricConfig() {
         super();
@@ -35,7 +38,8 @@ public class MetricConfig {
         this.samples = 2;
         this.eventWindow = Long.MAX_VALUE;
         this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
-        this.unit = TimeUnit.SECONDS;
+        this.tags = new LinkedHashMap<>();
+        this.recordingLevel = Sensor.RecordingLevel.INFO;
     }
 
     public Quota quota() {
@@ -65,6 +69,15 @@ public class MetricConfig {
         return this;
     }
 
+    public Map<String, String> tags() {
+        return this.tags;
+    }
+
+    public MetricConfig tags(Map<String, String> tags) {
+        this.tags = tags;
+        return this;
+    }
+
     public int samples() {
         return this.samples;
     }
@@ -76,12 +89,14 @@ public class MetricConfig {
         return this;
     }
 
-    public TimeUnit timeUnit() {
-        return unit;
+    public Sensor.RecordingLevel recordLevel() {
+        return this.recordingLevel;
     }
 
-    public MetricConfig timeUnit(TimeUnit unit) {
-        this.unit = unit;
+    public MetricConfig recordLevel(Sensor.RecordingLevel recordingLevel) {
+        this.recordingLevel = recordingLevel;
         return this;
     }
+
+
 }

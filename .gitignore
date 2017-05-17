@@ -2,6 +2,7 @@ dist
 *classes
 target/
 build/
+build_eclipse/
 .gradle/
 lib_managed/
 src_managed/
@@ -11,6 +12,8 @@ patch-process/*
 .idea
 .svn
 .classpath
+/.metadata
+/.recommenders
 *~
 *#
 .#*
@@ -19,19 +22,27 @@ TAGS
 *.iml
 .project
 .settings
-.gradle
 kafka.ipr
 kafka.iws
 .vagrant
 Vagrantfile.local
 /logs
+.DS_Store
 
 config/server-*
 config/zookeeper-*
 core/data/*
 gradle/wrapper/*
+gradlew
+gradlew.bat
 
 results
 tests/results
 .ducktape
 tests/.ducktape
+tests/venv
+.cache
+
+docs/generated/
+
+.release-settings.json

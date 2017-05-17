@@ -17,8 +17,11 @@
 
 package kafka.common
 
-import kafka.message.InvalidMessageException
 import java.nio.ByteBuffer
+
+import kafka.message.InvalidMessageException
+import org.apache.kafka.common.errors.InvalidTopicException
+
 import scala.Predef._
 
 /**
@@ -27,14 +30,14 @@ import scala.Predef._
 object ErrorMapping {
   val EmptyByteBuffer = ByteBuffer.allocate(0)
 
-  val UnknownCode : Short = -1
-  val NoError : Short = 0
-  val OffsetOutOfRangeCode : Short = 1
-  val InvalidMessageCode : Short = 2
-  val UnknownTopicOrPartitionCode : Short = 3
-  val InvalidFetchSizeCode  : Short = 4
-  val LeaderNotAvailableCode : Short = 5
-  val NotLeaderForPartitionCode : Short = 6
+  val UnknownCode: Short = -1
+  val NoError: Short = 0
+  val OffsetOutOfRangeCode: Short = 1
+  val InvalidMessageCode: Short = 2
+  val UnknownTopicOrPartitionCode: Short = 3
+  val InvalidFetchSizeCode: Short = 4
+  val LeaderNotAvailableCode: Short = 5
+  val NotLeaderForPartitionCode: Short = 6
   val RequestTimedOutCode: Short = 7
   val BrokerNotAvailableCode: Short = 8
   val ReplicaNotAvailableCode: Short = 9
@@ -45,12 +48,32 @@ object ErrorMapping {
   val OffsetsLoadInProgressCode: Short = 14
   val ConsumerCoordinatorNotAvailableCode: Short = 15
   val NotCoordinatorForConsumerCode: Short = 16
-  val InvalidTopicCode : Short = 17
+  val InvalidTopicCode: Short = 17
   val MessageSetSizeTooLargeCode: Short = 18
-  val NotEnoughReplicasCode : Short = 19
+  val NotEnoughReplicasCode: Short = 19
   val NotEnoughReplicasAfterAppendCode: Short = 20
   // 21: InvalidRequiredAcks
   // 22: IllegalConsumerGeneration
+  // 23: INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY
+  // 24: UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY
+  // 25: UNKNOWN_CONSUMER_ID
+  // 26: INVALID_SESSION_TIMEOUT
+  // 27: REBALANCE_IN_PROGRESS
+  // 28: INVALID_COMMIT_OFFSET_SIZE
+  val TopicAuthorizationCode: Short = 29
+  val GroupAuthorizationCode: Short = 30
+  val ClusterAuthorizationCode: Short = 31
+  // 32: INVALID_TIMESTAMP
+  // 33: UNSUPPORTED_SASL_MECHANISM
+  // 34: ILLEGAL_SASL_STATE
+  // 35: UNSUPPORTED_VERSION
+  // 36: TOPIC_ALREADY_EXISTS
+  // 37: INVALID_PARTITIONS
+  // 38: INVALID_REPLICATION_FACTOR
+  // 39: INVALID_REPLICA_ASSIGNMENT
+  // 40: INVALID_CONFIG
+  // 41: NOT_CONTROLLER
+  // 42: INVALID_REQUEST
 
   private val exceptionToCode =
     Map[Class[Throwable], Short](
@@ -58,8 +81,8 @@ object ErrorMapping {
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
       classOf[UnknownTopicOrPartitionException].asInstanceOf[Class[Throwable]] -> UnknownTopicOrPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
-      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[LeaderNotAvailableException].asInstanceOf[Class[Throwable]] -> LeaderNotAvailableCode,
+      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[RequestTimedOutException].asInstanceOf[Class[Throwable]] -> RequestTimedOutCode,
       classOf[BrokerNotAvailableException].asInstanceOf[Class[Throwable]] -> BrokerNotAvailableCode,
       classOf[ReplicaNotAvailableException].asInstanceOf[Class[Throwable]] -> ReplicaNotAvailableCode,
@@ -72,7 +95,10 @@ object ErrorMapping {
       classOf[InvalidTopicException].asInstanceOf[Class[Throwable]] -> InvalidTopicCode,
       classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode,
       classOf[NotEnoughReplicasException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasCode,
-      classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode
+      classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode,
+      classOf[TopicAuthorizationException].asInstanceOf[Class[Throwable]] -> TopicAuthorizationCode,
+      classOf[GroupAuthorizationException].asInstanceOf[Class[Throwable]] -> GroupAuthorizationCode,
+      classOf[ClusterAuthorizationException].asInstanceOf[Class[Throwable]] -> ClusterAuthorizationCode
     ).withDefaultValue(UnknownCode)
 
   /* invert the mapping */

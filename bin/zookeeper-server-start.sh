@@ -5,9 +5,9 @@
 # The ASF licenses this file to You under the Apache License, Version 2.0
 # (the "License"); you may not use this file except in compliance with
 # the License.  You may obtain a copy of the License at
-# 
+#
 #    http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 zookeeper.properties"
+	echo "USAGE: $0 [-daemon] zookeeper.properties"
 	exit 1
 fi
 base_dir=$(dirname $0)
@@ -29,7 +29,7 @@ if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M -Xms512M"
 fi
 
-EXTRA_ARGS="-name zookeeper -loggc"
+EXTRA_ARGS=${EXTRA_ARGS-'-name zookeeper -loggc'}
 
 COMMAND=$1
 case $COMMAND in
@@ -41,5 +41,4 @@ case $COMMAND in
      ;;
 esac
 
-exec $base_dir/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain $@
-
+exec $base_dir/kafka-run-class.sh $EXTRA_ARGS org.apache.zookeeper.server.quorum.QuorumPeerMain "$@"

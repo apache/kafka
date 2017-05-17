@@ -19,23 +19,20 @@ package kafka.utils
 
 import java.io._
 import java.nio._
-import charset.Charset
 import java.nio.channels._
-import java.util.concurrent.locks.{ReadWriteLock, Lock}
+import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
+import java.util.{Properties, UUID}
 import javax.management._
+import javax.xml.bind.DatatypeConverter
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection._
 import scala.collection.mutable
-import java.util.Properties
 import kafka.cluster.EndPoint
-import kafka.common.KafkaException
-import kafka.common.KafkaStorageException
-import org.apache.kafka.common.utils.Crc32
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Utils
-
 
 /**
  * General helper functions!
@@ -61,13 +58,15 @@ object CoreUtils extends Logging {
     }
 
   /**
-   * Create a daemon thread
-   * @param name The name of the thread
-   * @param fun The runction to execute in the thread
-   * @return The unstarted thread
-   */
-  def daemonThread(name: String, fun: => Unit): Thread =
-    Utils.daemonThread(name, runnable(fun))
+    * Create a thread
+    *
+    * @param name The name of the thread
+    * @param daemon Whether the thread should block JVM shutdown
+    * @param fun The function to execute in the thread
+    * @return The unstarted thread
+    */
+  def newThread(name: String, daemon: Boolean)(fun: => Unit): Thread =
+    Utils.newThread(name, runnable(fun), daemon)
 
   /**
    * Do the given action and log any exceptions thrown without rethrowing them
@@ -83,35 +82,10 @@ object CoreUtils extends Logging {
   }
 
   /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
-   * @param file The root file at which to begin deleting
-   */
-  def rm(file: String): Unit = rm(new File(file))
-
-  /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def rm(files: Seq[String]): Unit = files.foreach(f => rm(new File(f)))
-
-  /**
-   * Recursively delete the given file/directory and any subfiles (if any exist)
-   * @param file The root file at which to begin deleting
-   */
-  def rm(file: File) {
-	  if(file == null) {
-	    return
-	  } else if(file.isDirectory) {
-	    val files = file.listFiles()
-	    if(files != null) {
-	      for(f <- files)
-	        rm(f)
-	    }
-	    file.delete()
-	  } else {
-	    file.delete()
-	  }
-  }
+  def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -152,26 +126,6 @@ object CoreUtils extends Logging {
       if(mbs.isRegistered(objName))
         mbs.unregisterMBean(objName)
     }
-  }
-
-  /**
-   * Compute the CRC32 of the byte array
-   * @param bytes The array to compute the checksum for
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte]): Long = crc32(bytes, 0, bytes.length)
-
-  /**
-   * Compute the CRC32 of the segment of the byte array given by the specificed size and offset
-   * @param bytes The bytes to checksum
-   * @param offset the offset at which to begin checksumming
-   * @param size the number of bytes to checksum
-   * @return The CRC32
-   */
-  def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
-    val crc = new Crc32()
-    crc.update(bytes, offset, size)
-    crc.getValue()
   }
 
   /**
@@ -217,8 +171,8 @@ object CoreUtils extends Logging {
   /**
    * Create an instance of the class with the given class name
    */
-  def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className).asInstanceOf[Class[T]]
+  def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -228,11 +182,8 @@ object CoreUtils extends Logging {
    * @param coll An iterable over the underlying collection.
    * @return A circular iterator over the collection.
    */
-  def circularIterator[T](coll: Iterable[T]) = {
-    val stream: Stream[T] =
-      for (forever <- Stream.continually(1); t <- coll) yield t
-    stream.iterator
-  }
+  def circularIterator[T](coll: Iterable[T]) =
+    for (_ <- Iterator.continually(1); t <- coll) yield t
 
   /**
    * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
@@ -289,7 +240,7 @@ object CoreUtils extends Logging {
        * Per RFC4627, section 2.5, we're not technically required to
        * encode the C1 codes, but we do to be safe.
        */
-      case c if ((c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f')) => "\\u%04x".format(c: Int)
+      case c if (c >= '\u0000' && c <= '\u001f') || (c >= '\u007f' && c <= '\u009f') => "\\u%04x".format(c: Int)
       case c => c
     }.mkString
   }
@@ -299,13 +250,61 @@ object CoreUtils extends Logging {
    */
   def duplicates[T](s: Traversable[T]): Iterable[T] = {
     s.groupBy(identity)
-      .map{ case (k,l) => (k,l.size)}
-      .filter{ case (k,l) => (l > 1) }
+      .map { case (k, l) => (k, l.size)}
+      .filter { case (_, l) => l > 1 }
       .keys
   }
 
-  def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
-    val listenerList = parseCsvList(listeners)
-    listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
+  def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
+    def validate(endPoints: Seq[EndPoint]): Unit = {
+      // filter port 0 for unit tests
+      val portsExcludingZero = endPoints.map(_.port).filter(_ != 0)
+      val distinctPorts = portsExcludingZero.distinct
+      val distinctListenerNames = endPoints.map(_.listenerName).distinct
+
+      require(distinctPorts.size == portsExcludingZero.size, s"Each listener must have a different port, listeners: $listeners")
+      require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
+    }
+
+    val endPoints = try {
+      val listenerList = parseCsvList(listeners)
+      listenerList.map(EndPoint.createEndPoint(_, Some(securityProtocolMap)))
+    } catch {
+      case e: Exception =>
+        throw new IllegalArgumentException(s"Error creating broker listeners from '$listeners': ${e.getMessage}", e)
+    }
+    validate(endPoints)
+    endPoints
+  }
+
+  def generateUuidAsBase64(): String = {
+    val uuid = UUID.randomUUID()
+    urlSafeBase64EncodeNoPadding(getBytesFromUuid(uuid))
+  }
+
+  def getBytesFromUuid(uuid: UUID): Array[Byte] = {
+    // Extract bytes for uuid which is 128 bits (or 16 bytes) long.
+    val uuidBytes = ByteBuffer.wrap(new Array[Byte](16))
+    uuidBytes.putLong(uuid.getMostSignificantBits)
+    uuidBytes.putLong(uuid.getLeastSignificantBits)
+    uuidBytes.array
+  }
+
+  def urlSafeBase64EncodeNoPadding(data: Array[Byte]): String = {
+    val base64EncodedUUID = DatatypeConverter.printBase64Binary(data)
+    //Convert to URL safe variant by replacing + and / with - and _ respectively.
+    val urlSafeBase64EncodedUUID = base64EncodedUUID.replace("+", "-").replace("/", "_")
+    // Remove the "==" padding at the end.
+    urlSafeBase64EncodedUUID.substring(0, urlSafeBase64EncodedUUID.length - 2)
+  }
+
+  def propsWith(key: String, value: String): Properties = {
+    propsWith((key, value))
+  }
+
+  def propsWith(props: (String, String)*): Properties = {
+    val properties = new Properties()
+    props.foreach { case (k, v) => properties.put(k, v) }
+    properties
   }
 }

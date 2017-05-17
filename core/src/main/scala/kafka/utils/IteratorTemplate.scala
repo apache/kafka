@@ -17,8 +17,6 @@
 
 package kafka.utils
 
-import java.lang.IllegalStateException
-
 class State
 object DONE extends State
 object READY extends State
@@ -77,7 +75,7 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
     null.asInstanceOf[T]
   }
   
-  def remove = 
+  override def remove =
     throw new UnsupportedOperationException("Removal not supported")
 
   protected def resetState() {

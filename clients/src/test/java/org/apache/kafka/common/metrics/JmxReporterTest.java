@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.metrics;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.junit.Test;
@@ -26,12 +25,16 @@ public class JmxReporterTest {
     @Test
     public void testJmxRegistration() throws Exception {
         Metrics metrics = new Metrics();
-        metrics.addReporter(new JmxReporter());
-        Sensor sensor = metrics.sensor("kafka.requests");
-        sensor.add(new MetricName("pack.bean1.avg", "grp1"), new Avg());
-        sensor.add(new MetricName("pack.bean2.total", "grp2"), new Total());
-        Sensor sensor2 = metrics.sensor("kafka.blah");
-        sensor2.add(new MetricName("pack.bean1.some", "grp1"), new Total());
-        sensor2.add(new MetricName("pack.bean2.some", "grp1"), new Total());
+        try {
+            metrics.addReporter(new JmxReporter());
+            Sensor sensor = metrics.sensor("kafka.requests");
+            sensor.add(metrics.metricName("pack.bean1.avg", "grp1"), new Avg());
+            sensor.add(metrics.metricName("pack.bean2.total", "grp2"), new Total());
+            Sensor sensor2 = metrics.sensor("kafka.blah");
+            sensor2.add(metrics.metricName("pack.bean1.some", "grp1"), new Total());
+            sensor2.add(metrics.metricName("pack.bean2.some", "grp1"), new Total());
+        } finally {
+            metrics.close();
+        }
     }
 }

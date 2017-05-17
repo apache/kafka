@@ -67,7 +67,7 @@ class PartitionTopicInfo(val topic: String,
     }
   }
   
-  override def toString(): String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
+  override def toString: String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
     ": consumed offset = " + consumedOffset.get
 }
 

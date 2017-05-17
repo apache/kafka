@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -16,19 +16,19 @@
  */
 package kafka.client
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
 
 import scala.collection._
 import kafka.cluster._
 import kafka.api._
 import kafka.producer._
-import kafka.common.{ErrorMapping, KafkaException}
+import kafka.common.{BrokerEndPointNotAvailableException, KafkaException}
 import kafka.utils.{CoreUtils, Logging}
 import java.util.Properties
+
 import util.Random
 import kafka.network.BlockingChannel
-import kafka.utils.ZkUtils._
-import org.I0Itec.zkclient.ZkClient
+import kafka.utils.ZkUtils
 import java.io.IOException
 
  /**
@@ -43,6 +43,7 @@ object ClientUtils extends Logging{
    * @param producerConfig The producer's config
    * @return topic metadata response
    */
+  @deprecated("This method has been deprecated and will be removed in a future release.", "0.10.0.0")
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
@@ -95,7 +96,7 @@ object ClientUtils extends Logging{
   }
 
   /**
-   * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
+   * Parse a list of broker urls in the form host1:port1, host2:port2, ...
    */
   def parseBrokerList(brokerListStr: String): Seq[BrokerEndPoint] = {
     val brokersStr = CoreUtils.parseCsvList(brokerListStr)
@@ -105,57 +106,69 @@ object ClientUtils extends Logging{
     }
   }
 
-   /**
-    * Creates a blocking channel to a random broker
-    */
-   def channelToAnyBroker(zkClient: ZkClient, socketTimeoutMs: Int = 3000) : BlockingChannel = {
-     var channel: BlockingChannel = null
-     var connected = false
-     while (!connected) {
-       val allBrokers = getAllBrokerEndPointsForChannel(zkClient, SecurityProtocol.PLAINTEXT)
-       Random.shuffle(allBrokers).find { broker =>
-         trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
-         try {
-           channel = new BlockingChannel(broker.host, broker.port, BlockingChannel.UseDefaultBufferSize, BlockingChannel.UseDefaultBufferSize, socketTimeoutMs)
-           channel.connect()
-           debug("Created channel to broker %s:%d.".format(channel.host, channel.port))
-           true
-         } catch {
-           case e: Exception =>
-             if (channel != null) channel.disconnect()
-             channel = null
-             info("Error while creating channel to %s:%d.".format(broker.host, broker.port))
-             false
-         }
-       }
-       connected = if (channel == null) false else true
-     }
+  /**
+   * Creates a blocking channel to a random broker
+   */
+  def channelToAnyBroker(zkUtils: ZkUtils, socketTimeoutMs: Int = 3000) : BlockingChannel = {
+    var channel: BlockingChannel = null
+    var connected = false
+    while (!connected) {
+      val allBrokers = getPlaintextBrokerEndPoints(zkUtils)
+      Random.shuffle(allBrokers).find { broker =>
+        trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
+        try {
+          channel = new BlockingChannel(broker.host, broker.port, BlockingChannel.UseDefaultBufferSize, BlockingChannel.UseDefaultBufferSize, socketTimeoutMs)
+          channel.connect()
+          debug("Created channel to broker %s:%d.".format(channel.host, channel.port))
+          true
+        } catch {
+          case _: Exception =>
+            if (channel != null) channel.disconnect()
+            channel = null
+            info("Error while creating channel to %s:%d.".format(broker.host, broker.port))
+            false
+        }
+      }
+      connected = channel != null
+    }
 
-     channel
-   }
+    channel
+  }
+
+   /**
+    * Returns the first end point from each broker with the PLAINTEXT security protocol.
+    */
+  def getPlaintextBrokerEndPoints(zkUtils: ZkUtils): Seq[BrokerEndPoint] = {
+    zkUtils.getAllBrokersInCluster().map { broker =>
+      broker.endPoints.collectFirst {
+        case endPoint if endPoint.securityProtocol == SecurityProtocol.PLAINTEXT =>
+          new BrokerEndPoint(broker.id, endPoint.host, endPoint.port)
+      }.getOrElse(throw new BrokerEndPointNotAvailableException(s"End point with security protocol PLAINTEXT not found for broker ${broker.id}"))
+    }
+  }
 
    /**
     * Creates a blocking channel to the offset manager of the given group
     */
-   def channelToOffsetManager(group: String, zkClient: ZkClient, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
-     var queryChannel = channelToAnyBroker(zkClient)
+   def channelToOffsetManager(group: String, zkUtils: ZkUtils, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
+     var queryChannel = channelToAnyBroker(zkUtils)
 
      var offsetManagerChannelOpt: Option[BlockingChannel] = None
 
-     while (!offsetManagerChannelOpt.isDefined) {
+     while (offsetManagerChannelOpt.isEmpty) {
 
        var coordinatorOpt: Option[BrokerEndPoint] = None
 
-       while (!coordinatorOpt.isDefined) {
+       while (coordinatorOpt.isEmpty) {
          try {
            if (!queryChannel.isConnected)
-             queryChannel = channelToAnyBroker(zkClient)
+             queryChannel = channelToAnyBroker(zkUtils)
            debug("Querying %s:%d to locate offset manager for %s.".format(queryChannel.host, queryChannel.port, group))
-           queryChannel.send(ConsumerMetadataRequest(group))
+           queryChannel.send(GroupCoordinatorRequest(group))
            val response = queryChannel.receive()
-           val consumerMetadataResponse =  ConsumerMetadataResponse.readFrom(response.payload())
+           val consumerMetadataResponse =  GroupCoordinatorResponse.readFrom(response.payload())
            debug("Consumer metadata response: " + consumerMetadataResponse.toString)
-           if (consumerMetadataResponse.errorCode == ErrorMapping.NoError)
+           if (consumerMetadataResponse.error == Errors.NONE)
              coordinatorOpt = consumerMetadataResponse.coordinatorOpt
            else {
              debug("Query to %s:%d to locate offset manager for %s failed - will retry in %d milliseconds."
@@ -164,7 +177,7 @@ object ClientUtils extends Logging{
            }
          }
          catch {
-           case ioe: IOException =>
+           case _: IOException =>
              info("Failed to fetch consumer metadata from %s:%d.".format(queryChannel.host, queryChannel.port))
              queryChannel.disconnect()
          }
@@ -187,7 +200,7 @@ object ClientUtils extends Logging{
            queryChannel.disconnect()
          }
          catch {
-           case ioe: IOException => // offsets manager may have moved
+           case _: IOException => // offsets manager may have moved
              info("Error while connecting to %s.".format(connectString))
              if (offsetManagerChannel != null) offsetManagerChannel.disconnect()
              Thread.sleep(retryBackOffMs)

@@ -21,6 +21,8 @@ package kafka.producer
 import kafka.utils._
 import org.apache.kafka.common.utils.Utils
 
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "It has been replaced by org.apache.kafka.clients.producer.internals.DefaultPartitioner.", "0.10.0.0")
 class ByteArrayPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(key: Any, numPartitions: Int): Int = {
     Utils.abs(java.util.Arrays.hashCode(key.asInstanceOf[Array[Byte]])) % numPartitions

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,7 +20,8 @@ package kafka.api
 import java.nio.ByteBuffer
 
 import kafka.utils.Logging
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.TopicAndPartition
+import org.apache.kafka.common.protocol.Errors
 
 object OffsetCommitResponse extends Logging {
   val CurrentVersion: Short = 0
@@ -33,7 +34,7 @@ object OffsetCommitResponse extends Logging {
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partitionId = buffer.getInt
-        val error = buffer.getShort
+        val error = Errors.forCode(buffer.getShort)
         (TopicAndPartition(topic, partitionId), error)
       })
     })
@@ -41,13 +42,13 @@ object OffsetCommitResponse extends Logging {
   }
 }
 
-case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
+case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Errors],
                                 correlationId: Int = 0)
     extends RequestOrResponse() {
 
   lazy val commitStatusGroupedByTopic = commitStatus.groupBy(_._1.topic)
 
-  def hasError = commitStatus.exists{ case (topicAndPartition, errorCode) => errorCode != ErrorMapping.NoError }
+  def hasError = commitStatus.values.exists(_ != Errors.NONE)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
@@ -55,14 +56,14 @@ case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
     commitStatusGroupedByTopic.foreach { case(topic, statusMap) =>
       ApiUtils.writeShortString(buffer, topic)
       buffer.putInt(statusMap.size) // partition count
-      statusMap.foreach { case(topicAndPartition, errorCode) =>
+      statusMap.foreach { case(topicAndPartition, error) =>
         buffer.putInt(topicAndPartition.partition)
-        buffer.putShort(errorCode)
+        buffer.putShort(error.code)
       }
     }
   }
 
-  override def sizeInBytes = 
+  override def sizeInBytes =
     4 + /* correlationId */
     4 + /* topic count */
     commitStatusGroupedByTopic.foldLeft(0)((count, partitionStatusMap) => {

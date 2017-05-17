@@ -1,11 +1,11 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * 
+ * the License. You may obtain a copy of the License at
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.record;
 
 import static org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.LZ4_FRAME_INCOMPRESSIBLE_MASK;
@@ -27,7 +26,7 @@ import java.io.InputStream;
 
 import org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.BD;
 import org.apache.kafka.common.record.KafkaLZ4BlockOutputStream.FLG;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.ByteUtils;
 
 import net.jpountz.lz4.LZ4Exception;
 import net.jpountz.lz4.LZ4Factory;
@@ -36,15 +35,14 @@ import net.jpountz.xxhash.XXHash32;
 import net.jpountz.xxhash.XXHashFactory;
 
 /**
- * A partial implementation of the v1.4.1 LZ4 Frame format.
- * 
- * @see <a href="https://docs.google.com/document/d/1Tdxmn5_2e5p1y4PtXkatLndWVb0R8QARJFe6JI4Keuo/edit">LZ4 Framing
- *      Format Spec</a>
+ * A partial implementation of the v1.5.1 LZ4 Frame format.
+ *
+ * @see <a href="http://cyan4973.github.io/lz4/lz4_Frame_format.html">LZ4 Frame Format</a>
  */
 public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     public static final String PREMATURE_EOS = "Stream ended prematurely";
-    public static final String NOT_SUPPORTED = "Stream unsupported";
+    public static final String NOT_SUPPORTED = "Stream unsupported (invalid magic bytes)";
     public static final String BLOCK_HASH_MISMATCH = "Block checksum mismatch";
     public static final String DESCRIPTOR_HASH_MISMATCH = "Stream frame descriptor corrupted";
 
@@ -53,6 +51,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
     private final byte[] buffer;
     private final byte[] compressedBuffer;
     private final int maxBlockSize;
+    private final boolean ignoreFlagDescriptorChecksum;
     private FLG flg;
     private BD bd;
     private int bufferOffset;
@@ -61,14 +60,16 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
 
     /**
      * Create a new {@link InputStream} that will decompress data using the LZ4 algorithm.
-     * 
+     *
      * @param in The stream to decompress
+     * @param ignoreFlagDescriptorChecksum for compatibility with old kafka clients, ignore incorrect HC byte
      * @throws IOException
      */
-    public KafkaLZ4BlockInputStream(InputStream in) throws IOException {
+    public KafkaLZ4BlockInputStream(InputStream in, boolean ignoreFlagDescriptorChecksum) throws IOException {
         super(in);
         decompressor = LZ4Factory.fastestInstance().safeDecompressor();
         checksum = XXHashFactory.fastestInstance().hash32();
+        this.ignoreFlagDescriptorChecksum = ignoreFlagDescriptorChecksum;
         readHeader();
         maxBlockSize = bd.getBlockMaximumSize();
         buffer = new byte[maxBlockSize];
@@ -79,48 +80,78 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
     }
 
     /**
+     * Create a new {@link InputStream} that will decompress data using the LZ4 algorithm.
+     *
+     * @param in The stream to decompress
+     * @throws IOException
+     */
+    public KafkaLZ4BlockInputStream(InputStream in) throws IOException {
+        this(in, false);
+    }
+
+    /**
+     * Check whether KafkaLZ4BlockInputStream is configured to ignore the
+     * Frame Descriptor checksum, which is useful for compatibility with
+     * old client implementations that use incorrect checksum calculations.
+     */
+    public boolean ignoreFlagDescriptorChecksum() {
+        return this.ignoreFlagDescriptorChecksum;
+    }
+
+    /**
      * Reads the magic number and frame descriptor from the underlying {@link InputStream}.
-     * 
+     *
      * @throws IOException
      */
     private void readHeader() throws IOException {
         byte[] header = new byte[LZ4_MAX_HEADER_LENGTH];
 
         // read first 6 bytes into buffer to check magic and FLG/BD descriptor flags
-        bufferOffset = 6;
-        if (in.read(header, 0, bufferOffset) != bufferOffset) {
+        int headerOffset = 6;
+        if (in.read(header, 0, headerOffset) != headerOffset) {
             throw new IOException(PREMATURE_EOS);
         }
 
-        if (MAGIC != Utils.readUnsignedIntLE(header, bufferOffset - 6)) {
+        if (MAGIC != ByteUtils.readUnsignedIntLE(header, headerOffset - 6)) {
             throw new IOException(NOT_SUPPORTED);
         }
-        flg = FLG.fromByte(header[bufferOffset - 2]);
-        bd = BD.fromByte(header[bufferOffset - 1]);
-        // TODO read uncompressed content size, update flg.validate()
-        // TODO read dictionary id, update flg.validate()
+        flg = FLG.fromByte(header[headerOffset - 2]);
+        bd = BD.fromByte(header[headerOffset - 1]);
 
-        // check stream descriptor hash
-        byte hash = (byte) ((checksum.hash(header, 0, bufferOffset, 0) >> 8) & 0xFF);
-        header[bufferOffset++] = (byte) in.read();
-        if (hash != header[bufferOffset - 1]) {
-            throw new IOException(DESCRIPTOR_HASH_MISMATCH);
+        if (flg.isContentSizeSet()) {
+            if (in.read(header, headerOffset, 8) != 8)
+                throw new IOException(PREMATURE_EOS);
+            headerOffset += 8;
         }
+
+        // Final byte of Frame Descriptor is HC checksum
+        header[headerOffset++] = (byte) in.read();
+
+        // Old implementations produced incorrect HC checksums
+        if (ignoreFlagDescriptorChecksum)
+            return;
+
+        int offset = 4;
+        int len = headerOffset - offset - 1; // dont include magic bytes or HC
+        byte hash = (byte) ((checksum.hash(header, offset, len, 0) >> 8) & 0xFF);
+        if (hash != header[headerOffset - 1])
+            throw new IOException(DESCRIPTOR_HASH_MISMATCH);
     }
 
     /**
      * Decompresses (if necessary) buffered data, optionally computes and validates a XXHash32 checksum, and writes the
      * result to a buffer.
-     * 
+     *
      * @throws IOException
      */
     private void readBlock() throws IOException {
-        int blockSize = Utils.readUnsignedIntLE(in);
+        int blockSize = ByteUtils.readUnsignedIntLE(in);
 
         // Check for EndMark
         if (blockSize == 0) {
             finished = true;
-            // TODO implement content checksum, update flg.validate()
+            if (flg.isContentChecksumSet())
+                ByteUtils.readUnsignedIntLE(in); // TODO: verify this content checksum
             return;
         } else if (blockSize > maxBlockSize) {
             throw new IOException(String.format("Block size %s exceeded max: %s", blockSize, maxBlockSize));
@@ -141,7 +172,7 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
         }
 
         // verify checksum
-        if (flg.isBlockChecksumSet() && Utils.readUnsignedIntLE(in) != checksum.hash(bufferToRead, 0, blockSize, 0)) {
+        if (flg.isBlockChecksumSet() && ByteUtils.readUnsignedIntLE(in) != checksum.hash(bufferToRead, 0, blockSize, 0)) {
             throw new IOException(BLOCK_HASH_MISMATCH);
         }
 
@@ -167,14 +198,13 @@ public final class KafkaLZ4BlockInputStream extends FilterInputStream {
         if (finished) {
             return -1;
         }
-        int value = buffer[bufferOffset++] & 0xFF;
 
-        return value;
+        return buffer[bufferOffset++] & 0xFF;
     }
 
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
-        net.jpountz.util.Utils.checkRange(b, off, len);
+        net.jpountz.util.SafeUtils.checkRange(b, off, len);
         if (finished) {
             return -1;
         }

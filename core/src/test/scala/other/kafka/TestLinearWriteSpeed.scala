@@ -21,11 +21,16 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.util.{Properties, Random}
-import kafka.log._
-import kafka.utils._
-import kafka.message._
-import scala.math._
+
 import joptsimple._
+import kafka.log._
+import kafka.message._
+import kafka.server.BrokerTopicStats
+import kafka.utils._
+import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.{Time, Utils}
+
+import scala.math._
 
 /**
  * This test does linear writes using either a kafka log or a file and measures throughput and latency.
@@ -61,7 +66,7 @@ object TestLinearWriteSpeed {
                            .withRequiredArg
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Long])
-                           .defaultsTo(1000)
+                           .defaultsTo(1000L)
    val maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
                            .withRequiredArg
                            .describedAs("mb")
@@ -78,7 +83,7 @@ object TestLinearWriteSpeed {
                             .ofType(classOf[java.lang.String])
                             .defaultsTo(NoCompressionCodec.name)
    val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
-   val channelOpt = parser.accepts("channel", "Do writes to file channesl.")
+   val channelOpt = parser.accepts("channel", "Do writes to file channels.")
    val logOpt = parser.accepts("log", "Do writes to kafka logs.")
                           
     val options = parser.parse(args : _*)
@@ -98,8 +103,13 @@ object TestLinearWriteSpeed {
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
-    val messageSet = new ByteBufferMessageSet(compressionCodec = compressionCodec, messages = (0 until numMessages).map(x => new Message(new Array[Byte](messageSize))): _*)
-    
+    val createTime = System.currentTimeMillis
+    val messageSet = {
+      val compressionType = CompressionType.forId(compressionCodec.codec)
+      val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
+      MemoryRecords.withRecords(compressionType, records: _*)
+    }
+
     val writables = new Array[Writable](numFiles)
     val scheduler = new KafkaScheduler(1)
     scheduler.startup()
@@ -116,7 +126,7 @@ object TestLinearWriteSpeed {
         writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
       } else {
         System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     bytesToWrite = (bytesToWrite / numFiles) * numFiles
@@ -195,16 +205,16 @@ object TestLinearWriteSpeed {
     }
   }
   
-  class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
-    CoreUtils.rm(dir)
-    val log = new Log(dir, config, 0L, scheduler, SystemTime)
+  class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: MemoryRecords) extends Writable {
+    Utils.delete(dir)
+    val log = new Log(dir, config, 0L, 0L, scheduler, new BrokerTopicStats, Time.SYSTEM)
     def write(): Int = {
-      log.append(messages, true)
+      log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes
     }
     def close() {
       log.close()
-      CoreUtils.rm(log.dir)
+      Utils.delete(log.dir)
     }
   }
   

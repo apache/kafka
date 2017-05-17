@@ -18,13 +18,17 @@
 package kafka.producer
 
 import java.util.Random
+import java.util.concurrent.TimeUnit
 
 import kafka.api._
 import kafka.network.{RequestOrResponseSend, BlockingChannel}
 import kafka.utils._
 import org.apache.kafka.common.network.NetworkReceive
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.utils.Utils._
 
+@deprecated("This object has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 object SyncProducer {
   val RequestKey: Short = 0
   val randomGenerator = new Random
@@ -34,6 +38,8 @@ object SyncProducer {
  * Send a message set.
  */
 @threadsafe
+@deprecated("This class has been deprecated and will be removed in a future release. " +
+            "Please use org.apache.kafka.clients.producer.KafkaProducer instead.", "0.10.0.0")
 class SyncProducer(val config: SyncProducerConfig) extends Logging {
 
   private val lock = new Object()
@@ -54,7 +60,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       val buffer = new RequestOrResponseSend("", request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      if(requestTypeId == RequestKeys.ProduceKey) {
+      if(requestTypeId == ApiKeys.PRODUCE.id) {
         val request = ProducerRequest.readFrom(buffer)
         trace(request.toString)
       }
@@ -101,11 +107,15 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     val aggregateTimer = producerRequestStats.getProducerRequestAllBrokersStats.requestTimer
     aggregateTimer.time {
       specificTimer.time {
-        response = doSend(producerRequest, if(producerRequest.requiredAcks == 0) false else true)
+        response = doSend(producerRequest, producerRequest.requiredAcks != 0)
       }
     }
-    if(producerRequest.requiredAcks != 0)
-      ProducerResponse.readFrom(response.payload)
+    if(producerRequest.requiredAcks != 0) {
+      val producerResponse = ProducerResponse.readFrom(response.payload)
+      producerRequestStats.getProducerRequestStats(config.host, config.port).throttleTimeStats.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
+      producerRequestStats.getProducerRequestAllBrokersStats.throttleTimeStats.update(producerResponse.throttleTime, TimeUnit.MILLISECONDS)
+      producerResponse
+    }
     else
       null
   }

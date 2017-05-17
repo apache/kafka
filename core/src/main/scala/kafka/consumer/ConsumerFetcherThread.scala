@@ -17,57 +17,125 @@
 
 package kafka.consumer
 
+import kafka.api.{FetchRequestBuilder, FetchResponsePartitionData, OffsetRequest, Request}
 import kafka.cluster.BrokerEndPoint
-import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{Request, OffsetRequest, FetchResponsePartitionData}
-import kafka.common.TopicAndPartition
+import kafka.server.{AbstractFetcherThread, PartitionFetchState}
+import kafka.common.{ErrorMapping, TopicAndPartition}
 
+import scala.collection.Map
+import ConsumerFetcherThread._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.EpochEndOffset
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
                             sourceBroker: BrokerEndPoint,
-                            partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
+                            partitionMap: Map[TopicPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
         extends AbstractFetcherThread(name = name,
                                       clientId = config.clientId,
                                       sourceBroker = sourceBroker,
-                                      socketTimeout = config.socketTimeoutMs,
-                                      socketBufferSize = config.socketReceiveBufferBytes,
-                                      fetchSize = config.fetchMessageMaxBytes,
-                                      fetcherBrokerId = Request.OrdinaryConsumerId,
-                                      maxWait = config.fetchWaitMaxMs,
-                                      minBytes = config.fetchMinBytes,
                                       fetchBackOffMs = config.refreshLeaderBackoffMs,
-                                      isInterruptible = true) {
+                                      isInterruptible = true,
+                                      includeLogTruncation = false) {
+
+  type REQ = FetchRequest
+  type PD = PartitionData
+
+  private val clientId = config.clientId
+  private val fetchSize = config.fetchMessageMaxBytes
+
+  private val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, config.socketTimeoutMs,
+    config.socketReceiveBufferBytes, config.clientId)
+
+  private val fetchRequestBuilder = new FetchRequestBuilder().
+    clientId(clientId).
+    replicaId(Request.OrdinaryConsumerId).
+    maxWait(config.fetchWaitMaxMs).
+    minBytes(config.fetchMinBytes).
+    requestVersion(3) // for now, the old consumer is pinned to the old message format through the fetch request
+
+  override def initiateShutdown(): Boolean = {
+    val justShutdown = super.initiateShutdown()
+    if (justShutdown && isInterruptible)
+      simpleConsumer.disconnectToHandleJavaIOBug()
+    justShutdown
+  }
+
+  override def shutdown(): Unit = {
+    super.shutdown()
+    simpleConsumer.close()
+  }
 
   // process fetched data
-  def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
-    val pti = partitionMap(topicAndPartition)
+  def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: PartitionData) {
+    val pti = partitionMap(topicPartition)
     if (pti.getFetchOffset != fetchOffset)
       throw new RuntimeException("Offset doesn't match for partition [%s,%d] pti offset: %d fetch offset: %d"
-                                .format(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset, fetchOffset))
-    pti.enqueue(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
+                                .format(topicPartition.topic, topicPartition.partition, pti.getFetchOffset, fetchOffset))
+    pti.enqueue(partitionData.underlying.messages.asInstanceOf[ByteBufferMessageSet])
   }
 
   // handle a partition whose offset is out of range and return a new fetch offset
-  def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long = {
-    var startTimestamp : Long = 0
-    config.autoOffsetReset match {
-      case OffsetRequest.SmallestTimeString => startTimestamp = OffsetRequest.EarliestTime
-      case OffsetRequest.LargestTimeString => startTimestamp = OffsetRequest.LatestTime
-      case _ => startTimestamp = OffsetRequest.LatestTime
+  def handleOffsetOutOfRange(topicPartition: TopicPartition): Long = {
+    val startTimestamp = config.autoOffsetReset match {
+      case OffsetRequest.SmallestTimeString => OffsetRequest.EarliestTime
+      case _ => OffsetRequest.LatestTime
     }
+    val topicAndPartition = TopicAndPartition(topicPartition.topic, topicPartition.partition)
     val newOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, startTimestamp, Request.OrdinaryConsumerId)
-    val pti = partitionMap(topicAndPartition)
+    val pti = partitionMap(topicPartition)
     pti.resetFetchOffset(newOffset)
     pti.resetConsumeOffset(newOffset)
     newOffset
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
     removePartitions(partitions.toSet)
     consumerFetcherManager.addPartitionsWithError(partitions)
+  }
+
+  protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): FetchRequest = {
+    partitionMap.foreach { case ((topicPartition, partitionFetchState)) =>
+      if (partitionFetchState.isReadyForFetch)
+        fetchRequestBuilder.addFetch(topicPartition.topic, topicPartition.partition, partitionFetchState.fetchOffset, fetchSize)
+    }
+
+    new FetchRequest(fetchRequestBuilder.build())
+  }
+
+  protected def fetch(fetchRequest: FetchRequest): Seq[(TopicPartition, PartitionData)] =
+    simpleConsumer.fetch(fetchRequest.underlying).data.map { case (TopicAndPartition(t, p), value) =>
+      new TopicPartition(t, p) -> new PartitionData(value)
+    }
+
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): Map[TopicPartition, Int] = { Map() }
+
+  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
+
+  override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): Map[TopicPartition, Long] = { Map() }
+}
+
+object ConsumerFetcherThread {
+
+  class FetchRequest(val underlying: kafka.api.FetchRequest) extends AbstractFetcherThread.FetchRequest {
+    private lazy val tpToOffset: Map[TopicPartition, Long] = underlying.requestInfo.map { case (tp, fetchInfo) =>
+      new TopicPartition(tp.topic, tp.partition) -> fetchInfo.offset
+    }.toMap
+    def isEmpty: Boolean = underlying.requestInfo.isEmpty
+    def offset(topicPartition: TopicPartition): Long = tpToOffset(topicPartition)
+  }
+
+  class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {
+    def error = underlying.error
+    def toRecords: MemoryRecords = underlying.messages.asInstanceOf[ByteBufferMessageSet].asRecords
+    def highWatermark: Long = underlying.hw
+    def exception: Option[Throwable] =
+      if (error == Errors.NONE) None else Some(ErrorMapping.exceptionFor(error.code))
+
   }
 }

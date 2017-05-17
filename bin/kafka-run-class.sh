@@ -20,62 +20,125 @@ then
   exit 1
 fi
 
+# CYGINW == 1 if Cygwin is detected, else 0.
+if [[ $(uname -a) =~ "CYGWIN" ]]; then
+  CYGWIN=1
+else
+  CYGWIN=0
+fi
+
+if [ -z "$INCLUDE_TEST_JARS" ]; then
+  INCLUDE_TEST_JARS=false
+fi
+
+# Exclude jars not necessary for running commands.
+regex="(-(test|src|scaladoc|javadoc)\.jar|jar.asc)$"
+should_include_file() {
+  if [ "$INCLUDE_TEST_JARS" = true ]; then
+    return 0
+  fi
+  file=$1
+  if [ -z "$(echo "$file" | egrep "$regex")" ] ; then
+    return 0
+  else
+    return 1
+  fi
+}
+
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10.5
+  SCALA_VERSION=2.11.11
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
-	SCALA_BINARY_VERSION=2.10
+  SCALA_BINARY_VERSION=$(echo $SCALA_VERSION | cut -f 1-2 -d '.')
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
-for file in $base_dir/core/build/dependant-libs-${SCALA_VERSION}*/*.jar;
+shopt -s nullglob
+for dir in "$base_dir"/core/build/dependant-libs-${SCALA_VERSION}*;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if [ -z "$CLASSPATH" ] ; then
+    CLASSPATH="$dir/*"
+  else
+    CLASSPATH="$CLASSPATH:$dir/*"
+  fi
 done
 
-for file in $base_dir/examples/build/libs//kafka-examples*.jar;
+for file in "$base_dir"/examples/build/libs/kafka-examples*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar;
+for file in "$base_dir"/clients/build/libs/kafka-clients*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar;
+for file in "$base_dir"/streams/build/libs/kafka-streams*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/clients/build/libs/kafka-clients*.jar;
+for file in "$base_dir"/streams/examples/build/libs/kafka-streams-examples*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/tools/build/libs/kafka-tools*.jar;
+for file in "$base_dir"/streams/build/dependant-libs-${SCALA_VERSION}/rocksdb*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH="$CLASSPATH":"$file"
 done
 
-for file in $base_dir/tools/build/dependant-libs-${SCALA_VERSION}*/*.jar;
+for file in "$base_dir"/tools/build/libs/kafka-tools*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
+done
+
+for dir in "$base_dir"/tools/build/dependant-libs-${SCALA_VERSION}*;
+do
+  CLASSPATH="$CLASSPATH:$dir/*"
+done
+
+for cc_pkg in "api" "transforms" "runtime" "file" "json" "tools"
+do
+  for file in "$base_dir"/connect/${cc_pkg}/build/libs/connect-${cc_pkg}*.jar;
+  do
+    if should_include_file "$file"; then
+      CLASSPATH="$CLASSPATH":"$file"
+    fi
+  done
+  if [ -d "$base_dir/connect/${cc_pkg}/build/dependant-libs" ] ; then
+    CLASSPATH="$CLASSPATH:$base_dir/connect/${cc_pkg}/build/dependant-libs/*"
+  fi
 done
 
 # classpath addition for release
-for file in $base_dir/libs/*.jar;
+for file in "$base_dir"/libs/*;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
 
-for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
+for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if should_include_file "$file"; then
+    CLASSPATH="$CLASSPATH":"$file"
+  fi
 done
+shopt -u nullglob
 
 # JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
@@ -89,13 +152,16 @@ fi
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-    LOG_DIR="$base_dir/logs"
+  LOG_DIR="$base_dir/logs"
 fi
 
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
+  (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
+  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
 else
   # create logs directory
   if [ ! -d "$LOG_DIR" ]; then
@@ -103,11 +169,33 @@ else
   fi
 fi
 
+# If Cygwin is detected, LOG_DIR is converted to Windows format.
+(( CYGWIN )) && LOG_DIR=$(cygpath --path --mixed "${LOG_DIR}")
 KAFKA_LOG4J_OPTS="-Dkafka.logs.dir=$LOG_DIR $KAFKA_LOG4J_OPTS"
 
 # Generic jvm settings you want to add
 if [ -z "$KAFKA_OPTS" ]; then
   KAFKA_OPTS=""
+fi
+
+# Set Debug options if enabled
+if [ "x$KAFKA_DEBUG" != "x" ]; then
+
+    # Use default ports
+    DEFAULT_JAVA_DEBUG_PORT="5005"
+
+    if [ -z "$JAVA_DEBUG_PORT" ]; then
+        JAVA_DEBUG_PORT="$DEFAULT_JAVA_DEBUG_PORT"
+    fi
+
+    # Use the defaults if JAVA_DEBUG_OPTS was not set
+    DEFAULT_JAVA_DEBUG_OPTS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=${DEBUG_SUSPEND_FLAG:-n},address=$JAVA_DEBUG_PORT"
+    if [ -z "$JAVA_DEBUG_OPTS" ]; then
+        JAVA_DEBUG_OPTS="$DEFAULT_JAVA_DEBUG_OPTS"
+    fi
+
+    echo "Enabling Java debug options: $JAVA_DEBUG_OPTS"
+    KAFKA_OPTS="$JAVA_DEBUG_OPTS $KAFKA_OPTS"
 fi
 
 # Which java to use
@@ -124,7 +212,7 @@ fi
 
 # JVM performance options
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
-  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true"
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+DisableExplicitGC -Djava.awt.headless=true"
 fi
 
 
@@ -157,8 +245,11 @@ GC_FILE_SUFFIX='-gc.log'
 GC_LOG_FILE_NAME=''
 if [ "x$GC_LOG_ENABLED" = "xtrue" ]; then
   GC_LOG_FILE_NAME=$DAEMON_NAME$GC_FILE_SUFFIX
-  KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+  KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=100M"
 fi
+
+# If Cygwin is detected, classpath is converted to Windows format.
+(( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then

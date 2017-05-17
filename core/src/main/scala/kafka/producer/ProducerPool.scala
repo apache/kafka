@@ -26,7 +26,7 @@ import kafka.utils.Logging
 
 import scala.collection.mutable.HashMap
 
-
+@deprecated("This object has been deprecated and will be removed in a future release.", "0.10.0.0")
 object ProducerPool {
   /**
    * Used in ProducerPool to initiate a SyncProducer connection with a broker.
@@ -40,6 +40,7 @@ object ProducerPool {
   }
 }
 
+@deprecated("This class has been deprecated and will be removed in a future release.", "0.10.0.0")
 class ProducerPool(val config: ProducerConfig) extends Logging {
   private val syncProducers = new HashMap[Int, SyncProducer]
   private val lock = new Object()

@@ -1,27 +1,33 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.metrics;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 /**
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
@@ -37,16 +43,77 @@ public final class Sensor {
     private final List<KafkaMetric> metrics;
     private final MetricConfig config;
     private final Time time;
+    private volatile long lastRecordTime;
+    private final long inactiveSensorExpirationTimeMs;
 
-    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time) {
+    public enum RecordingLevel {
+        INFO(0, "INFO"), DEBUG(1, "DEBUG");
+
+        private static final RecordingLevel[] ID_TO_TYPE;
+        private static final int MIN_RECORDING_LEVEL_KEY = 0;
+        public static final int MAX_RECORDING_LEVEL_KEY;
+
+        static {
+            int maxRL = -1;
+            for (RecordingLevel level : RecordingLevel.values()) {
+                maxRL = Math.max(maxRL, level.id);
+            }
+            RecordingLevel[] idToName = new RecordingLevel[maxRL + 1];
+            for (RecordingLevel level : RecordingLevel.values()) {
+                idToName[level.id] = level;
+            }
+            ID_TO_TYPE = idToName;
+            MAX_RECORDING_LEVEL_KEY = maxRL;
+        }
+
+        /** an english description of the api--this is for debugging and can change */
+        public final String name;
+
+        /** the permanent and immutable id of an API--this can't change ever */
+        public final short id;
+
+        RecordingLevel(int id, String name) {
+            this.id = (short) id;
+            this.name = name;
+        }
+
+        public static RecordingLevel forId(int id) {
+            if (id < MIN_RECORDING_LEVEL_KEY || id > MAX_RECORDING_LEVEL_KEY)
+                throw new IllegalArgumentException(String.format("Unexpected RecordLevel id `%s`, it should be between `%s` " +
+                    "and `%s` (inclusive)", id, MIN_RECORDING_LEVEL_KEY, MAX_RECORDING_LEVEL_KEY));
+            return ID_TO_TYPE[id];
+        }
+
+        /** Case insensitive lookup by protocol name */
+        public static RecordingLevel forName(String name) {
+            return RecordingLevel.valueOf(name.toUpperCase(Locale.ROOT));
+        }
+
+        public boolean shouldRecord(final int configId) {
+            if (configId == DEBUG.id) {
+                return true;
+            } else {
+                return configId == this.id;
+            }
+        }
+
+    }
+
+    private final RecordingLevel recordingLevel;
+
+    Sensor(Metrics registry, String name, Sensor[] parents, MetricConfig config, Time time,
+           long inactiveSensorExpirationTimeSeconds, RecordingLevel recordingLevel) {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
         this.parents = parents == null ? new Sensor[0] : parents;
-        this.metrics = new ArrayList<KafkaMetric>();
-        this.stats = new ArrayList<Stat>();
+        this.metrics = new ArrayList<>();
+        this.stats = new ArrayList<>();
         this.config = config;
         this.time = time;
+        this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
+        this.lastRecordTime = time.milliseconds();
+        this.recordingLevel = recordingLevel;
         checkForest(new HashSet<Sensor>());
     }
 
@@ -54,8 +121,8 @@ public final class Sensor {
     private void checkForest(Set<Sensor> sensors) {
         if (!sensors.add(this))
             throw new IllegalArgumentException("Circular dependency in sensors: " + name() + " is its own parent.");
-        for (int i = 0; i < parents.length; i++)
-            parents[i].checkForest(sensors);
+        for (Sensor parent : parents)
+            parent.checkForest(sensors);
     }
 
     /**
@@ -69,9 +136,17 @@ public final class Sensor {
      * Record an occurrence, this is just short-hand for {@link #record(double) record(1.0)}
      */
     public void record() {
-        record(1.0);
+        if (shouldRecord()) {
+            record(1.0);
+        }
     }
 
+    /**
+     * @return true if the sensor's record level indicates that the metric will be recorded, false otherwise
+     */
+    public boolean shouldRecord() {
+        return this.recordingLevel.shouldRecord(config.recordLevel().id);
+    }
     /**
      * Record a value with this sensor
      * @param value The value to record
@@ -79,7 +154,9 @@ public final class Sensor {
      *         bound
      */
     public void record(double value) {
-        record(value, time.milliseconds());
+        if (shouldRecord()) {
+            record(value, time.milliseconds());
+        }
     }
 
     /**
@@ -91,29 +168,42 @@ public final class Sensor {
      *         bound
      */
     public void record(double value, long timeMs) {
-        synchronized (this) {
-            // increment all the stats
-            for (int i = 0; i < this.stats.size(); i++)
-                this.stats.get(i).record(config, value, timeMs);
-            checkQuotas(timeMs);
+        record(value, timeMs, true);
+    }
+
+    public void record(double value, long timeMs, boolean checkQuotas) {
+        if (shouldRecord()) {
+            this.lastRecordTime = timeMs;
+            synchronized (this) {
+                // increment all the stats
+                for (Stat stat : this.stats)
+                    stat.record(config, value, timeMs);
+                if (checkQuotas)
+                    checkQuotas(timeMs);
+            }
+            for (Sensor parent : parents)
+                parent.record(value, timeMs, checkQuotas);
         }
-        for (int i = 0; i < parents.length; i++)
-            parents[i].record(value, timeMs);
     }
 
     /**
      * Check if we have violated our quota for any metric that has a configured quota
-     * @param timeMs
      */
-    private void checkQuotas(long timeMs) {
-        for (int i = 0; i < this.metrics.size(); i++) {
-            KafkaMetric metric = this.metrics.get(i);
+    public void checkQuotas() {
+        checkQuotas(time.milliseconds());
+    }
+
+    public void checkQuotas(long timeMs) {
+        for (KafkaMetric metric : this.metrics) {
             MetricConfig config = metric.config();
             if (config != null) {
                 Quota quota = config.quota();
                 if (quota != null) {
-                    if (!quota.acceptable(metric.value(timeMs)))
-                        throw new QuotaViolationException(metric.metricName() + " is in violation of its quota of " + quota.bound());
+                    double value = metric.value(timeMs);
+                    if (!quota.acceptable(value)) {
+                        throw new QuotaViolationException(metric.metricName(), value,
+                            quota.bound());
+                    }
                 }
             }
         }
@@ -167,8 +257,15 @@ public final class Sensor {
         this.stats.add(stat);
     }
 
+    /**
+     * Return true if the Sensor is eligible for removal due to inactivity.
+     *        false otherwise
+     */
+    public boolean hasExpired() {
+        return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
+    }
+
     synchronized List<KafkaMetric> metrics() {
         return Collections.unmodifiableList(this.metrics);
     }
-
 }

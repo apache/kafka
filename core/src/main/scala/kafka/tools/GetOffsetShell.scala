@@ -20,10 +20,10 @@ package kafka.tools
 
 import kafka.consumer._
 import joptsimple._
-import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
+import kafka.api.{OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
-import kafka.utils.{ToolsUtils, CommandLineUtils}
+import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 
 
 object GetOffsetShell {
@@ -47,6 +47,7 @@ object GetOffsetShell {
                            .withRequiredArg
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
+                           .defaultsTo(-1)
     val nOffsetsOpt = parser.accepts("offsets", "number of offsets returned")
                            .withRequiredArg
                            .describedAs("count")
@@ -63,7 +64,7 @@ object GetOffsetShell {
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, timeOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt)
 
     val clientId = "GetOffsetShell"
     val brokerList = options.valueOf(brokerListOpt)
@@ -76,10 +77,10 @@ object GetOffsetShell {
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
     val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers, clientId, maxWaitMs).topicsMetadata
-    if(topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic)) {
+    if(topicsMetadata.size != 1 || !topicsMetadata.head.topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + " probably the topic does not exist, run ").format(topic) +
         "kafka-list-topic.sh to verify")
-      System.exit(1)
+      Exit.exit(1)
     }
     val partitions =
       if(partitionList == "") {

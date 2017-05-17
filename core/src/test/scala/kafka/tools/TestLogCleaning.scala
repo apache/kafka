@@ -21,12 +21,15 @@ import joptsimple.OptionParser
 import java.util.Properties
 import java.util.Random
 import java.io._
+
 import kafka.consumer._
 import kafka.serializer._
 import kafka.utils._
-import kafka.log.FileMessageSet
 import kafka.log.Log
-import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.record.FileRecords
+
+import scala.collection.JavaConverters._
 
 /**
  * This is a torture test that runs against an existing broker. Here is how it works:
@@ -97,7 +100,7 @@ object TestLogCleaning {
 
     if(options.has(dumpOpt)) {
       dumpLog(new File(options.valueOf(dumpOpt)))
-      System.exit(0)
+      Exit.exit(0)
     }
 
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, zkConnectOpt, numMessagesOpt)
@@ -135,15 +138,15 @@ object TestLogCleaning {
   
   def dumpLog(dir: File) {
     require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
-    for(file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
-      val ms = new FileMessageSet(new File(dir, file))
-      for(entry <- ms) {
-        val key = TestUtils.readString(entry.message.key)
-        val content = 
-          if(entry.message.isNull)
+    for (file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
+      val fileRecords = FileRecords.open(new File(dir, file))
+      for (entry <- fileRecords.records.asScala) {
+        val key = TestUtils.readString(entry.key)
+        val content =
+          if (!entry.hasValue)
             null
           else
-            TestUtils.readString(entry.message.payload)
+            TestUtils.readString(entry.value)
         println("offset = %s, key = %s, content = %s".format(entry.offset, key, content))
       }
     }
@@ -247,7 +250,7 @@ object TestLogCleaning {
                       dups: Int,
                       percentDeletes: Int): File = {
     val producerProps = new Properties
-    producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
+    producerProps.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
@@ -301,7 +304,7 @@ object TestLogCleaning {
           consumedWriter.newLine()
         }
       } catch {
-        case e: ConsumerTimeoutException => 
+        case _: ConsumerTimeoutException =>
       }
     }
     consumedWriter.close()
@@ -311,9 +314,9 @@ object TestLogCleaning {
   
 }
 
-case class TestRecord(val topic: String, val key: Int, val value: Long, val delete: Boolean) {
+case class TestRecord(topic: String, key: Int, value: Long, delete: Boolean) {
   def this(pieces: Array[String]) = this(pieces(0), pieces(1).toInt, pieces(2).toLong, pieces(3) == "d")
   def this(line: String) = this(line.split("\t"))
-  override def toString() = topic + "\t" +  key + "\t" + value + "\t" + (if(delete) "d" else "u")
+  override def toString = topic + "\t" +  key + "\t" + value + "\t" + (if(delete) "d" else "u")
   def topicAndKey = topic + key
 }
