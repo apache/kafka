@@ -26,8 +26,8 @@ import java.nio.ByteBuffer;
 
 public class WindowStoreUtils {
 
-    private static final int SEQNUM_SIZE = 4;
-    private static final int TIMESTAMP_SIZE = 8;
+    static final int SEQNUM_SIZE = 4;
+    static final int TIMESTAMP_SIZE = 8;
 
     /** Inner byte array serde used for segments */
     static final Serde<Bytes> INNER_KEY_SERDE = Serdes.Bytes();

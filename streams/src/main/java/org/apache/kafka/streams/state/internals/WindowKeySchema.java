@@ -21,9 +21,15 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import java.nio.ByteBuffer;
 import java.util.List;
 
 class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+
+    private static final int SUFFIX_SIZE = WindowStoreUtils.TIMESTAMP_SIZE + WindowStoreUtils.SEQNUM_SIZE;
+    private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
+    private static final int MIN_KEY_LENGTH = 1;
+
     private StateSerdes<Bytes, byte[]> serdes;
 
     @Override
@@ -33,12 +39,56 @@ class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
-        return WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes);
+        final byte[] bytes = key.get();
+        ByteBuffer rangeEnd = ByteBuffer.allocate(bytes.length + SUFFIX_SIZE);
+
+        final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
+            .putLong(to)
+            .putInt(Integer.MAX_VALUE)
+            .array();
+
+        int i = 0;
+        while (i < bytes.length && (
+            i < MIN_KEY_LENGTH // assumes keys are at least one byte long
+            || bytes[i] >= maxSuffix[0]
+            )) {
+            rangeEnd.put(bytes[i++]);
+        }
+
+        rangeEnd.put(maxSuffix);
+        rangeEnd.flip();
+
+        byte[] res = new byte[rangeEnd.remaining()];
+        ByteBuffer.wrap(res).put(rangeEnd);
+        return Bytes.wrap(res);
     }
 
     @Override
     public Bytes lowerRange(final Bytes key, final long from) {
+        final byte[] bytes = key.get();
+        ByteBuffer rangeStart = ByteBuffer.allocate(bytes.length + SUFFIX_SIZE);
+        // any key in the range would start at least with the given prefix to be
+        // in the range, and have at least SUFFIX_SIZE number of trailing zero bytes.
+
+        // unless there is a maximum key length, you can keep appending more zero bytes
+        // to keyFrom to create a key that will match the range, yet that would precede
+        // WindowStoreUtils.toBinaryKey(keyFrom, from, 0) in byte order
+        return Bytes.wrap(
+            rangeStart
+                .put(bytes)
+                .put(MIN_SUFFIX)
+                .array()
+        );
+    }
+
+    @Override
+    public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         return WindowStoreUtils.toBinaryKey(key, Math.max(0, from), 0, serdes);
+    }
+
+    @Override
+    public Bytes upperRangeFixedSize(final Bytes key, final long to) {
+        return WindowStoreUtils.toBinaryKey(key, to, Integer.MAX_VALUE, serdes);
     }
 
     @Override

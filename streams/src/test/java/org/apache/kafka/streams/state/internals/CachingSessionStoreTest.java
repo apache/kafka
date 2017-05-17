@@ -90,6 +90,8 @@ public class CachingSessionStoreTest {
         cachingStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 1L);
         cachingStore.put(new Windowed<>("b", new SessionWindow(0, 0)), 1L);
 
+        assertEquals(3, cache.size());
+
         final KeyValueIterator<Windowed<String>, Long> a = cachingStore.findSessions("a", 0, 0);
         final KeyValueIterator<Windowed<String>, Long> b = cachingStore.findSessions("b", 0, 0);
 
@@ -97,7 +99,17 @@ public class CachingSessionStoreTest {
         assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), b.next());
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
-        assertEquals(3, cache.size());
+
+        final KeyValueIterator<Windowed<String>, Long> all = cachingStore.findSessions("a", "b", 0, 0);
+        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), all.next());
+        assertEquals(KeyValue.pair(new Windowed<>("aa", new SessionWindow(0, 0)), 1L), all.next());
+        assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L), all.next());
+        assertFalse(all.hasNext());
+
+        final KeyValueIterator<Windowed<String>, Long> some = cachingStore.findSessions("aa", "b", 0, 0);
+        assertEquals(KeyValue.pair(new Windowed<>("aa", new SessionWindow(0, 0)), 1L), some.next());
+        assertEquals(KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), 1L),  some.next());
+        assertFalse(all.hasNext());
     }
 
     @Test
@@ -165,6 +177,29 @@ public class CachingSessionStoreTest {
         assertEquals(a2, results.next().key);
         assertEquals(a3, results.next().key);
         assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void shouldFetchRangeCorrectlyAcrossSegments() throws Exception {
+        final Windowed<String> a1 = new Windowed<>("a", new SessionWindow(0, 0));
+        final Windowed<String> aa1 = new Windowed<>("aa", new SessionWindow(0, 0));
+        final Windowed<String> a2 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL, Segments.MIN_SEGMENT_INTERVAL));
+        final Windowed<String> a3 = new Windowed<>("a", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        final Windowed<String> aa3 = new Windowed<>("aa", new SessionWindow(Segments.MIN_SEGMENT_INTERVAL * 2, Segments.MIN_SEGMENT_INTERVAL * 2));
+        cachingStore.put(a1, 1L);
+        cachingStore.put(aa1, 1L);
+        cachingStore.put(a2, 2L);
+        cachingStore.put(a3, 3L);
+        cachingStore.put(aa3, 3L);
+        cachingStore.flush();
+
+        final KeyValueIterator<Windowed<String>, Long> rangeResults = cachingStore.findSessions("a", "aa", 0, Segments.MIN_SEGMENT_INTERVAL * 2);
+        assertEquals(a1, rangeResults.next().key);
+        assertEquals(aa1, rangeResults.next().key);
+        assertEquals(a2, rangeResults.next().key);
+        assertEquals(a3, rangeResults.next().key);
+        assertEquals(aa3, rangeResults.next().key);
+        assertFalse(rangeResults.hasNext());
     }
 
     @Test

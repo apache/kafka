@@ -63,6 +63,25 @@ public class SessionKeySchemaTest {
         assertThat(results, equalTo(Arrays.asList(1, 5)));
     }
 
+    @Test
+    public void boundsSanity() throws Exception {
+        // easy
+        Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{1}), Long.MAX_VALUE);
+        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{1}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))));
+
+        // hard
+        upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0, 1}), Long.MAX_VALUE);
+        assertThat(upper, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(Long.MAX_VALUE, Long.MAX_VALUE)))));
+
+        // easy
+        Bytes lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0}), Long.MAX_VALUE);
+        assertThat(lower, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new SessionWindow(0, 0)))));
+
+        // hard
+        lower = sessionKeySchema.lowerRange(Bytes.wrap(new byte[]{0, 1}), Long.MAX_VALUE);
+        assertThat(lower, equalTo(SessionKeySerde.bytesToBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 1}), new SessionWindow(0, 0)))));
+    }
+
 
     private List<Integer> getValues(final HasNextCondition hasNextCondition) {
         final List<Integer> results = new ArrayList<>();
