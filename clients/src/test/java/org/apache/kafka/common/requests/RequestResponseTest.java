@@ -230,6 +230,12 @@ public class RequestResponseTest {
         checkRequest(createDeleteAclsRequest());
         checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."));
         checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion());
+        checkRequest(createAlterConfigsRequest());
+        checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException());
+        checkResponse(createAlterConfigsResponse(), 0);
+        checkRequest(createDescribeConfigsRequest());
+        checkErrorResponse(createDescribeConfigsRequest(), new UnknownServerException());
+        checkResponse(createDescribeConfigsResponse(), 0);
     }
 
     @Test
@@ -1086,4 +1092,40 @@ public class RequestResponseTest {
         }
     }
 
+    private DescribeConfigsRequest createDescribeConfigsRequest() {
+        return new DescribeConfigsRequest((short) 0,
+                asList(new Resource(ResourceType.BROKER, "0"), new Resource(ResourceType.TOPIC, "topic")));
+    }
+
+    private DescribeConfigsResponse createDescribeConfigsResponse() {
+        Map<Resource, DescribeConfigsResponse.Config> configs = new HashMap<>();
+        List<DescribeConfigsResponse.ConfigEntry> configEntries = asList(
+                new DescribeConfigsResponse.ConfigEntry("config_name", "config_value", false, true, false),
+                new DescribeConfigsResponse.ConfigEntry("another_name", "another value", true, false, true)
+        );
+        configs.put(new Resource(ResourceType.BROKER, "0"), new DescribeConfigsResponse.Config(
+                new ApiError(Errors.NONE, null), configEntries));
+        configs.put(new Resource(ResourceType.TOPIC, "topic"), new DescribeConfigsResponse.Config(
+                new ApiError(Errors.NONE, null), Collections.<DescribeConfigsResponse.ConfigEntry>emptyList()));
+        return new DescribeConfigsResponse(200, configs);
+    }
+
+    private AlterConfigsRequest createAlterConfigsRequest() {
+        Map<Resource, AlterConfigsRequest.Config> configs = new HashMap<>();
+        List<AlterConfigsRequest.ConfigEntry> configEntries = asList(
+                new AlterConfigsRequest.ConfigEntry("config_name", "config_value"),
+                new AlterConfigsRequest.ConfigEntry("another_name", "another value")
+        );
+        configs.put(new Resource(ResourceType.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
+        configs.put(new Resource(ResourceType.TOPIC, "topic"),
+                new AlterConfigsRequest.Config(Collections.<AlterConfigsRequest.ConfigEntry>emptyList()));
+        return new AlterConfigsRequest((short) 0, configs, false);
+    }
+
+    private AlterConfigsResponse createAlterConfigsResponse() {
+        Map<Resource, ApiError> errors = new HashMap<>();
+        errors.put(new Resource(ResourceType.BROKER, "0"), new ApiError(Errors.NONE, null));
+        errors.put(new Resource(ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
+        return new AlterConfigsResponse(20, errors);
+    }
 }
