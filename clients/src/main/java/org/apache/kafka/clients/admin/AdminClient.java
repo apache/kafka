@@ -276,24 +276,3 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
 }
-/*
-
-
-
-public class DescribeConfigsResult {
-    public Map<ConfigResource, KafkaFuture<Config>> results()
-    public KafkaFuture<Map<ConfigResource, Config>> all();
-}
-
-public class AlterConfigsOptions {
-    public AlterConfigsOptions timeoutMs(Integer timeout);
-    public AlterConfigsOptions validateOnly(boolean validateOnly);
-}
-
-public class AlterConfigsResult {
-    public KafkaFuture<Void> all();
-    public Map<ConfigResource, KafkaFuture<Void>> results();
-}
-
-
- */
