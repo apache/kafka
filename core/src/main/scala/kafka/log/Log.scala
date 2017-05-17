@@ -113,9 +113,10 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
  *                       Other activities such as log cleaning are not affected by logStartOffset.
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
+ * @param brokerTopicStats Container for Broker Topic Yammer Metrics
  * @param time The time instance used for checking the clock
- * @param maxPidExpirationMs The maximum amount of time to wait before a PID is considered expired
- * @param pidExpirationCheckIntervalMs How often to check for PIDs which need to be expired
+ * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
+ * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  */
 @threadsafe
 class Log(@volatile var dir: File,
@@ -123,9 +124,10 @@ class Log(@volatile var dir: File,
           @volatile var logStartOffset: Long = 0L,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
+          brokerTopicStats: BrokerTopicStats,
           time: Time = Time.SYSTEM,
-          val maxPidExpirationMs: Int = 60 * 60 * 1000,
-          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
+          val producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -149,7 +151,7 @@ class Log(@volatile var dir: File,
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
-  private val producerStateManager = new ProducerStateManager(topicPartition, dir, maxPidExpirationMs)
+  private val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -207,7 +209,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
-  }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
+  }, period = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
   /** The name of this log */
   def name  = dir.getName()
@@ -306,7 +308,7 @@ class Log(@volatile var dir: File,
   }
 
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
-    val stateManager = new ProducerStateManager(topicPartition, dir, maxPidExpirationMs)
+    val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
       val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
@@ -314,6 +316,7 @@ class Log(@volatile var dir: File,
       if (fetchDataInfo != null)
         loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
+    stateManager.updateMapEndOffset(segment.baseOffset)
     val bytesTruncated = segment.recover(config.maxMessageSize, stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
@@ -443,10 +446,8 @@ class Log(@volatile var dir: File,
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      if (batch.hasProducerId) {
-        val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducers(batch, loadedProducers, completedTxns, lastEntry, loadingFromLog = true)
-      }
+      if (batch.hasProducerId)
+        updateProducers(batch, loadedProducers, completedTxns, loadingFromLog = true)
     }
     loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
@@ -560,8 +561,8 @@ class Log(@volatile var dir: File,
               if (batch.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
-                BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-                BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+                brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+                brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
                 throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
                   .format(batch.sizeInBytes, config.maxMessageSize))
               }
@@ -625,7 +626,7 @@ class Log(@volatile var dir: File,
           segment.updateTxnIndex(completedTxn, lastStableOffset)
         }
 
-        // always update the last pid map offset so that the snapshot reflects the current offset
+        // always update the last producer id map offset so that the snapshot reflects the current offset
         // even if there isn't any idempotent data being written
         producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
 
@@ -692,7 +693,7 @@ class Log(@volatile var dir: File,
       // the last appended entry to the client.
       if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
         return (updatedProducers, completedTxns.toList, maybeLastEntry)
-      updateProducers(batch, updatedProducers, completedTxns, maybeLastEntry, loadingFromLog = false)
+      updateProducers(batch, updatedProducers, completedTxns, loadingFromLog = false)
     }
     (updatedProducers, completedTxns.toList, None)
   }
@@ -746,8 +747,8 @@ class Log(@volatile var dir: File,
       // Check if the message sizes are valid.
       val batchSize = batch.sizeInBytes
       if (batchSize > config.maxMessageSize) {
-        BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+        brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+        brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
         throw new RecordTooLargeException(s"The record batch size is $batchSize bytes which exceeds the maximum configured " +
           s"value of ${config.maxMessageSize}.")
       }
@@ -777,12 +778,10 @@ class Log(@volatile var dir: File,
   private def updateProducers(batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
                               completedTxns: ListBuffer[CompletedTxn],
-                              lastEntry: Option[ProducerIdEntry],
                               loadingFromLog: Boolean): Unit = {
-    val pid = batch.producerId
-    val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
-    val shouldValidateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
-    val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
+    val producerId = batch.producerId
+    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, loadingFromLog))
+    val maybeCompletedTxn = appendInfo.append(batch)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 
@@ -1551,7 +1550,7 @@ object Log {
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix)
 
   /**
-   * Construct a PID snapshot file using the given offset.
+   * Construct a producer id snapshot file using the given offset.
    *
    * @param dir The directory in which the log will reside
    * @param offset The last offset (exclusive) included in the snapshot

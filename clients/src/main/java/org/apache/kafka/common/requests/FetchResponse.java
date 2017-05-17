@@ -56,7 +56,7 @@ public class FetchResponse extends AbstractResponse {
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
     // aborted transaction field names
-    private static final String PID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
 
     private static final int DEFAULT_THROTTLE_TIME = 0;
@@ -211,7 +211,7 @@ public class FetchResponse extends AbstractResponse {
                         abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
                         for (Object abortedTransactionObj : abortedTransactionsArray) {
                             Struct abortedTransactionStruct = (Struct) abortedTransactionObj;
-                            long producerId = abortedTransactionStruct.getLong(PID_KEY_NAME);
+                            long producerId = abortedTransactionStruct.getLong(PRODUCER_ID_KEY_NAME);
                             long firstOffset = abortedTransactionStruct.getLong(FIRST_OFFSET_KEY_NAME);
                             abortedTransactions.add(new AbortedTransaction(producerId, firstOffset));
                         }
@@ -339,7 +339,7 @@ public class FetchResponse extends AbstractResponse {
                         List<Struct> abortedTransactionStructs = new ArrayList<>(fetchPartitionData.abortedTransactions.size());
                         for (AbortedTransaction abortedTransaction : fetchPartitionData.abortedTransactions) {
                             Struct abortedTransactionStruct = partitionDataHeader.instance(ABORTED_TRANSACTIONS_KEY_NAME);
-                            abortedTransactionStruct.set(PID_KEY_NAME, abortedTransaction.producerId);
+                            abortedTransactionStruct.set(PRODUCER_ID_KEY_NAME, abortedTransaction.producerId);
                             abortedTransactionStruct.set(FIRST_OFFSET_KEY_NAME, abortedTransaction.firstOffset);
                             abortedTransactionStructs.add(abortedTransactionStruct);
                         }

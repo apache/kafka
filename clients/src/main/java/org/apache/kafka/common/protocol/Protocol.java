@@ -1399,9 +1399,13 @@ public class Protocol {
     );
     public static final Schema ADD_PARTITIONS_TO_TXN_RESPONSE_V0 = new Schema(
             newThrottleTimeField(),
-            new Field("error_code",
-                    INT16,
-                    "An integer error code.")
+            new Field("errors",
+                      new ArrayOf(new Schema(new Field("topic", STRING),
+                                   new Field("partition_errors",
+                                             new ArrayOf(new Schema(new Field("partition",
+                                                                              INT32),
+                                                                    new Field("error_code",
+                                                                              INT16)))))))
     );
 
     public static final Schema[] ADD_PARTITIONS_TO_TXN_REQUEST = new Schema[] {ADD_PARTITIONS_TO_TXN_REQUEST_V0};
@@ -1521,9 +1525,6 @@ public class Protocol {
             new Field("producer_epoch",
                     INT16,
                     "Current epoch associated with the producer id."),
-            new Field("retention_time",
-                    INT64,
-                    "The time in ms to retain the offset."),
             new Field("topics",
                     new ArrayOf(new Schema(
                             new Field("topic", STRING),

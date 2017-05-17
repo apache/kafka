@@ -361,7 +361,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                             TimestampType timestampType,
                             long baseTimestamp,
                             long maxTimestamp,
-                            long pid,
+                            long producerId,
                             short epoch,
                             int sequence,
                             boolean isTransactional,
@@ -384,7 +384,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
-        buffer.putLong(position + PRODUCER_ID_OFFSET, pid);
+        buffer.putLong(position + PRODUCER_ID_OFFSET, producerId);
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);

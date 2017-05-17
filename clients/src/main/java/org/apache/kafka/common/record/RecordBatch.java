@@ -132,9 +132,9 @@ public interface RecordBatch extends Iterable<Record> {
     byte magic();
 
     /**
-     * Get the producer ID (PID) for this log record batch. For older magic versions, this will return 0.
+     * Get the producer id for this log record batch. For older magic versions, this will return 0.
      *
-     * @return The PID or -1 if there is none
+     * @return The producer id or -1 if there is none
      */
     long producerId();
 

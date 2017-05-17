@@ -387,8 +387,8 @@ public class SenderTest {
         }, new InitProducerIdResponse(0, Errors.NONE, producerId, (short) 0));
         sender.run(time.milliseconds());
         assertTrue(transactionManager.hasProducerId());
-        assertEquals(producerId, transactionManager.pidAndEpoch().producerId);
-        assertEquals((short) 0, transactionManager.pidAndEpoch().epoch);
+        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test

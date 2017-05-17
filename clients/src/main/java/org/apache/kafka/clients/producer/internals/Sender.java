@@ -108,7 +108,7 @@ public class Sender implements Runnable {
     /* current request API versions supported by the known brokers */
     private final ApiVersions apiVersions;
 
-    /* all the state related to transactions, in particular the PID, epoch, and sequence numbers */
+    /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
     public Sender(KafkaClient client,
@@ -197,8 +197,15 @@ public class Sender implements Runnable {
 
     private long sendProducerData(long now) {
         Cluster cluster = metadata.fetch();
-        maybeWaitForPid();
+        maybeWaitForProducerId();
 
+        if (transactionManager != null && transactionManager.isInErrorState()) {
+            final KafkaException exception = transactionManager.lastError() instanceof KafkaException
+                    ? (KafkaException) transactionManager.lastError()
+                    : new KafkaException(transactionManager.lastError());
+            this.accumulator.abortBatches(exception);
+            return Long.MAX_VALUE;
+        }
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -237,7 +244,7 @@ public class Sender implements Runnable {
         List<ProducerBatch> expiredBatches = this.accumulator.abortExpiredBatches(this.requestTimeout, now);
 
         boolean needsTransactionStateReset = false;
-        // Reset the PID if an expired batch has previously been sent to the broker. Also update the metrics
+        // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetProducerId to understand why
         // we need to reset the producer id here.
         for (ProducerBatch expiredBatch : expiredBatches) {
@@ -370,19 +377,25 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private void maybeWaitForPid() {
-        // If this is a transactional producer, the PID will be received when recovering transactions in the
+    private void maybeWaitForProducerId() {
+        // If this is a transactional producer, the producer id will be received when recovering transactions in the
         // initTransactions() method of the producer.
         if (transactionManager == null || transactionManager.isTransactional())
             return;
 
-        while (!transactionManager.hasProducerId()) {
+        while (!transactionManager.hasProducerId() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitPidRequest(node);
+
                     if (response.hasResponse() && (response.responseBody() instanceof InitProducerIdResponse)) {
                         InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
+                        Exception exception = initProducerIdResponse.error().exception();
+                        if (exception != null && !(exception instanceof  RetriableException)) {
+                            transactionManager.setError(exception);
+                            return;
+                        }
                         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
                                 initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
                         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
@@ -395,12 +408,13 @@ public class Sender implements Runnable {
                             "We will back off and try again.");
                 }
             } catch (Exception e) {
-                log.warn("Received an exception while trying to get a pid. Will back off and retry.", e);
+                log.warn("Received an exception while trying to get a producer id. Will back off and retry.", e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
+
     }
 
     /**
@@ -459,15 +473,16 @@ public class Sender implements Runnable {
                         error);
                 if (transactionManager == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionManager.pidAndEpoch().producerId == batch.producerId() && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
-                    // If idempotence is enabled only retry the request if the current PID is the same as the pid of the batch.
+                } else if (transactionManager.producerIdAndEpoch().producerId == batch.producerId() &&
+                        transactionManager.producerIdAndEpoch().epoch == batch.producerEpoch()) {
+                    // If idempotence is enabled only retry the request if the current producer id is the same as the producer id of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
                             transactionManager.sequenceNumber(batch.topicPartition));
                     reenqueueBatch(batch, now);
                 } else {
                     failBatch(batch, response, new OutOfOrderSequenceException("Attempted to retry sending a " +
                             "batch but the producer id changed from " + batch.producerId() + " to " +
-                            transactionManager.pidAndEpoch().producerId + " in the mean time. This batch will be dropped."));
+                            transactionManager.producerIdAndEpoch().producerId + " in the mean time. This batch will be dropped."));
                     this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
                 }
             } else {
@@ -476,7 +491,7 @@ public class Sender implements Runnable {
                     exception = new TopicAuthorizationException(batch.topicPartition.topic());
                 else
                     exception = error.exception();
-                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionManager.pidAndEpoch().producerId)
+                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionManager.producerIdAndEpoch().producerId)
                     log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
                                     "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
                             correlationId, batch.topicPartition, response.baseOffset);
@@ -494,8 +509,8 @@ public class Sender implements Runnable {
         } else {
             completeBatch(batch, response);
 
-            if (transactionManager != null && transactionManager.pidAndEpoch().producerId == batch.producerId()
-                    && transactionManager.pidAndEpoch().epoch == batch.producerEpoch()) {
+            if (transactionManager != null && transactionManager.producerIdAndEpoch().producerId == batch.producerId()
+                    && transactionManager.producerIdAndEpoch().epoch == batch.producerEpoch()) {
                 transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
                 log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
                         transactionManager.sequenceNumber(batch.topicPartition));
@@ -519,7 +534,7 @@ public class Sender implements Runnable {
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
         if (transactionManager != null && !transactionManager.isTransactional()
-                && batch.producerId() == transactionManager.pidAndEpoch().producerId) {
+                && batch.producerId() == transactionManager.producerIdAndEpoch().producerId) {
             // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
             // about the previously committed message. Note that this will discard the producer id and sequence
             // numbers for all existing partitions.
