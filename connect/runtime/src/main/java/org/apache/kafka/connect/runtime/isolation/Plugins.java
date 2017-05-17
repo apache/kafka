@@ -39,12 +39,12 @@ import java.util.Set;
 
 public class Plugins {
     private static final Logger log = LoggerFactory.getLogger(Plugins.class);
-
     private final DelegatingClassLoader delegatingLoader;
 
     public Plugins(Map<String, String> props) {
         List<String> pluginLocations = WorkerConfig.pluginLocations(props);
         delegatingLoader = newDelegatingClassLoader(pluginLocations);
+        delegatingLoader.initLoaders();
     }
 
     private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {

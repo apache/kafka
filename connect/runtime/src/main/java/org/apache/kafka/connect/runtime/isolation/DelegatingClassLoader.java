@@ -64,8 +64,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.transformations = new TreeSet<>();
-        initLoaders();
-        addAllAliases();
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
@@ -105,13 +103,14 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private static PluginClassLoader newPluginClassLoader(
             final URL pluginLocation,
-            final URL[] jars
+            final URL[] jars,
+            final ClassLoader parent
     ) {
         return (PluginClassLoader) AccessController.doPrivileged(
                 new PrivilegedAction() {
                     @Override
                     public Object run() {
-                        return new PluginClassLoader(pluginLocation, jars);
+                        return new PluginClassLoader(pluginLocation, jars, parent);
                     }
                 }
         );
@@ -131,7 +130,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
-    private void initLoaders() {
+    protected void initLoaders() {
         for (String path : pluginPaths) {
             try {
                 Path pluginPath = Paths.get(path).toAbsolutePath();
@@ -146,7 +145,8 @@ public class DelegatingClassLoader extends URLClassLoader {
                         }
                         PluginClassLoader loader = newPluginClassLoader(
                                 pluginLocation.toUri().toURL(),
-                                jars
+                                jars,
+                                this
                         );
 
                         PluginScanResult plugins = scanPluginPath(loader, jars);
@@ -171,6 +171,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 log.error("Could not instantiate plugins in: {}. Ignoring: {}", path, e);
             }
         }
+        addAllAliases();
     }
 
     private PluginScanResult scanPluginPath(
