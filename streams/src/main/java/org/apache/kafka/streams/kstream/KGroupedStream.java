@@ -951,35 +951,35 @@ public interface KGroupedStream<K, V> {
                                          final Serde<T> aggValueSerde,
                                          final StateStoreSupplier<SessionStore> storeSupplier);
 
-    <T> KCogroupedStream<K, K, T> cogroup(final Initializer<T> initializer,
+    <T> CogroupedKStream<K, K, T> cogroup(final Initializer<T> initializer,
                                           final Aggregator<? super K, ? super V, T> aggregator,
                                           final Serde<T> aggValueSerde,
                                           final String storeName);
 
-    <T> KCogroupedStream<K, K, T> cogroup(final Initializer<T> initializer,
+    <T> CogroupedKStream<K, K, T> cogroup(final Initializer<T> initializer,
                                           final Aggregator<? super K, ? super V, T> aggregator,
                                           final StateStoreSupplier<KeyValueStore> storeSupplier);
 
-    <T> KCogroupedStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
+    <T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
                                                     final Aggregator<? super K, ? super V, T> aggregator,
                                                     final Merger<? super K, T> sessionMerger,
                                                     final SessionWindows sessionWindows,
                                                     final Serde<T> aggValueSerde,
                                                     final String storeName);
 
-    <T> KCogroupedStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
+    <T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
                                                     final Aggregator<? super K, ? super V, T> aggregator,
                                                     final Merger<? super K, T> sessionMerger,
                                                     final SessionWindows sessionWindows,
                                                     final StateStoreSupplier<SessionStore> storeSupplier);
 
-    <W extends Window, T> KCogroupedStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
+    <W extends Window, T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
                                                                       final Aggregator<? super K, ? super V, T> aggregator,
                                                                       final Windows<W> windows,
                                                                       final Serde<T> aggValueSerde,
                                                                       final String storeName);
 
-    <W extends Window, T> KCogroupedStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
+    <W extends Window, T> CogroupedKStream<K, Windowed<K>, T> cogroup(final Initializer<T> initializer,
                                                                       final Aggregator<? super K, ? super V, T> aggregator,
                                                                       final Windows<W> windows,
                                                                       final StateStoreSupplier<WindowStore> storeSupplier);

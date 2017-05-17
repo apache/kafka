@@ -26,7 +26,7 @@ import java.util.Set;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.kstream.KCogroupedStream;
+import org.apache.kafka.streams.kstream.CogroupedKStream;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
@@ -39,7 +39,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 
-class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
+class CogroupedKStreamImpl<K, RK, V> implements CogroupedKStream<K, RK, V> {
 
     private static final String COGROUP_AGGREGATE_NAME = "KSTREAM-COGROUP-AGGREGATE-";
     private static final String COGROUP_NAME = "KSTREAM-COGROUP-";
@@ -59,7 +59,7 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
     private final Map<KGroupedStream<K, ?>, KStreamAggProcessorSupplier> cogroups = new HashMap<>();
     private boolean aggregated = false;
 
-    <T> KCogroupedStreamImpl(final KStreamBuilder topology,
+    <T> CogroupedKStreamImpl(final KStreamBuilder topology,
                              final KGroupedStream<K, T> groupedStream,
                              final Initializer<V> initializer,
                              final Aggregator<? super K, ? super T, V> aggregator,
@@ -74,7 +74,7 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
         cogroup(groupedStream, aggregator);
     }
 
-    <T> KCogroupedStreamImpl(final KStreamBuilder topology,
+    <T> CogroupedKStreamImpl(final KStreamBuilder topology,
                              final KGroupedStream<K, T> groupedStream,
                              final Initializer<V> initializer,
                              final Aggregator<? super K, ? super T, V> aggregator,
@@ -91,7 +91,7 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
         cogroup(groupedStream, aggregator);
     }
 
-    <W extends Window, T> KCogroupedStreamImpl(final KStreamBuilder topology,
+    <W extends Window, T> CogroupedKStreamImpl(final KStreamBuilder topology,
                                                final KGroupedStream<K, T> groupedStream,
                                                final Initializer<V> initializer,
                                                final Aggregator<? super K, ? super T, V> aggregator,
@@ -108,7 +108,7 @@ class KCogroupedStreamImpl<K, RK, V> implements KCogroupedStream<K, RK, V> {
     }
 
     @Override
-    public <T> KCogroupedStream<K, RK, V> cogroup(final KGroupedStream<K, T> groupedStream,
+    public <T> CogroupedKStream<K, RK, V> cogroup(final KGroupedStream<K, T> groupedStream,
                                               final Aggregator<? super K, ? super T, V> aggregator) {
         Objects.requireNonNull(groupedStream, "groupedStream can't be null");
         Objects.requireNonNull(aggregator, "aggregator can't be null");
