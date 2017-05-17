@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 
 import kafka.common.KafkaException
 import kafka.log.LogConfig
@@ -73,7 +73,7 @@ class TransactionStateManager(brokerId: Int,
   // TODO: we need to extend this lock as a read-write lock and reading access to it needs to be covered
   // by the read lock
   /** lock protecting access to loading and owned partition sets */
-  private val stateLock = new ReentrantLock()
+  private val stateLock = new ReentrantReadWriteLock()
 
   /** partitions of transaction topic that are being loaded, state lock should be called BEFORE accessing this set */
   private val loadingPartitions: mutable.Set[TransactionPartitionAndLeaderEpoch] = mutable.Set()
