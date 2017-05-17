@@ -17,10 +17,8 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
 class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
@@ -39,33 +37,11 @@ class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
     }
 
     private class KStreamPeekProcessor extends AbstractProcessor<K, V> {
-        
-        @Override
-        public void init(ProcessorContext context) {
-            super.init(context);
-            if (action instanceof PrintForeachAction) {
-                ((PrintForeachAction) action).setContext(context);
-                if (((PrintForeachAction) action).keySerde() == null) {
-                    ((PrintForeachAction) action).useDefaultKeySerde();
-                }
-                if (((PrintForeachAction) action).valueSerde() == null) {
-                    ((PrintForeachAction) action).useDefaultValueSerde();
-                }
-            }
-        }
-
         @Override
         public void process(final K key, final V value) {
             action.apply(key, value);
             if (forwardDownStream) {
                 context().forward(key, value);
-            }
-        }
-
-        @Override
-        public void close() {
-            if (action instanceof PrintForeachAction) {
-                ((PrintForeachAction) action).close();
             }
         }
     }

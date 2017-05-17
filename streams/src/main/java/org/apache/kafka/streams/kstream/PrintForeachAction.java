@@ -16,66 +16,36 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-
 import java.io.PrintWriter;
 
 public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
 
     private final String streamName;
-
-    private Serde<?> keySerde;
-    private Serde<?> valueSerde;
-    
     private final PrintWriter printWriter;
-    private ProcessorContext context;
-
-    public PrintForeachAction(final PrintWriter printWriter, final Serde<?> keySerde, final Serde<?> valueSerde, final String streamName) {
-        this.printWriter = printWriter;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.streamName = streamName;
-    }
-
-    public void setContext(final ProcessorContext context) {
-        this.context = context;
-    }
     
-    public void useDefaultKeySerde() {
-        this.keySerde = context.keySerde();
-    }
-
-    public void useDefaultValueSerde() { 
-        this.valueSerde = context.valueSerde(); 
-    }
-
-    public Serde<?> keySerde() { 
-        return keySerde; 
-    }
-
-    public Serde<?> valueSerde() { 
-        return valueSerde; 
+    /**
+     * Print data message with given writer. The PrintWriter can be null in order to
+     * distinguish between {@code System.out} and the others. If the PrintWriter is {@code PrintWriter(System.out)},
+     * then it would close {@code System.out} output stream.
+     * <p>
+     * Afterall, not to pass in {@code PrintWriter(System.out)} but {@code null} instead.
+     *
+     * @param printWriter Use {@code System.out.println} if {@code null}.
+     * @param streamName The given name will be printed.
+     */
+    public PrintForeachAction(final PrintWriter printWriter, final String streamName) {
+        this.printWriter = printWriter;
+        this.streamName = streamName;
     }
 
     @Override
     public void apply(final K key, final V value) {
-        final K deKey = (K) maybeDeserialize(key, keySerde.deserializer());
-        final V deValue = (V) maybeDeserialize(value, valueSerde.deserializer());
-        final String data = String.format("[%s]: %s, %s", streamName, deKey, deValue);
+        final String data = String.format("[%s]: %s, %s", streamName, key, value);
         if (printWriter == null) {
             System.out.println(data);
         } else {
             printWriter.println(data);
         }
-    }
-
-    private Object maybeDeserialize(final Object keyOrValue, final Deserializer<?> deserializer) {
-        if (keyOrValue instanceof byte[]) {
-            return deserializer.deserialize(this.context.topic(), (byte[]) keyOrValue);
-        }
-        return keyOrValue;
     }
 
     public void close() {
