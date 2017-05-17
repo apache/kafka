@@ -236,7 +236,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<String> allGroups = new ArrayList<>();
 
         Connector connector = getConnector(connType);
-        ClassLoader save = worker.getPlugins().compareAndSwapLoaders(connector);
+        ClassLoader savedLoader = worker.getPlugins().compareAndSwapLoaders(connector);
         try {
             // do basic connector validation (name, connector type, etc.)
             ConfigDef basicConfigDef = (connector instanceof SourceConnector)
@@ -276,7 +276,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             // Basic validation must have failed. Return the result.
             return generateResult(connType, configKeys, configValues, allGroups);
         } finally {
-            Plugins.compareAndSwapLoaders(save);
+            Plugins.compareAndSwapLoaders(savedLoader);
         }
     }
 
