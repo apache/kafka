@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -35,6 +36,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.Properties;
 
 public class AbstractTaskTest {
 
@@ -61,6 +63,10 @@ public class AbstractTaskTest {
 
     private AbstractTask createTask(final Consumer consumer) {
         final MockTime time = new MockTime();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
+        final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(new TaskId(0, 0),
                                 "app",
                                 Collections.singletonList(new TopicPartition("t", 0)),
@@ -74,7 +80,8 @@ public class AbstractTaskTest {
                                 new StoreChangelogReader(consumer, Time.SYSTEM, 5000),
                                 false,
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
-                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
+                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())),
+                                config) {
             @Override
             public void resume() {}
 
@@ -85,7 +92,7 @@ public class AbstractTaskTest {
             public void suspend() {}
 
             @Override
-            public void close() {}
+            public void close(final boolean clean) {}
         };
     }
 
