@@ -21,17 +21,17 @@ import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 
-public class KStreamPrint<K, V> extends KStreamPeek<K, V> {
+public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
 
     private final Serde<?> keySerde;
     private final Serde<?> valueSerde;
     private final ForeachAction<K, V> action;
     
     public KStreamPrint(final ForeachAction<K, V> action, final Serde<?> keySerde, final Serde<?> valueSerde) {
-        super(action, false);
         this.action = action;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -39,11 +39,7 @@ public class KStreamPrint<K, V> extends KStreamPeek<K, V> {
 
     @Override
     public Processor<K, V> get() {
-        if (action instanceof PrintForeachAction) {
-            return new KStreamPrintProcessor(keySerde, valueSerde);
-        } else {
-            return super.get();
-        }
+        return new KStreamPrintProcessor(keySerde, valueSerde);
     }
 
     private class KStreamPrintProcessor extends AbstractProcessor<K, V> {
