@@ -41,9 +41,9 @@ public class CreateTopicsRequest extends AbstractRequest {
     private static final String REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME = "partition_id";
     private static final String REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME = "replicas";
 
-    private static final String CONFIG_KEY_KEY_NAME = "config_key";
+    private static final String CONFIG_KEY_KEY_NAME = "config_name";
     private static final String CONFIG_VALUE_KEY_NAME = "config_value";
-    private static final String CONFIGS_KEY_NAME = "configs";
+    private static final String CONFIGS_KEY_NAME = "config_entries";
 
     public static final class TopicDetails {
         public final int numPartitions;
