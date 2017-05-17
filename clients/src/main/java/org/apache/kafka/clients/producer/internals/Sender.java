@@ -189,19 +189,21 @@ public class Sender implements Runnable {
      * @param now The current POSIX time in milliseconds
      */
     void run(long now) {
-        long pollTimeout = retryBackoffMs;
-        if (!maybeSendTransactionalRequest(now))
-            pollTimeout = sendProducerData(now);
+        if (transactionManager != null) {
+            if (!transactionManager.isTransactional())
+                maybeWaitForProducerId();
+            else if (maybeSendTransactionalRequest(now)) {
+                client.poll(retryBackoffMs, now);
+                return;
+            }
+        }
 
+        long pollTimeout = sendProducerData(now);
         log.trace("waiting {}ms in poll", pollTimeout);
-        this.client.poll(pollTimeout, now);
+        client.poll(pollTimeout, now);
     }
 
-
     private long sendProducerData(long now) {
-        Cluster cluster = metadata.fetch();
-        maybeWaitForProducerId();
-
         if (transactionManager != null && transactionManager.isInErrorState()) {
             final KafkaException exception = transactionManager.lastError() instanceof KafkaException
                     ? (KafkaException) transactionManager.lastError()
@@ -210,6 +212,8 @@ public class Sender implements Runnable {
             this.accumulator.abortBatches(exception);
             return Long.MAX_VALUE;
         }
+
+        Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
 
@@ -285,21 +289,18 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager == null || !transactionManager.isTransactional())
-            return false;
-
         if (transactionManager.hasInflightRequest()) {
             log.trace("TransactionalId: {} -- There is already an inflight transactional request. Going to wait for the response.",
                     transactionManager.transactionalId());
             return true;
         }
 
-        if (!transactionManager.hasPendingTransactionalRequests()) {
+        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
+        if (nextRequestHandler == null) {
             log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionManager.transactionalId());
             return false;
         }
 
-        TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
         if (nextRequestHandler.isEndTxn() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
@@ -396,11 +397,6 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForProducerId() {
-        // If this is a transactional producer, the producer id will be received when recovering transactions in the
-        // initTransactions() method of the producer.
-        if (transactionManager == null || transactionManager.isTransactional())
-            return;
-
         while (!transactionManager.hasProducerId() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
@@ -432,7 +428,6 @@ public class Sender implements Runnable {
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
-
     }
 
     /**

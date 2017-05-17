@@ -24,7 +24,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.ProducerFencedException;
-import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -408,14 +407,17 @@ public class TransactionManager {
     }
 
     private synchronized void transitionTo(State target, Exception error) {
-        if (currentState.isTransitionValid(currentState, target)) {
-            currentState = target;
-            if (target == State.ERROR && error != null)
-                lastError = error;
-        } else {
+        if (!currentState.isTransitionValid(currentState, target))
             throw new KafkaException("Invalid transition attempted from state " + currentState.name() +
                     " to state " + target.name());
+
+        if (target == State.ERROR) {
+            if (error == null)
+                throw new IllegalArgumentException("Cannot transition to ERROR without an exception");
+            lastError = error;
         }
+
+        currentState = target;
     }
 
     private void ensureTransactional() {
