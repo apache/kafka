@@ -17,12 +17,14 @@
 
 package kafka.api
 
+import java.util
 import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ProducerFencedException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{After, Before, Ignore, Test}
@@ -190,6 +192,49 @@ class TransactionsTest extends KafkaServerTestHarness {
       try {
         producer1.commitTransaction()
         fail("Should not be able to commit transactions from a fenced producer.")
+      } catch {
+        case e : ProducerFencedException =>
+          // good!
+          producer1.close()
+        case e : Exception =>
+          fail("Got an unexpected exception from a fenced producer.", e)
+      }
+
+      producer2.commitTransaction()  // ok
+
+      val records = pollUntilExactlyNumRecords(consumer, 2)
+      records.zipWithIndex.foreach { case (record, i) =>
+        TestUtils.assertCommittedAndGetValue(record)
+      }
+    } finally {
+      consumer.close()
+      producer2.close()
+    }
+  }
+
+  @Test
+  def testFencingOnSendOffsets() = {
+    val transactionalId = "my-t.id"
+    val producer1 = TestUtils.createTransactionalProducer(transactionalId, servers)
+    val producer2 = TestUtils.createTransactionalProducer(transactionalId, servers)
+    val consumer = transactionalConsumer()
+    consumer.subscribe(List(topic1, topic2))
+
+    try {
+      producer1.initTransactions()
+
+      producer1.beginTransaction()
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "1", "1", willBeCommitted = false))
+      producer1.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "3", "3", willBeCommitted = false))
+
+      producer2.initTransactions()  // ok, will abort the open transaction.
+      producer2.beginTransaction()
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "4", willBeCommitted = true))
+      producer2.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "4", willBeCommitted = true))
+
+      try {
+        producer1.sendOffsetsToTransaction(Map(new TopicPartition("foobartopic", 0) -> new OffsetAndMetadata(110L)),  "foobarGroup")
+        fail("Should not be able to send offsets from a fenced producer.")
       } catch {
         case e : ProducerFencedException =>
           // good!
