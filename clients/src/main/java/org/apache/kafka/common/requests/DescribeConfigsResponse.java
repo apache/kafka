@@ -143,6 +143,10 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return configs.get(resource);
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.DESCRIBE_CONFIGS.responseSchema(version));

@@ -20,6 +20,7 @@ import java.util.{Collections, LinkedHashMap, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
 
 import kafka.admin.AdminUtils
+import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
@@ -31,7 +32,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
-import org.apache.kafka.common.requests.{Resource => _, ResourceType => _, _}
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.security.auth.{DefaultPrincipalBuilder, KafkaPrincipal}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -276,7 +277,17 @@ class RequestQuotaTest extends BaseRequestTest {
             new ResourceFilter(AdminResourceType.TOPIC, null),
             new AccessControlEntryFilter("User:ANONYMOUS", "*", AclOperation.ANY, AclPermissionType.DENY))))
 
-        case key =>
+        case ApiKeys.DESCRIBE_CONFIGS =>
+          new DescribeConfigsRequest.Builder(Collections.singleton(new RResource(RResourceType.TOPIC, tp.topic)))
+
+        case ApiKeys.ALTER_CONFIGS =>
+          new AlterConfigsRequest.Builder(
+            Collections.singletonMap(new RResource(RResourceType.TOPIC, tp.topic),
+              new AlterConfigsRequest.Config(Collections.singleton(
+                new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
+              ))), true)
+
+        case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
   }
@@ -365,6 +376,8 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(response).throttleTimeMs
       case ApiKeys.CREATE_ACLS => new CreateAclsResponse(response).throttleTimeMs
       case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(response).throttleTimeMs
+      case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

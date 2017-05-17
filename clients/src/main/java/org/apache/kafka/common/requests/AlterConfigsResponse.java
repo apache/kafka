@@ -60,6 +60,10 @@ public class AlterConfigsResponse extends AbstractResponse {
         return errors;
     }
 
+    public int throttleTimeMs() {
+        return throttleTimeMs;
+    }
+
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.ALTER_CONFIGS.responseSchema(version));
