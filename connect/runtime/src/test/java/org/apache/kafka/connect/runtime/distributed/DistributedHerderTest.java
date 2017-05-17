@@ -32,6 +32,8 @@ import org.apache.kafka.connect.runtime.TargetState;
 import org.apache.kafka.connect.runtime.TaskConfig;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.runtime.isolation.DelegatingClassLoader;
+import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -73,7 +75,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
-@PrepareForTest(DistributedHerder.class)
+@PrepareForTest({DistributedHerder.class, Plugins.class})
 @PowerMockIgnore("javax.management.*")
 public class DistributedHerderTest {
     private static final Map<String, String> HERDER_CONFIG = new HashMap<>();
@@ -150,7 +152,12 @@ public class DistributedHerderTest {
     private DistributedHerder herder;
     @Mock private Worker worker;
     @Mock private Callback<Herder.Created<ConnectorInfo>> putConnectorCallback;
-    @Mock private Plugins plugins;
+    @Mock
+    private Plugins plugins;
+    @Mock
+    private PluginClassLoader pluginLoader;
+    @Mock
+    private DelegatingClassLoader delegatingLoader;
 
     private ConfigBackingStore.UpdateListener configUpdateListener;
     private WorkerRebalanceListener rebalanceListener;
@@ -167,7 +174,9 @@ public class DistributedHerderTest {
         configUpdateListener = herder.new ConfigUpdateListener();
         rebalanceListener = herder.new RebalanceListener();
         plugins = PowerMock.createMock(Plugins.class);
-
+        pluginLoader = PowerMock.createMock(PluginClassLoader.class);
+        delegatingLoader = PowerMock.createMock(DelegatingClassLoader.class);
+        PowerMock.mockStatic(Plugins.class);
         PowerMock.expectPrivate(herder, "updateDeletedConnectorStatus").andVoid().anyTimes();
     }
 
@@ -310,16 +319,13 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Plugins pluginsMock = PowerMock.createMock(Plugins.class);
-        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(pluginsMock);
-        EasyMock.expect(pluginsMock.compareAndSwapLoaders(connectorMock))
-                .andStubReturn(currentLoaderMock);
-        EasyMock.expect(pluginsMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(4);
+        EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
         EasyMock.expect(connectorMock.validate(CONN2_CONFIG)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
-        EasyMock.expect(Plugins.compareAndSwapLoaders(currentLoaderMock));
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader);
 
         // CONN2 is new, should succeed
         configBackingStore.putConnectorConfig(CONN2, CONN2_CONFIG);
@@ -352,14 +358,11 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Plugins pluginsMock = PowerMock.createMock(Plugins.class);
-        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(pluginsMock);
-        EasyMock.expect(pluginsMock.compareAndSwapLoaders(connectorMock))
-                .andStubReturn(currentLoaderMock);
-        EasyMock.expect(pluginsMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
-        EasyMock.expect(Plugins.compareAndSwapLoaders(currentLoaderMock));
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(3);
+        EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader);
 
         // CONN2 creation should fail
 
@@ -392,13 +395,10 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Plugins pluginsMock = PowerMock.createMock(Plugins.class);
-        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(pluginsMock);
-        EasyMock.expect(pluginsMock.compareAndSwapLoaders(connectorMock))
-                .andStubReturn(currentLoaderMock);
-        EasyMock.expect(pluginsMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(4);
+        EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
 
         ConfigDef configDef = new ConfigDef();
         configDef.define("foo.bar", ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "foo.bar doc");
@@ -407,7 +407,7 @@ public class DistributedHerderTest {
         ConfigValue validatedValue = new ConfigValue("foo.bar");
         validatedValue.addErrorMessage("Failed foo.bar validation");
         EasyMock.expect(connectorMock.validate(CONN2_CONFIG)).andReturn(new Config(singletonList(validatedValue)));
-        EasyMock.expect(Plugins.compareAndSwapLoaders(currentLoaderMock));
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader);
 
         // CONN2 creation should fail
 
@@ -443,16 +443,13 @@ public class DistributedHerderTest {
         config.put(ConnectorConfig.NAME_CONFIG, "test-group");
 
         // config validation
-        Plugins pluginsMock = PowerMock.createMock(Plugins.class);
-        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(SinkConnector.class);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(pluginsMock);
-        EasyMock.expect(pluginsMock.compareAndSwapLoaders(connectorMock))
-                .andStubReturn(currentLoaderMock);
-        EasyMock.expect(pluginsMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(4);
+        EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
         EasyMock.expect(connectorMock.validate(config)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
-        EasyMock.expect(Plugins.compareAndSwapLoaders(currentLoaderMock));
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader);
 
         // CONN2 creation should fail because the worker group id (connect-test-group) conflicts with
         // the consumer group id we would use for this sink
@@ -1265,16 +1262,13 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall();
 
         // config validation
-        Plugins pluginsMock = PowerMock.createMock(Plugins.class);
-        ClassLoader currentLoaderMock = PowerMock.createMock(ClassLoader.class);
         Connector connectorMock = PowerMock.createMock(Connector.class);
-        EasyMock.expect(worker.getPlugins()).andStubReturn(pluginsMock);
-        EasyMock.expect(pluginsMock.compareAndSwapLoaders(connectorMock))
-                .andStubReturn(currentLoaderMock);
-        EasyMock.expect(pluginsMock.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+        EasyMock.expect(worker.getPlugins()).andReturn(plugins).times(6);
+        EasyMock.expect(plugins.compareAndSwapLoaders(connectorMock)).andReturn(delegatingLoader);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
         EasyMock.expect(connectorMock.config()).andReturn(new ConfigDef());
         EasyMock.expect(connectorMock.validate(CONN1_CONFIG_UPDATED)).andReturn(new Config(Collections.<ConfigValue>emptyList()));
-        EasyMock.expect(Plugins.compareAndSwapLoaders(currentLoaderMock));
+        EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader)).andReturn(pluginLoader);
 
         configBackingStore.putConnectorConfig(CONN1, CONN1_CONFIG_UPDATED);
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {

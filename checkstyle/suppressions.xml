@@ -63,7 +63,7 @@
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerder.java"/>
+              files="DistributedHerder(|Test).java"/>
 
     <suppress checks="MethodLength"
               files="KafkaConfigBackingStore.java"/>
