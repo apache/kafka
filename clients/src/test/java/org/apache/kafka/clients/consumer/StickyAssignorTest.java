@@ -30,7 +30,6 @@ import java.util.Map.Entry;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -665,8 +664,8 @@ public class StickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = ConsumerProtocol.asMap(partitions);
-                Map<String, List<Integer>> otherMap = ConsumerProtocol.asMap(otherPartitions);
+                Map<String, List<Integer>> map = StickyAssignor.asMap(partitions);
+                Map<String, List<Integer>> otherMap = StickyAssignor.asMap(otherPartitions);
 
                 if (len > otherLen) {
                     for (String topic: map.keySet())

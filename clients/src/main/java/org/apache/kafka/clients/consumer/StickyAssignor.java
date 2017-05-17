@@ -32,13 +32,12 @@ import java.util.Set;
 import java.util.TreeSet;
 
 import org.apache.kafka.clients.consumer.internals.AbstractPartitionAssignor;
-import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.types.Type;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -175,26 +174,20 @@ import org.slf4j.LoggerFactory;
 public class StickyAssignor extends AbstractPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(StickyAssignor.class);
 
-    // this schema is used for preserving consumer's assigned partitions list and
-    // sending it to the leader during a rebalance
-    public static final Schema TOPIC_PARTITION_ASSIGNMENT_V0 = new Schema(
-            new Field(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(ConsumerProtocol.TOPIC_ASSIGNMENT_V0)));
+    // these schemas are used for preserving consumer's previously assigned partitions
+    // list and sending it as user data to the leader during a rebalance
+    private static final String TOPIC_PARTITIONS_KEY_NAME = "previous_assignment";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
+    private static final Schema TOPIC_ASSIGNMENT = new Schema(
+            new Field(TOPIC_KEY_NAME, Type.STRING),
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(Type.INT32)));
+    private static final Schema STICKY_ASSIGNOR_USER_DATA = new Schema(
+            new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT)));
 
-    protected Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
+    Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;
-
-    private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {
-        dest.clear();
-        for (Entry<String, List<TopicPartition>> entry: source.entrySet())
-            dest.put(entry.getKey(), new ArrayList<>(entry.getValue()));
-    }
-
-    private Map<String, List<TopicPartition>> deepCopy(Map<String, List<TopicPartition>> assignment) {
-        Map<String, List<TopicPartition>> copy = new HashMap<>();
-        deepCopy(assignment, copy);
-        return copy;
-    }
 
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, List<String>> subscriptions) {
@@ -664,39 +657,59 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     private static ByteBuffer serializeTopicPartitionAssignment(List<TopicPartition> partitions) {
-        Struct struct = new Struct(TOPIC_PARTITION_ASSIGNMENT_V0);
+        Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA);
         List<Struct> topicAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> topicEntry : ConsumerProtocol.asMap(partitions).entrySet()) {
-            Struct topicAssignment = new Struct(ConsumerProtocol.TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(ConsumerProtocol.TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(ConsumerProtocol.PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
+        for (Map.Entry<String, List<Integer>> topicEntry : asMap(partitions).entrySet()) {
+            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT);
+            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
+            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
             topicAssignments.add(topicAssignment);
         }
-        struct.set(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        ByteBuffer buffer = ByteBuffer.allocate(ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_V0.sizeOf() +
-                                                TOPIC_PARTITION_ASSIGNMENT_V0.sizeOf(struct));
-        ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_V0.writeTo(buffer);
-        TOPIC_PARTITION_ASSIGNMENT_V0.write(buffer, struct);
+        struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
+        ByteBuffer buffer = ByteBuffer.allocate(STICKY_ASSIGNOR_USER_DATA.sizeOf(struct));
+        STICKY_ASSIGNOR_USER_DATA.write(buffer, struct);
         buffer.flip();
         return buffer;
     }
 
     private static List<TopicPartition> deserializeTopicPartitionAssignment(ByteBuffer buffer) {
-        Struct header = ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
-        Short version = header.getShort(ConsumerProtocol.VERSION_KEY_NAME);
-        if (version < ConsumerProtocol.CONSUMER_PROTOCOL_V0)
-            throw new SchemaException("Unsupported subscription version: " + version);
-        Struct struct = TOPIC_PARTITION_ASSIGNMENT_V0.read(buffer);
+        Struct struct = STICKY_ASSIGNOR_USER_DATA.read(buffer);
         List<TopicPartition> partitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME)) {
+        for (Object structObj : struct.getArray(TOPIC_PARTITIONS_KEY_NAME)) {
             Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(ConsumerProtocol.TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(ConsumerProtocol.PARTITIONS_KEY_NAME)) {
+            String topic = assignment.getString(TOPIC_KEY_NAME);
+            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
                 Integer partition = (Integer) partitionObj;
                 partitions.add(new TopicPartition(topic, partition));
             }
         }
         return partitions;
+    }
+
+    private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {
+        dest.clear();
+        for (Entry<String, List<TopicPartition>> entry: source.entrySet())
+            dest.put(entry.getKey(), new ArrayList<>(entry.getValue()));
+    }
+
+    private Map<String, List<TopicPartition>> deepCopy(Map<String, List<TopicPartition>> assignment) {
+        Map<String, List<TopicPartition>> copy = new HashMap<>();
+        deepCopy(assignment, copy);
+        return copy;
+    }
+
+    public static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
+        Map<String, List<Integer>> partitionMap = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            String topic = partition.topic();
+            List<Integer> topicPartitions = partitionMap.get(topic);
+            if (topicPartitions == null) {
+                topicPartitions = new ArrayList<>();
+                partitionMap.put(topic, topicPartitions);
+            }
+            topicPartitions.add(partition.partition());
+        }
+        return partitionMap;
     }
 
     private static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
@@ -719,28 +732,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    protected static class SubscriptionComparator implements Comparator<String>, Serializable {
+    private static class SubscriptionComparator implements Comparator<String>, Serializable {
         private static final long serialVersionUID = 1L;
         private Map<String, List<TopicPartition>> map;
 
         SubscriptionComparator(Map<String, List<TopicPartition>> map) {
-            this.map = map;
-        }
-
-        @Override
-        public int compare(String o1, String o2) {
-            int ret = map.get(o1).size() - map.get(o2).size();
-            if (ret == 0)
-                ret = o1.compareTo(o2);
-            return ret;
-        }
-    }
-
-    protected static class PartitionAssignmentComparator implements Comparator<String>, Serializable {
-        private static final long serialVersionUID = 1L;
-        private Map<String, List<TopicPartition>> map;
-
-        PartitionAssignmentComparator(Map<String, List<TopicPartition>> map) {
             this.map = map;
         }
 
