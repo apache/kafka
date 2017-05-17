@@ -115,7 +115,6 @@ class TxnMarkerQueue(@volatile private var destination: Node) {
 
   def node: Node = destination
 
-  // TODO: this function is only for metrics recording, not yet added
   def totalNumMarkers(): Int = markersPerTxnTopicPartition.map { case(_, queue) => queue.size()}.sum
 
   // visible for testing
@@ -142,10 +141,11 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
   def start(): Unit = {
     txnMarkerSendThread.start()
-    networkClient.wakeup()    // FIXME: is this really required?
   }
 
   def shutdown(): Unit = {
+    // wake up the thread in case it is blocked inside poll
+    networkClient.wakeup()
     txnMarkerSendThread.shutdown()
     markersQueuePerBroker.clear()
   }
@@ -242,8 +242,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     // watch for both the transactional id and the transaction topic partition id,
     // so we can cancel all the delayed operations for the same partition id;
     // NOTE this is only possible because the hashcode of Int / String never overlaps
-
-    // TODO: if the delayed txn marker will always have infinite timeout, we can replace it with a map
     val delayedTxnMarker = new DelayedTxnMarker(txnMetadata, appendToLogCallback)
     val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
     txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId, txnTopicPartition))
@@ -295,8 +293,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     txnMarkerPurgatory.cancelForKey(transactionalId)
   }
 
-  // FIXME: Currently, operations registered under partition in txnMarkerPurgatory
-  // are only cleaned during coordinator immigration, which happens rarely. This means potential memory leak
   def completeSendMarkersForTxnId(transactionalId: String): Unit = {
     txnMarkerPurgatory.checkAndComplete(transactionalId)
   }

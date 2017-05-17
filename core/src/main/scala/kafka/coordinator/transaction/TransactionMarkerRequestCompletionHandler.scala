@@ -57,7 +57,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
 
               txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
             } else {
-              // re-enqueue the markers
+              // re-enqueue the markers with possibly new destination brokers
               trace(s"Re-enqueuing ${txnMarker.transactionResult} transaction markers for transactional id $transactionalId " +
                 s"under coordinator epoch ${txnMarker.coordinatorEpoch}")
 

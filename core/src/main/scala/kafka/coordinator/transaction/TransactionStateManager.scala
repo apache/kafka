@@ -20,13 +20,13 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.common.KafkaException
 import kafka.log.LogConfig
 import kafka.message.UncompressedCodec
 import kafka.server.ReplicaManager
-import kafka.utils.CoreUtils.inLock
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool, Scheduler, ZkUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -70,9 +70,7 @@ class TransactionStateManager(brokerId: Int,
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
 
-  // TODO: we need to extend this lock as a read-write lock and reading access to it needs to be covered
-  // by the read lock
-  /** lock protecting access to loading and owned partition sets */
+  /** lock protecting access to the metadata cache, including loading and leaving partition sets */
   private val stateLock = new ReentrantReadWriteLock()
 
   /** partitions of transaction topic that are being loaded, state lock should be called BEFORE accessing this set */
@@ -113,7 +111,37 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
+    * Check if the this transactional id should be assigned to this coordinator
+    *
+    * Need to grab the state lock before calling this function
+    */
+  def isCoordinatorFor(transactionalId: String): Boolean = inReadLock(stateLock) {
+    val partitionId = partitionFor(transactionalId)
+    transactionMetadataCache.contains(partitionId)
+  }
+
+  /**
+    * Check if the this transactional id's transaction metadata is still loading upon coordinator migration
+    *
+    * Need to grab the state lock before calling this function
+    */
+  def isCoordinatorLoadingInProgress(transactionalId: String): Boolean = inReadLock(stateLock) {
+    val partitionId = partitionFor(transactionalId)
+
+    // we only need to check loading partition set but not leaving partition set since there are three possible cases:
+    //    1) it is not in the leaving partitions set, hence safe to return true
+    //    2) it is in the leaving partitions with a smaller epoch than the latest loading epoch, hence safe to return NONE
+    //    3) it is in the leaving partition with a larger epoch, return true is also OK since the client will then retry
+    //       later be notified that this coordinator is no longer be the transaction coordinator for him
+    //
+    //    4) it is NOT possible to be in the leaving partition with the same epoch
+    loadingPartitions.exists(_.txnPartitionId == partitionId)
+  }
+
+  /**
    * Get the transaction metadata associated with the given transactional id, or null if not found
+   *
+   * Need to grab the state lock before calling this function
    */
   def getTransactionState(transactionalId: String): Option[CoordinatorEpochAndTxnMetadata] = {
     val partitionId = partitionFor(transactionalId)
@@ -139,6 +167,8 @@ class TransactionStateManager(brokerId: Int,
   /**
    * Add a new transaction metadata, or retrieve the metadata if it already exists with the associated transactional id
    * along with the current coordinator epoch for that belonging transaction topic partition
+   *
+   * Need to grab the state lock before calling this function
    */
   def addTransaction(transactionalId: String, txnMetadata: TransactionMetadata): CoordinatorEpochAndTxnMetadata = {
     val partitionId = partitionFor(transactionalId)
@@ -178,28 +208,6 @@ class TransactionStateManager(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
-  def isCoordinatorFor(txnTopicPartitionId: Int): Boolean = inLock(stateLock) {
-    transactionMetadataCache.contains(txnTopicPartitionId)
-  }
-
-  def isCoordinatorFor(transactionalId: String): Boolean = inLock(stateLock) {
-    val partitionId = partitionFor(transactionalId)
-    transactionMetadataCache.contains(partitionId)
-  }
-
-  def isCoordinatorLoadingInProgress(transactionalId: String): Boolean = inLock(stateLock) {
-    val partitionId = partitionFor(transactionalId)
-
-    // we only need to check loading partition set but not leaving partition set since there are three possible cases:
-    //    1) it is not in the leaving partitions set, hence safe to return true
-    //    2) it is in the leaving partitions with a smaller epoch than the latest loading epoch, hence safe to return NONE
-    //    3) it is in the leaving partition with a larger epoch, return true is also OK since the client will then retry
-    //       later be notified that this coordinator is no longer be the transaction coordinator for him
-    //
-    //    4) it is NOT possible to be in the leaving partition with the same epoch
-    loadingPartitions.exists(_.txnPartitionId == partitionId)
-  }
-
   /**
    * Gets the partition count of the transaction log topic from ZooKeeper.
    * If the topic does not exist, the default partition count is returned.
@@ -227,7 +235,7 @@ class TransactionStateManager(brokerId: Int,
         try {
           while (currOffset < logEndOffset
             && !shuttingDown.get()
-            && inLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
+            && inReadLock(stateLock) {loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
             val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, maxOffset = None,
               minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
@@ -274,9 +282,11 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-    * Add a transaction topic partition into the cache
-    */
-  def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
+   * Add a transaction topic partition into the cache
+   *
+   * Make it package-private to be used only for unit tests.
+   */
+  private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int, coordinatorEpoch: Int, metadataPerTransactionalId: Pool[String, TransactionMetadata]): Unit = {
     val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, metadataPerTransactionalId)
     val currentTxnMetadataCacheEntry = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
@@ -301,7 +311,7 @@ class TransactionStateManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
-    inLock(stateLock) {
+    inWriteLock(stateLock) {
       leavingPartitions.remove(partitionAndLeaderEpoch)
       loadingPartitions.add(partitionAndLeaderEpoch)
     }
@@ -310,7 +320,7 @@ class TransactionStateManager(brokerId: Int,
       info(s"Loading transaction metadata from $topicPartition")
       val loadedTransactions = loadTransactionMetadata(topicPartition, coordinatorEpoch)
 
-      inLock(stateLock) {
+      inWriteLock(stateLock) {
         if (loadingPartitions.contains(partitionAndLeaderEpoch)) {
           addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
 
@@ -352,13 +362,13 @@ class TransactionStateManager(brokerId: Int,
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
-    inLock(stateLock) {
+    inWriteLock(stateLock) {
       loadingPartitions.remove(partitionAndLeaderEpoch)
       leavingPartitions.add(partitionAndLeaderEpoch)
     }
 
     def removeTransactions() {
-      inLock(stateLock) {
+      inWriteLock(stateLock) {
         if (leavingPartitions.contains(partitionAndLeaderEpoch)) {
           transactionMetadataCache.remove(partitionId) match {
             case Some(txnMetadataCacheEntry) =>
@@ -395,7 +405,6 @@ class TransactionStateManager(brokerId: Int,
     val timestamp = time.milliseconds()
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, new SimpleRecord(timestamp, keyBytes, valueBytes))
-
     val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
     val recordsPerPartition = Map(topicPartition -> records)
 
@@ -484,13 +493,39 @@ class TransactionStateManager(brokerId: Int,
       responseCallback(responseError)
     }
 
-    replicaManager.appendRecords(
-      newMetadata.txnTimeoutMs.toLong,
-      TransactionLog.EnforcedRequiredAcks,
-      internalTopicsAllowed = true,
-      isFromClient = false,
-      recordsPerPartition,
-      updateCacheCallback)
+    // note that we need to grab the read lock and double check the metadata and coordinator epoch again
+    // until we have appended to log to avoid the scenario that an emigration and immigration happens after
+    // the check when handling the request
+    inReadLock(stateLock) {
+      getTransactionState(transactionalId) match {
+        case Some(epochAndMetadata) =>
+          val metadata = epochAndMetadata.transactionMetadata
+
+          metadata synchronized {
+            if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
+              // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
+              responseCallback(Errors.NOT_COORDINATOR)
+            } else {
+              // do not need to check the metadata object itself since no current thread should be able to modify it
+              // under the same coordinator epoch, so directly append to txn log now
+
+              replicaManager.appendRecords(
+                newMetadata.txnTimeoutMs.toLong,
+                TransactionLog.EnforcedRequiredAcks,
+                internalTopicsAllowed = true,
+                isFromClient = false,
+                recordsPerPartition,
+                updateCacheCallback)
+
+              trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+            }
+          }
+
+        case None =>
+          // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
+          responseCallback(Errors.NOT_COORDINATOR)
+      }
+    }
   }
 
   def shutdown() {

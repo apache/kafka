@@ -48,8 +48,10 @@ object TransactionCoordinator {
       config.transactionTransactionsExpiredTransactionCleanupIntervalMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
+    // we need to enable reaper thread still even with infinite delays for txn marker purgatory, since we
+    // are still relying on the thread to remove already completed tasks as each task is watched on two lists: txn id and partition id
+    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
-    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false)
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
     new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, txnMarkerPurgatory, time)
@@ -343,10 +345,12 @@ class TransactionCoordinator(brokerId: Int,
         case Right((coordinatorEpoch, newMetadata)) =>
           def sendTxnMarkersCallback(error: Errors): Unit = {
             if (error == Errors.NONE) {
+              // we do NOT need to grab the read lock until we have completed putting into the sender queue,
+              // since even if the coordinator epoch has changed after the check (e.g. a leader emigration followed by an immediate immigration),
+              // the enqueued markers will still be cleared by the sender upon receiving the COORDINATOR_EPOCH_INVALID error code
               val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
                 case Some(epochAndMetadata) =>
                   if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
-
                     val txnMetadata = epochAndMetadata.transactionMetadata
                     txnMetadata synchronized {
                       if (txnMetadata.producerId != producerId)
