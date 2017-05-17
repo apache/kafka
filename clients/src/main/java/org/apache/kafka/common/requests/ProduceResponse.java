@@ -61,6 +61,8 @@ public class ProduceResponse extends AbstractResponse {
      * INVALID_REQUIRED_ACKS (21)
      * TOPIC_AUTHORIZATION_FAILED (29)
      * UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
+     * PRODUCER_ID_AUTHORIZATION_FAILED (54)
+     * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";

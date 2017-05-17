@@ -1621,7 +1621,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
     val header = request.header
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
