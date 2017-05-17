@@ -17,8 +17,8 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -35,15 +35,11 @@ public class SinkConnectorConfig extends ConnectorConfig {
     static ConfigDef config = ConnectorConfig.configDef()
         .define(TOPICS_CONFIG, ConfigDef.Type.LIST, TOPICS_DEFAULT, ConfigDef.Importance.HIGH, TOPICS_DOC, COMMON_GROUP, 4, ConfigDef.Width.LONG, TOPICS_DISPLAY);
 
-    public SinkConnectorConfig() {
-        this(new HashMap<String, String>());
-    }
-
     public static ConfigDef configDef() {
         return config;
     }
 
-    public SinkConnectorConfig(Map<String, String> props) {
-        super(config, props);
+    public SinkConnectorConfig(Plugins plugins, Map<String, String> props) {
+        super(plugins, config, props);
     }
 }

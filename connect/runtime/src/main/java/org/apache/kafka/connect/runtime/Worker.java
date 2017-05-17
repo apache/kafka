@@ -199,7 +199,7 @@ public class Worker {
         final WorkerConnector workerConnector;
         ClassLoader save = plugins.currentThreadLoader();
         try {
-            final ConnectorConfig connConfig = new ConnectorConfig(connProps);
+            final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = plugins.newConnector(connClass);
@@ -341,7 +341,7 @@ public class Worker {
         final WorkerTask workerTask;
         ClassLoader save = plugins.currentThreadLoader();
         try {
-            final ConnectorConfig connConfig = new ConnectorConfig(connProps);
+            final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
             String connType = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
             ClassLoader connectorLoader = plugins.delegatingLoader().connectorLoader(connType);
             save = Plugins.compareAndSwapLoaders(connectorLoader);

@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -230,33 +231,53 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         if (connType == null)
             throw new BadRequestException("Connector config " + connectorConfig + " contains no connector type");
 
-        Connector connector = getConnector(connType);
-        ClassLoader save = worker.getPlugins().compareAndSwapLoaders(connector);
-        final ConfigDef connectorConfigDef = ConnectorConfig.enrich(
-                (connector instanceof SourceConnector) ? SourceConnectorConfig.configDef() : SinkConnectorConfig.configDef(),
-                connectorConfig,
-                false
-        );
-
         List<ConfigValue> configValues = new ArrayList<>();
         Map<String, ConfigKey> configKeys = new HashMap<>();
         List<String> allGroups = new ArrayList<>();
 
-        // do basic connector validation (name, connector type, etc.)
-        Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(connector, connectorConfigDef, connectorConfig);
-        configValues.addAll(validatedConnectorConfig.values());
-        configKeys.putAll(connectorConfigDef.configKeys());
-        allGroups.addAll(connectorConfigDef.groups());
+        Connector connector = getConnector(connType);
+        ClassLoader save = worker.getPlugins().compareAndSwapLoaders(connector);
+        try {
+            // do basic connector validation (name, connector type, etc.)
+            ConfigDef basicConfigDef = (connector instanceof SourceConnector)
+                                       ? SourceConnectorConfig.configDef()
+                                       : SinkConnectorConfig.configDef();
+            Map<String, ConfigValue> validatedConnectorConfig = validateBasicConnectorConfig(
+                    connector,
+                    basicConfigDef,
+                    connectorConfig
+            );
+            configValues.addAll(validatedConnectorConfig.values());
+            configKeys.putAll(basicConfigDef.configKeys());
+            allGroups.addAll(basicConfigDef.groups());
 
-        // do custom connector-specific validation
-        Config config = connector.validate(connectorConfig);
-        ConfigDef configDef = connector.config();
-        configKeys.putAll(configDef.configKeys());
-        allGroups.addAll(configDef.groups());
-        configValues.addAll(config.configValues());
+            ConnectorConfig connectorConfigToEnrich = (connector instanceof SourceConnector)
+                    ? new SourceConnectorConfig(plugins(), connectorConfig)
+                    : new SinkConnectorConfig(plugins(), connectorConfig);
+            final ConfigDef connectorConfigDef = connectorConfigToEnrich.enrich(
+                    plugins(),
+                    basicConfigDef,
+                    connectorConfig,
+                    false
+            );
 
-        Plugins.compareAndSwapLoaders(save);
-        return generateResult(connType, configKeys, configValues, allGroups);
+            // Override is required here after the enriched ConfigDef has been created successfully
+            configKeys.putAll(connectorConfigDef.configKeys());
+            allGroups.addAll(connectorConfigDef.groups());
+
+            // do custom connector-specific validation
+            Config config = connector.validate(connectorConfig);
+            ConfigDef configDef = connector.config();
+            configKeys.putAll(configDef.configKeys());
+            allGroups.addAll(configDef.groups());
+            configValues.addAll(config.configValues());
+            return generateResult(connType, configKeys, configValues, allGroups);
+        } catch (ConfigException e) {
+            // Basic validation must have failed. Return the result.
+            return generateResult(connType, configKeys, configValues, allGroups);
+        } finally {
+            Plugins.compareAndSwapLoaders(save);
+        }
     }
 
     // public for testing
