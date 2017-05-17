@@ -23,6 +23,7 @@ import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
@@ -115,6 +116,23 @@ public class PluginUtils {
             default:
                 return prunePluginName(plugin, plugin.type().simpleName());
         }
+    }
+
+    public static <U> boolean isAliasUnique(
+            PluginDesc<U> alias,
+            Collection<PluginDesc<U>> plugins
+    ) {
+        boolean matched = false;
+        for (PluginDesc<U> plugin : plugins) {
+            if (simpleName(alias).equals(simpleName(plugin))
+                    || prunedName(alias).equals(prunedName(plugin))) {
+                if (matched) {
+                    return false;
+                }
+                matched = true;
+            }
+        }
+        return true;
     }
 
     private static String prunePluginName(PluginDesc<?> plugin, String suffix) {

@@ -55,14 +55,12 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<Transformation>> transformations;
     private final List<String> pluginPaths;
     private final Map<Path, PluginClassLoader> activePaths;
-    private final Map<Path, Void> inactivePaths;
 
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
         this.pluginLoaders = new HashMap<>();
         this.activePaths = new HashMap<>();
-        this.inactivePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.transformations = new TreeSet<>();
@@ -74,6 +72,50 @@ public class DelegatingClassLoader extends URLClassLoader {
         this(pluginPaths, ClassLoader.getSystemClassLoader());
     }
 
+    public Set<PluginDesc<Connector>> connectors() {
+        return connectors;
+    }
+
+    public Set<PluginDesc<Converter>> converters() {
+        return converters;
+    }
+
+    public Set<PluginDesc<Transformation>> transformations() {
+        return transformations;
+    }
+
+    public ClassLoader connectorLoader(Connector connector) {
+        return connectorLoader(connector.getClass().getName());
+    }
+
+    public ClassLoader connectorLoader(String connectorClassOrAlias) {
+        log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
+        SortedMap<PluginDesc<?>, PluginClassLoader> inner =
+                pluginLoaders.get(connectorClassOrAlias);
+        if (inner == null) {
+            log.error(
+                    "Plugin class loader for connector: '{}' was not found. Returning: {}",
+                    connectorClassOrAlias,
+                    this
+            );
+            return this;
+        }
+        return inner.get(inner.lastKey());
+    }
+
+    private static PluginClassLoader newPluginClassLoader(
+            final URL pluginLocation,
+            final URL[] jars
+    ) {
+        return (PluginClassLoader) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    @Override
+                    public Object run() {
+                        return new PluginClassLoader(pluginLocation, jars);
+                    }
+                }
+        );
+    }
 
     private <T> void addPlugins(Collection<PluginDesc<T>> plugins, PluginClassLoader loader) {
         for (PluginDesc<T> plugin : plugins) {
@@ -131,37 +173,10 @@ public class DelegatingClassLoader extends URLClassLoader {
         }
     }
 
-    private static PluginClassLoader newPluginClassLoader(
-            final URL pluginLocation,
-            final URL[] jars
-    ) {
-        return (PluginClassLoader) AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    @Override
-                    public Object run() {
-                        return new PluginClassLoader(pluginLocation, jars);
-                    }
-                }
-        );
-    }
-
-    public Set<PluginDesc<Connector>> connectors() {
-        return connectors;
-    }
-
-    public Set<PluginDesc<Converter>> converters() {
-        return converters;
-    }
-
-    public Set<PluginDesc<Transformation>> transformations() {
-        return transformations;
-    }
-
     private PluginScanResult scanPluginPath(
             PluginClassLoader loader,
             URL[] urls
     ) throws InstantiationException, IllegalAccessException {
-        //log.info("Scanning plugin path urls: " + Arrays.toString(urls));
         ConfigurationBuilder builder = new ConfigurationBuilder();
         builder.setClassLoaders(new PluginClassLoader[]{loader});
         builder.addUrls(urls);
@@ -201,25 +216,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    public ClassLoader connectorLoader(Connector connector) {
-        return connectorLoader(connector.getClass().getName());
-    }
-
-    public ClassLoader connectorLoader(String connectorClassOrAlias) {
-        log.debug("Getting plugin class loader for connector: '{}'", connectorClassOrAlias);
-        SortedMap<PluginDesc<?>, PluginClassLoader> inner =
-                pluginLoaders.get(connectorClassOrAlias);
-        if (inner == null) {
-            log.error(
-                    "Plugin class loader for connector: '{}' was not found. Returning: {}",
-                    connectorClassOrAlias,
-                    this
-            );
-            return this;
-        }
-        return inner.get(inner.lastKey());
-    }
-
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         if (!PluginUtils.shouldLoadInIsolation(name)) {
@@ -256,7 +252,7 @@ public class DelegatingClassLoader extends URLClassLoader {
 
     private <S> void addAliases(Collection<PluginDesc<S>> plugins) {
         for (PluginDesc<S> plugin : plugins) {
-            if (isAliasUnique(plugin, plugins)) {
+            if (PluginUtils.isAliasUnique(plugin, plugins)) {
                 String simple = PluginUtils.simpleName(plugin);
                 String pruned = PluginUtils.prunedName(plugin);
                 SortedMap<PluginDesc<?>, PluginClassLoader> inner =
@@ -275,22 +271,5 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
             }
         }
-    }
-
-    private static <U> boolean isAliasUnique(
-            PluginDesc<U> alias,
-            Collection<PluginDesc<U>> plugins
-    ) {
-        boolean oneMatch = false;
-        for (PluginDesc<U> plugin : plugins) {
-            if (PluginUtils.simpleName(alias).equals(PluginUtils.simpleName(plugin))
-                    || PluginUtils.prunedName(alias).equals(PluginUtils.prunedName(plugin))) {
-                if (oneMatch) {
-                    return false;
-                }
-                oneMatch = true;
-            }
-        }
-        return true;
     }
 }

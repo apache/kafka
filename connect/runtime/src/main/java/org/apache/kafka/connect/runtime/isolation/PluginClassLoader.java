@@ -36,6 +36,15 @@ public class PluginClassLoader extends URLClassLoader {
         this.pluginLocation = pluginLocation;
     }
 
+    public String location() {
+        return pluginLocation.toString();
+    }
+
+    @Override
+    public String toString() {
+        return "PluginClassLoader{pluginLocation=" + pluginLocation + "}";
+    }
+
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         Class<?> klass = findLoadedClass(name);
@@ -55,14 +64,5 @@ public class PluginClassLoader extends URLClassLoader {
             resolveClass(klass);
         }
         return klass;
-    }
-
-    public String location() {
-        return pluginLocation.toString();
-    }
-
-    @Override
-    public String toString() {
-        return "PluginClassLoader{pluginLocation=" + pluginLocation + "}";
     }
 }
