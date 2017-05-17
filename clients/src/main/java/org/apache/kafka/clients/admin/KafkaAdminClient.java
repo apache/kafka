@@ -1251,7 +1251,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> configResources, DescribeConfigsOptions options) {
+    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Config>> singleRequestFutures = new HashMap<>();
         final Collection<Resource> singleRequestResources = new ArrayList<>(configResources.size());
 
@@ -1262,8 +1262,7 @@ public class KafkaAdminClient extends AdminClient {
             if (resource.type() != ConfigResource.Type.BROKER) {
                 singleRequestFutures.put(resource, new KafkaFutureImpl<Config>());
                 singleRequestResources.add(configResourceToResource(resource));
-            }
-            else {
+            } else {
                 brokerFutures.put(resource, new KafkaFutureImpl<Config>());
                 brokerResources.add(configResourceToResource(resource));
             }
@@ -1360,7 +1359,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
+    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>(configs.size());
         for (ConfigResource configResource : configs.keySet()) {
             futures.put(configResource, new KafkaFutureImpl<Void>());

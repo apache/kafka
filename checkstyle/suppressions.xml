@@ -46,7 +46,7 @@
               files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|SsLTransportLayer|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer).java"/>
 
     <suppress checks="JavaNCSS"
-              files="KerberosLogin.java"/>
+              files="AbstractRequest.java|KerberosLogin.java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java"/>
