@@ -346,7 +346,7 @@ public class WorkerTest extends ThreadedTest {
         Connector connector = PowerMock.createMock(Connector.class);
         ConnectorContext ctx = PowerMock.createMock(ConnectorContext.class);
 
-        EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(2);
+        EasyMock.expect(plugins.currentThreadLoader()).andReturn(delegatingLoader).times(3);
         EasyMock.expect(plugins.newConnector(WorkerTestConnector.class.getName()))
                 .andReturn(connector);
         EasyMock.expect(connector.version()).andReturn("1.0");
@@ -359,7 +359,7 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(plugins.compareAndSwapLoaders(connector))
                 .andReturn(delegatingLoader)
-                .times(2);
+                .times(3);
         connector.initialize(EasyMock.anyObject(ConnectorContext.class));
         EasyMock.expectLastCall();
         connector.start(props);
@@ -367,7 +367,7 @@ public class WorkerTest extends ThreadedTest {
 
         EasyMock.expect(Plugins.compareAndSwapLoaders(delegatingLoader))
                 .andReturn(pluginLoader)
-                .times(2);
+                .times(3);
 
         connectorStatusListener.onStartup(CONNECTOR_ID);
         EasyMock.expectLastCall();

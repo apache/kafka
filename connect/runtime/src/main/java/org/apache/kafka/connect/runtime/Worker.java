@@ -237,7 +237,14 @@ public class Worker {
         WorkerConnector workerConnector = connectors.get(connName);
         if (workerConnector == null)
             throw new ConnectException("Connector " + connName + " not found in this worker.");
-        return workerConnector.isSinkConnector();
+
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
+            return workerConnector.isSinkConnector();
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
+        }
     }
 
     /**
@@ -257,14 +264,23 @@ public class Worker {
 
         Connector connector = workerConnector.connector();
         List<Map<String, String>> result = new ArrayList<>();
-        String taskClassName = connector.taskClass().getName();
-        for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
-            Map<String, String> taskConfig = new HashMap<>(taskProps); // Ensure we don't modify the connector's copy of the config
-            taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
-            if (sinkTopics != null)
-                taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
-            result.add(taskConfig);
+        ClassLoader savedLoader = plugins.currentThreadLoader();
+        try {
+            savedLoader = plugins.compareAndSwapLoaders(connector);
+            String taskClassName = connector.taskClass().getName();
+            for (Map<String, String> taskProps : connector.taskConfigs(maxTasks)) {
+                // Ensure we don't modify the connector's copy of the config
+                Map<String, String> taskConfig = new HashMap<>(taskProps);
+                taskConfig.put(TaskConfig.TASK_CLASS_CONFIG, taskClassName);
+                if (sinkTopics != null) {
+                    taskConfig.put(SinkTask.TOPICS_CONFIG, Utils.join(sinkTopics, ","));
+                }
+                result.add(taskConfig);
+            }
+        } finally {
+            Plugins.compareAndSwapLoaders(savedLoader);
         }
+
         return result;
     }
 
@@ -284,16 +300,16 @@ public class Worker {
     public boolean stopConnector(String connName) {
         log.info("Stopping connector {}", connName);
 
-        WorkerConnector connector = connectors.remove(connName);
-        if (connector == null) {
+        WorkerConnector workerConnector = connectors.remove(connName);
+        if (workerConnector == null) {
             log.warn("Ignoring stop request for unowned connector {}", connName);
             return false;
         }
 
         ClassLoader savedLoader = plugins.currentThreadLoader();
         try {
-            savedLoader = plugins.compareAndSwapLoaders(connector.connector());
-            connector.shutdown();
+            savedLoader = plugins.compareAndSwapLoaders(workerConnector.connector());
+            workerConnector.shutdown();
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
         }
@@ -318,8 +334,8 @@ public class Worker {
      * @return true if the connector is running, false if the connector is not running or is not manages by this worker.
      */
     public boolean isRunning(String connName) {
-        WorkerConnector connector = connectors.get(connName);
-        return connector != null && connector.isRunning();
+        WorkerConnector workerConnector = connectors.get(connName);
+        return workerConnector != null && workerConnector.isRunning();
     }
 
     /**
