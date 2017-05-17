@@ -31,6 +31,11 @@ case object Cluster extends ResourceType {
   val error = Errors.CLUSTER_AUTHORIZATION_FAILED
 }
 
+case object Broker extends ResourceType {
+  val name = "Broker"
+  val error = Errors.BROKER_AUTHORIZATION_FAILED
+}
+
 case object Topic extends ResourceType {
   val name = "Topic"
   val error = Errors.TOPIC_AUTHORIZATION_FAILED

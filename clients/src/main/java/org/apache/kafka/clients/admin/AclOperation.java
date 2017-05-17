@@ -73,7 +73,17 @@ public enum AclOperation {
     /**
      * CLUSTER_ACTION operation.
      */
-    CLUSTER_ACTION((byte) 9);
+    CLUSTER_ACTION((byte) 9),
+
+    /**
+     * DESCRIBE_CONFIGS operation.
+     */
+    DESCRIBE_CONFIGS((byte) 10),
+
+    /**
+     * ALTER_CONFIGS operation.
+     */
+    ALTER_CONFIGS((byte) 11);
 
     private final static HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
 

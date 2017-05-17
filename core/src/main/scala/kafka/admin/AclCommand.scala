@@ -31,9 +31,10 @@ object AclCommand {
 
   val Newline = scala.util.Properties.lineSeparator
   val ResourceTypeToValidOperations = Map[ResourceType, Set[Operation]] (
-    Topic -> Set(Read, Write, Describe, All, Delete),
+    Broker -> Set(DescribeConfigs),
+    Topic -> Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     Group -> Set(Read, Describe, All),
-    Cluster -> Set(Create, ClusterAction, All)
+    Cluster -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, All)
   )
 
   def main(args: Array[String]) {

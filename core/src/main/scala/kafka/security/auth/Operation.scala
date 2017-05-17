@@ -57,16 +57,25 @@ case object ClusterAction extends Operation {
   val name = "ClusterAction"
   val toJava = AclOperation.CLUSTER_ACTION
 }
+case object DescribeConfigs extends Operation {
+  val name = "DescribeConfigs"
+  val toJava = AclOperation.DESCRIBE_CONFIGS
+}
+case object AlterConfigs extends Operation {
+  val name = "AlterConfigs"
+  val toJava = AclOperation.ALTER_CONFIGS
+}
 case object All extends Operation {
   val name = "All"
   val toJava = AclOperation.ALL
 }
 
 object Operation {
-   def fromString(operation: String): Operation = {
-      val op = values.find(op => op.name.equalsIgnoreCase(operation))
-      op.getOrElse(throw new KafkaException(operation + " not a valid operation name. The valid names are " + values.mkString(",")))
-   }
+
+  def fromString(operation: String): Operation = {
+    val op = values.find(op => op.name.equalsIgnoreCase(operation))
+    op.getOrElse(throw new KafkaException(operation + " not a valid operation name. The valid names are " + values.mkString(",")))
+  }
 
   def fromJava(operation: AclOperation): Try[Operation] = {
     try {
@@ -76,5 +85,6 @@ object Operation {
     }
   }
 
-   def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, All)
+  def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, AlterConfigs,
+     DescribeConfigs, All)
 }

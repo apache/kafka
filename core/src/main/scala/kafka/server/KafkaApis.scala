@@ -1924,17 +1924,58 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
     val alterConfigsRequest = request.body[AlterConfigsRequest]
-    //TODO Authorization
-    val result = adminManager.alterConfigs(alterConfigsRequest.configs.asScala)
-    sendResponseMaybeThrottle(request, new AlterConfigsResponse(_, result.asJava))
+    val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.partition { case (resource, _) =>
+      resource.`type` match {
+        case RResourceType.BROKER =>
+          authorize(request.session, AlterConfigs, new Resource(Broker, resource.name)) ||
+            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+        case RResourceType.TOPIC =>
+          authorize(request.session, AlterConfigs, new Resource(Topic, resource.name)) ||
+            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+      }
+    }
+    val authorizedResult = adminManager.alterConfigs(authorizedResources)
+    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+      resource -> configsAuthorizationApiError(request.session, resource)
+    }
+    sendResponseMaybeThrottle(request, new AlterConfigsResponse(_, (authorizedResult ++ unauthorizedResult).asJava))
   }
 
+  private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
+    val error = resource.`type` match {
+      case RResourceType.BROKER => Errors.BROKER_AUTHORIZATION_FAILED
+      case RResourceType.TOPIC =>
+        // Don't leak topic name unless the user has describe topic permission
+        if (authorize(session, Describe, new Resource(Topic, resource.name)))
+          Errors.TOPIC_AUTHORIZATION_FAILED
+        else
+          Errors.UNKNOWN_TOPIC_OR_PARTITION
+      case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
+    }
+    new ApiError(error, null)
+  }
 
   def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
-    //TODO Authorization
-    val configs = adminManager.describeConfigs(describeConfigsRequest.resources.asScala)
-    sendResponseMaybeThrottle(request, new DescribeConfigsResponse(_, configs.asJava))
+    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.resources.asScala.partition { resource =>
+      resource.`type` match {
+        case RResourceType.BROKER =>
+          authorize(request.session, DescribeConfigs, new Resource(Broker, resource.name)) ||
+            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+        case RResourceType.TOPIC =>
+          authorize(request.session, DescribeConfigs, new Resource(Topic, resource.name)) ||
+            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
+      }
+    }
+    val authorizedConfigs = adminManager.describeConfigs(authorizedResources)
+    val unauthorizedConfigs = unauthorizedResources.map { resource =>
+      val error = configsAuthorizationApiError(request.session, resource)
+      resource -> new DescribeConfigsResponse.Config(error, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
+    }
+
+    sendResponseMaybeThrottle(request, new DescribeConfigsResponse(_, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
