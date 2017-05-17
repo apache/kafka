@@ -520,10 +520,12 @@ public class TransactionManager {
             } else {
                 clearInFlightRequestCorrelationId();
                 if (response.wasDisconnected()) {
+                    log.trace("disconnected from " + response.destination() + ". Will retry.");
                     reenqueue();
                 } else if (response.versionMismatch() != null) {
                     fatal(response.versionMismatch());
                 } else if (response.hasResponse()) {
+                    log.trace("Got transactional response for request:" + requestBuilder());
                     handleResponse(response.responseBody());
                 } else {
                     fatal(new KafkaException("Could not execute transactional request for unknown reasons"));

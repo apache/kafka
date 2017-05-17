@@ -188,9 +188,11 @@ public class Sender implements Runnable {
      */
     void run(long now) {
         long pollTimeout = retryBackoffMs;
-        if (!maybeSendTransactionalRequest(now))
+        if (!maybeSendTransactionalRequest(now)) {
             pollTimeout = sendProducerData(now);
+        }
 
+        log.trace("waiting {}ms in poll", pollTimeout);
         this.client.poll(pollTimeout, now);
     }
 
@@ -203,6 +205,7 @@ public class Sender implements Runnable {
             final KafkaException exception = transactionManager.lastError() instanceof KafkaException
                     ? (KafkaException) transactionManager.lastError()
                     : new KafkaException(transactionManager.lastError());
+            log.error("aborting producer batches because the transaction manager is in an error state: {}", exception);
             this.accumulator.abortBatches(exception);
             return Long.MAX_VALUE;
         }
@@ -281,11 +284,18 @@ public class Sender implements Runnable {
     }
 
     private boolean maybeSendTransactionalRequest(long now) {
-        if (transactionManager != null && transactionManager.hasInflightRequest())
-            return true;
-
-        if (transactionManager == null || !transactionManager.hasPendingTransactionalRequests())
+        if (transactionManager == null || !transactionManager.isTransactional())
             return false;
+
+        if (transactionManager.hasInflightRequest()) {
+            log.trace("There is already an inflight transactional request. Going to wait for the response.");
+            return true;
+        }
+
+        if (!transactionManager.hasPendingTransactionalRequests()) {
+            log.trace("There are no pending transactional requests to send");
+            return false;
+        }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
 
@@ -293,11 +303,15 @@ public class Sender implements Runnable {
             if (!accumulator.flushInProgress())
                 accumulator.beginFlush();
             transactionManager.reenqueue(nextRequestHandler);
+            log.trace("Going to wait for pending ProducerBatches to flush before sending an end transaction request");
             return false;
         }
 
-        if (transactionManager.maybeTerminateRequestWithError(nextRequestHandler))
+        if (transactionManager.maybeTerminateRequestWithError(nextRequestHandler)) {
+            log.trace("Not sending a transactional request because we are in an error state");
             return false;
+        }
+
 
         Node targetNode = null;
 
@@ -319,23 +333,26 @@ public class Sender implements Runnable {
                 }
                 if (targetNode != null) {
                     if (nextRequestHandler.isRetry()) {
+                        log.trace("waiting " + retryBackoffMs + "ms before resending a transactional request: " + nextRequestHandler.requestBuilder());
                         time.sleep(retryBackoffMs);
                     }
                     ClientRequest clientRequest = client.newClientRequest(targetNode.idString(), nextRequestHandler.requestBuilder(),
                             now, true, nextRequestHandler);
                     transactionManager.setInFlightRequestCorrelationId(clientRequest.correlationId());
+                    log.trace("sending transactional request {} to node {}", nextRequestHandler.requestBuilder(), clientRequest.destination());
                     client.send(clientRequest, now);
                     return true;
                 }
             } catch (IOException e) {
-                log.warn("Got an exception when trying to find a node to send a transactional request to. Going to back off and retry", e);
+                targetNode = null;
+                log.warn("Got an exception when trying to find a node to send transactional request " + nextRequestHandler.requestBuilder() + ". Going to back off and retry", e);
             }
+            log.trace("About to wait for " + retryBackoffMs + "ms before trying to send another transational request.");
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
 
-        if (targetNode == null)
-            transactionManager.retry(nextRequestHandler);
+        transactionManager.retry(nextRequestHandler);
 
         return true;
     }

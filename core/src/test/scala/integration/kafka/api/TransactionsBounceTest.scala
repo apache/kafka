@@ -72,7 +72,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @Ignore @Test
+  @Test
   def testBrokerFailure() {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
@@ -95,22 +95,23 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     while (numMessagesProcessed < numInputRecords) {
       try {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
-        error(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
+        trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead)
+        trace(s"received ${records.size} messages. sending them transactionally to $outputTopic")
         producer.beginTransaction()
         val shouldAbort = iteration % 10 == 0
         records.zipWithIndex.foreach { case (record, i) =>
           producer.send(producerRecord(outputTopic, record, !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key(), record.value(), true))
         }
-        error(s"Sent ${records.size} messages. Committing offsets.")
+        trace(s"Sent ${records.size} messages. Committing offsets.")
         producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer), consumerGroup)
         if (shouldAbort) {
-          error(s"aborting transaction of ${records.size} messages.")
+          trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
           producer.abortTransaction()
           consumer.close()
           consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
         } else {
-          error(s"committing transaction of ${records.size} messages.")
+          trace(s"Committed offsets. committing transaction of ${records.size} messages.")
           producer.commitTransaction()
           numMessagesProcessed += records.size
         }
@@ -186,13 +187,13 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
     override def doWork(): Unit = {
       for (server <- servers) {
-        error("Shutting down server : %s".format(server.config.brokerId))
+        info("Shutting down server : %s".format(server.config.brokerId))
         server.shutdown()
         server.awaitShutdown()
         Thread.sleep(500)
         info("Server %s shut down. Starting it up again.".format(server.config.brokerId))
         server.startup()
-        error("Restarted server: %s".format(server.config.brokerId))
+        info("Restarted server: %s".format(server.config.brokerId))
         Thread.sleep(500)
       }
 
