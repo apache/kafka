@@ -245,7 +245,7 @@ object TestUtils extends Logging {
       props.putAll(sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId"))
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSaslAuthentication(protocol) })
-      props.putAll(saslConfigs(saslProperties))
+      props.putAll(JaasTestUtils.saslConfigs(saslProperties))
 
     interBrokerSecurityProtocol.foreach { protocol =>
       props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
@@ -509,8 +509,9 @@ object TestUtils extends Logging {
     val props = new Properties
     if (usesSslTransportLayer(securityProtocol))
       props.putAll(sslConfigs(mode, securityProtocol == SecurityProtocol.SSL, trustStoreFile, certAlias))
+
     if (usesSaslAuthentication(securityProtocol))
-      props.putAll(saslConfigs(saslProperties))
+      props.putAll(JaasTestUtils.saslConfigs(saslProperties))
     props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
     props
   }
@@ -1182,13 +1183,6 @@ object TestUtils extends Logging {
     val sslProps = new Properties()
     sslConfigs.asScala.foreach { case (k, v) => sslProps.put(k, v) }
     sslProps
-  }
-
-  def saslConfigs(saslProperties: Option[Properties]): Properties = {
-    saslProperties match {
-      case Some(properties) => properties
-      case None => new Properties
-    }
   }
 
   // a X509TrustManager to trust self-signed certs for unit tests.
