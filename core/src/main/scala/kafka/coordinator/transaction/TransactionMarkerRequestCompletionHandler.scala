@@ -43,13 +43,23 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         val txnMarker = txnIdAndMarker.txnMarkerEntry
 
         txnStateManager.getTransactionState(transactionalId) match {
-          case None =>
-            info(s"Transaction metadata for $transactionalId does not exist in the cache" +
-              s"any more; cancel sending transaction markers $txnMarker to the brokers")
+
+          case Left(Errors.NOT_COORDINATOR) =>
+            info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
-          case Some(epochAndMetadata) =>
+          case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+            info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
+              s"cancel sending transaction markers $txnMarker to the brokers")
+
+            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Right(None) =>
+            throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+              s"no metadata in the cache; this is not expected")
+
+          case Right(Some(epochAndMetadata)) =>
             if (epochAndMetadata.coordinatorEpoch != txnMarker.coordinatorEpoch) {
               // coordinator epoch has changed, just cancel it from the purgatory
               info(s"Transaction coordinator epoch for $transactionalId has changed from ${txnMarker.coordinatorEpoch} to " +
@@ -84,13 +94,22 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
 
         txnStateManager.getTransactionState(transactionalId) match {
-          case None =>
-            info(s"Transaction metadata for $transactionalId does not exist in the cache" +
-              s"any more; cancel sending transaction markers $txnMarker to the brokers")
+          case Left(Errors.NOT_COORDINATOR) =>
+            info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 
             txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
 
-          case Some(epochAndMetadata) =>
+          case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+            info(s"I am loading the transaction partition that contains $transactionalId which means the current markers have to be obsoleted; " +
+              s"cancel sending transaction markers $txnMarker to the brokers")
+
+            txnMarkerChannelManager.removeMarkersForTxnId(transactionalId)
+
+          case Right(None) =>
+            throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+              s"no metadata in the cache; this is not expected")
+
+          case Right(Some(epochAndMetadata)) =>
             val txnMetadata = epochAndMetadata.transactionMetadata
             val retryPartitions: mutable.Set[TopicPartition] = mutable.Set.empty[TopicPartition]
             var abortSending: Boolean = false

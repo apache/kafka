@@ -100,18 +100,16 @@ class TransactionCoordinator(brokerId: Int,
       // and return a new producerId from the producerId manager
       val producerId = producerIdManager.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
-    } else if (!txnManager.isCoordinatorFor(transactionalId)) {
-      // check if it is the assigned coordinator for the transactional id
-      responseCallback(initTransactionError(Errors.NOT_COORDINATOR))
-    } else if (txnManager.isCoordinatorLoadingInProgress(transactionalId)) {
-      responseCallback(initTransactionError(Errors.COORDINATOR_LOAD_IN_PROGRESS))
     } else if (!txnManager.validateTransactionTimeoutMs(transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
       // only try to get a new producerId and update the cache if the transactional id is unknown
       val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-        case None =>
+        case Left(err) =>
+          Left(initTransactionError(err))
+
+        case Right(None) =>
           val producerId = producerIdManager.generateProducerId()
           val now = time.milliseconds()
           val createdMetadata = new TransactionMetadata(producerId = producerId,
@@ -136,7 +134,7 @@ class TransactionCoordinator(brokerId: Int,
             }
           }
 
-        case Some(existingEpochAndMetadata) =>
+        case Right(Some(existingEpochAndMetadata)) =>
           val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
           val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
@@ -204,33 +202,24 @@ class TransactionCoordinator(brokerId: Int,
     }
   }
 
-  private def validateTransactionalId(transactionalId: String): Errors =
-    if (transactionalId == null || transactionalId.isEmpty)
-      Errors.INVALID_REQUEST
-    else if (!txnManager.isCoordinatorFor(transactionalId))
-      Errors.NOT_COORDINATOR
-    else if (txnManager.isCoordinatorLoadingInProgress(transactionalId))
-      Errors.COORDINATOR_LOAD_IN_PROGRESS
-    else
-      Errors.NONE
-
-
   def handleAddPartitionsToTransaction(transactionalId: String,
                                        producerId: Long,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback): Unit = {
-    val error = validateTransactionalId(transactionalId)
-    if (error != Errors.NONE) {
-      responseCallback(error)
+    if (transactionalId == null || transactionalId.isEmpty) {
+      responseCallback(Errors.INVALID_REQUEST)
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid producerId mapping error.
       val result: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-        case None =>
+        case Left(err) =>
+          Left(err)
+
+        case Right(None) =>
           Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
-        case Some(epochAndMetadata) =>
+        case Right(Some(epochAndMetadata)) =>
           val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
           val txnMetadata = epochAndMetadata.transactionMetadata
 
@@ -276,8 +265,8 @@ class TransactionCoordinator(brokerId: Int,
   private def logInvalidStateTransitionAndReturnError(transactionalId: String,
                                                       transactionState: TransactionState,
                                                       transactionResult: TransactionResult) = {
-    error(s"transactionalId: $transactionalId -- Current state is $transactionState, but received transaction " +
-      s"marker result: $transactionResult")
+    debug(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
+      s"marker result to send: $transactionResult")
     Left(Errors.INVALID_TXN_STATE)
   }
 
@@ -286,15 +275,17 @@ class TransactionCoordinator(brokerId: Int,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback): Unit = {
-    val error = validateTransactionalId(transactionalId)
-    if (error != Errors.NONE)
-      responseCallback(error)
+    if (transactionalId == null || transactionalId.isEmpty)
+      responseCallback(Errors.INVALID_REQUEST)
     else {
       val preAppendResult: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-        case None =>
+        case Left(err) =>
+          Left(err)
+
+        case Right(None) =>
           Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
-        case Some(epochAndTxnMetadata) =>
+        case Right(Some(epochAndTxnMetadata)) =>
           val txnMetadata = epochAndTxnMetadata.transactionMetadata
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
 
@@ -349,7 +340,10 @@ class TransactionCoordinator(brokerId: Int,
               // since even if the coordinator epoch has changed after the check (e.g. a leader emigration followed by an immediate immigration),
               // the enqueued markers will still be cleared by the sender upon receiving the COORDINATOR_EPOCH_INVALID error code
               val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-                case Some(epochAndMetadata) =>
+                case Left(err) =>
+                  Left(err)
+
+                case Right(Some(epochAndMetadata)) =>
                   if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                     val txnMetadata = epochAndMetadata.transactionMetadata
                     txnMetadata synchronized {
@@ -381,16 +375,12 @@ class TransactionCoordinator(brokerId: Int,
                     Left(Errors.NOT_COORDINATOR)
                   }
 
-                case None =>
-                  if (txnManager.isCoordinatorFor(transactionalId)) {
-                    throw new IllegalStateException("Cannot find the metadata in coordinator's cache while it is still the leader of the txn topic partition")
-                  } else {
-                    // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-                    info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
-                      s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
+                case Right(None) =>
+                  // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
+                  info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
+                    s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
 
-                    Left(Errors.NOT_COORDINATOR)
-                  }
+                  Left(Errors.NOT_COORDINATOR)
               }
 
               preSendResult match {

@@ -57,7 +57,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
       .andReturn(txnTopicPartition)
       .anyTimes()
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
-      .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .anyTimes()
     EasyMock.replay(txnStateManager)
   }
@@ -100,7 +100,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   @Test
   def shouldCompleteDelayedOperationWhenNoMetadata(): Unit = {
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
-      .andReturn(None)
+      .andReturn(Right(None))
       .anyTimes()
     EasyMock.replay(txnStateManager)
 
@@ -110,7 +110,7 @@ class TransactionMarkerRequestCompletionHandlerTest {
   @Test
   def shouldCompleteDelayedOperationWhenCoordinatorEpochChanged(): Unit = {
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
-      .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch+1, txnMetadata)))
+      .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch+1, txnMetadata))))
       .anyTimes()
     EasyMock.replay(txnStateManager)
 

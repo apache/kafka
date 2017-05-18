@@ -198,7 +198,14 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
           trace(s"Completed sending transaction markers for $transactionalId as $txnResult")
 
           txnStateManager.getTransactionState(transactionalId) match {
-            case Some(epochAndMetadata) =>
+            case Left(Errors.NOT_COORDINATOR) =>
+              info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $newMetadata to transaction log")
+
+            case Left(Errors.COORDINATOR_LOAD_IN_PROGRESS) =>
+              info(s"I am loading the transaction partition that contains $transactionalId while my current coordinator epoch is $coordinatorEpoch; " +
+                s"so appending $newMetadata to transaction log since the loading process will continue the left work")
+
+            case Right(Some(epochAndMetadata)) =>
               if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                 debug(s"Updating $transactionalId's transaction state to $txnMetadata with coordinator epoch $coordinatorEpoch for $transactionalId succeeded")
 
@@ -227,11 +234,9 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                   s"has been sent to brokers. The cached metadata have been changed to $epochAndMetadata since preparing to send markers")
               }
 
-            case None =>
-              // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-              // we will stop appending the completed log entry to transaction topic as the new leader should be doing it.
-              info(s"Updating $transactionalId's transaction state (txn topic partition ${txnStateManager.partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
-                s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
+            case Right(None) =>
+              throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                s"no metadata in the cache; this is not expected")
           }
 
         case other =>
