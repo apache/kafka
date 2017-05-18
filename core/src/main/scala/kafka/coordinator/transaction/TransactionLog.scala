@@ -146,7 +146,7 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[coordinator] def valueToBytes(txnMetadata: TransactionMetadataTransition): Array[Byte] = {
+  private[coordinator] def valueToBytes(txnMetadata: TxnTransitMetadata): Array[Byte] = {
     import ValueSchema._
     val value = new Struct(Current)
     value.set(ProducerIdField, txnMetadata.producerId)

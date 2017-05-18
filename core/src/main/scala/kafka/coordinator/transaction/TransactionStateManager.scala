@@ -65,7 +65,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TransactionMetadataTransition) => Unit
+  type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -108,7 +108,7 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def enablePidExpiration() {
+  def enableProducerIdExpiration() {
     // TODO: add producer id expiration logic
   }
 
@@ -379,7 +379,7 @@ class TransactionStateManager(brokerId: Int,
   // TODO: check broker message format and error if < V2
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
-                             newMetadata: TransactionMetadataTransition,
+                             newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit): Unit = {
 
     // generate the message for this transaction metadata
