@@ -23,6 +23,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 
@@ -55,5 +56,18 @@ public class MmapBufferPoolTest {
         pool.deallocate(buffer);
         assertEquals("All memory should be available", totalMemory, pool.availableMemory());
         assertEquals("Non-standard size didn't go to the free list.", totalMemory - size, pool.unallocatedMemory());
+    }
+
+    /**
+     * Test that we cannot try to allocate more memory then we have in the whole pool
+     */
+    @Test(expected = IllegalArgumentException.class)
+    public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(storefile, 1024, 512);
+        ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
+        assertEquals(1024, buffer.limit());
+        pool.deallocate(buffer);
+        pool.allocate(1025, maxBlockTimeMs);
     }
 }
