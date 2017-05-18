@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.modules.junit4.PowerMockRunner;
@@ -25,6 +27,8 @@ import java.nio.ByteBuffer;
 import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 public class MmapBufferPoolTest {
@@ -68,5 +72,44 @@ public class MmapBufferPoolTest {
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
         pool.allocate(1025, maxBlockTimeMs);
+    }
+
+    private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
+        Thread thread = new Thread() {
+            public void run() {
+                Time.SYSTEM.sleep(delayMs);
+                pool.deallocate(buffer);
+            }
+        };
+        thread.start();
+    }
+
+    /**
+     * Test if Timeout exception is thrown when there is not enough memory to allocate and the elapsed time is greater than the max specified block time.
+     * And verify that the allocation should finish soon after the maxBlockTimeMs.
+     */
+    @Test
+    public void testBlockTimeout() throws Exception {
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(10, 1, storefile);
+        ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
+        ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
+        ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
+        // First two buffers will be de-allocated within maxBlockTimeMs since the most recent de-allocation
+        delayedDeallocate(pool, buffer1, maxBlockTimeMs / 2);
+        delayedDeallocate(pool, buffer2, maxBlockTimeMs);
+        // The third buffer will be de-allocated after maxBlockTimeMs since the most recent de-allocation
+        delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
+
+        long beginTimeMs = Time.SYSTEM.milliseconds();
+        try {
+            pool.allocate(10, maxBlockTimeMs);
+            fail("The buffer allocated more memory than its maximum value 10");
+        } catch (TimeoutException e) {
+            // this is good
+        }
+        assertTrue("available memory" + pool.availableMemory(), pool.availableMemory() >= 9 && pool.availableMemory() <= 10);
+        long endTimeMs = Time.SYSTEM.milliseconds();
+        assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
     }
 }
