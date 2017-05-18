@@ -475,7 +475,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY))
     }
 
-    def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData) = {
+    def convertedPartitionData(tp: TopicPartition, data: FetchResponse.PartitionData): (FetchResponse.PartitionData, Boolean) = {
 
       // Down-conversion of the fetched records is needed when the stored magic version is
       // greater than that supported by the client (as indicated by the fetch request version). If the
@@ -487,15 +487,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.getMagic(tp) match {
         case Some(magic) if magic > 0 && versionId <= 1 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0) =>
           trace(s"Down converting message to V0 for fetch request from $clientId")
-          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0))
+          (new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V0)), true)
 
         case Some(magic) if magic > 1 && versionId <= 3 && !data.records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1) =>
           trace(s"Down converting message to V1 for fetch request from $clientId")
-          new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1))
+          (new FetchResponse.PartitionData(data.error, data.highWatermark, FetchResponse.INVALID_LAST_STABLE_OFFSET,
+              data.logStartOffset, data.abortedTransactions, data.records.downConvert(RecordBatch.MAGIC_VALUE_V1)), true)
 
-        case _ => data
+        case _ => (data, false)
       }
     }
 
@@ -520,14 +520,23 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         fetchedPartitionData.put(topicPartition, data)
       }
+      var response = new FetchResponse(fetchedPartitionData, 0)
+      var responseStruct = response.toStruct(versionId)
 
       // fetch response callback invoked after any throttling
       def fetchResponseCallback(bandwidthThrottleTimeMs: Int) {
         def createResponse(requestThrottleTimeMs: Int): RequestChannel.Response = {
           val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]
-          fetchedPartitionData.asScala.foreach(e => convertedData.put(e._1, convertedPartitionData(e._1, e._2)))
-          val response = new FetchResponse(convertedData, 0)
-          val responseStruct = response.toStruct(versionId)
+          var conversionNeeded = false
+          fetchedPartitionData.asScala.foreach(e => {
+              val (data, converted) = convertedPartitionData(e._1, e._2)
+              convertedData.put(e._1, data)
+              conversionNeeded |= converted
+            })
+          if (conversionNeeded) {
+            response = new FetchResponse(convertedData, 0)
+            responseStruct = response.toStruct(versionId)
+          }
 
           trace(s"Sending fetch response to client $clientId of ${responseStruct.sizeOf} bytes.")
           response.responseData.asScala.foreach { case (topicPartition, data) =>
@@ -547,7 +556,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           sendResponseMaybeThrottle(request, request.header.clientId, sendResponseCallback)
       }
 
-      // When this callback is triggered, the remote API call has completed
+      // When this callback is triggered, the remote API call has completed.
+      // Record time before any byte-rate throttling.
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
       if (fetchRequest.isFromFollower) {
@@ -559,8 +569,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
         // result in data being loaded into memory, it is better to do this after throttling to avoid OOM.
-        val response = new FetchResponse(fetchedPartitionData, 0)
-        val responseStruct = response.toStruct(versionId)
         quotas.fetch.recordAndMaybeThrottle(request.session.sanitizedUser, clientId, responseStruct.sizeOf,
           fetchResponseCallback)
       }
