@@ -21,16 +21,27 @@ import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.SubjectConverter;
 
 import java.util.Map;
 
 /**
  * Pass-through converter for raw byte data.
  */
-public class ByteArrayConverter implements Converter {
+public class ByteArrayConverter implements Converter, SubjectConverter {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
+    }
+
+    @Override
+    public byte[] fromConnectData(String topic, String subject, Schema schema, Object value) {
+        return fromConnectData(topic, schema, value);
+    }
+
+    @Override
+    public SchemaAndValue toConnectData(String topic, String subject, byte[] value) {
+        return toConnectData(topic, value);
     }
 
     @Override

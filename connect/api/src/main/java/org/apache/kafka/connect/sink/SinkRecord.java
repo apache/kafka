@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.connect.sink;
 
+import java.util.List;
+
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.connect.connector.ConnectHeader;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 
@@ -38,7 +41,12 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
 
     public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
                       Long timestamp, TimestampType timestampType) {
-        super(topic, partition, keySchema, key, valueSchema, value, timestamp);
+        this(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, null);
+    }
+
+    public SinkRecord(String topic, int partition, Schema keySchema, Object key, Schema valueSchema, Object value, long kafkaOffset,
+                      Long timestamp, TimestampType timestampType, List<ConnectHeader> headers) {
+        super(topic, partition, keySchema, key, valueSchema, value, timestamp, headers);
         this.kafkaOffset = kafkaOffset;
         this.timestampType = timestampType;
     }
@@ -52,8 +60,8 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     }
 
     @Override
-    public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp) {
-        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType);
+    public SinkRecord newRecord(String topic, Integer kafkaPartition, Schema keySchema, Object key, Schema valueSchema, Object value, Long timestamp, List<ConnectHeader> headers) {
+        return new SinkRecord(topic, kafkaPartition, keySchema, key, valueSchema, value, kafkaOffset(), timestamp, timestampType, headers);
     }
 
     @Override

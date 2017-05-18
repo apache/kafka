@@ -16,17 +16,17 @@
  */
 package org.apache.kafka.connect.storage;
 
+import java.util.Map;
+
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
-
-import java.util.Map;
 
 /**
  * The Converter interface provides support for translating between Kafka Connect's runtime data format
  * and byte[]. Internally, this likely includes an intermediate step to the format used by the serialization
  * layer (e.g. JsonNode, GenericRecord, Message).
  */
-public interface Converter {
+public interface SubjectConverter {
 
     /**
      * Configure this class.
@@ -42,7 +42,7 @@ public interface Converter {
      * @param value the value to convert
      * @return the serialized value
      */
-    byte[] fromConnectData(String topic, Schema schema, Object value);
+    byte[] fromConnectData(String topic, String subject, Schema schema, Object value);
 
     /**toConnectData
      * Convert a native object to a Kafka Connect data object.
@@ -50,5 +50,5 @@ public interface Converter {
      * @param value the value to convert
      * @return an object containing the {@link Schema} and the converted value
      */
-    SchemaAndValue toConnectData(String topic, byte[] value);
+    SchemaAndValue toConnectData(String topic, String subject, byte[] value);
 }

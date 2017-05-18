@@ -34,6 +34,8 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.storage.StringConverter;
+import org.apache.kafka.connect.storage.SubjectConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.MockTime;
 import org.apache.kafka.connect.util.ThreadedTest;
@@ -372,6 +374,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(TargetState.STARTED),
                 EasyMock.anyObject(JsonConverter.class),
                 EasyMock.anyObject(JsonConverter.class),
+                EasyMock.anyObject(StringConverter.class),
                 EasyMock.eq(TransformationChain.<SourceRecord>noOp()),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
@@ -446,6 +449,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(TargetState.STARTED),
                 EasyMock.anyObject(JsonConverter.class),
                 EasyMock.anyObject(JsonConverter.class),
+                EasyMock.anyObject(StringConverter.class),
                 EasyMock.eq(TransformationChain.<SourceRecord>noOp()),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
@@ -493,6 +497,7 @@ public class WorkerTest extends ThreadedTest {
 
         Capture<TestConverter> keyConverter = EasyMock.newCapture();
         Capture<TestConverter> valueConverter = EasyMock.newCapture();
+        Capture<TestConverter> headerConverter = EasyMock.newCapture();
 
         PowerMock.expectNew(
                 WorkerSourceTask.class, EasyMock.eq(TASK_ID),
@@ -501,6 +506,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.eq(TargetState.STARTED),
                 EasyMock.capture(keyConverter),
                 EasyMock.capture(valueConverter),
+                EasyMock.capture(headerConverter),
                 EasyMock.eq(TransformationChain.<SourceRecord>noOp()),
                 EasyMock.anyObject(KafkaProducer.class),
                 EasyMock.anyObject(OffsetStorageReader.class),
@@ -627,12 +633,22 @@ public class WorkerTest extends ThreadedTest {
         }
     }
 
-    public static class TestConverter implements Converter {
+    public static class TestConverter implements Converter, SubjectConverter {
         public Map<String, ?> configs;
 
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
             this.configs = configs;
+        }
+
+        @Override
+        public byte[] fromConnectData(String topic, String subject, Schema schema, Object value) {
+            return new byte[0];
+        }
+
+        @Override
+        public SchemaAndValue toConnectData(String topic, String subject, byte[] value) {
+            return null;
         }
 
         @Override

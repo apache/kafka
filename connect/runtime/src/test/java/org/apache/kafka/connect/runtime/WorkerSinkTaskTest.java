@@ -35,6 +35,7 @@ import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.SubjectConverter;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.MockTime;
 import org.easymock.Capture;
@@ -108,6 +109,8 @@ public class WorkerSinkTaskTest {
     @Mock
     private Converter valueConverter;
     @Mock
+    private SubjectConverter headerConverter;
+    @Mock
     private TransformationChain<SinkRecord> transformationChain;
     @Mock
     private TaskStatus.Listener statusListener;
@@ -123,6 +126,7 @@ public class WorkerSinkTaskTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put("header.converter", "org.apache.kafka.connect.storage.StringConverter");
         workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("internal.key.converter.schemas.enable", "false");
@@ -131,7 +135,7 @@ public class WorkerSinkTaskTest {
         workerConfig = new StandaloneConfig(workerProps);
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, transformationChain, time);
+                taskId, sinkTask, statusListener, initialState, workerConfig, keyConverter, valueConverter, headerConverter, transformationChain, time);
 
         recordsReturned = 0;
     }
@@ -140,7 +144,7 @@ public class WorkerSinkTaskTest {
     public void testStartPaused() throws Exception {
         workerTask = PowerMock.createPartialMock(
                 WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, transformationChain, time);
+                taskId, sinkTask, statusListener, TargetState.PAUSED, workerConfig, keyConverter, valueConverter, headerConverter, transformationChain, time);
 
         expectInitializeTask();
         expectPollInitialAssignment();
