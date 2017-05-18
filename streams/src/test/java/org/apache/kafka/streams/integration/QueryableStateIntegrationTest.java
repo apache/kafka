@@ -908,17 +908,16 @@ public class QueryableStateIntegrationTest {
             producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
             producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-            final KafkaProducer<String, String>
-                producer =
-                new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer());
+            try (final KafkaProducer<String, String> producer =
+                         new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer())) {
 
-            while (getCurrIteration() < numIterations && !shutdown) {
-                for (int i = 0; i < inputValues.size(); i++) {
-                    producer.send(new ProducerRecord<String, String>(topic, inputValues.get(i)));
+                while (getCurrIteration() < numIterations && !shutdown) {
+                    for (int i = 0; i < inputValues.size(); i++) {
+                        producer.send(new ProducerRecord<String, String>(topic, inputValues.get(i)));
+                    }
+                    incrementInteration();
                 }
-                incrementInteration();
             }
-            producer.close();
         }
     }
 
