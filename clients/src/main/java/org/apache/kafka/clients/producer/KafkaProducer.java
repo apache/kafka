@@ -374,8 +374,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userConfiguredRetries = true;
         }
         if (idempotenceEnabled && !userConfiguredRetries) {
-            log.info("Overriding the default retries config to " + 3 + " since the idempotent producer is enabled.");
-            return 3;
+            // We recommend setting infinite retries when the idempotent producer is enabled, so it makes sense to make
+            // this the default.
+            log.info("Overriding the default retries config to " + Integer.MAX_VALUE + " since the idempotent producer is enabled.");
+            return Integer.MAX_VALUE;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
             throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
