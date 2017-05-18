@@ -137,11 +137,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors.asScala.find(_._1 == createTopic).get._2.error),
     ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors.asScala.find(_._1 == deleteTopic).get._2),
     ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
-    ApiKeys.DESCRIBE_CONFIGS -> { (resp: DescribeConfigsResponse) =>
-      if (resp.configs.get(tp) == null)
-        println("resp " + resp.configs)
-      resp.configs.get(new RResource(RResourceType.TOPIC, tp.topic)).error.error
-    },
+    ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
+      resp.configs.get(new RResource(RResourceType.TOPIC, tp.topic)).error.error),
     ApiKeys.ALTER_CONFIGS -> ((resp: AlterConfigsResponse) =>
       resp.errors.get(new RResource(RResourceType.TOPIC, tp.topic)).error)
   )
