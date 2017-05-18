@@ -312,7 +312,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
      * a particular resource are updated atomically.
-     * 
+     *
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
      * @param options         The options to use when describing configs
