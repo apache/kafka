@@ -17,7 +17,6 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.record.KafkaLZ4BlockInputStream.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 
@@ -110,8 +109,7 @@ public enum CompressionType {
         @Override
         public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize) {
             try {
-                return (OutputStream) LZ4Constructors.OUTPUT.invoke(buffer,
-                        messageVersion == RecordBatch.MAGIC_VALUE_V0);
+                return new KafkaLZ4BlockOutputStream(buffer, messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -120,8 +118,8 @@ public enum CompressionType {
         @Override
         public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion) {
             try {
-                return (InputStream) LZ4Constructors.INPUT.invoke(buffer, bufferSupplier.get(),
-                        messageVersion == RecordBatch.MAGIC_VALUE_V0);
+                return new KafkaLZ4BlockInputStream(buffer, bufferSupplier.get(),
+                                                    messageVersion == RecordBatch.MAGIC_VALUE_V0);
             } catch (Throwable e) {
                 throw new KafkaException(e);
             }
@@ -138,6 +136,12 @@ public enum CompressionType {
         this.rate = rate;
     }
 
+    /**
+     * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@#link ByteBuffer}s directly.
+     * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
+     * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
+     * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
+     */
     public abstract OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion, int bufferSize);
 
     public abstract InputStream wrapForInput(ByteBuffer buffer, byte messageVersion);
@@ -170,22 +174,13 @@ public enum CompressionType {
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
 
-    // Dynamically load the Snappy and LZ4 classes so that we only have a runtime dependency on compression algorithms
+    // Dynamically load the Snappy classes so that we only have a runtime dependency on compression algorithms
     // that are used. This is important for platforms that are not supported by the underlying libraries.
     // Note that we are using the initialization-on-demand holder idiom, so it's important that the initialisation
     // is done in separate classes (one per compression type).
-
-    private static class LZ4Constructors {
-        static final MethodHandle INPUT = findConstructor(
-                "org.apache.kafka.common.record.KafkaLZ4BlockInputStream",
-                MethodType.methodType(void.class, ByteBuffer.class,
-                                      BufferSupplier.class, Boolean.TYPE));
-
-        static final MethodHandle OUTPUT = findConstructor(
-                "org.apache.kafka.common.record.KafkaLZ4BlockOutputStream",
-                MethodType.methodType(void.class, OutputStream.class, Boolean.TYPE));
-
-    }
+    //
+    // For LZ4 we are using org.apache.kafka classes, which should always be in the classpath, and would not trigger
+    // an error until KafkaLZ4BlockInputStream is initialized, which only happens if LZ4 is actually used.
 
     private static class SnappyConstructors {
         static final MethodHandle INPUT = findConstructor("org.xerial.snappy.SnappyInputStream",
