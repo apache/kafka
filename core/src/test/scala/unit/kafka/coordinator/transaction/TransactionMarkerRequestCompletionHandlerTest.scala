@@ -98,9 +98,19 @@ class TransactionMarkerRequestCompletionHandlerTest {
   }
 
   @Test
-  def shouldCompleteDelayedOperationWhenNoMetadata(): Unit = {
+  def shouldCompleteDelayedOperationWhenNotCoordinator(): Unit = {
     EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
-      .andReturn(Right(None))
+      .andReturn(Left(Errors.NOT_COORDINATOR))
+      .anyTimes()
+    EasyMock.replay(txnStateManager)
+
+    verifyRemoveDelayedOperationOnError(Errors.NONE)
+  }
+
+  @Test
+  def shouldCompleteDelayedOperationWhenCoordinatorLoading(): Unit = {
+    EasyMock.expect(txnStateManager.getTransactionState(transactionalId))
+      .andReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
       .anyTimes()
     EasyMock.replay(txnStateManager)
 
