@@ -29,7 +29,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 
 public class MmapBufferPool implements BufferPool {
     
-    private final long maxSize;
+    private final long totalMemory;
     private final int chunkSize;
     /** This memory is accounted for separately from the poolable buffers in free. */
     private long availableMemory;
@@ -37,16 +37,16 @@ public class MmapBufferPool implements BufferPool {
     private final BlockingDeque<ByteBuffer> free;
     private MappedByteBuffer fileBuffer;
     
-    public MmapBufferPool(File backingFileName, long maxSize, int chunkSize) throws IOException {
-        this.maxSize = maxSize;
-        this.availableMemory = maxSize;
+    public MmapBufferPool(File backingFileName, long totalMemory, int chunkSize) throws IOException {
+        this.totalMemory = totalMemory;
+        this.availableMemory = totalMemory;
         this.chunkSize = chunkSize;
         this.free = new LinkedBlockingDeque<ByteBuffer>();
 
         RandomAccessFile f = new RandomAccessFile(backingFileName, "rw");
-        f.setLength(maxSize);
+        f.setLength(totalMemory);
 
-        this.fileBuffer = f.getChannel().map(MapMode.READ_WRITE, 0, maxSize);
+        this.fileBuffer = f.getChannel().map(MapMode.READ_WRITE, 0, totalMemory);
 //        while (this.fileBuffer.remaining() >= chunkSize) {
 //            ByteBuffer fileBufferSlice = this.fileBuffer.slice();
 //            fileBufferSlice.limit(chunkSize);
@@ -58,8 +58,11 @@ public class MmapBufferPool implements BufferPool {
 
     @Override
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
-        if (size > chunkSize)
-            throw new IllegalArgumentException("Illegal allocation size.");
+        if (size > this.totalMemory)
+            throw new IllegalArgumentException("Attempt to allocate " + size
+                                                + " bytes, but there is a hard limit of "
+                                                + this.totalMemory
+                                                + " on memory allocations.");
 
         // check if we have a free buffer of the right size pooled
         if (size == chunkSize && !this.free.isEmpty())
@@ -77,7 +80,7 @@ public class MmapBufferPool implements BufferPool {
             return allocatedBuffer;
         } else {
             // we are out of memory and will have to block
-            throw new BufferExhaustedException("You have exhausted the " + this.maxSize
+            throw new BufferExhaustedException("You have exhausted the " + this.totalMemory
                         + " bytes of memory you configured for the client and the client is configured to error"
                         + " rather than block when memory is exhausted.");
         }
