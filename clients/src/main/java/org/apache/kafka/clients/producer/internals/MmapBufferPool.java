@@ -74,12 +74,12 @@ public class MmapBufferPool implements BufferPool {
         if (this.availableMemory + freeListSize >= size) {
             // we have enough unallocated or pooled memory to immediately
             // satisfy the request
-            freeUp(size);
             ByteBuffer allocatedBuffer = allocateByteBuffer(size);
             this.availableMemory -= size;
             return allocatedBuffer;
         } else {
             // we are out of memory and will have to block
+            // throw error until blocking code is implemented
             throw new BufferExhaustedException("You have exhausted the " + this.totalMemory
                         + " bytes of memory you configured for the client and the client is configured to error"
                         + " rather than block when memory is exhausted.");
@@ -95,24 +95,20 @@ public class MmapBufferPool implements BufferPool {
         return fileBufferSlice;
     }
 
-    /**
-     * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
-     * buffers (if needed)
-     */
-    private void freeUp(int size) {
-        while (!this.free.isEmpty() && this.availableMemory < size)
-            this.availableMemory += this.free.pollLast().capacity();
-    }
-
     @Override
     public void deallocate(ByteBuffer buffer, int size) {
-        buffer.clear();
-        this.free.add(buffer);
+        int sliceSize = buffer.limit() - buffer.position();
+        if (size == this.chunkSize && size == sliceSize) {
+            this.free.add(buffer);
+        } else {
+            this.availableMemory += size;
+        }
     }
 
     @Override
     public void deallocate(ByteBuffer buffer) {
-        deallocate(buffer, buffer.capacity());
+        int size = buffer.limit() - buffer.position();
+        deallocate(buffer, size);
     }
 
     /**
