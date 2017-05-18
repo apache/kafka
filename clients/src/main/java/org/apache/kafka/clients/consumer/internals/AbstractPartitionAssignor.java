@@ -34,6 +34,7 @@ import java.util.Set;
  */
 public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractPartitionAssignor.class);
+    private Map<String, Subscription> subscriptions = null;
 
     /**
      * Perform the group assignment given the partition counts and member subscriptions
@@ -52,6 +53,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+        this.subscriptions = new HashMap<>(subscriptions);
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, List<String>> topicSubscriptions = new HashMap<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
@@ -71,11 +73,15 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
         Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, topicSubscriptions);
 
-        // this class has maintains no user data, so just wrap the results
+        // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
             assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue()));
         return assignments;
+    }
+
+    protected Map<String, Subscription> getSubscriptions() {
+        return subscriptions;
     }
 
     @Override

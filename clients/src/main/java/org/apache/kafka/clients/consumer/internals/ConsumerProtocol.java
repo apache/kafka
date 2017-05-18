@@ -66,7 +66,7 @@ public class ConsumerProtocol {
     public static final short CONSUMER_PROTOCOL_V0 = 0;
     public static final Schema CONSUMER_PROTOCOL_HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY_NAME, Type.INT16));
-    private static final Struct CONSUMER_PROTOCOL_HEADER_V0 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA)
+    public static final Struct CONSUMER_PROTOCOL_HEADER_V0 = new Struct(CONSUMER_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONSUMER_PROTOCOL_V0);
 
     public static final Schema SUBSCRIPTION_V0 = new Schema(
@@ -146,8 +146,7 @@ public class ConsumerProtocol {
         // otherwise, assume versions can be parsed as V0
     }
 
-
-    private static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
+    public static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
         Map<String, List<Integer>> partitionMap = new HashMap<>();
         for (TopicPartition partition : partitions) {
             String topic = partition.topic();
@@ -160,5 +159,4 @@ public class ConsumerProtocol {
         }
         return partitionMap;
     }
-
 }
