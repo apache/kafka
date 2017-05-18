@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.server.KafkaServer;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -56,6 +57,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -79,6 +81,7 @@ public class EosIntegrationTest {
 
     private final Map<Integer, Integer> maxPartitionNumberSeen = new HashMap<>();
     private boolean injectError = false;
+    private AtomicInteger commitRequested;
     private Throwable uncaughtException;
 
     private int testNumber = 0;
@@ -177,46 +180,78 @@ public class EosIntegrationTest {
                         }
                     }));
 
-            streams.start();
+                try {
+                    streams.start();
 
-            final List<KeyValue<Long, Long>> inputData = new ArrayList<KeyValue<Long, Long>>() {
-                {
-                    add(new KeyValue<>(0L, factor * 100 + 0L));
-                    add(new KeyValue<>(0L, factor * 100 + 1L));
-                    add(new KeyValue<>(0L, factor * 100 + 2L));
-                    add(new KeyValue<>(1L, factor * 100 + 0L));
-                    add(new KeyValue<>(1L, factor * 100 + 1L));
-                    add(new KeyValue<>(1L, factor * 100 + 2L));
-                }
-            };
-
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                inputTopic,
-                inputData,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
-            );
-
-            final List<KeyValue<Long, Long>> committedRecords
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
+                    final List<KeyValue<Long, Long>> inputData = new ArrayList<KeyValue<Long, Long>>() {
                         {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                            add(new KeyValue<>(0L, factor * 100 + 0L));
+                            add(new KeyValue<>(0L, factor * 100 + 1L));
+                            add(new KeyValue<>(0L, factor * 100 + 2L));
+                            add(new KeyValue<>(1L, factor * 100 + 0L));
+                            add(new KeyValue<>(1L, factor * 100 + 1L));
+                            add(new KeyValue<>(1L, factor * 100 + 2L));
                         }
-                    }),
-                inputTopic,
-                inputData.size()
-            );
+                    };
 
-            assertThat(committedRecords, equalTo(inputData));
+                    IntegrationTestUtils.produceKeyValuesSynchronously(
+                        inputTopic,
+                        inputData,
+                        TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                        CLUSTER.time
+                    );
 
-            streams.close();
+                    final List<KeyValue<Long, Long>> committedRecords
+                        = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                        TestUtils.consumerConfig(
+                            CLUSTER.bootstrapServers(),
+                            CONSUMER_GROUP_ID,
+                            LongDeserializer.class,
+                            LongDeserializer.class,
+                            new Properties() {
+                                {
+                                    put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                                }
+                            }),
+                        inputTopic,
+                        inputData.size()
+                    );
+
+                    checkResultPerKey(committedRecords, inputData);
+                } finally {
+                    streams.close();
+                }
         }
+    }
+
+    private void checkResultPerKey(final List<KeyValue<Long, Long>> result,
+                                   final List<KeyValue<Long, Long>> expectedResult) {
+        final Set<Long> allKeys = new HashSet<>();
+        addAllKeys(allKeys, result);
+        addAllKeys(allKeys, expectedResult);
+
+        for (final Long key : allKeys) {
+            assertThat(getAllRecordPerKey(key, result), equalTo(getAllRecordPerKey(key, expectedResult)));
+        }
+
+    }
+
+    private void addAllKeys(final Set<Long> allKeys, final List<KeyValue<Long, Long>> records) {
+        for (final KeyValue<Long, Long> record : records) {
+            allKeys.add(record.key);
+        }
+    }
+
+    private List<KeyValue<Long, Long>> getAllRecordPerKey(final Long key, final List<KeyValue<Long, Long>> records) {
+        final List<KeyValue<Long, Long>> recordsPerKey = new ArrayList<>(records.size());
+
+        for (final KeyValue<Long, Long> record : records) {
+            if (record.key.equals(key)) {
+                recordsPerKey.add(record);
+            }
+        }
+
+        return recordsPerKey;
     }
 
     @Test
@@ -237,76 +272,78 @@ public class EosIntegrationTest {
                     }
                 }));
 
-        streams.start();
+        try {
+            streams.start();
 
-        final List<KeyValue<Long, Long>> firstBurstOfData = new ArrayList<KeyValue<Long, Long>>() {
-            {
-                add(new KeyValue<>(0L, 0L));
-                add(new KeyValue<>(0L, 1L));
-                add(new KeyValue<>(0L, 2L));
-                add(new KeyValue<>(0L, 3L));
-                add(new KeyValue<>(0L, 4L));
-            }
-        };
-        final List<KeyValue<Long, Long>> secondBurstOfData = new ArrayList<KeyValue<Long, Long>>() {
-            {
-                add(new KeyValue<>(0L, 5L));
-                add(new KeyValue<>(0L, 6L));
-                add(new KeyValue<>(0L, 7L));
-            }
-        };
+            final List<KeyValue<Long, Long>> firstBurstOfData = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(0L, 0L));
+                    add(new KeyValue<>(0L, 1L));
+                    add(new KeyValue<>(0L, 2L));
+                    add(new KeyValue<>(0L, 3L));
+                    add(new KeyValue<>(0L, 4L));
+                }
+            };
+            final List<KeyValue<Long, Long>> secondBurstOfData = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(0L, 5L));
+                    add(new KeyValue<>(0L, 6L));
+                    add(new KeyValue<>(0L, 7L));
+                }
+            };
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            SINGLE_PARTITION_INPUT_TOPIC,
-            firstBurstOfData,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
-        );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                SINGLE_PARTITION_INPUT_TOPIC,
+                firstBurstOfData,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
 
-        final List<KeyValue<Long, Long>> firstCommittedRecords
-            = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                CONSUMER_GROUP_ID,
-                LongDeserializer.class,
-                LongDeserializer.class,
-                new Properties() {
-                    {
-                        put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                    }
-                }),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
-            firstBurstOfData.size()
-        );
+            final List<KeyValue<Long, Long>> firstCommittedRecords
+                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID,
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                        }
+                    }),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                firstBurstOfData.size()
+            );
 
-        assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
+            assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            SINGLE_PARTITION_INPUT_TOPIC,
-            secondBurstOfData,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
-        );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                SINGLE_PARTITION_INPUT_TOPIC,
+                secondBurstOfData,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
 
-        final List<KeyValue<Long, Long>> secondCommittedRecords
-            = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                CONSUMER_GROUP_ID,
-                LongDeserializer.class,
-                LongDeserializer.class,
-                new Properties() {
-                    {
-                        put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                    }
-                }),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
-            secondBurstOfData.size()
-        );
+            final List<KeyValue<Long, Long>> secondCommittedRecords
+                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID,
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                        }
+                    }),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                secondBurstOfData.size()
+            );
 
-        assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
-
-        streams.close();
+            assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
+        } finally {
+            streams.close();
+        }
     }
 
     @Ignore
@@ -321,70 +358,98 @@ public class EosIntegrationTest {
         // after fail over, we should read 30 committed records
 
         final KafkaStreams streams = getKafkaStreams(false);
-        streams.start();
+        try {
+            streams.start();
 
-        final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
-            {
-                add(new KeyValue<>(0L, 0L));
-                add(new KeyValue<>(0L, 1L));
-                add(new KeyValue<>(0L, 2L));
-                add(new KeyValue<>(0L, 3L));
-                add(new KeyValue<>(0L, 4L));
-                add(new KeyValue<>(0L, 5L));
-                add(new KeyValue<>(0L, 6L));
-                add(new KeyValue<>(0L, 7L));
-                add(new KeyValue<>(0L, 8L));
-                add(new KeyValue<>(0L, 9L));
-                add(new KeyValue<>(1L, 0L));
-                add(new KeyValue<>(1L, 1L));
-                add(new KeyValue<>(1L, 2L));
-                add(new KeyValue<>(1L, 3L));
-                add(new KeyValue<>(1L, 4L));
-                add(new KeyValue<>(1L, 5L));
-                add(new KeyValue<>(1L, 6L));
-                add(new KeyValue<>(1L, 7L));
-                add(new KeyValue<>(1L, 8L));
-                add(new KeyValue<>(1L, 9L));
+            final List<KeyValue<Long, Long>> committedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(0L, 0L));
+                    add(new KeyValue<>(0L, 1L));
+                    add(new KeyValue<>(0L, 2L));
+                    add(new KeyValue<>(0L, 3L));
+                    add(new KeyValue<>(0L, 4L));
+                    add(new KeyValue<>(0L, 5L));
+                    add(new KeyValue<>(0L, 6L));
+                    add(new KeyValue<>(0L, 7L));
+                    add(new KeyValue<>(0L, 8L));
+                    add(new KeyValue<>(0L, 9L));
+                    add(new KeyValue<>(1L, 0L));
+                    add(new KeyValue<>(1L, 1L));
+                    add(new KeyValue<>(1L, 2L));
+                    add(new KeyValue<>(1L, 3L));
+                    add(new KeyValue<>(1L, 4L));
+                    add(new KeyValue<>(1L, 5L));
+                    add(new KeyValue<>(1L, 6L));
+                    add(new KeyValue<>(1L, 7L));
+                    add(new KeyValue<>(1L, 8L));
+                    add(new KeyValue<>(1L, 9L));
+                }
+            };
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(0L, 10L));
+                    add(new KeyValue<>(0L, 11L));
+                    add(new KeyValue<>(0L, 12L));
+                    add(new KeyValue<>(0L, 13L));
+                    add(new KeyValue<>(0L, 14L));
+                    add(new KeyValue<>(1L, 10L));
+                    add(new KeyValue<>(1L, 11L));
+                    add(new KeyValue<>(1L, 12L));
+                    add(new KeyValue<>(1L, 13L));
+                    add(new KeyValue<>(1L, 14L));
+                }
+            };
 
-                add(new KeyValue<>(0L, 10L));
-                add(new KeyValue<>(0L, 11L));
-                add(new KeyValue<>(0L, 12L));
-                add(new KeyValue<>(0L, 13L));
-                add(new KeyValue<>(0L, 14L));
-                add(new KeyValue<>(1L, 10L));
-                add(new KeyValue<>(1L, 11L));
-                add(new KeyValue<>(1L, 12L));
-                add(new KeyValue<>(1L, 13L));
-                add(new KeyValue<>(1L, 14L));
-            }
-        };
-        final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
-            {
-                add(new KeyValue<>(0L, 15L));
-                add(new KeyValue<>(0L, 16L));
-                add(new KeyValue<>(0L, 17L));
-                add(new KeyValue<>(0L, 18L));
-                add(new KeyValue<>(0L, 19L));
-                add(new KeyValue<>(1L, 15L));
-                add(new KeyValue<>(1L, 16L));
-                add(new KeyValue<>(1L, 17L));
-                add(new KeyValue<>(1L, 18L));
-                add(new KeyValue<>(1L, 19L));
-            }
-        };
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
+            dataBeforeFailure.addAll(committedDataBeforeFailure);
+            dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            MULTI_PARTITION_INPUT_TOPIC,
-            dataBeforeFailure,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
-        );
 
-        final Set<KeyValue<Long, Long>> expectedCommittedRecords = new HashSet<>(dataBeforeFailure.subList(0, 20));
-        final Set<KeyValue<Long, Long>> expectedUncommittedRecords = new HashSet<>(dataBeforeFailure);
+            final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(0L, 15L));
+                    add(new KeyValue<>(0L, 16L));
+                    add(new KeyValue<>(0L, 17L));
+                    add(new KeyValue<>(0L, 18L));
+                    add(new KeyValue<>(0L, 19L));
+                    add(new KeyValue<>(1L, 15L));
+                    add(new KeyValue<>(1L, 16L));
+                    add(new KeyValue<>(1L, 17L));
+                    add(new KeyValue<>(1L, 18L));
+                    add(new KeyValue<>(1L, 19L));
+                }
+            };
 
-        final Set<KeyValue<Long, Long>> committedRecords
-            = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                committedDataBeforeFailure,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return commitRequested.get() == 2;
+                }
+            }, "SteamsTasks did not request commit.");
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                uncommittedDataBeforeFailure,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
+
+            final List<KeyValue<Long, Long>> uncommittedRecords
+                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                dataBeforeFailure.size()
+            );
+
+            final List<KeyValue<Long, Long>> committedRecords
+                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
                     CLUSTER.bootstrapServers(),
                     CONSUMER_GROUP_ID,
@@ -392,66 +457,89 @@ public class EosIntegrationTest {
                     LongDeserializer.class,
                     new Properties() {
                         {
-                            //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
                         }
                     }),
                 SINGLE_PARTITION_OUTPUT_TOPIC,
                 20
-        ));
+            );
 
-        final Set<KeyValue<Long, Long>> uncommittedRecords
-            = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+            checkResultPerKey(committedRecords, committedDataBeforeFailure);
+            checkResultPerKey(uncommittedRecords, dataBeforeFailure);
+
+            injectError = true;
+
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                dataAfterFailure,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
+
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return uncaughtException != null;
+                }
+            }, "Should receive uncaught exception from one StreamThread.");
+
+            final List<KeyValue<Long, Long>> allCommittedRecords
+                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID + "_All",
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
+                        }
+                    }),
                 SINGLE_PARTITION_OUTPUT_TOPIC,
-                dataBeforeFailure.size()
-        ));
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size()
+            );
 
-        //assertThat(committedRecords, equalTo(expectedCommittedRecords));
-        assertThat(uncommittedRecords, equalTo(expectedUncommittedRecords));
+            final List<KeyValue<Long, Long>> committedRecordsAfterFailure
+                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID,
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
+                        }
+                    }),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size()
+            );
 
-        injectError = true;
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
+            allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
+            allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            MULTI_PARTITION_INPUT_TOPIC,
-            dataAfterFailure,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
-        );
+            final List<KeyValue<Long, Long>> expectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            expectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
+            expectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return uncaughtException != null;
+            try {
+                checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
+                checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery);
+            } catch (final Throwable t) {
+                for (final KafkaServer broker : CLUSTER.brokers()) {
+                    System.out.println(broker.config().logDirs());
+                }
+                throw t;
             }
-        }, "Should receive uncaught exception from one StreamThread.");
-
-        dataBeforeFailure.removeAll(expectedCommittedRecords);
-        expectedCommittedRecords.clear();
-        expectedCommittedRecords.addAll(dataBeforeFailure);
-        expectedCommittedRecords.addAll(dataAfterFailure);
-        final Set<KeyValue<Long, Long>> committedRecordsAfterFailure
-            = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                CONSUMER_GROUP_ID,
-                LongDeserializer.class,
-                LongDeserializer.class,
-                new Properties() {
-                    {
-                        //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                    }
-                }),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
-            //expectedCommittedRecords.size()
-            10
-        ));
-
-        assertThat(committedRecordsAfterFailure, equalTo(expectedCommittedRecords));
-
-        streams.close();
+        } finally {
+            streams.close();
+        }
     }
 
     private KafkaStreams getKafkaStreams(final boolean withState) {
+        commitRequested = new AtomicInteger(0);
         final KStreamBuilder builder = new KStreamBuilder();
 
         final String storeName = "store";
@@ -505,6 +593,7 @@ public class EosIntegrationTest {
 
                         if (++processedRecords == 10) {
                             context.commit();
+                            commitRequested.incrementAndGet();
                         }
 
                         if (state != null) {
@@ -543,9 +632,9 @@ public class EosIntegrationTest {
                     {
                         put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
                         put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 2);
-                        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60 * 1000);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 60 * 1000 - 1);
+                        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, -1);
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
                     }
                 }));
 
@@ -574,134 +663,136 @@ public class EosIntegrationTest {
         // after fail over, we should read 30 committed records
 
         final KafkaStreams streams = getKafkaStreams(true);
-        streams.start();
+        try {
+            streams.start();
 
-        final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
-            {
-                add(new KeyValue<>(1L, 0L));
-                add(new KeyValue<>(1L, 1L));
-                add(new KeyValue<>(1L, 2L));
-                add(new KeyValue<>(1L, 3L));
-                add(new KeyValue<>(1L, 4L));
-                add(new KeyValue<>(1L, 5L));
-                add(new KeyValue<>(1L, 6L));
-                add(new KeyValue<>(1L, 7L));
-                add(new KeyValue<>(1L, 8L));
-                add(new KeyValue<>(1L, 9L));
-                add(new KeyValue<>(2L, 0L));
-                add(new KeyValue<>(2L, 1L));
-                add(new KeyValue<>(2L, 2L));
-                add(new KeyValue<>(2L, 3L));
-                add(new KeyValue<>(2L, 4L));
-                add(new KeyValue<>(2L, 5L));
-                add(new KeyValue<>(2L, 6L));
-                add(new KeyValue<>(2L, 7L));
-                add(new KeyValue<>(2L, 8L));
-                add(new KeyValue<>(2L, 9L));
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(1L, 0L));
+                    add(new KeyValue<>(1L, 1L));
+                    add(new KeyValue<>(1L, 2L));
+                    add(new KeyValue<>(1L, 3L));
+                    add(new KeyValue<>(1L, 4L));
+                    add(new KeyValue<>(1L, 5L));
+                    add(new KeyValue<>(1L, 6L));
+                    add(new KeyValue<>(1L, 7L));
+                    add(new KeyValue<>(1L, 8L));
+                    add(new KeyValue<>(1L, 9L));
+                    add(new KeyValue<>(2L, 0L));
+                    add(new KeyValue<>(2L, 1L));
+                    add(new KeyValue<>(2L, 2L));
+                    add(new KeyValue<>(2L, 3L));
+                    add(new KeyValue<>(2L, 4L));
+                    add(new KeyValue<>(2L, 5L));
+                    add(new KeyValue<>(2L, 6L));
+                    add(new KeyValue<>(2L, 7L));
+                    add(new KeyValue<>(2L, 8L));
+                    add(new KeyValue<>(2L, 9L));
 
-                add(new KeyValue<>(1L, 10L));
-                add(new KeyValue<>(1L, 11L));
-                add(new KeyValue<>(1L, 12L));
-                add(new KeyValue<>(1L, 13L));
-                add(new KeyValue<>(1L, 14L));
-                add(new KeyValue<>(2L, 10L));
-                add(new KeyValue<>(2L, 11L));
-                add(new KeyValue<>(2L, 12L));
-                add(new KeyValue<>(2L, 13L));
-                add(new KeyValue<>(2L, 14L));
-            }
-        };
-        final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
-            {
-                add(new KeyValue<>(1L, 15L));
-                add(new KeyValue<>(1L, 16L));
-                add(new KeyValue<>(1L, 17L));
-                add(new KeyValue<>(1L, 18L));
-                add(new KeyValue<>(1L, 19L));
-                add(new KeyValue<>(2L, 15L));
-                add(new KeyValue<>(2L, 16L));
-                add(new KeyValue<>(2L, 17L));
-                add(new KeyValue<>(2L, 18L));
-                add(new KeyValue<>(2L, 19L));
-            }
-        };
+                    add(new KeyValue<>(1L, 10L));
+                    add(new KeyValue<>(1L, 11L));
+                    add(new KeyValue<>(1L, 12L));
+                    add(new KeyValue<>(1L, 13L));
+                    add(new KeyValue<>(1L, 14L));
+                    add(new KeyValue<>(2L, 10L));
+                    add(new KeyValue<>(2L, 11L));
+                    add(new KeyValue<>(2L, 12L));
+                    add(new KeyValue<>(2L, 13L));
+                    add(new KeyValue<>(2L, 14L));
+                }
+            };
+            final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(1L, 15L));
+                    add(new KeyValue<>(1L, 16L));
+                    add(new KeyValue<>(1L, 17L));
+                    add(new KeyValue<>(1L, 18L));
+                    add(new KeyValue<>(1L, 19L));
+                    add(new KeyValue<>(2L, 15L));
+                    add(new KeyValue<>(2L, 16L));
+                    add(new KeyValue<>(2L, 17L));
+                    add(new KeyValue<>(2L, 18L));
+                    add(new KeyValue<>(2L, 19L));
+                }
+            };
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            MULTI_PARTITION_INPUT_TOPIC,
-            dataBeforeFailure,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
-        );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                dataBeforeFailure,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
 
-        final Set<KeyValue<Long, Long>> expectedCommittedRecords = getExpectedResult(dataBeforeFailure.subList(0, 20));
-        final Set<KeyValue<Long, Long>> expectedUncommittedRecords = getExpectedResult(dataBeforeFailure);
+            final Set<KeyValue<Long, Long>> expectedCommittedRecords = getExpectedResult(dataBeforeFailure.subList(0, 20));
+            final Set<KeyValue<Long, Long>> expectedUncommittedRecords = getExpectedResult(dataBeforeFailure);
 
-        final Set<KeyValue<Long, Long>> committedRecords
-            = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                CONSUMER_GROUP_ID,
-                LongDeserializer.class,
-                LongDeserializer.class,
-                new Properties() {
-                    {
-                        //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                    }
-                }),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
-            20
-        ));
+            final Set<KeyValue<Long, Long>> committedRecords
+                = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID,
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
+                        }
+                    }),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                20
+            ));
 
-        final Set<KeyValue<Long, Long>> uncommittedRecords
-            = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
-            dataBeforeFailure.size()
-        ));
+            final Set<KeyValue<Long, Long>> uncommittedRecords
+                = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                dataBeforeFailure.size()
+            ));
 
-        //assertThat(committedRecords, equalTo(expectedCommittedRecords));
-        assertThat(uncommittedRecords, equalTo(expectedUncommittedRecords));
+            //assertThat(committedRecords, equalTo(expectedCommittedRecords));
+            assertThat(uncommittedRecords, equalTo(expectedUncommittedRecords));
 
-        injectError = true;
+            injectError = true;
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(
-            MULTI_PARTITION_INPUT_TOPIC,
-            dataAfterFailure,
-            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-            CLUSTER.time
-        );
+            IntegrationTestUtils.produceKeyValuesSynchronously(
+                MULTI_PARTITION_INPUT_TOPIC,
+                dataAfterFailure,
+                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                CLUSTER.time
+            );
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return uncaughtException != null;
-            }
-        }, "Should receive uncaught exception from one StreamThread.");
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return uncaughtException != null;
+                }
+            }, "Should receive uncaught exception from one StreamThread.");
 
-        dataBeforeFailure.removeAll(expectedCommittedRecords);
-        expectedCommittedRecords.clear();
-        expectedCommittedRecords.addAll(dataBeforeFailure);
-        expectedCommittedRecords.addAll(dataAfterFailure);
-        final Set<KeyValue<Long, Long>> committedRecordsAfterFailure
-            = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(
-                CLUSTER.bootstrapServers(),
-                CONSUMER_GROUP_ID,
-                LongDeserializer.class,
-                LongDeserializer.class,
-                new Properties() {
-                    {
-                        //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                    }
-                }),
-            SINGLE_PARTITION_OUTPUT_TOPIC,
-            //expectedCommittedRecords.size()
-            10
-        ));
+            dataBeforeFailure.removeAll(expectedCommittedRecords);
+            expectedCommittedRecords.clear();
+            expectedCommittedRecords.addAll(dataBeforeFailure);
+            expectedCommittedRecords.addAll(dataAfterFailure);
+            final Set<KeyValue<Long, Long>> committedRecordsAfterFailure
+                = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID,
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
+                        }
+                    }),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                //expectedCommittedRecords.size()
+                10
+            ));
 
-        assertThat(committedRecordsAfterFailure, equalTo(expectedCommittedRecords));
-
-        streams.close();
+            assertThat(committedRecordsAfterFailure, equalTo(expectedCommittedRecords));
+        } finally {
+            streams.close();
+        }
     }
 
     private Set<KeyValue<Long, Long>> getExpectedResult(final List<KeyValue<Long, Long>> input) {
