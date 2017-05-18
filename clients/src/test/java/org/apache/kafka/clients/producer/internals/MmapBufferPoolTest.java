@@ -48,5 +48,8 @@ public class MmapBufferPoolTest {
         buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Recycled buffer should be cleared.", 0, buffer.position());
         assertEquals("Recycled buffer should be cleared.", buffer.capacity(), buffer.limit());
+        pool.deallocate(buffer);
+        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
+        assertEquals("Still a single buffer on the free list", totalMemory - size, pool.unallocatedMemory());
     }
 }
