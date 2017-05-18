@@ -103,14 +103,13 @@ public class MmapBufferPool implements BufferPool {
 
     @Override
     public void deallocate(ByteBuffer buffer, int size) {
-        // TODO: check size
+        buffer.clear();
         this.free.add(buffer);
     }
 
     @Override
     public void deallocate(ByteBuffer buffer) {
-        // TODO: check size
-        this.free.add(buffer);
+        deallocate(buffer, buffer.capacity());
     }
 
     /**
