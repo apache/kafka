@@ -146,7 +146,6 @@ public class ConsumerProtocol {
         // otherwise, assume versions can be parsed as V0
     }
 
-
     private static Map<String, List<Integer>> asMap(Collection<TopicPartition> partitions) {
         Map<String, List<Integer>> partitionMap = new HashMap<>();
         for (TopicPartition partition : partitions) {
