@@ -1579,8 +1579,8 @@ public class Protocol {
             newThrottleTimeField(),
             new Field("resources", new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V0)));
 
-    public static final Schema[] LIST_CONFIGS_REQUEST = {DESCRIBE_CONFIGS_REQUEST_V0};
-    public static final Schema[] LIST_CONFIGS_RESPONSE = {DESCRIBE_CONFIGS_RESPONSE_V0};
+    public static final Schema[] DESCRIBE_CONFIGS_REQUEST = {DESCRIBE_CONFIGS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_CONFIGS_RESPONSE = {DESCRIBE_CONFIGS_RESPONSE_V0};
 
     /* AlterConfigs API */
 
@@ -1733,7 +1733,7 @@ public class Protocol {
         REQUESTS[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_REQUEST;
         REQUESTS[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_REQUEST;
         REQUESTS[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_REQUEST;
-        REQUESTS[ApiKeys.DESCRIBE_CONFIGS.id] = LIST_CONFIGS_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_REQUEST;
         REQUESTS[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
@@ -1768,7 +1768,7 @@ public class Protocol {
         RESPONSES[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_RESPONSE;
         RESPONSES[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_RESPONSE;
         RESPONSES[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_RESPONSE;
-        RESPONSES[ApiKeys.DESCRIBE_CONFIGS.id] = LIST_CONFIGS_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_CONFIGS.id] = DESCRIBE_CONFIGS_RESPONSE;
         RESPONSES[ApiKeys.ALTER_CONFIGS.id] = ALTER_CONFIGS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
