@@ -1095,47 +1095,48 @@ public class RequestResponseTest {
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequest() {
-        return new DescribeConfigsRequest.Builder(asList(new Resource(ResourceType.BROKER, "0"),
-                new Resource(ResourceType.TOPIC, "topic"))).build((short) 0);
+        return new DescribeConfigsRequest.Builder(asList(
+                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"),
+                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"))).build((short) 0);
     }
 
     private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries() {
-        Map<Resource, Collection<String>> resources = new HashMap<>();
-        resources.put(new Resource(ResourceType.BROKER, "0"), asList("foo", "bar"));
-        resources.put(new Resource(ResourceType.TOPIC, "topic"), null);
-        resources.put(new Resource(ResourceType.TOPIC, "topic a"), Collections.<String>emptyList());
+        Map<org.apache.kafka.common.requests.Resource, Collection<String>> resources = new HashMap<>();
+        resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), asList("foo", "bar"));
+        resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), null);
+        resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic a"), Collections.<String>emptyList());
         return new DescribeConfigsRequest.Builder(resources).build((short) 0);
     }
 
     private DescribeConfigsResponse createDescribeConfigsResponse() {
-        Map<Resource, DescribeConfigsResponse.Config> configs = new HashMap<>();
+        Map<org.apache.kafka.common.requests.Resource, DescribeConfigsResponse.Config> configs = new HashMap<>();
         List<DescribeConfigsResponse.ConfigEntry> configEntries = asList(
                 new DescribeConfigsResponse.ConfigEntry("config_name", "config_value", false, true, false),
                 new DescribeConfigsResponse.ConfigEntry("another_name", "another value", true, false, true)
         );
-        configs.put(new Resource(ResourceType.BROKER, "0"), new DescribeConfigsResponse.Config(
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new DescribeConfigsResponse.Config(
                 new ApiError(Errors.NONE, null), configEntries));
-        configs.put(new Resource(ResourceType.TOPIC, "topic"), new DescribeConfigsResponse.Config(
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new DescribeConfigsResponse.Config(
                 new ApiError(Errors.NONE, null), Collections.<DescribeConfigsResponse.ConfigEntry>emptyList()));
         return new DescribeConfigsResponse(200, configs);
     }
 
     private AlterConfigsRequest createAlterConfigsRequest() {
-        Map<Resource, AlterConfigsRequest.Config> configs = new HashMap<>();
+        Map<org.apache.kafka.common.requests.Resource, AlterConfigsRequest.Config> configs = new HashMap<>();
         List<AlterConfigsRequest.ConfigEntry> configEntries = asList(
                 new AlterConfigsRequest.ConfigEntry("config_name", "config_value"),
                 new AlterConfigsRequest.ConfigEntry("another_name", "another value")
         );
-        configs.put(new Resource(ResourceType.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
-        configs.put(new Resource(ResourceType.TOPIC, "topic"),
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"),
                 new AlterConfigsRequest.Config(Collections.<AlterConfigsRequest.ConfigEntry>emptyList()));
         return new AlterConfigsRequest((short) 0, configs, false);
     }
 
     private AlterConfigsResponse createAlterConfigsResponse() {
-        Map<Resource, ApiError> errors = new HashMap<>();
-        errors.put(new Resource(ResourceType.BROKER, "0"), new ApiError(Errors.NONE, null));
-        errors.put(new Resource(ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
+        Map<org.apache.kafka.common.requests.Resource, ApiError> errors = new HashMap<>();
+        errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new ApiError(Errors.NONE, null));
+        errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
         return new AlterConfigsResponse(20, errors);
     }
 }

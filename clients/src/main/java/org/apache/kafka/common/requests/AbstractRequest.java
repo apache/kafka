@@ -207,6 +207,7 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case DELETE_ACLS:
                 request = new DeleteAclsRequest(struct, version);
+                break;
             case DESCRIBE_CONFIGS:
                 request = new DescribeConfigsRequest(struct, version);
                 break;
