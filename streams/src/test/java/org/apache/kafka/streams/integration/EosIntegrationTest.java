@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.server.KafkaServer;
 import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -180,47 +179,47 @@ public class EosIntegrationTest {
                         }
                     }));
 
-                try {
-                    streams.start();
+            try {
+                streams.start();
 
-                    final List<KeyValue<Long, Long>> inputData = new ArrayList<KeyValue<Long, Long>>() {
-                        {
-                            add(new KeyValue<>(0L, factor * 100 + 0L));
-                            add(new KeyValue<>(0L, factor * 100 + 1L));
-                            add(new KeyValue<>(0L, factor * 100 + 2L));
-                            add(new KeyValue<>(1L, factor * 100 + 0L));
-                            add(new KeyValue<>(1L, factor * 100 + 1L));
-                            add(new KeyValue<>(1L, factor * 100 + 2L));
-                        }
-                    };
+                final List<KeyValue<Long, Long>> inputData = new ArrayList<KeyValue<Long, Long>>() {
+                    {
+                        add(new KeyValue<>(0L, factor * 100 + 0L));
+                        add(new KeyValue<>(0L, factor * 100 + 1L));
+                        add(new KeyValue<>(0L, factor * 100 + 2L));
+                        add(new KeyValue<>(1L, factor * 100 + 0L));
+                        add(new KeyValue<>(1L, factor * 100 + 1L));
+                        add(new KeyValue<>(1L, factor * 100 + 2L));
+                    }
+                };
 
-                    IntegrationTestUtils.produceKeyValuesSynchronously(
-                        inputTopic,
-                        inputData,
-                        TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                        CLUSTER.time
-                    );
+                IntegrationTestUtils.produceKeyValuesSynchronously(
+                    inputTopic,
+                    inputData,
+                    TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+                    CLUSTER.time
+                );
 
-                    final List<KeyValue<Long, Long>> committedRecords
-                        = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                        TestUtils.consumerConfig(
-                            CLUSTER.bootstrapServers(),
-                            CONSUMER_GROUP_ID,
-                            LongDeserializer.class,
-                            LongDeserializer.class,
-                            new Properties() {
-                                {
-                                    put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                                }
-                            }),
-                        inputTopic,
-                        inputData.size()
-                    );
+                final List<KeyValue<Long, Long>> committedRecords
+                    = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                    TestUtils.consumerConfig(
+                        CLUSTER.bootstrapServers(),
+                        CONSUMER_GROUP_ID,
+                        LongDeserializer.class,
+                        LongDeserializer.class,
+                        new Properties() {
+                            {
+                                put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                            }
+                        }),
+                    inputTopic,
+                    inputData.size()
+                );
 
-                    checkResultPerKey(committedRecords, inputData);
-                } finally {
-                    streams.close();
-                }
+                checkResultPerKey(committedRecords, inputData);
+            } finally {
+                streams.close();
+            }
         }
     }
 
@@ -346,7 +345,6 @@ public class EosIntegrationTest {
         }
     }
 
-    @Ignore
     @Test
     public void shouldNotViolateEosIfOneTaskFails() throws Exception {
         // this test updates a store with 10 + 5 records per partition
@@ -404,7 +402,6 @@ public class EosIntegrationTest {
             dataBeforeFailure.addAll(committedDataBeforeFailure);
             dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
 
-
             final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
                 {
                     add(new KeyValue<>(0L, 15L));
@@ -420,12 +417,7 @@ public class EosIntegrationTest {
                 }
             };
 
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                MULTI_PARTITION_INPUT_TOPIC,
-                committedDataBeforeFailure,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
-            );
+            writeInputData(committedDataBeforeFailure);
 
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -434,47 +426,16 @@ public class EosIntegrationTest {
                 }
             }, "SteamsTasks did not request commit.");
 
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                MULTI_PARTITION_INPUT_TOPIC,
-                uncommittedDataBeforeFailure,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
-            );
+            writeInputData(uncommittedDataBeforeFailure);
 
-            final List<KeyValue<Long, Long>> uncommittedRecords
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                dataBeforeFailure.size()
-            );
-
-            final List<KeyValue<Long, Long>> committedRecords
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                20
-            );
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
             checkResultPerKey(committedRecords, committedDataBeforeFailure);
             checkResultPerKey(uncommittedRecords, dataBeforeFailure);
 
             injectError = true;
-
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                MULTI_PARTITION_INPUT_TOPIC,
-                dataAfterFailure,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
-            );
+            writeInputData(dataAfterFailure);
 
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
@@ -483,37 +444,13 @@ public class EosIntegrationTest {
                 }
             }, "Should receive uncaught exception from one StreamThread.");
 
-            final List<KeyValue<Long, Long>> allCommittedRecords
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID + "_All",
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size()
-            );
+            final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
+                CONSUMER_GROUP_ID + "_ALL");
 
-            final List<KeyValue<Long, Long>> committedRecordsAfterFailure
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                uncommittedDataBeforeFailure.size() + dataAfterFailure.size()
-            );
+            final List<KeyValue<Long, Long>> committedRecordsAfterFailure = readResult(
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
+                CONSUMER_GROUP_ID);
 
             final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
             allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
@@ -524,15 +461,8 @@ public class EosIntegrationTest {
             expectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
             expectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
 
-            try {
-                checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
-                checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery);
-            } catch (final Throwable t) {
-                for (final KafkaServer broker : CLUSTER.brokers()) {
-                    System.out.println(broker.config().logDirs());
-                }
-                throw t;
-            }
+            checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
+            checkResultPerKey(committedRecordsAfterFailure, expectedCommittedRecordsAfterRecovery);
         } finally {
             streams.close();
         }
@@ -591,7 +521,7 @@ public class EosIntegrationTest {
                             throw new RuntimeException("Injected test exception.");
                         }
 
-                        if (++processedRecords == 10) {
+                        if (++processedRecords % 10 == 0) {
                             context.commit();
                             commitRequested.incrementAndGet();
                         }
@@ -642,6 +572,7 @@ public class EosIntegrationTest {
             @Override
             public void uncaughtException(final Thread t, final Throwable e) {
                 if (uncaughtException != null) {
+                    e.printStackTrace(System.err);
                     fail("Should only get one uncaught exception from Streams.");
                 }
                 uncaughtException = e;
@@ -649,6 +580,42 @@ public class EosIntegrationTest {
         });
 
         return streams;
+    }
+
+    private void writeInputData(final List<KeyValue<Long, Long>> records) throws Exception {
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            MULTI_PARTITION_INPUT_TOPIC,
+            records,
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
+            CLUSTER.time
+        );
+    }
+
+    private List<KeyValue<Long, Long>> readResult(final int numberOfRecords,
+                                                  final String groupId) throws Exception {
+        if (groupId != null) {
+            return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    groupId,
+                    LongDeserializer.class,
+                    LongDeserializer.class,
+                    new Properties() {
+                        {
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                        }
+                    }),
+                SINGLE_PARTITION_OUTPUT_TOPIC,
+                numberOfRecords
+            );
+        }
+
+        // read uncommitted
+        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+            SINGLE_PARTITION_OUTPUT_TOPIC,
+            numberOfRecords
+        );
     }
 
     @Ignore
