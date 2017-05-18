@@ -45,10 +45,8 @@ public class StringConverter implements Converter {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        Map<String, Object> serializerConfigs = new HashMap<>();
-        serializerConfigs.putAll(configs);
-        Map<String, Object> deserializerConfigs = new HashMap<>();
-        deserializerConfigs.putAll(configs);
+        Map<String, Object> serializerConfigs = new HashMap<>(configs);
+        Map<String, Object> deserializerConfigs = new HashMap<>(configs);
 
         Object encodingValue = configs.get("converter.encoding");
         if (encodingValue != null) {

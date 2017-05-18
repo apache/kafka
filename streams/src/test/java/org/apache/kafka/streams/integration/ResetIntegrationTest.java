@@ -205,8 +205,7 @@ public class ResetIntegrationTest {
 
             do {
                 Utils.sleep(100);
-                allTopics = new HashSet<>();
-                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+                allTopics = new HashSet<>(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
             } while (allTopics.contains(INTERMEDIATE_USER_TOPIC));
         } finally {
             if (zkUtils != null) {
@@ -455,8 +454,7 @@ public class ResetIntegrationTest {
 
             do {
                 Utils.sleep(100);
-                allTopics = new HashSet<>();
-                allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
+                allTopics = new HashSet<>(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
             } while (allTopics.size() != expectedRemainingTopicsAfterCleanup.size());
         } finally {
             if (zkUtils != null) {
