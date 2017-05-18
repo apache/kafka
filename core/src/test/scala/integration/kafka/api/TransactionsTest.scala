@@ -194,7 +194,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       } catch {
         case e : ProducerFencedException =>
           // good!
-          producer1.close()
         case e : Exception =>
           fail("Got an unexpected exception from a fenced producer.", e)
       }
@@ -207,6 +206,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       }
     } finally {
       consumer.close()
+      producer1.close()
       producer2.close()
     }
   }
@@ -237,7 +237,6 @@ class TransactionsTest extends KafkaServerTestHarness {
       } catch {
         case e : ProducerFencedException =>
           // good!
-          producer1.close()
         case e : Exception =>
           fail("Got an unexpected exception from a fenced producer.", e)
       }
@@ -250,6 +249,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       }
     } finally {
       consumer.close()
+      producer1.close()
       producer2.close()
     }
   }
@@ -287,7 +287,6 @@ class TransactionsTest extends KafkaServerTestHarness {
           producer1.close()
         case e : ExecutionException =>
           assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
-          producer1.close()
         case e : Exception =>
           fail("Got an unexpected exception from a fenced producer.", e)
       }
@@ -300,6 +299,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       }
     } finally {
       consumer.close()
+      producer1.close()
       producer2.close()
     }
   }
@@ -339,7 +339,6 @@ class TransactionsTest extends KafkaServerTestHarness {
           producer1.close()
         case e : ExecutionException =>
           assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
-          producer1.close()
         case e : Exception =>
           fail("Got an unexpected exception from a fenced producer.", e)
       }
@@ -352,6 +351,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       }
     } finally {
       consumer.close()
+      producer1.close()
       producer2.close()
     }
   }

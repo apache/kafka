@@ -204,6 +204,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     producers.foreach(_.close())
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close())
+    transactionalProducer.close()
     removeAllAcls()
     super.tearDown()
   }
