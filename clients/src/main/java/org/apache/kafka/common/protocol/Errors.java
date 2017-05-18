@@ -429,7 +429,8 @@ public enum Errors {
                 return new DuplicateSequenceNumberException(message);
             }
         }),
-    INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch",
+    INVALID_PRODUCER_EPOCH(47, "Producer attempted an operation with an old epoch. Either there is a newer producer " +
+            "with the same transactionalId, or the producer's transaction has been expired by the broker.",
         new ApiExceptionBuilder() {
             @Override
             public ApiException build(String message) {
