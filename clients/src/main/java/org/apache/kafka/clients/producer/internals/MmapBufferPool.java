@@ -31,21 +31,28 @@ public class MmapBufferPool implements BufferPool {
     
     private final long maxSize;
     private final int chunkSize;
+    /** This memory is accounted for separately from the poolable buffers in free. */
+    private long availableMemory;
+
     private final BlockingDeque<ByteBuffer> free;
+    private MappedByteBuffer fileBuffer;
     
     public MmapBufferPool(File backingFileName, long maxSize, int chunkSize) throws IOException {
         this.maxSize = maxSize;
+        this.availableMemory = maxSize;
         this.chunkSize = chunkSize;
         this.free = new LinkedBlockingDeque<ByteBuffer>();
+
         RandomAccessFile f = new RandomAccessFile(backingFileName, "rw");
         f.setLength(maxSize);
-        MappedByteBuffer buffer = f.getChannel().map(MapMode.READ_WRITE, 0, maxSize);
-        while (buffer.remaining() >= chunkSize) {
-            ByteBuffer b = buffer.slice();
-            b.limit(chunkSize);
-            buffer.position(buffer.position() + chunkSize);
-            free.add(b);
-        }
+
+        this.fileBuffer = f.getChannel().map(MapMode.READ_WRITE, 0, maxSize);
+//        while (this.fileBuffer.remaining() >= chunkSize) {
+//            ByteBuffer fileBufferSlice = this.fileBuffer.slice();
+//            fileBufferSlice.limit(chunkSize);
+//            this.fileBuffer.position(this.fileBuffer.position() + chunkSize);
+//            free.add(fileBufferSlice);
+//        }
         f.close();
     }
 
@@ -53,20 +60,46 @@ public class MmapBufferPool implements BufferPool {
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
         if (size > chunkSize)
             throw new IllegalArgumentException("Illegal allocation size.");
-        ByteBuffer buffer;
-//        if (blockOnExhaustion) {
-//            buffer = this.free.take();
-//        } else {
-//            buffer = this.free.poll();
-//            if (buffer == null) {
-//                throw new BufferExhaustedException("You have exhausted the " + this.maxSize
-//                        + " bytes of memory you configured for the client and the client is configured to error"
-//                        + " rather than block when memory is exhausted.");
-//            }
-//        }
-        buffer = this.free.poll();
-            
-        return buffer;
+
+        // check if we have a free buffer of the right size pooled
+        if (size == chunkSize && !this.free.isEmpty())
+            return this.free.pollFirst();
+
+        // now check if the request is immediately satisfiable with the
+        // memory on hand or if we need to block
+        int freeListSize = freeSize() * this.chunkSize;
+        if (this.availableMemory + freeListSize >= size) {
+            // we have enough unallocated or pooled memory to immediately
+            // satisfy the request
+            freeUp(size);
+            ByteBuffer allocatedBuffer = allocateByteBuffer(size);
+            this.availableMemory -= size;
+            return allocatedBuffer;
+        } else {
+            // we are out of memory and will have to block
+            throw new BufferExhaustedException("You have exhausted the " + this.maxSize
+                        + " bytes of memory you configured for the client and the client is configured to error"
+                        + " rather than block when memory is exhausted.");
+        }
+    }
+
+    // Protected for testing.
+    protected ByteBuffer allocateByteBuffer(int size) {
+        ByteBuffer fileBufferSlice = this.fileBuffer.slice();
+        fileBufferSlice.limit(chunkSize);
+        this.fileBuffer.position(this.fileBuffer.position() + chunkSize);
+        free.add(fileBufferSlice);
+
+        return fileBufferSlice;
+    }
+
+    /**
+     * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
+     * buffers (if needed)
+     */
+    private void freeUp(int size) {
+        while (!this.free.isEmpty() && this.availableMemory < size)
+            this.availableMemory += this.free.pollLast().capacity();
     }
 
     @Override
@@ -81,10 +114,12 @@ public class MmapBufferPool implements BufferPool {
         this.free.add(buffer);
     }
 
+    /**
+     * the total free memory both unallocated and in the free list
+     */
     @Override
     public long availableMemory() {
-        // TODO write me
-        return 0;
+        return this.availableMemory + freeSize() * (long) this.chunkSize;
     }
 
     // Protected for testing.
@@ -94,8 +129,7 @@ public class MmapBufferPool implements BufferPool {
 
     @Override
     public long unallocatedMemory() {
-        // TODO write me
-        return 0;
+        return this.availableMemory;
     }
 
     @Override
