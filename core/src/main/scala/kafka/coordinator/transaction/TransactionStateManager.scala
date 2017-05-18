@@ -126,9 +126,8 @@ class TransactionStateManager(brokerId: Int,
     //       later be notified that this coordinator is no longer be the transaction coordinator for him
     //
     //    4) it is NOT possible to be in the leaving partition with the same epoch
-    if (loadingPartitions.exists(_.txnPartitionId == partitionId)) {
+    if (loadingPartitions.exists(_.txnPartitionId == partitionId))
       return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
-    }
 
     transactionMetadataCache.get(partitionId) match {
       case Some(cacheEntry) =>
