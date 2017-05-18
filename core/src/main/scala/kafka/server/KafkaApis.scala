@@ -1054,7 +1054,8 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.GROUP &&
       !authorize(request.session, Describe, new Resource(Group, findCoordinatorRequest.coordinatorKey))) {
-      sendResponseMaybeThrottle(request, _ => new FindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode))
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new FindCoordinatorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode))
     } else {
       // TODO: Authorize by transactional id if coordinator type is TRANSACTION
 
