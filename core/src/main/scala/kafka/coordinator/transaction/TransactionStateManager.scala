@@ -243,13 +243,13 @@ class TransactionStateManager(brokerId: Int,
             memRecords.batches.asScala.foreach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                val txnKey = TransactionLog.readTxnKey(record.key)
+                val txnKey = TransactionLog.readTxnRecordKey(record.key)
                 // load transaction metadata along with transaction state
                 val transactionalId = txnKey.transactionalId
                 if (!record.hasValue) {
                   loadedTransactions.remove(transactionalId)
                 } else {
-                  val txnMetadata = TransactionLog.readMessageValue(transactionalId, record.value)
+                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
                   loadedTransactions.put(transactionalId, txnMetadata)
                 }
                 currOffset = batch.nextOffset

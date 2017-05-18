@@ -84,9 +84,9 @@ class TransactionLogTest extends JUnitSuite {
 
     var count = 0
     for (record <- records.records.asScala) {
-      val txnKey = TransactionLog.readTxnKey(record.key)
+      val txnKey = TransactionLog.readTxnRecordKey(record.key)
       val transactionalId = txnKey.transactionalId
-      val txnMetadata = TransactionLog.readMessageValue(transactionalId, record.value)
+      val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
 
       assertEquals(pidMappings(transactionalId), txnMetadata.producerId)
       assertEquals(producerEpoch, txnMetadata.producerEpoch)

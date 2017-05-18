@@ -70,12 +70,13 @@ private[transaction] case object CompleteCommit extends TransactionState { val b
 private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
 private[transaction] object TransactionMetadata {
-  def apply(transactionalId: String, producerId: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, epoch, txnTimeoutMs, Empty,
+  def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
+    new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, Empty,
       collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def apply(transactionalId: String, producerId: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) =
-    new TransactionMetadata(transactionalId, producerId, epoch, txnTimeoutMs, state,
+  def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int,
+            state: TransactionState, timestamp: Long) =
+    new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, state,
       collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def byteToState(byte: Byte): TransactionState = {
@@ -90,7 +91,8 @@ private[transaction] object TransactionMetadata {
     }
   }
 
-  def isValidTransition(oldState: TransactionState, newState: TransactionState): Boolean = TransactionMetadata.validPreviousStates(newState).contains(oldState)
+  def isValidTransition(oldState: TransactionState, newState: TransactionState): Boolean =
+    TransactionMetadata.validPreviousStates(newState).contains(oldState)
 
   private val validPreviousStates: Map[TransactionState, Set[TransactionState]] =
     Map(Empty -> Set(Empty, CompleteCommit, CompleteAbort),
@@ -179,8 +181,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
       -1, updateTimestamp)
   }
 
-  def prepareNewPid(updateTimestamp: Long): TxnTransitMetadata = {
-
+  def prepareNewProducerId(updateTimestamp: Long): TxnTransitMetadata = {
     prepareTransitionTo(Empty, producerEpoch, txnTimeoutMs, immutable.Set.empty[TopicPartition], -1, updateTimestamp)
   }
 

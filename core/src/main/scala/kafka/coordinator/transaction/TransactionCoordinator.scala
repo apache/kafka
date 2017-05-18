@@ -137,7 +137,7 @@ class TransactionCoordinator(brokerId: Int,
             if (!txnMetadata.eq(createdMetadata)) {
               initProducerIdWithExistingMetadata(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
             } else {
-              Right(coordinatorEpoch, txnMetadata.prepareNewPid(time.milliseconds()))
+              Right(coordinatorEpoch, txnMetadata.prepareNewProducerId(time.milliseconds()))
             }
           }
 

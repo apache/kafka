@@ -186,7 +186,7 @@ object TransactionLog {
     *
     * @return the key
     */
-  def readTxnKey(buffer: ByteBuffer): TxnKey = {
+  def readTxnRecordKey(buffer: ByteBuffer): TxnKey = {
     val version = buffer.getShort
     val keySchema = schemaForKey(version)
     val key = keySchema.read(buffer)
@@ -204,7 +204,7 @@ object TransactionLog {
     *
     * @return a transaction metadata object from the message
     */
-  def readMessageValue(transactionalId: String, buffer: ByteBuffer): TransactionMetadata = {
+  def readTxnRecordValue(transactionalId: String, buffer: ByteBuffer): TransactionMetadata = {
     if (buffer == null) { // tombstone
       null
     } else {
@@ -253,12 +253,12 @@ object TransactionLog {
   // Formatter for use with tools to read transaction log messages
   class TransactionLogMessageFormatter extends MessageFormatter {
     def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
-      Option(consumerRecord.key).map(key => readTxnKey(ByteBuffer.wrap(key))).foreach { txnKey =>
+      Option(consumerRecord.key).map(key => readTxnRecordKey(ByteBuffer.wrap(key))).foreach { txnKey =>
         val transactionalId = txnKey.transactionalId
         val value = consumerRecord.value
         val producerIdMetadata =
           if (value == null) "NULL"
-          else readMessageValue(transactionalId, ByteBuffer.wrap(value))
+          else readTxnRecordValue(transactionalId, ByteBuffer.wrap(value))
         output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
         output.write("::".getBytes(StandardCharsets.UTF_8))
         output.write(producerIdMetadata.toString.getBytes(StandardCharsets.UTF_8))
