@@ -186,15 +186,16 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     private static final Schema STICKY_ASSIGNOR_USER_DATA = new Schema(
             new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT)));
 
-    Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
+    Map<String, List<TopicPartition>> currentAssignment;
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;
 
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, List<String>> subscriptions) {
+                                                    Map<String, Subscription> subscriptions) {
+        currentAssignment = new HashMap<>();
         partitionMovements = new PartitionMovements();
 
-        prepopulateCurrentAssignments();
+        prepopulateCurrentAssignments(subscriptions);
         // make a deep copy of currentAssignment
         Map<String, List<TopicPartition>> oldAssignment = deepCopy(currentAssignment);
 
@@ -209,10 +210,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<String>());
         }
 
-        for (Entry<String, List<String>> entry: subscriptions.entrySet()) {
+        for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
-            for (String topic: entry.getValue()) {
+            for (String topic: entry.getValue().topics()) {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
@@ -250,7 +251,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                         // if this topic partition of this consumer no longer exists remove it from currentAssignment of the consumer
                         partitionIter.remove();
                         currentPartitionConsumer.remove(partition);
-                    } else if (!subscriptions.get(entry.getKey()).contains(partition.topic())) {
+                    } else if (!subscriptions.get(entry.getKey()).topics().contains(partition.topic())) {
                         // if this partition cannot remain assigned to its current consumer because the consumer
                         // is no longer subscribed to its topic remove it from currentAssignment of the consumer
                         partitionIter.remove();
@@ -275,12 +276,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return currentAssignment;
     }
 
-    private void prepopulateCurrentAssignments() {
-        Map<String, Subscription> subscriptions = getSubscriptions();
-        if (subscriptions == null)
-            return;
-
-        currentAssignment.clear();
+    private void prepopulateCurrentAssignments(Map<String, Subscription> subscriptions) {
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData != null && userData.hasRemaining())
@@ -658,7 +654,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return partitionMovements.isSticky();
     }
 
-    private static ByteBuffer serializeTopicPartitionAssignment(List<TopicPartition> partitions) {
+    static ByteBuffer serializeTopicPartitionAssignment(List<TopicPartition> partitions) {
         Struct struct = new Struct(STICKY_ASSIGNOR_USER_DATA);
         List<Struct> topicAssignments = new ArrayList<>();
         for (Map.Entry<String, List<Integer>> topicEntry : CollectionUtils.groupDataByTopic(partitions).entrySet()) {
