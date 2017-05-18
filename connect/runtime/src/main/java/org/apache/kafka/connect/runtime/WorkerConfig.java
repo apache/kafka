@@ -62,6 +62,7 @@ public class WorkerConfig extends AbstractConfig {
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
                     " configs and offsets, so users can typically use any functioning Converter implementation.";
+    public static final String INTERNAL_KEY_CONVERTER_CLASS_DEFAULT = "org.apache.kafka.connect.json.JsonConverter";
 
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_CONFIG = "internal.value.converter";
     public static final String INTERNAL_VALUE_CONVERTER_CLASS_DOC =
@@ -71,6 +72,7 @@ public class WorkerConfig extends AbstractConfig {
                     " Examples of common formats include JSON and Avro." +
                     " This setting controls the format used for internal bookkeeping data used by the framework, such as" +
                     " configs and offsets, so users can typically use any functioning Converter implementation.";
+    public static final String INTERNAL_VALUE_CONVERTER_CLASS_DEFAULT = "org.apache.kafka.connect.json.JsonConverter";
 
     public static final String TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG
             = "task.shutdown.graceful.timeout.ms";
@@ -136,9 +138,11 @@ public class WorkerConfig extends AbstractConfig {
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
                         Importance.HIGH, VALUE_CONVERTER_CLASS_DOC)
                 .define(INTERNAL_KEY_CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.LOW, INTERNAL_KEY_CONVERTER_CLASS_DOC)
+                        INTERNAL_KEY_CONVERTER_CLASS_DEFAULT, Importance.LOW,
+                        INTERNAL_KEY_CONVERTER_CLASS_DOC)
                 .define(INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS,
-                        Importance.LOW, INTERNAL_VALUE_CONVERTER_CLASS_DOC)
+                        INTERNAL_VALUE_CONVERTER_CLASS_DEFAULT, Importance.LOW,
+                        INTERNAL_VALUE_CONVERTER_CLASS_DOC)
                 .define(TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG, Type.LONG,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DEFAULT, Importance.LOW,
                         TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_DOC)
