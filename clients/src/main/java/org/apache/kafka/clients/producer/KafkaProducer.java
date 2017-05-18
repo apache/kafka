@@ -350,7 +350,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
 
         if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
-            throw new ConfigException("Cannot set a {} without also enabling idempotence.", ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
 
         if (userConfiguredTransactions)
             idempotenceEnabled = true;
@@ -381,7 +381,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             return Integer.MAX_VALUE;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
-            throw new ConfigException("Must set {} to non-zero when using the idempotent producer.", ProducerConfig.RETRIES_CONFIG);
+            throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
         }
         return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
@@ -396,8 +396,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             return 1;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) != 1) {
-            throw new ConfigException("Must set {} to 1 in order" +
-                    "to use the idempotent producer. Otherwise we cannot guarantee idempotence.", ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
+            throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 in order" +
+                    "to use the idempotent producer. Otherwise we cannot guarantee idempotence.");
         }
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
@@ -415,8 +415,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         if (idempotenceEnabled && acks != -1) {
-            throw new ConfigException("Must set {} to all in order to use the idempotent " +
-                    "producer. Otherwise we cannot guarantee idempotence.", ProducerConfig.ACKS_CONFIG);
+            throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
+                    "producer. Otherwise we cannot guarantee idempotence.");
         }
         return acks;
     }
