@@ -23,5 +23,6 @@ public class MmapBufferPoolTest {
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
+        assertEquals("Available memory should have shrunk", totalMemory - size, pool.availableMemory());
     }
 }
