@@ -254,7 +254,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
   }
 
-  @Ignore @Test
+  @Test
   def testFencingOnSend() {
     val transactionalId = "my-t.id"
     val producer1 = TestUtils.createTransactionalProducer(transactionalId, servers)
