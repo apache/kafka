@@ -326,6 +326,100 @@ public interface KStream<K, V> {
                final String streamName);
 
     /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The default serde will be use to deserialize key or value if type is {@code byte[]}.
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The default serde will be used to deserialize key or value if type is {@code byte[]}.
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param streamName The given name which labels output will be printed.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final String streamName);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}
+     * The provided serde will be use to deserialize key or value if type is {@code byte[]}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The provided KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
+     * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde);
+
+    /**
+     * Print the customized output with {@code System.out}.
+     * <p>
+     * The user provided {@link KeyValueMapper} which customizes output is used to print with {@code System.out}.
+     * The provided serde will be use to deserialize key or value if type is {@code byte[]}.
+     * <p>
+     * The example below shows the way to customize output data.
+     * <pre>{@code
+     * final KeyValueMapper<Integer, String, String> mapper = new KeyValueMapper<Integer, String, String>() {
+     *     @Override
+     *     public String apply(Integer key, String value) {
+     *         return String.format("(%d, %s)", key, value);
+     *     }
+     * };
+     * }</pre>
+     * <p>
+     * The provided KeyValueMapper's mapped value type must be {@code String}.
+     *
+     * @param mapper a {@link KeyValueMapper} that computes output type {@code String}.
+     * @param keySerde a {@link Serde<K>} used to deserialize key if type is {@code byte[]}.
+     * @param valSerde a {@link Serde<V>} used to deserialize value if type is {@code byte[]}.
+     * @param streamName The given name which labels output will be printed.
+     */
+    void print(final KeyValueMapper<? super K, ? super V, String> mapper, final Serde<K> keySerde, final Serde<V> valSerde, final String streamName);
+
+    /**
      * Write the records of this stream to a file at the given path.
      * This function will use the generated name of the parent processor node to label the key/value pairs printed to
      * the file.

@@ -177,26 +177,45 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print() {
-        print(null, null, null);
+        print(null, null, null, null);
     }
 
     @Override
     public void print(String streamName) {
-        print(null, null, streamName);
+        print(null,null, null, streamName);
     }
 
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde) {
-        print(keySerde, valSerde, null);
+        print(null, keySerde, valSerde, null);
     }
 
     @Override
     public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
-        String name = topology.newName(PRINTING_NAME);
-        streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, streamName), keySerde, valSerde), this.name);
+        print(null, keySerde, valSerde, streamName);
     }
 
+    @Override
+    public void print(KeyValueMapper<? super K, ? super V, String> mapper) {
+        print(mapper, null, null, null);
+    }
+
+    @Override
+    public void print(KeyValueMapper<? super K, ? super V, String> mapper, String streamName) {
+        print(mapper, null, null, streamName);
+    }
+
+    @Override
+    public void print(KeyValueMapper<? super K, ? super V, String> mapper, Serde<K> keySerde, Serde<V> valSerde) {
+        print(mapper, keySerde, valSerde, null);
+    }
+
+    @Override
+    public void print(KeyValueMapper<? super K, ? super V, String> mapper, Serde<K> keySerde, Serde<V> valSerde, String streamName) {
+        String name = topology.newName(PRINTING_NAME);
+        streamName = (streamName == null) ? this.name : streamName;
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, mapper, streamName), keySerde, valSerde), this.name);
+    }
 
     @Override
     public void writeAsText(String filePath) {
