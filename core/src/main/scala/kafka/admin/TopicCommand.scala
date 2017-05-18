@@ -204,7 +204,10 @@ object TopicCommand extends Logging {
             val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic).asScala
             if (!reportOverriddenConfigs || configs.nonEmpty) {
               val numPartitions = topicPartitionAssignment.size
-              val replicationFactor = topicPartitionAssignment.head._2.size
+              val replicationFactor =
+                if (numPartitions > 0)
+                  topicPartitionAssignment.head._2.size
+                else 0
               println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s"
                 .format(topic, numPartitions, replicationFactor, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
             }
