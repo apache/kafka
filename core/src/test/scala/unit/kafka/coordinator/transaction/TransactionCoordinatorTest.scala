@@ -133,7 +133,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
-      EasyMock.anyObject().asInstanceOf[TransactionMetadataTransition],
+      EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
@@ -268,7 +268,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
-      EasyMock.anyObject().asInstanceOf[TransactionMetadataTransition],
+      EasyMock.anyObject().asInstanceOf[TxnTransitMetadata],
       EasyMock.capture(capturedErrorsCallback)
     ))
 
@@ -558,7 +558,7 @@ class TransactionCoordinatorTest {
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .once()
 
-    val expectedTransition = TransactionMetadataTransition(producerId, producerEpoch, txnTimeoutMs, PrepareAbort,
+    val expectedTransition = TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, PrepareAbort,
       partitions.toSet, now, now + TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
 
     EasyMock.expect(transactionManager.appendTransactionToLog(EasyMock.eq(transactionalId),
@@ -624,7 +624,7 @@ class TransactionCoordinatorTest {
     EasyMock.expect(transactionManager.getTransactionState(transactionalId))
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata)))
 
-    val capturedNewMetadata: Capture[TransactionMetadataTransition] = EasyMock.newCapture()
+    val capturedNewMetadata: Capture[TxnTransitMetadata] = EasyMock.newCapture()
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
@@ -654,7 +654,7 @@ class TransactionCoordinatorTest {
     val originalMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs,
       Ongoing, partitions, now, now)
 
-    val transition = TransactionMetadataTransition(producerId, producerEpoch, txnTimeoutMs, transactionState,
+    val transition = TxnTransitMetadata(producerId, producerEpoch, txnTimeoutMs, transactionState,
       partitions.toSet, now, now)
 
     EasyMock.expect(transactionManager.isCoordinatorFor(transactionalId))

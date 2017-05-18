@@ -337,7 +337,7 @@ class TransactionStateManagerTest {
                            coordinatorEpoch: Int,
                            command: TransactionResult,
                            metadata: TransactionMetadata,
-                           newMetadata: TransactionMetadataTransition): Unit = {
+                           newMetadata: TxnTransitMetadata): Unit = {
       txnId = transactionalId
     }
 
