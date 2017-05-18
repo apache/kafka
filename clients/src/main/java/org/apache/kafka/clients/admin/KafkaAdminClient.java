@@ -53,6 +53,8 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.AlterConfigsRequest;
+import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateAclsRequest;
@@ -69,8 +71,13 @@ import org.apache.kafka.common.requests.DeleteTopicsRequest;
 import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsRequest;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.DescribeConfigsRequest;
+import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.Resource;
+import org.apache.kafka.common.requests.ResourceType;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -355,13 +362,26 @@ public class KafkaAdminClient extends AdminClient {
         Node provide();
     }
 
+    private class ConstantNodeIdProvider implements NodeProvider {
+        private final int nodeId;
+
+        ConstantNodeIdProvider(int nodeId) {
+            this.nodeId = nodeId;
+        }
+
+        @Override
+        public Node provide() {
+            return metadata.fetch().nodeById(nodeId);
+        }
+    }
+
     /**
      * Provides a constant node which is known at construction time.
      */
-    private static class ConstantAdminNodeProvider implements NodeProvider {
+    private static class ConstantNodeProvider implements NodeProvider {
         private final Node node;
 
-        ConstantAdminNodeProvider(Node node) {
+        ConstantNodeProvider(Node node) {
             this.node = node;
         }
 
@@ -853,7 +873,7 @@ public class KafkaAdminClient extends AdminClient {
             public void handleResponse(AbstractResponse abstractResponse) {
                 CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, CreateTopicsResponse.Error> entry : response.errors().entrySet()) {
+                for (Map.Entry<String, ApiError> entry : response.errors().entrySet()) {
                     KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
                     if (future == null) {
                         log.warn("Server response mentioned unknown topic {}", entry.getKey());
@@ -1071,7 +1091,7 @@ public class KafkaAdminClient extends AdminClient {
                 continue;
             final KafkaFutureImpl<NodeApiVersions> nodeFuture = new KafkaFutureImpl<>();
             nodeFutures.put(node, nodeFuture);
-            runnable.call(new Call("apiVersions", deadlineMs, new ConstantAdminNodeProvider(node)) {
+            runnable.call(new Call("apiVersions", deadlineMs, new ConstantNodeProvider(node)) {
                     @Override
                     public AbstractRequest.Builder createRequest(int timeoutMs) {
                         return new ApiVersionsRequest.Builder();
@@ -1228,5 +1248,161 @@ public class KafkaAdminClient extends AdminClient {
             }
         }, now);
         return new DeleteAclsResults(new HashMap<AclBindingFilter, KafkaFuture<FilterResults>>(futures));
+    }
+
+    @Override
+    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> configResources, final DescribeConfigsOptions options) {
+        final Map<ConfigResource, KafkaFutureImpl<Config>> singleRequestFutures = new HashMap<>();
+        final Collection<Resource> singleRequestResources = new ArrayList<>(configResources.size());
+
+        final Map<ConfigResource, KafkaFutureImpl<Config>> brokerFutures = new HashMap<>(configResources.size());
+        final Collection<Resource> brokerResources = new ArrayList<>();
+
+        for (ConfigResource resource : configResources) {
+            if (resource.type() != ConfigResource.Type.BROKER) {
+                singleRequestFutures.put(resource, new KafkaFutureImpl<Config>());
+                singleRequestResources.add(configResourceToResource(resource));
+            } else {
+                brokerFutures.put(resource, new KafkaFutureImpl<Config>());
+                brokerResources.add(configResourceToResource(resource));
+            }
+        }
+
+        final long now = time.milliseconds();
+        runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
+
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new DescribeConfigsRequest.Builder(singleRequestResources);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
+                for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : singleRequestFutures.entrySet()) {
+                    ConfigResource configResource = entry.getKey();
+                    KafkaFutureImpl<Config> future = entry.getValue();
+                    DescribeConfigsResponse.Config config = response.config(configResourceToResource(configResource));
+                    if (!config.error().is(Errors.NONE)) {
+                        future.completeExceptionally(config.error().exception());
+                        continue;
+                    }
+                    List<ConfigEntry> configEntries = new ArrayList<>();
+                    for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
+                        configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
+                                configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                    }
+                    future.complete(new Config(configEntries));
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(singleRequestFutures.values(), throwable);
+            }
+        }, now);
+
+        for (Map.Entry<ConfigResource, KafkaFutureImpl<Config>> entry : brokerFutures.entrySet()) {
+            final KafkaFutureImpl<Config> brokerFuture = entry.getValue();
+            final Resource resource = configResourceToResource(entry.getKey());
+            int nodeId = Integer.parseInt(resource.name());
+            runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
+                    new ConstantNodeIdProvider(nodeId)) {
+
+                @Override
+                AbstractRequest.Builder createRequest(int timeoutMs) {
+                    return new DescribeConfigsRequest.Builder(Collections.singleton(resource));
+                }
+
+                @Override
+                void handleResponse(AbstractResponse abstractResponse) {
+                    DescribeConfigsResponse response = (DescribeConfigsResponse) abstractResponse;
+                    DescribeConfigsResponse.Config config = response.configs().get(resource);
+
+                    if (!config.error().is(Errors.NONE))
+                        brokerFuture.completeExceptionally(config.error().exception());
+                    else {
+                        List<ConfigEntry> configEntries = new ArrayList<>();
+                        for (DescribeConfigsResponse.ConfigEntry configEntry : config.entries()) {
+                            configEntries.add(new ConfigEntry(configEntry.name(), configEntry.value(),
+                                    configEntry.isDefault(), configEntry.isSensitive(), configEntry.isReadOnly()));
+                        }
+                        brokerFuture.complete(new Config(configEntries));
+                    }
+                }
+
+                @Override
+                void handleFailure(Throwable throwable) {
+                    completeAllExceptionally(singleRequestFutures.values(), throwable);
+                }
+            }, now);
+        }
+
+        Map<ConfigResource, KafkaFutureImpl<Config>> allFutures = new HashMap<>(configResources.size());
+        allFutures.putAll(singleRequestFutures);
+        allFutures.putAll(brokerFutures);
+        return new DescribeConfigsResults(new HashMap<ConfigResource, KafkaFuture<Config>>(allFutures));
+    }
+
+    private Resource configResourceToResource(ConfigResource configResource) {
+        ResourceType resourceType;
+        switch (configResource.type()) {
+            case TOPIC:
+                resourceType = ResourceType.TOPIC;
+                break;
+            case BROKER:
+                resourceType = ResourceType.BROKER;
+                break;
+            default:
+                throw new IllegalArgumentException("Unexpected resource type " + configResource.type());
+        }
+        return new Resource(resourceType, configResource.name());
+    }
+
+    @Override
+    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
+        final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>(configs.size());
+        for (ConfigResource configResource : configs.keySet()) {
+            futures.put(configResource, new KafkaFutureImpl<Void>());
+        }
+        final Map<Resource, AlterConfigsRequest.Config> requestMap = new HashMap<>(configs.size());
+        for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
+            List<AlterConfigsRequest.ConfigEntry> configEntries = new ArrayList<>();
+            for (ConfigEntry configEntry: entry.getValue().entries())
+                configEntries.add(new AlterConfigsRequest.ConfigEntry(configEntry.name(), configEntry.value()));
+            ConfigResource resource = entry.getKey();
+            requestMap.put(configResourceToResource(resource), new AlterConfigsRequest.Config(configEntries));
+        }
+
+        final long now = time.milliseconds();
+        runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()),
+                new LeastLoadedNodeProvider()) {
+
+            @Override
+            public AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new AlterConfigsRequest.Builder(requestMap, options.isValidateOnly());
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                AlterConfigsResponse response = (AlterConfigsResponse) abstractResponse;
+                for (Map.Entry<ConfigResource, KafkaFutureImpl<Void>> entry : futures.entrySet()) {
+                    KafkaFutureImpl<Void> future = entry.getValue();
+                    ApiException exception = response.errors().get(configResourceToResource(entry.getKey())).exception();
+                    if (exception != null) {
+                        future.completeExceptionally(exception);
+                    } else {
+                        future.complete(null);
+                    }
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                completeAllExceptionally(futures.values(), throwable);
+            }
+        }, now);
+        return new AlterConfigsResults(new HashMap<ConfigResource, KafkaFuture<Void>>(futures));
     }
 }

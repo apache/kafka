@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -42,9 +41,9 @@ public class CreateTopicsRequest extends AbstractRequest {
     private static final String REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME = "partition_id";
     private static final String REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME = "replicas";
 
-    private static final String CONFIG_KEY_KEY_NAME = "config_key";
+    private static final String CONFIG_KEY_KEY_NAME = "config_name";
     private static final String CONFIG_VALUE_KEY_NAME = "config_value";
-    private static final String CONFIGS_KEY_NAME = "configs";
+    private static final String CONFIGS_KEY_NAME = "config_entries";
 
     public static final class TopicDetails {
         public final int numPartitions;
@@ -210,12 +209,9 @@ public class CreateTopicsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        Map<String, CreateTopicsResponse.Error> topicErrors = new HashMap<>();
+        Map<String, ApiError> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
-            Errors error = Errors.forException(e);
-            // Avoid populating the error message if it's a generic one
-            String message = error.message().equals(e.getMessage()) ? null : e.getMessage();
-            topicErrors.put(topic, new CreateTopicsResponse.Error(error, message));
+            topicErrors.put(topic, ApiError.fromThrowable(e));
         }
 
         short versionId = version();

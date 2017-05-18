@@ -65,7 +65,9 @@ public enum ApiKeys {
     TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false),
     DESCRIBE_ACLS(29, "DescribeAcls", false),
     CREATE_ACLS(30, "CreateAcls", false),
-    DELETE_ACLS(31, "DeleteAcls", false);
+    DELETE_ACLS(31, "DeleteAcls", false),
+    DESCRIBE_CONFIGS(32, "DescribeConfigs", false),
+    ALTER_CONFIGS(33, "AlterConfigs", false);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

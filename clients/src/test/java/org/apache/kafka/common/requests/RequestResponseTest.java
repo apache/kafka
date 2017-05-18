@@ -60,6 +60,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -230,6 +231,13 @@ public class RequestResponseTest {
         checkRequest(createDeleteAclsRequest());
         checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."));
         checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion());
+        checkRequest(createAlterConfigsRequest());
+        checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException());
+        checkResponse(createAlterConfigsResponse(), 0);
+        checkRequest(createDescribeConfigsRequest());
+        checkRequest(createDescribeConfigsRequestWithConfigEntries());
+        checkErrorResponse(createDescribeConfigsRequest(), new UnknownServerException());
+        checkResponse(createDescribeConfigsResponse(), 0);
     }
 
     @Test
@@ -887,9 +895,9 @@ public class RequestResponseTest {
     }
 
     private CreateTopicsResponse createCreateTopicResponse() {
-        Map<String, CreateTopicsResponse.Error> errors = new HashMap<>();
-        errors.put("t1", new CreateTopicsResponse.Error(Errors.INVALID_TOPIC_EXCEPTION, null));
-        errors.put("t2", new CreateTopicsResponse.Error(Errors.LEADER_NOT_AVAILABLE, "Leader with id 5 is not available."));
+        Map<String, ApiError> errors = new HashMap<>();
+        errors.put("t1", new ApiError(Errors.INVALID_TOPIC_EXCEPTION, null));
+        errors.put("t2", new ApiError(Errors.LEADER_NOT_AVAILABLE, "Leader with id 5 is not available."));
         return new CreateTopicsResponse(errors);
     }
 
@@ -1084,5 +1092,51 @@ public class RequestResponseTest {
             buf.flip();
             closed = true;
         }
+    }
+
+    private DescribeConfigsRequest createDescribeConfigsRequest() {
+        return new DescribeConfigsRequest.Builder(asList(
+                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"),
+                new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"))).build((short) 0);
+    }
+
+    private DescribeConfigsRequest createDescribeConfigsRequestWithConfigEntries() {
+        Map<org.apache.kafka.common.requests.Resource, Collection<String>> resources = new HashMap<>();
+        resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), asList("foo", "bar"));
+        resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), null);
+        resources.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic a"), Collections.<String>emptyList());
+        return new DescribeConfigsRequest.Builder(resources).build((short) 0);
+    }
+
+    private DescribeConfigsResponse createDescribeConfigsResponse() {
+        Map<org.apache.kafka.common.requests.Resource, DescribeConfigsResponse.Config> configs = new HashMap<>();
+        List<DescribeConfigsResponse.ConfigEntry> configEntries = asList(
+                new DescribeConfigsResponse.ConfigEntry("config_name", "config_value", false, true, false),
+                new DescribeConfigsResponse.ConfigEntry("another_name", "another value", true, false, true)
+        );
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new DescribeConfigsResponse.Config(
+                new ApiError(Errors.NONE, null), configEntries));
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new DescribeConfigsResponse.Config(
+                new ApiError(Errors.NONE, null), Collections.<DescribeConfigsResponse.ConfigEntry>emptyList()));
+        return new DescribeConfigsResponse(200, configs);
+    }
+
+    private AlterConfigsRequest createAlterConfigsRequest() {
+        Map<org.apache.kafka.common.requests.Resource, AlterConfigsRequest.Config> configs = new HashMap<>();
+        List<AlterConfigsRequest.ConfigEntry> configEntries = asList(
+                new AlterConfigsRequest.ConfigEntry("config_name", "config_value"),
+                new AlterConfigsRequest.ConfigEntry("another_name", "another value")
+        );
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
+        configs.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"),
+                new AlterConfigsRequest.Config(Collections.<AlterConfigsRequest.ConfigEntry>emptyList()));
+        return new AlterConfigsRequest((short) 0, configs, false);
+    }
+
+    private AlterConfigsResponse createAlterConfigsResponse() {
+        Map<org.apache.kafka.common.requests.Resource, ApiError> errors = new HashMap<>();
+        errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.BROKER, "0"), new ApiError(Errors.NONE, null));
+        errors.put(new org.apache.kafka.common.requests.Resource(org.apache.kafka.common.requests.ResourceType.TOPIC, "topic"), new ApiError(Errors.INVALID_REQUEST, "This request is invalid"));
+        return new AlterConfigsResponse(20, errors);
     }
 }

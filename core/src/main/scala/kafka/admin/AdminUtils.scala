@@ -46,6 +46,26 @@ trait AdminUtilities {
   def changeClientIdConfig(zkUtils: ZkUtils, clientId: String, configs: Properties)
   def changeUserOrUserClientIdConfig(zkUtils: ZkUtils, sanitizedEntityName: String, configs: Properties)
   def changeBrokerConfig(zkUtils: ZkUtils, brokerIds: Seq[Int], configs: Properties)
+
+  def changeConfigs(zkUtils: ZkUtils, entityType: String, entityName: String, configs: Properties): Unit = {
+
+    def parseBroker(broker: String): Int = {
+      try broker.toInt
+      catch {
+        case _: NumberFormatException =>
+          throw new IllegalArgumentException(s"Error parsing broker $broker. The broker's Entity Name must be a single integer value")
+      }
+    }
+
+    entityType match {
+      case ConfigType.Topic => changeTopicConfig(zkUtils, entityName, configs)
+      case ConfigType.Client => changeClientIdConfig(zkUtils, entityName, configs)
+      case ConfigType.User => changeUserOrUserClientIdConfig(zkUtils, entityName, configs)
+      case ConfigType.Broker => changeBrokerConfig(zkUtils, Seq(parseBroker(entityName)), configs)
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.Topic}, ${ConfigType.Client}, ${ConfigType.Broker}")
+    }
+  }
+
   def fetchEntityConfig(zkUtils: ZkUtils,entityType: String, entityName: String): Properties
 }
 
@@ -527,6 +547,14 @@ object AdminUtils extends Logging with AdminUtilities {
     changeEntityConfig(zkUtils, ConfigType.User, sanitizedEntityName, configs)
   }
 
+  def validateTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties): Unit = {
+    Topic.validate(topic)
+    if (!topicExists(zkUtils, topic))
+      throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
+    // remove the topic overrides
+    LogConfig.validate(configs)
+  }
+
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
    *
@@ -537,10 +565,7 @@ object AdminUtils extends Logging with AdminUtilities {
    *
    */
   def changeTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties) {
-    if (!topicExists(zkUtils, topic))
-      throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
-    // remove the topic overrides
-    LogConfig.validate(configs)
+    validateTopicConfig(zkUtils, topic, configs)
     changeEntityConfig(zkUtils, ConfigType.Topic, topic, configs)
   }
 

@@ -40,7 +40,8 @@ public class ResourceTypeTest {
         new AclResourceTypeTestInfo(ResourceType.ANY, 1, "any", false),
         new AclResourceTypeTestInfo(ResourceType.TOPIC, 2, "topic", false),
         new AclResourceTypeTestInfo(ResourceType.GROUP, 3, "group", false),
-        new AclResourceTypeTestInfo(ResourceType.CLUSTER, 4, "cluster", false)
+        new AclResourceTypeTestInfo(ResourceType.CLUSTER, 4, "cluster", false),
+        new AclResourceTypeTestInfo(ResourceType.BROKER, 5, "broker", false)
     };
 
     @Test

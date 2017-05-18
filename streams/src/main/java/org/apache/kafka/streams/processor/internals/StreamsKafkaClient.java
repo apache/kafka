@@ -38,6 +38,7 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
@@ -182,7 +183,7 @@ public class StreamsKafkaClient {
         final CreateTopicsResponse createTopicsResponse =  (CreateTopicsResponse) clientResponse.responseBody();
 
         for (InternalTopicConfig internalTopicConfig : topicsMap.keySet()) {
-            CreateTopicsResponse.Error error = createTopicsResponse.errors().get(internalTopicConfig.name());
+            ApiError error = createTopicsResponse.errors().get(internalTopicConfig.name());
             if (!error.is(Errors.NONE) && !error.is(Errors.TOPIC_ALREADY_EXISTS)) {
                 throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
             }

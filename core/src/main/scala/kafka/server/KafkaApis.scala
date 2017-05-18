@@ -43,10 +43,10 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
@@ -126,6 +126,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
+        case ApiKeys.ALTER_CONFIGS => handleAlterConfigsRequest(request)
+        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1266,7 +1268,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
     val createTopicsRequest = request.body[CreateTopicsRequest]
 
-    def sendResponseCallback(results: Map[String, CreateTopicsResponse.Error]): Unit = {
+    def sendResponseCallback(results: Map[String, ApiError]): Unit = {
       def createResponse(throttleTimeMs: Int): AbstractResponse = {
         val responseBody = new CreateTopicsResponse(throttleTimeMs, results.asJava)
         trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
@@ -1277,12 +1279,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!controller.isActive) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new CreateTopicsResponse.Error(Errors.NOT_CONTROLLER, null))
+        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
       }
       sendResponseCallback(results)
     } else if (!authorize(request.session, Create, Resource.ClusterResource)) {
       val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new CreateTopicsResponse.Error(Errors.CLUSTER_AUTHORIZATION_FAILED, null))
+        (topic, new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null))
       }
       sendResponseCallback(results)
     } else {
@@ -1291,7 +1293,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       // Special handling to add duplicate topics to the response
-      def sendResponseWithDuplicatesCallback(results: Map[String, CreateTopicsResponse.Error]): Unit = {
+      def sendResponseWithDuplicatesCallback(results: Map[String, ApiError]): Unit = {
 
         val duplicatedTopicsResults =
           if (duplicateTopics.nonEmpty) {
@@ -1300,7 +1302,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // We can send the error message in the response for version 1, so we don't have to log it any more
             if (request.header.apiVersion == 0)
               warn(errorMessage)
-            duplicateTopics.keySet.map((_, new CreateTopicsResponse.Error(Errors.INVALID_REQUEST, errorMessage))).toMap
+            duplicateTopics.keySet.map((_, new ApiError(Errors.INVALID_REQUEST, errorMessage))).toMap
           } else Map.empty
 
         val completeResults = results ++ duplicatedTopicsResults
@@ -1894,11 +1896,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       if (mayThrottle) {
-        val clientId : String =
-          if (request.requestObj.isInstanceOf[ControlledShutdownRequest])
-            request.requestObj.asInstanceOf[ControlledShutdownRequest].clientId.getOrElse("")
-          else
+        val clientId: String = request.requestObj match {
+          case r: ControlledShutdownRequest => r.clientId.getOrElse("")
+          case _ =>
             throw new IllegalStateException("Old style requests should only be used for ControlledShutdownRequest")
+        }
         sendResponseMaybeThrottle(request, clientId, sendResponseCallback)
       } else
         sendResponseExemptThrottle(request, () => sendResponseCallback(0))
@@ -1918,6 +1920,64 @@ class KafkaApis(val requestChannel: RequestChannel,
       else
         sendResponseExemptThrottle(request, new RequestChannel.Response(request, createResponse(0)))
     }
+  }
+
+  def handleAlterConfigsRequest(request: RequestChannel.Request): Unit = {
+    val alterConfigsRequest = request.body[AlterConfigsRequest]
+    val (authorizedResources, unauthorizedResources) = alterConfigsRequest.configs.asScala.partition { case (resource, _) =>
+      resource.`type` match {
+        case RResourceType.BROKER =>
+          authorize(request.session, AlterConfigs, new Resource(Broker, resource.name)) ||
+            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+        case RResourceType.TOPIC =>
+          authorize(request.session, AlterConfigs, new Resource(Topic, resource.name)) ||
+            authorize(request.session, AlterConfigs, Resource.ClusterResource)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
+      }
+    }
+    val authorizedResult = adminManager.alterConfigs(authorizedResources, alterConfigsRequest.validateOnly)
+    val unauthorizedResult = unauthorizedResources.keys.map { resource =>
+      resource -> configsAuthorizationApiError(request.session, resource)
+    }
+    sendResponseMaybeThrottle(request, new AlterConfigsResponse(_, (authorizedResult ++ unauthorizedResult).asJava))
+  }
+
+  private def configsAuthorizationApiError(session: RequestChannel.Session, resource: RResource): ApiError = {
+    val error = resource.`type` match {
+      case RResourceType.BROKER => Errors.BROKER_AUTHORIZATION_FAILED
+      case RResourceType.TOPIC =>
+        // Don't leak topic name unless the user has describe topic permission
+        if (authorize(session, Describe, new Resource(Topic, resource.name)))
+          Errors.TOPIC_AUTHORIZATION_FAILED
+        else
+          Errors.UNKNOWN_TOPIC_OR_PARTITION
+      case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
+    }
+    new ApiError(error, null)
+  }
+
+  def handleDescribeConfigsRequest(request: RequestChannel.Request): Unit = {
+    val describeConfigsRequest = request.body[DescribeConfigsRequest]
+    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.resources.asScala.partition { resource =>
+      resource.`type` match {
+        case RResourceType.BROKER =>
+          authorize(request.session, DescribeConfigs, new Resource(Broker, resource.name)) ||
+            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+        case RResourceType.TOPIC =>
+          authorize(request.session, DescribeConfigs, new Resource(Topic, resource.name)) ||
+            authorize(request.session, DescribeConfigs, Resource.ClusterResource)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
+      }
+    }
+    val authorizedConfigs = adminManager.describeConfigs(authorizedResources.map { resource =>
+      resource -> Option(describeConfigsRequest.configNames(resource)).map(_.asScala.toSet)
+    }.toMap)
+    val unauthorizedConfigs = unauthorizedResources.map { resource =>
+      val error = configsAuthorizationApiError(request.session, resource)
+      resource -> new DescribeConfigsResponse.Config(error, Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
+    }
+
+    sendResponseMaybeThrottle(request, new DescribeConfigsResponse(_, (authorizedConfigs ++ unauthorizedConfigs).asJava))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

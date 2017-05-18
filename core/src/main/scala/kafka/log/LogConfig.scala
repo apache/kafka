@@ -321,7 +321,7 @@ object LogConfig {
     val names = configNames
     for(name <- props.asScala.keys)
       if (!names.contains(name))
-        throw new InvalidConfigurationException(s"Unknown Log configuration $name.")
+        throw new InvalidConfigurationException(s"Unknown topic config name: $name")
   }
 
   /**
