@@ -350,7 +350,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         boolean idempotenceEnabled = config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG);
 
         if (!idempotenceEnabled && userConfiguredIdempotence && userConfiguredTransactions)
-            throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
+            throw new ConfigException("Cannot set a {} without also enabling idempotence.", ProducerConfig.TRANSACTIONAL_ID_CONFIG);
 
         if (userConfiguredTransactions)
             idempotenceEnabled = true;
@@ -376,11 +376,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (idempotenceEnabled && !userConfiguredRetries) {
             // We recommend setting infinite retries when the idempotent producer is enabled, so it makes sense to make
             // this the default.
-            log.info("Overriding the default retries config to " + Integer.MAX_VALUE + " since the idempotent producer is enabled.");
+            log.info("Overriding the default retries config to the recommended value of {} since the idempotent " +
+                    "producer is enabled.", Integer.MAX_VALUE);
             return Integer.MAX_VALUE;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.RETRIES_CONFIG) == 0) {
-            throw new ConfigException("Must set " + ProducerConfig.RETRIES_CONFIG + " to non-zero when using the idempotent producer.");
+            throw new ConfigException("Must set {} to non-zero when using the idempotent producer.", ProducerConfig.RETRIES_CONFIG);
         }
         return config.getInt(ProducerConfig.RETRIES_CONFIG);
     }
@@ -391,12 +392,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             userConfiguredInflights = true;
         }
         if (idempotenceEnabled && !userConfiguredInflights) {
-            log.info("Overriding the default " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 since idempontence is enabled.");
+            log.info("Overriding the default {} to 1 since idempontence is enabled.", ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
             return 1;
         }
         if (idempotenceEnabled && config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION) != 1) {
-            throw new ConfigException("Must set " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " to 1 in order" +
-                    "to use the idempotent producer. Otherwise we cannot guarantee idempotence.");
+            throw new ConfigException("Must set {} to 1 in order" +
+                    "to use the idempotent producer. Otherwise we cannot guarantee idempotence.", ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
         }
         return config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION);
     }
@@ -409,13 +410,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         if (idempotenceEnabled && !userConfiguredAcks) {
-            log.info("Overriding the default " + ProducerConfig.ACKS_CONFIG + " to all since idempotence is enabled");
+            log.info("Overriding the default {} to all since idempotence is enabled.", ProducerConfig.ACKS_CONFIG);
             return -1;
         }
 
         if (idempotenceEnabled && acks != -1) {
-            throw new ConfigException("Must set " + ProducerConfig.ACKS_CONFIG + " to all in order to use the idempotent " +
-                    "producer. Otherwise we cannot guarantee idempotence");
+            throw new ConfigException("Must set {} to all in order to use the idempotent " +
+                    "producer. Otherwise we cannot guarantee idempotence.", ProducerConfig.ACKS_CONFIG);
         }
         return acks;
     }
