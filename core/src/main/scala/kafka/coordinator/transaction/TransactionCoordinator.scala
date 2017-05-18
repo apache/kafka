@@ -117,14 +117,16 @@ class TransactionCoordinator(brokerId: Int,
         case None =>
           val producerId = producerIdManager.generateProducerId()
           val now = time.milliseconds()
-          val createdMetadata = new TransactionMetadata(producerId = producerId,
+          val createdMetadata = new TransactionMetadata(
+            transactionalId = transactionalId,
+            producerId = producerId,
             producerEpoch = 0,
             txnTimeoutMs = transactionTimeoutMs,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
             txnLastUpdateTimestamp = now)
 
-          val epochAndMetadata = txnManager.addTransaction(transactionalId, createdMetadata)
+          val epochAndMetadata = txnManager.addTransaction(createdMetadata)
           val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
           val txnMetadata = epochAndMetadata.transactionMetadata
 

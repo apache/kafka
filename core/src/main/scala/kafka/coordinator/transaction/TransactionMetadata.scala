@@ -16,7 +16,7 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.utils.nonthreadsafe
+import kafka.utils.{Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.{immutable, mutable}
@@ -70,9 +70,13 @@ private[transaction] case object CompleteCommit extends TransactionState { val b
 private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
 private[transaction] object TransactionMetadata {
-  def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(transactionalId: String, producerId: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) =
+    new TransactionMetadata(transactionalId, producerId, epoch, txnTimeoutMs, Empty,
+      collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(transactionalId: String, producerId: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) =
+    new TransactionMetadata(transactionalId, producerId, epoch, txnTimeoutMs, state,
+      collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def byteToState(byte: Byte): TransactionState = {
     byte match {
@@ -117,13 +121,14 @@ private[transaction] case class TransactionMetadataTransition(producerId: Long,
   * @param txnLastUpdateTimestamp   updated when any operation updates the TransactionMetadata. To be used for expiration
   */
 @nonthreadsafe
-private[transaction] class TransactionMetadata(val producerId: Long,
+private[transaction] class TransactionMetadata(val transactionalId: String,
+                                               val producerId: Long,
                                                var producerEpoch: Short,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
                                                var txnStartTimestamp: Long = -1,
-                                               var txnLastUpdateTimestamp: Long) {
+                                               var txnLastUpdateTimestamp: Long) extends Logging {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -159,7 +164,8 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
                                     updateTimestamp: Long): TransactionMetadataTransition = {
 
-    prepareTransitionTo(Empty, (producerEpoch + 1).toShort, newTxnTimeoutMs, immutable.Set.empty[TopicPartition], -1, updateTimestamp)
+    prepareTransitionTo(Empty, (producerEpoch + 1).toShort, newTxnTimeoutMs, immutable.Set.empty[TopicPartition],
+      -1, updateTimestamp)
   }
 
   def prepareNewPid(updateTimestamp: Long): TransactionMetadataTransition = {
@@ -171,30 +177,22 @@ private[transaction] class TransactionMetadata(val producerId: Long,
                            updateTimestamp: Long): TransactionMetadataTransition = {
 
     if (state == Empty || state == CompleteCommit || state == CompleteAbort) {
-      prepareTransitionTo(Ongoing, producerEpoch, txnTimeoutMs, (topicPartitions ++ addedTopicPartitions).toSet, updateTimestamp, updateTimestamp)
+      prepareTransitionTo(Ongoing, producerEpoch, txnTimeoutMs, (topicPartitions ++ addedTopicPartitions).toSet,
+        updateTimestamp, updateTimestamp)
     } else {
-      prepareTransitionTo(Ongoing, producerEpoch, txnTimeoutMs, (topicPartitions ++ addedTopicPartitions).toSet, txnStartTimestamp, updateTimestamp)
+      prepareTransitionTo(Ongoing, producerEpoch, txnTimeoutMs, (topicPartitions ++ addedTopicPartitions).toSet,
+        txnStartTimestamp, updateTimestamp)
     }
   }
 
   def prepareAbortOrCommit(newState: TransactionState,
                            updateTimestamp: Long): TransactionMetadataTransition = {
-
     prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, topicPartitions.toSet, txnStartTimestamp, updateTimestamp)
   }
 
   def prepareComplete(updateTimestamp: Long): TransactionMetadataTransition = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
     prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition], txnStartTimestamp, updateTimestamp)
-  }
-
-  // visible for testing only
-  def copy(): TransactionMetadata = {
-    val cloned = new TransactionMetadata(producerId, producerEpoch, txnTimeoutMs, state,
-      mutable.Set.empty ++ topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
-    cloned.pendingState = pendingState
-
-    cloned
   }
 
   private def prepareTransitionTo(newState: TransactionState,
@@ -209,8 +207,8 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
     // check that the new state transition is valid and update the pending state if necessary
     if (TransactionMetadata.validPreviousStates(newState).contains(state)) {
+      debug(s"TransactionalId $transactionalId prepare transition from $state to $newState")
       pendingState = Some(newState)
-
       TransactionMetadataTransition(producerId, newEpoch, newTxnTimeoutMs, newState, newTopicPartitions, newTxnStartTimestamp, updateTimestamp)
     } else {
       throw new IllegalStateException(s"Preparing transaction state transition to $newState failed since the target state" +
@@ -239,7 +237,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
       throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata state")
     } else {
-      val updated = toState match {
+      toState match {
         case Empty => // from initPid
           if (producerEpoch > newMetadata.producerEpoch ||
             producerEpoch < newMetadata.producerEpoch - 1 ||
@@ -285,6 +283,8 @@ private[transaction] class TransactionMetadata(val producerId: Long,
           }
       }
 
+      debug(s"TransactionalId $transactionalId transitioned from $state to $toState")
+
       txnLastUpdateTimestamp = newMetadata.txnLastUpdateTimestamp
       pendingState = None
       state = toState
@@ -293,10 +293,11 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
   def pendingTransitionInProgress: Boolean = pendingState.isDefined
 
-  override def toString = s"TransactionMetadata($pendingState, $producerId, $producerEpoch, $txnTimeoutMs, $state, $topicPartitions, $txnStartTimestamp, $txnLastUpdateTimestamp)"
+  override def toString = s"TransactionMetadata($transactionalId, $pendingState, $producerId, $producerEpoch, $txnTimeoutMs, $state, $topicPartitions, $txnStartTimestamp, $txnLastUpdateTimestamp)"
 
   override def equals(that: Any): Boolean = that match {
     case other: TransactionMetadata =>
+      transactionalId == other.transactionalId &&
       producerId == other.producerId &&
       producerEpoch == other.producerEpoch &&
       txnTimeoutMs == other.txnTimeoutMs &&
@@ -308,7 +309,8 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   }
 
   override def hashCode(): Int = {
-    val fields = Seq(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions, txnStartTimestamp, txnLastUpdateTimestamp)
+    val fields = Seq(transactionalId, producerId, producerEpoch, txnTimeoutMs, state, topicPartitions,
+      txnStartTimestamp, txnLastUpdateTimestamp)
     fields.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
   }
 }
