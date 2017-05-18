@@ -51,5 +51,9 @@ public class MmapBufferPoolTest {
         pool.deallocate(buffer);
         assertEquals("All memory should be available", totalMemory, pool.availableMemory());
         assertEquals("Still a single buffer on the free list", totalMemory - size, pool.unallocatedMemory());
+        buffer = pool.allocate(2 * size, maxBlockTimeMs);
+        pool.deallocate(buffer);
+        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
+        assertEquals("Non-standard size didn't go to the free list.", totalMemory - size, pool.unallocatedMemory());
     }
 }
