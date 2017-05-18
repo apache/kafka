@@ -22,7 +22,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import com.yammer.metrics.core.Gauge
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
-import kafka.common._
+import kafka.common.NotAssignedReplicaException
 import kafka.controller.KafkaController
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup

@@ -67,7 +67,7 @@ class OffsetsForLeaderEpochTest {
   }
 
   @Test
-  def shonuldReturnNoLeaderForPartitionIfThrown(): Unit = {
+  def shouldReturnNoLeaderForPartitionIfThrown(): Unit = {
     //create a replica manager with 1 partition that has 0 replica
     val replicaManager = new ReplicaManager(config, metrics, time, null, null, null, new AtomicBoolean(false),
       QuotaFactory.instantiate(config, metrics, time).follower, new BrokerTopicStats,

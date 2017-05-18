@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordEx
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.protocol.Errors.UNKNOWN_TOPIC_OR_PARTITION
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
