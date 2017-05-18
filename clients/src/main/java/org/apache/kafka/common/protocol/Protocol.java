@@ -1549,6 +1549,90 @@ public class Protocol {
     public static final Schema[] TXN_OFFSET_COMMIT_REQUEST = new Schema[] {TXN_OFFSET_COMMIT_REQUEST_V0};
     public static final Schema[] TXN_OFFSET_COMMIT_RESPONSE = new Schema[] {TXN_OFFSET_COMMIT_RESPONSE_V0};
 
+    public static final Schema DESCRIBE_ACLS_REQUEST_V0 = new Schema(
+        new Field("resource_type", INT8, "The filter resource type."),
+        new Field("resource_name", NULLABLE_STRING, "The filter resource name."),
+        new Field("principal", NULLABLE_STRING, "The filter principal name."),
+        new Field("host", NULLABLE_STRING, "The filter ip address."),
+        new Field("operation", INT8, "The filter operation type."),
+        new Field("permission_type", INT8, "The filter permission type.")
+    );
+
+    public static final Schema DESCRIBE_ACLS_RESOURCE = new Schema(
+        new Field("resource_type", INT8, "The resource type"),
+        new Field("resource_name", STRING, "The resource name"),
+        new Field("acls", new ArrayOf(new Schema(
+            new Field("principal", STRING, "The ACL principal"),
+            new Field("host", STRING, "The ACL host"),
+            new Field("operation", INT8, "The ACL operation"),
+            new Field("permission_type", INT8, "The ACL permission type")))));
+
+    public static final Schema DESCRIBE_ACLS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("error_code", INT16, "The error code."),
+        new Field("error_message", NULLABLE_STRING, "The error message."),
+        new Field("resources",
+            new ArrayOf(DESCRIBE_ACLS_RESOURCE),
+            "The resources and their associated ACLs."));
+
+    public static final Schema[] DESCRIBE_ACLS_REQUEST = new Schema[] {DESCRIBE_ACLS_REQUEST_V0};
+    public static final Schema[] DESCRIBE_ACLS_RESPONSE  = new Schema[] {DESCRIBE_ACLS_RESPONSE_V0};
+
+    public static final Schema CREATE_ACLS_REQUEST_V0 = new Schema(
+        new Field("creations",
+            new ArrayOf(new Schema(
+                new Field("resource_type", INT8, "The resource type."),
+                new Field("resource_name", STRING, "The resource name."),
+                new Field("principal", STRING, "The principal."),
+                new Field("host", STRING, "The ip address."),
+                new Field("operation", INT8, "The ACL operation"),
+                new Field("permission_type", INT8, "The ACL permission type")
+            ))));
+
+    public static final Schema CREATE_ACLS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("creation_responses",
+            new ArrayOf(new Schema(
+                new Field("error_code", INT16, "The error code."),
+                new Field("error_message", NULLABLE_STRING, "The error message.")
+            ))));
+
+    public static final Schema[] CREATE_ACLS_REQUEST = new Schema[] {CREATE_ACLS_REQUEST_V0};
+    public static final Schema[] CREATE_ACLS_RESPONSE = new Schema[] {CREATE_ACLS_RESPONSE_V0};
+
+    public static final Schema DELETE_ACLS_REQUEST_V0 = new Schema(
+        new Field("filters",
+            new ArrayOf(new Schema(
+                new Field("resource_type", INT8, "The resource type filter."),
+                new Field("resource_name", NULLABLE_STRING, "The resource name filter."),
+                new Field("principal", NULLABLE_STRING, "The principal filter."),
+                new Field("host", NULLABLE_STRING, "The ip address filter."),
+                new Field("operation", INT8, "The ACL operation filter."),
+                new Field("permission_type", INT8, "The ACL permission type filter.")
+            ))));
+
+    public static final Schema MATCHING_ACL = new Schema(
+        new Field("error_code", INT16, "The error code."),
+        new Field("error_message", NULLABLE_STRING, "The error message."),
+        new Field("resource_type", INT8, "The resource type."),
+        new Field("resource_name", STRING, "The resource name."),
+        new Field("principal", STRING, "The principal."),
+        new Field("host", STRING, "The ip address."),
+        new Field("operation", INT8, "The ACL operation"),
+        new Field("permission_type", INT8, "The ACL permission type")
+    );
+
+    public static final Schema DELETE_ACLS_RESPONSE_V0 = new Schema(
+        newThrottleTimeField(),
+        new Field("filter_responses",
+            new ArrayOf(new Schema(
+                new Field("error_code", INT16, "The error code."),
+                new Field("error_message", NULLABLE_STRING, "The error message."),
+                new Field("matching_acls", new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+
+    public static final Schema[] DELETE_ACLS_REQUEST = new Schema[] {DELETE_ACLS_REQUEST_V0};
+    public static final Schema[] DELETE_ACLS_RESPONSE = new Schema[] {DELETE_ACLS_RESPONSE_V0};
+
     /* an array of all requests and responses with all schema versions; a null value in the inner array means that the
      * particular version is not supported */
     public static final Schema[][] REQUESTS = new Schema[ApiKeys.MAX_API_KEY + 1][];
@@ -1588,6 +1672,9 @@ public class Protocol {
         REQUESTS[ApiKeys.END_TXN.id] = END_TXN_REQUEST;
         REQUESTS[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_REQUEST;
         REQUESTS[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_REQUEST;
+        REQUESTS[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_REQUEST;
+        REQUESTS[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_REQUEST;
+        REQUESTS[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_REQUEST;
 
         RESPONSES[ApiKeys.PRODUCE.id] = PRODUCE_RESPONSE;
         RESPONSES[ApiKeys.FETCH.id] = FETCH_RESPONSE;
@@ -1618,6 +1705,9 @@ public class Protocol {
         RESPONSES[ApiKeys.END_TXN.id] = END_TXN_RESPONSE;
         RESPONSES[ApiKeys.WRITE_TXN_MARKERS.id] = WRITE_TXN_RESPONSE;
         RESPONSES[ApiKeys.TXN_OFFSET_COMMIT.id] = TXN_OFFSET_COMMIT_RESPONSE;
+        RESPONSES[ApiKeys.DESCRIBE_ACLS.id] = DESCRIBE_ACLS_RESPONSE;
+        RESPONSES[ApiKeys.CREATE_ACLS.id] = CREATE_ACLS_RESPONSE;
+        RESPONSES[ApiKeys.DELETE_ACLS.id] = DELETE_ACLS_RESPONSE;
 
         /* set the minimum and maximum version of each api */
         for (ApiKeys api : ApiKeys.values()) {

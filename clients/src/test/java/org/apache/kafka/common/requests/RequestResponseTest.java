@@ -16,10 +16,21 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.admin.AccessControlEntry;
+import org.apache.kafka.clients.admin.AccessControlEntryFilter;
+import org.apache.kafka.clients.admin.AclBinding;
+import org.apache.kafka.clients.admin.AclBindingFilter;
+import org.apache.kafka.clients.admin.AclOperation;
+import org.apache.kafka.clients.admin.AclPermissionType;
+import org.apache.kafka.clients.admin.Resource;
+import org.apache.kafka.clients.admin.ResourceFilter;
+import org.apache.kafka.clients.admin.ResourceType;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.ListenerName;
@@ -35,6 +46,10 @@ import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
+import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
+import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -44,6 +59,7 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -205,6 +221,15 @@ public class RequestResponseTest {
         checkRequest(createTxnOffsetCommitRequest());
         checkErrorResponse(createTxnOffsetCommitRequest(), new UnknownServerException());
         checkResponse(createTxnOffsetCommitResponse(), 0);
+        checkRequest(createListAclsRequest());
+        checkErrorResponse(createListAclsRequest(), new SecurityDisabledException("Security is not enabled."));
+        checkResponse(createListAclsResponse(), ApiKeys.DESCRIBE_ACLS.latestVersion());
+        checkRequest(createCreateAclsRequest());
+        checkErrorResponse(createCreateAclsRequest(), new SecurityDisabledException("Security is not enabled."));
+        checkResponse(createCreateAclsResponse(), ApiKeys.CREATE_ACLS.latestVersion());
+        checkRequest(createDeleteAclsRequest());
+        checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."));
+        checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion());
     }
 
     @Test
@@ -958,6 +983,61 @@ public class RequestResponseTest {
         final Map<TopicPartition, Errors> errorPerPartitions = new HashMap<>();
         errorPerPartitions.put(new TopicPartition("topic", 73), Errors.NONE);
         return new TxnOffsetCommitResponse(0, errorPerPartitions);
+    }
+
+    private DescribeAclsRequest createListAclsRequest() {
+        return new DescribeAclsRequest.Builder(new AclBindingFilter(
+                new ResourceFilter(ResourceType.TOPIC, "mytopic"),
+                new AccessControlEntryFilter(null, null, AclOperation.ANY, AclPermissionType.ANY))).build();
+    }
+
+    private DescribeAclsResponse createListAclsResponse() {
+        return new DescribeAclsResponse(0, null, Collections.singleton(new AclBinding(
+            new Resource(ResourceType.TOPIC, "mytopic"),
+            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.ALLOW))));
+    }
+
+    private CreateAclsRequest createCreateAclsRequest() {
+        List<AclCreation> creations = new ArrayList<>();
+        creations.add(new AclCreation(new AclBinding(
+            new Resource(ResourceType.TOPIC, "mytopic"),
+            new AccessControlEntry("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.ALLOW))));
+        creations.add(new AclCreation(new AclBinding(
+            new Resource(ResourceType.GROUP, "mygroup"),
+            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY))));
+        return new CreateAclsRequest.Builder(creations).build();
+    }
+
+    private CreateAclsResponse createCreateAclsResponse() {
+        return new CreateAclsResponse(0, Arrays.asList(new AclCreationResponse(null),
+            new AclCreationResponse(new InvalidRequestException("Foo bar"))));
+    }
+
+    private DeleteAclsRequest createDeleteAclsRequest() {
+        List<AclBindingFilter> filters = new ArrayList<>();
+        filters.add(new AclBindingFilter(
+            new ResourceFilter(ResourceType.ANY, null),
+            new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY)));
+        filters.add(new AclBindingFilter(
+            new ResourceFilter(ResourceType.ANY, null),
+            new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY)));
+        return new DeleteAclsRequest.Builder(filters).build();
+    }
+
+    private DeleteAclsResponse createDeleteAclsResponse() {
+        List<AclFilterResponse> responses = new ArrayList<>();
+        responses.add(new AclFilterResponse(null,
+            new HashSet<AclDeletionResult>() {{
+                    add(new AclDeletionResult(null, new AclBinding(
+                        new Resource(ResourceType.TOPIC, "mytopic3"),
+                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW))));
+                    add(new AclDeletionResult(null, new AclBinding(
+                        new Resource(ResourceType.TOPIC, "mytopic4"),
+                        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))));
+                }}));
+        responses.add(new AclFilterResponse(new SecurityDisabledException("No security"),
+            Collections.<AclDeletionResult>emptySet()));
+        return new DeleteAclsResponse(0, responses);
     }
 
     private static class ByteBufferChannel implements GatheringByteChannel {

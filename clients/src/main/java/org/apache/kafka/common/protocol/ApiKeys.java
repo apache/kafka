@@ -62,7 +62,10 @@ public enum ApiKeys {
     ADD_OFFSETS_TO_TXN(25, "AddOffsetsToTxn", false),
     END_TXN(26, "EndTxn", false),
     WRITE_TXN_MARKERS(27, "WriteTxnMarkers", true),
-    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false);
+    TXN_OFFSET_COMMIT(28, "TxnOffsetCommit", false),
+    DESCRIBE_ACLS(29, "DescribeAcls", false),
+    CREATE_ACLS(30, "CreateAcls", false),
+    DELETE_ACLS(31, "DeleteAcls", false);
 
     private static final ApiKeys[] ID_TO_TYPE;
     private static final int MIN_API_KEY = 0;

@@ -43,15 +43,20 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch}
+import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
+import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.requests.SaslHandshakeResponse
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.clients.admin.{AccessControlEntry, AclBinding, AclBindingFilter, AclOperation, AclPermissionType, Resource => AdminResource, ResourceType => AdminResourceType}
 
 import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ListBuffer
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -118,6 +123,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.END_TXN => handleEndTxnRequest(request)
         case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
         case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
+        case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
+        case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
+        case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -1652,6 +1660,217 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
         commitTimestamp = currentTimestamp,
         expireTimestamp = defaultExpireTimestamp)
+    }
+  }
+
+  def handleDescribeAcls(request: RequestChannel.Request): Unit = {
+    authorizeClusterAction(request)
+    val describeAclsRequest = request.body[DescribeAclsRequest]
+    authorizer match {
+      case None =>
+        def createResponse(throttleTimeMs: Int): AbstractResponse =
+          new DescribeAclsResponse(throttleTimeMs, new SecurityDisabledException(
+            "No Authorizer is configured on the broker."), Collections.emptySet[AclBinding]);
+        sendResponseMaybeThrottle(request, createResponse)
+      case Some(auth) =>
+        val filter = describeAclsRequest.filter()
+        var returnedAcls = new util.ArrayList[AclBinding]
+        val aclMap : Map[Resource, Set[Acl]] = auth.getAcls()
+        aclMap.foreach {
+          case (resource, acls) => {
+            acls.foreach {
+              case (acl) => {
+                val fixture = new AclBinding(new AdminResource(AdminResourceType.fromString(resource.resourceType.toString), resource.name),
+                    new AccessControlEntry(acl.principal.toString(), acl.host.toString(), acl.operation.toJava, acl.permissionType.toJava))
+                if (filter.matches(fixture))
+                  returnedAcls.add(fixture)
+              }
+            }
+          }
+        }
+        def createResponse(throttleTimeMs: Int): AbstractResponse =
+          new DescribeAclsResponse(throttleTimeMs, null, returnedAcls)
+        sendResponseMaybeThrottle(request, createResponse)
+    }
+  }
+
+  /**
+    * Convert an ACL binding filter to a Scala object.
+    * All ACL and resource fields must be specified (no UNKNOWN, ANY, or null fields are allowed.)
+    *
+    * @param filter     The binding filter as a Java object.
+    * @return           The binding filter as a scala object, or an exception if there was an error
+    *                   converting the Java object.
+    */
+  def toScala(filter: AclBindingFilter) : Try[(Resource, Acl)] = {
+    filter.resourceFilter().resourceType() match {
+      case AdminResourceType.UNKNOWN => return Failure(new InvalidRequestException("Invalid UNKNOWN resource type"))
+      case AdminResourceType.ANY => return Failure(new InvalidRequestException("Invalid ANY resource type"))
+      case _ => {}
+    }
+    var resourceType: ResourceType = null
+    try {
+      resourceType = ResourceType.fromString(filter.resourceFilter().resourceType().toString)
+    } catch {
+      case throwable: Throwable => return Failure(new InvalidRequestException("Invalid resource type"))
+    }
+    var principal: KafkaPrincipal = null
+    try {
+      principal = KafkaPrincipal.fromString(filter.entryFilter().principal())
+    } catch {
+      case throwable: Throwable => return Failure(new InvalidRequestException("Invalid principal"))
+    }
+    filter.entryFilter().operation() match {
+      case AclOperation.UNKNOWN => return Failure(new InvalidRequestException("Invalid UNKNOWN operation type"))
+      case AclOperation.ANY => return Failure(new InvalidRequestException("Invalid ANY operation type"))
+      case _ => {}
+    }
+    val operation = Operation.fromJava(filter.entryFilter().operation()) match {
+      case Failure(throwable) => return Failure(new InvalidRequestException(throwable.getMessage))
+      case Success(op) => op
+    }
+    filter.entryFilter().permissionType() match {
+      case AclPermissionType.UNKNOWN => new InvalidRequestException("Invalid UNKNOWN permission type")
+      case AclPermissionType.ANY => new InvalidRequestException("Invalid ANY permission type")
+      case _ => {}
+    }
+    val permissionType = PermissionType.fromJava(filter.entryFilter.permissionType) match {
+      case Failure(throwable) => return Failure(new InvalidRequestException(throwable.getMessage))
+      case Success(perm) => perm
+    }
+    return Success((Resource(resourceType, filter.resourceFilter().name()), Acl(principal, permissionType,
+                   filter.entryFilter().host(), operation)))
+  }
+
+  /**
+    * Convert a Scala ACL binding to a Java object.
+    *
+    * @param acl        The binding as a Scala object.
+    * @return           The binding as a Java object.
+    */
+  def toJava(acl: (Resource, Acl)) : AclBinding = {
+    acl match {
+      case (resource, acl) =>
+        val adminResource = new AdminResource(AdminResourceType.fromString(resource.resourceType.toString), resource.name)
+        val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
+                                  acl.operation.toJava, acl.permissionType.toJava)
+        return new AclBinding(adminResource, entry)
+    }
+  }
+
+  def handleCreateAcls(request: RequestChannel.Request): Unit = {
+    authorizeClusterAction(request)
+    val createAclsRequest = request.body[CreateAclsRequest]
+    authorizer match {
+      case None =>
+        def createResponse(throttleTimeMs: Int): AbstractResponse =
+          createAclsRequest.getErrorResponse(throttleTimeMs,
+            new SecurityDisabledException("No Authorizer is configured on the broker."))
+        sendResponseMaybeThrottle(request, createResponse)
+      case Some(auth) =>
+        val errors = mutable.HashMap[Int, Throwable]()
+        var creations = ListBuffer[(Resource, Acl)]()
+        for (i <- 0 to createAclsRequest.aclCreations().size() - 1) {
+          val result = toScala(createAclsRequest.aclCreations.get(i).acl.toFilter)
+          result match {
+            case Failure(throwable) => errors.put(i, throwable)
+            case Success((resource, acl)) => try {
+                if (resource.resourceType.equals(Cluster) &&
+                    !resource.name.equals(Resource.ClusterResourceName))
+                  throw new InvalidRequestException("The only valid name for the CLUSTER resource is " +
+                      Resource.ClusterResourceName)
+                if (resource.name.isEmpty())
+                  throw new InvalidRequestException("Invalid empty resource name")
+                auth.addAcls(immutable.Set(acl), resource)
+              } catch {
+                case throwable : Throwable => errors.put(i, throwable)
+              }
+          }
+        }
+        var aclCreationResults = new java.util.ArrayList[AclCreationResponse]
+        for (i <- 0 to createAclsRequest.aclCreations().size() - 1) {
+          errors.get(i) match {
+            case Some(throwable) => aclCreationResults.add(new AclCreationResponse(throwable))
+            case None => aclCreationResults.add(new AclCreationResponse(null))
+          }
+        }
+        def createResponse(throttleTimeMs: Int): AbstractResponse =
+          new CreateAclsResponse(throttleTimeMs, aclCreationResults)
+        sendResponseMaybeThrottle(request, createResponse)
+    }
+  }
+
+  def handleDeleteAcls(request: RequestChannel.Request): Unit = {
+    authorizeClusterAction(request)
+    val deleteAclsRequest = request.body[DeleteAclsRequest]
+    authorizer match {
+      case None =>
+        def createResponse(throttleTimeMs: Int): AbstractResponse =
+          deleteAclsRequest.getErrorResponse(throttleTimeMs,
+            new SecurityDisabledException("No Authorizer is configured on the broker."))
+        sendResponseMaybeThrottle(request, createResponse)
+      case Some(auth) =>
+        val filterResponseMap = mutable.HashMap[Int, AclFilterResponse]()
+        var toDelete = mutable.HashMap[Int, ListBuffer[(Resource, Acl)]]()
+        for (i <- 0 to deleteAclsRequest.filters().size - 1) {
+          toDelete.put(i, new ListBuffer[(Resource, Acl)]())
+        }
+        if (deleteAclsRequest.filters().asScala.exists { f => !f.matchesAtMostOne() }) {
+          // Delete based on filters that may match more than one ACL.
+          val aclMap : Map[Resource, Set[Acl]] = auth.getAcls()
+          aclMap.foreach {
+            case (resource, acls) => {
+              acls.foreach {
+                case (acl) => {
+                  val binding = new AclBinding(new AdminResource(AdminResourceType.
+                      fromString(resource.resourceType.toString), resource.name),
+                    new AccessControlEntry(acl.principal.toString(), acl.host.toString(),
+                      acl.operation.toJava, acl.permissionType.toJava))
+                  for (i <- 0 to deleteAclsRequest.filters().size - 1) {
+                    val filter = deleteAclsRequest.filters().get(i)
+                    if (filter.matches(binding)) {
+                      toDelete.get(i).get += ((resource, acl))
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else {
+          // Delete based on a list of ACL fixtures.
+          for (i <- 0 to deleteAclsRequest.filters().size - 1) {
+            toScala(deleteAclsRequest.filters().get(i)) match {
+              case Failure(throwable) => filterResponseMap.put(i,
+                new AclFilterResponse(throwable, Collections.emptySet[AclDeletionResult]()))
+              case Success(fixture) => toDelete.put(i, ListBuffer(fixture))
+            }
+          }
+        }
+        for (i <- toDelete.keys) {
+          val deletionResults = new util.ArrayList[AclDeletionResult]()
+          for (acls <- toDelete.get(i)) {
+            for ((resource, acl) <- acls) {
+              try {
+                if (auth.removeAcls(immutable.Set(acl), resource)) {
+                  deletionResults.add(new AclDeletionResult(null, toJava((resource, acl))))
+                }
+              } catch {
+                case throwable: Throwable => deletionResults.add(new AclDeletionResult(
+                  new UnknownServerException("Failed to delete ACL: " + throwable.toString),
+                    toJava((resource, acl))))
+              }
+            }
+          }
+          filterResponseMap.put(i, new AclFilterResponse(null, deletionResults))
+        }
+        val filterResponses = new util.ArrayList[AclFilterResponse]
+        for (i <- 0 to deleteAclsRequest.filters().size() - 1) {
+          filterResponses.add(filterResponseMap.getOrElse(i,
+            new AclFilterResponse(null, new util.ArrayList[AclDeletionResult]())))
+        }
+        def createResponse(throttleTimeMs: Int): AbstractResponse =
+          new DeleteAclsResponse(throttleTimeMs, filterResponses)
+        sendResponseMaybeThrottle(request, createResponse)
     }
   }
 
