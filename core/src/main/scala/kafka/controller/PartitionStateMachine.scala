@@ -149,7 +149,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       assertValidTransition(topicAndPartition, targetState)
       targetState match {
         case NewPartition =>
-          // pre: partition did not exist before this
           partitionState.put(topicAndPartition, NewPartition)
           val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(",")
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s with assigned replicas %s"
@@ -173,14 +172,12 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
                                     .format(controllerId, controller.epoch, topicAndPartition, currState, targetState, leader))
            // post: partition has a leader
         case OfflinePartition =>
-          // pre: partition should be in New or Online state
           // should be called when the leader for a partition is no longer alive
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s"
                                     .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))
           partitionState.put(topicAndPartition, OfflinePartition)
           // post: partition has no alive leader
         case NonExistentPartition =>
-          // pre: partition should be in Offline state
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s"
                                     .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))
           partitionState.put(topicAndPartition, NonExistentPartition)
