@@ -27,8 +27,8 @@ import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetFetchResponse, TransactionResult}
+import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Map, Seq, immutable}
@@ -48,6 +48,8 @@ class GroupCoordinator(val brokerId: Int,
                        val heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat],
                        val joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
                        time: Time) extends Logging {
+  import GroupCoordinator._
+
   type JoinCallback = JoinGroupResult => Unit
   type SyncCallback = (Array[Byte], Errors) => Unit
 
@@ -395,42 +397,52 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
+  def handleTxnCommitOffsets(groupId: String,
+                             producerId: Long,
+                             producerEpoch: Short,
+                             offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
+                             responseCallback: immutable.Map[TopicPartition, Errors] => Unit): Unit = {
+    validateGroup(groupId) match {
+      case Some(error) => responseCallback(offsetMetadata.mapValues(_ => error))
+      case None =>
+        val group = groupManager.getGroup(groupId).getOrElse(groupManager.addGroup(new GroupMetadata(groupId)))
+        doCommitOffsets(group, NoMemberId, NoGeneration, producerId, producerEpoch, offsetMetadata, responseCallback)
+    }
+  }
+
   def handleCommitOffsets(groupId: String,
                           memberId: String,
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
-                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit,
-                          producerId: Long = RecordBatch.NO_PRODUCER_ID,
-                          producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH) {
-    if (!isActive.get) {
-      responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
-    } else if (!isCoordinatorForGroup(groupId)) {
-      responseCallback(offsetMetadata.mapValues(_ => Errors.NOT_COORDINATOR))
-    } else if (isCoordinatorLoadInProgress(groupId)) {
-      responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_LOAD_IN_PROGRESS))
-    } else {
-      groupManager.getGroup(groupId) match {
-        case None =>
-          if (generationId < 0) {
-            // the group is not relying on Kafka for group management, so allow the commit
-            val group = groupManager.addGroup(new GroupMetadata(groupId))
-            doCommitOffsets(group, memberId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
-          } else {
-            // or this is a request coming from an older generation. either way, reject the commit
-            responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
-          }
+                          responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
+    validateGroup(groupId) match {
+      case Some(error) => responseCallback(offsetMetadata.mapValues(_ => error))
+      case None =>
+        groupManager.getGroup(groupId) match {
+          case None =>
+            if (generationId < 0) {
+              // the group is not relying on Kafka for group management, so allow the commit
+              val group = groupManager.addGroup(new GroupMetadata(groupId))
+              doCommitOffsets(group, memberId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
+                offsetMetadata, responseCallback)
+            } else {
+              // or this is a request coming from an older generation. either way, reject the commit
+              responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
+            }
 
-        case Some(group) =>
-          doCommitOffsets(group, memberId, generationId, producerId, producerEpoch, offsetMetadata, responseCallback)
-      }
+          case Some(group) =>
+            doCommitOffsets(group, memberId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
+              offsetMetadata, responseCallback)
+        }
     }
   }
 
   def handleTxnCompletion(producerId: Long,
-                          topicPartitions: Seq[TopicPartition],
+                          offsetsPartitions: Iterable[TopicPartition],
                           transactionResult: TransactionResult) {
-    val offsetPartitions = topicPartitions.filter(_.topic == Topic.GROUP_METADATA_TOPIC_NAME).map(_.partition).toSet
-    groupManager.handleTxnCompletion(producerId, offsetPartitions, transactionResult == TransactionResult.COMMIT)
+    require(offsetsPartitions.forall(_.topic == Topic.GROUP_METADATA_TOPIC_NAME))
+    val isCommit = transactionResult == TransactionResult.COMMIT
+    groupManager.handleTxnCompletion(producerId, offsetsPartitions.map(_.partition).toSet, isCommit)
   }
 
   private def doCommitOffsets(group: GroupMetadata,
@@ -444,7 +456,7 @@ class GroupCoordinator(val brokerId: Int,
     group synchronized {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
-      } else if ((generationId < 0 && group.is(Empty)) || (producerId != RecordBatch.NO_PRODUCER_ID)) {
+      } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
         // the group is only using Kafka to store offsets
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
         delayedOffsetStore = groupManager.prepareStoreOffsets(group, memberId, generationId,
@@ -512,6 +524,18 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
     groupManager.cleanupGroupMetadata(Some(topicPartitions))
+  }
+
+
+  private def validateGroup(groupId: String): Option[Errors] = {
+    if (!isActive.get)
+      Some(Errors.COORDINATOR_NOT_AVAILABLE)
+    else if (!isCoordinatorForGroup(groupId))
+      Some(Errors.NOT_COORDINATOR)
+    else if (isCoordinatorLoadInProgress(groupId))
+      Some(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+    else
+      None
   }
 
   private def onGroupUnloaded(group: GroupMetadata) {
@@ -791,6 +815,8 @@ object GroupCoordinator {
   val NoProtocolType = ""
   val NoProtocol = ""
   val NoLeader = ""
+  val NoGeneration = -1
+  val NoMemberId = ""
   val NoMembers = List[MemberSummary]()
   val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
   val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)

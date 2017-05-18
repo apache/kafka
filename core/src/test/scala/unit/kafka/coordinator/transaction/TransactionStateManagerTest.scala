@@ -176,7 +176,7 @@ class TransactionStateManagerTest {
     assertTrue(transactionManager.isCoordinatorFor(txnId1))
     assertTrue(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.removeTransactionsForTxnTopicPartition(partitionId)
+    transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
 
     // let the time advance to trigger the background thread removing
     scheduler.tick()

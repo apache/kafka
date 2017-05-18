@@ -24,11 +24,11 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, SecurityProtocol}
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import CreateTopicsRequest.TopicDetails
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{Node, TopicPartition, requests}
@@ -40,9 +40,10 @@ import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import org.apache.kafka.common.KafkaException
 import kafka.admin.AdminUtils
+import kafka.log.LogConfig
 import kafka.network.SocketServer
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.record.{CompressionType, SimpleRecord, RecordBatch, MemoryRecords}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
@@ -53,6 +54,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val topicPattern = "topic.*"
   val createTopic = "topic-new"
   val deleteTopic = "topic-delete"
+  val transactionalId = "transactional.id"
   val part = 0
   val correlationId = 0
   val clientId = "client-Id"
@@ -62,17 +64,22 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val topicResource = new Resource(Topic, topic)
   val groupResource = new Resource(Group, group)
   val deleteTopicResource = new Resource(Topic, deleteTopic)
+  val producerTransactionalIdResource = new Resource(ProducerTransactionalId, transactionalId)
 
-  val GroupReadAcl = Map(groupResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
-  val ClusterAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)))
-  val ClusterCreateAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)))
-  val TopicReadAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
-  val TopicWriteAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
-  val TopicDescribeAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
-  val TopicDeleteAcl = Map(deleteTopicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)))
+  val groupReadAcl = Map(groupResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
+  val clusterAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, ClusterAction)))
+  val clusterCreateAcl = Map(Resource.ClusterResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Create)))
+  val topicReadAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)))
+  val topicWriteAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
+  val topicDescribeAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Describe)))
+  val topicDeleteAcl = Map(deleteTopicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Delete)))
+  val topicDescribeConfigsAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, DescribeConfigs)))
+  val topicAlterConfigsAcl = Map(topicResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, AlterConfigs)))
+  val producerTransactionalIdWriteAcl = Map(producerTransactionalIdResource -> Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)))
 
   val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
+  var transactionalProducer: KafkaProducer[Array[Byte], Array[Byte]] = _
 
   val producerCount = 1
   val consumerCount = 2
@@ -83,9 +90,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+    properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
+    properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
+    properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
   }
 
-  val RequestKeyToResponseDeserializer: Map[ApiKeys, Class[_ <: Any]] =
+  val requestKeyToResponseDeserializer: Map[ApiKeys, Class[_ <: Any]] =
     Map(ApiKeys.METADATA -> classOf[requests.MetadataResponse],
       ApiKeys.PRODUCE -> classOf[requests.ProduceResponse],
       ApiKeys.FETCH -> classOf[requests.FetchResponse],
@@ -103,15 +113,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CONTROLLED_SHUTDOWN_KEY -> classOf[requests.ControlledShutdownResponse],
       ApiKeys.CREATE_TOPICS -> classOf[CreateTopicsResponse],
       ApiKeys.DELETE_TOPICS -> classOf[requests.DeleteTopicsResponse],
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> classOf[OffsetsForLeaderEpochResponse]
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> classOf[OffsetsForLeaderEpochResponse],
+      ApiKeys.DESCRIBE_CONFIGS -> classOf[DescribeConfigsResponse],
+      ApiKeys.ALTER_CONFIGS -> classOf[AlterConfigsResponse]
   )
 
-  val RequestKeyToError = Map[ApiKeys, (Nothing) => Errors](
-    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors().asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
-    ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses().asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData().asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData().asScala.find(_._1 == tp).get._2),
+  val requestKeyToError = Map[ApiKeys, Nothing => Errors](
+    ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
+    ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.FETCH -> ((resp: requests.FetchResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
+    ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData.asScala.find(_._1 == tp).get._2),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
     ApiKeys.UPDATE_METADATA_KEY -> ((resp: requests.UpdateMetadataResponse) => resp.error),
@@ -119,33 +131,39 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
-    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
-    ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses().asScala.find(_._1 == tp).get._2),
+    ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
+    ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
     ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ((resp: requests.ControlledShutdownResponse) => resp.error),
-    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors().asScala.find(_._1 == createTopic).get._2.error),
-    ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors().asScala.find(_._1 == deleteTopic).get._2),
-    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.asScala.get(tp).get.error())
+    ApiKeys.CREATE_TOPICS -> ((resp: CreateTopicsResponse) => resp.errors.asScala.find(_._1 == createTopic).get._2.error),
+    ApiKeys.DELETE_TOPICS -> ((resp: requests.DeleteTopicsResponse) => resp.errors.asScala.find(_._1 == deleteTopic).get._2),
+    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ((resp: OffsetsForLeaderEpochResponse) => resp.responses.get(tp).error),
+    ApiKeys.DESCRIBE_CONFIGS -> ((resp: DescribeConfigsResponse) =>
+      resp.configs.get(new RResource(RResourceType.TOPIC, tp.topic)).error.error),
+    ApiKeys.ALTER_CONFIGS -> ((resp: AlterConfigsResponse) =>
+      resp.errors.get(new RResource(RResourceType.TOPIC, tp.topic)).error)
   )
 
-  val RequestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
-    ApiKeys.METADATA -> TopicDescribeAcl,
-    ApiKeys.PRODUCE -> TopicWriteAcl,
-    ApiKeys.FETCH -> TopicReadAcl,
-    ApiKeys.LIST_OFFSETS -> TopicDescribeAcl,
-    ApiKeys.OFFSET_COMMIT -> (TopicReadAcl ++ GroupReadAcl),
-    ApiKeys.OFFSET_FETCH -> (TopicReadAcl ++ GroupReadAcl),
-    ApiKeys.FIND_COORDINATOR -> (TopicReadAcl ++ GroupReadAcl),
-    ApiKeys.UPDATE_METADATA_KEY -> ClusterAcl,
-    ApiKeys.JOIN_GROUP -> GroupReadAcl,
-    ApiKeys.SYNC_GROUP -> GroupReadAcl,
-    ApiKeys.HEARTBEAT -> GroupReadAcl,
-    ApiKeys.LEAVE_GROUP -> GroupReadAcl,
-    ApiKeys.LEADER_AND_ISR -> ClusterAcl,
-    ApiKeys.STOP_REPLICA -> ClusterAcl,
-    ApiKeys.CONTROLLED_SHUTDOWN_KEY -> ClusterAcl,
-    ApiKeys.CREATE_TOPICS -> ClusterCreateAcl,
-    ApiKeys.DELETE_TOPICS -> TopicDeleteAcl,
-    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> ClusterAcl
+  val requestKeysToAcls = Map[ApiKeys, Map[Resource, Set[Acl]]](
+    ApiKeys.METADATA -> topicDescribeAcl,
+    ApiKeys.PRODUCE -> topicWriteAcl,
+    ApiKeys.FETCH -> topicReadAcl,
+    ApiKeys.LIST_OFFSETS -> topicDescribeAcl,
+    ApiKeys.OFFSET_COMMIT -> (topicReadAcl ++ groupReadAcl),
+    ApiKeys.OFFSET_FETCH -> (topicReadAcl ++ groupReadAcl),
+    ApiKeys.FIND_COORDINATOR -> (topicReadAcl ++ groupReadAcl),
+    ApiKeys.UPDATE_METADATA_KEY -> clusterAcl,
+    ApiKeys.JOIN_GROUP -> groupReadAcl,
+    ApiKeys.SYNC_GROUP -> groupReadAcl,
+    ApiKeys.HEARTBEAT -> groupReadAcl,
+    ApiKeys.LEAVE_GROUP -> groupReadAcl,
+    ApiKeys.LEADER_AND_ISR -> clusterAcl,
+    ApiKeys.STOP_REPLICA -> clusterAcl,
+    ApiKeys.CONTROLLED_SHUTDOWN_KEY -> clusterAcl,
+    ApiKeys.CREATE_TOPICS -> clusterCreateAcl,
+    ApiKeys.DELETE_TOPICS -> topicDeleteAcl,
+    ApiKeys.OFFSET_FOR_LEADER_EPOCH -> clusterAcl,
+    ApiKeys.DESCRIBE_CONFIGS -> topicDescribeConfigsAcl,
+    ApiKeys.ALTER_CONFIGS -> topicAlterConfigsAcl
   )
 
   @Before
@@ -158,6 +176,15 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       producers += TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
         maxBlockMs = 3000,
         acks = 1)
+
+    val transactionalProperties = new Properties()
+    transactionalProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    transactionalProperties.setProperty(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
+    transactionalProducer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 3,
+      props = Some(transactionalProperties)
+    )
+
     for (_ <- 0 until consumerCount)
       consumers += TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = group, securityProtocol = SecurityProtocol.PLAINTEXT)
 
@@ -205,8 +232,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def offsetsForLeaderEpochRequest = {
-  new OffsetsForLeaderEpochRequest.Builder().add(tp, 7).build()
-}
+    new OffsetsForLeaderEpochRequest.Builder().add(tp, 7).build()
+  }
 
   private def createOffsetFetchRequest = {
     new requests.OffsetFetchRequest.Builder(group, List(tp).asJava).build()
@@ -273,6 +300,17 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     new DeleteTopicsRequest.Builder(Set(deleteTopic).asJava, 5000).build()
   }
 
+  private def createDescribeConfigsRequest =
+    new DescribeConfigsRequest.Builder(Collections.singleton(new RResource(RResourceType.TOPIC, tp.topic))).build()
+
+  private def createAlterConfigsRequest =
+    new AlterConfigsRequest.Builder(
+      Collections.singletonMap(new RResource(RResourceType.TOPIC, tp.topic),
+        new AlterConfigsRequest.Config(Collections.singleton(
+          new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
+        ))), true).build()
+
+
   @Test
   def testAuthorizationWithTopicExisting() {
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
@@ -293,17 +331,19 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CONTROLLED_SHUTDOWN_KEY -> createControlledShutdownRequest,
       ApiKeys.CREATE_TOPICS -> createTopicsRequest,
       ApiKeys.DELETE_TOPICS -> deleteTopicsRequest,
-      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest
+      ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
+      ApiKeys.DESCRIBE_CONFIGS -> createDescribeConfigsRequest,
+      ApiKeys.ALTER_CONFIGS -> createAlterConfigsRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {
       removeAllAcls
-      val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
+      val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
       sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false, isAuthorizedTopicDescribe = false)
 
-      val resourceToAcls = RequestKeysToAcls(key)
+      val resourceToAcls = requestKeysToAcls(key)
       resourceToAcls.get(topicResource).map { acls =>
-        val describeAcls = TopicDescribeAcl(topicResource)
+        val describeAcls = topicDescribeAcl(topicResource)
         val isAuthorized =  describeAcls == acls
         addAndVerifyAcls(describeAcls, topicResource)
         sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = isAuthorized, isAuthorizedTopicDescribe = true)
@@ -337,12 +377,12 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     for ((key, request) <- requestKeyToRequest) {
       removeAllAcls
-      val resources = RequestKeysToAcls(key).map(_._1.resourceType).toSet
+      val resources = requestKeysToAcls(key).map(_._1.resourceType).toSet
       sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false, isAuthorizedTopicDescribe = false, topicExists = false)
 
-      val resourceToAcls = RequestKeysToAcls(key)
+      val resourceToAcls = requestKeysToAcls(key)
       resourceToAcls.get(topicResource).map { acls =>
-        val describeAcls = TopicDescribeAcl(topicResource)
+        val describeAcls = topicDescribeAcl(topicResource)
         val isAuthorized =  describeAcls == acls
         addAndVerifyAcls(describeAcls, topicResource)
         sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = isAuthorized, isAuthorizedTopicDescribe = true, topicExists = false)
@@ -411,7 +451,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRecords(numRecords, topicPartition)
   }
 
-  @Test(expected = classOf[AuthorizationException])
+  @Test(expected = classOf[GroupAuthorizationException])
   def testConsumeWithNoAccess(): Unit = {
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
     sendRecords(1, tp)
@@ -650,8 +690,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val topicPartition = new TopicPartition(newTopic, 0)
     val newTopicResource = new Resource(Topic, newTopic)
     addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Read)), newTopicResource)
-    addAndVerifyAcls(GroupReadAcl(groupResource), groupResource)
-    addAndVerifyAcls(ClusterAcl(Resource.ClusterResource), Resource.ClusterResource)
+    addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+    addAndVerifyAcls(clusterAcl(Resource.ClusterResource), Resource.ClusterResource)
     try {
       this.consumers.head.assign(List(topicPartition).asJava)
       consumeRecords(this.consumers.head)
@@ -810,6 +850,99 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Errors.NONE, deleteResponse.errors.asScala.head._2)
   }
 
+  @Test(expected = classOf[TransactionalIdAuthorizationException])
+  def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnInitTransactions(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    transactionalProducer.initTransactions()
+  }
+
+  @Test
+  def shouldInitTransactionsWhenAclSet(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), producerTransactionalIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    transactionalProducer.initTransactions()
+  }
+
+
+  @Test
+  def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessDuringSend(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), producerTransactionalIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    transactionalProducer.initTransactions()
+    removeAllAcls()
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    try {
+      transactionalProducer.beginTransaction()
+      transactionalProducer.send(new ProducerRecord(tp.topic(), tp.partition(), "1".getBytes, "1".getBytes)).get
+      Assert.fail("expected TransactionalIdAuthorizationException")
+    } catch {
+      case e: ExecutionException => assertTrue(s"expected TransactionalIdAuthorizationException, but got ${e.getCause}", e.getCause.isInstanceOf[TransactionalIdAuthorizationException])
+    }
+  }
+
+  @Test
+  def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnEndTransaction(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), producerTransactionalIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    transactionalProducer.initTransactions()
+    transactionalProducer.beginTransaction()
+    removeAllAcls()
+    try {
+      transactionalProducer.commitTransaction()
+      Assert.fail("expected TransactionalIdAuthorizationException")
+    } catch {
+      case _: TransactionalIdAuthorizationException => // ok
+    }
+  }
+
+  @Test
+  def shouldThrowTransactionalIdAuthorizationExceptionWhenNoTransactionAccessOnSendOffsetsToTxn(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), producerTransactionalIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), groupResource)
+    transactionalProducer.initTransactions()
+    transactionalProducer.beginTransaction()
+    removeAllAcls()
+    try {
+      val offsets: util.Map[TopicPartition, OffsetAndMetadata] = Map(new TopicPartition(topicAndPartition.topic, topicAndPartition.partition) -> new OffsetAndMetadata(1L)).asJava
+      transactionalProducer.sendOffsetsToTransaction(offsets, group)
+      Assert.fail("expected TransactionalIdAuthorizationException")
+    } catch {
+      case _: TransactionalIdAuthorizationException => // ok
+    }
+  }
+
+
+  @Test
+  def shouldThrowProducerIdAuthorizationExceptionWhenAclNotSet(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    val idempotentProperties = new Properties()
+    idempotentProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    val idempotentProducer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 3,
+      props = Some(idempotentProperties)
+    )
+    try {
+      idempotentProducer.send(new ProducerRecord(tp.topic(), tp.partition(), "1".getBytes, "1".getBytes)).get
+      Assert.fail("expected ProducerIdAuthorizationException")
+    } catch {
+      case e: ExecutionException => assertTrue(s"expected ProducerIdAuthorizationException, but got ${e.getCause}", e.getCause.isInstanceOf[ProducerIdAuthorizationException])
+    }
+  }
+
+  @Test
+  def shouldSendSuccessfullyWhenIdempotentAndHasCorrectACL(): Unit = {
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), Resource.ProducerIdResource)
+    addAndVerifyAcls(Set(new Acl(KafkaPrincipal.ANONYMOUS, Allow, Acl.WildCardHost, Write)), topicResource)
+    val idempotentProperties = new Properties()
+    idempotentProperties.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
+    val idempotentProducer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = 3,
+      props = Some(idempotentProperties)
+    )
+    idempotentProducer.send(new ProducerRecord(tp.topic(), tp.partition(), "1".getBytes, "1".getBytes)).get
+  }
+
   def removeAllAcls() = {
     servers.head.apis.authorizer.get.getAcls().keys.foreach { resource =>
       servers.head.apis.authorizer.get.removeAcls(resource)
@@ -824,9 +957,9 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                                         isAuthorizedTopicDescribe: Boolean,
                                         topicExists: Boolean = true): AbstractResponse = {
     val resp = connectAndSend(request, apiKey)
-    val response = RequestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer], classOf[Short]).invoke(
+    val response = requestKeyToResponseDeserializer(apiKey).getMethod("parse", classOf[ByteBuffer], classOf[Short]).invoke(
       null, resp, request.version: java.lang.Short).asInstanceOf[AbstractResponse]
-    val error = RequestKeyToError(apiKey).asInstanceOf[(AbstractResponse) => Errors](response)
+    val error = requestKeyToError(apiKey).asInstanceOf[(AbstractResponse) => Errors](response)
 
     val authorizationErrors = resources.flatMap { resourceType =>
       if (resourceType == Topic) {

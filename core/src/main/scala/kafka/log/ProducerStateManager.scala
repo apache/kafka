@@ -26,6 +26,7 @@ import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
@@ -62,8 +63,24 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  * It is initialized with the producer's state after the last successful append, and transitively validates the
  * sequence numbers and epochs of each new record. Additionally, this class accumulates transaction metadata
  * as the incoming records are validated.
+ *
+ * @param producerId The id of the producer appending to the log
+ * @param initialEntry The last entry associated with the producer id. Validation of the first append will be
+ *                     based off of this entry initially
+ * @param validateSequenceNumbers Whether or not sequence numbers should be validated. The only current use
+ *                                of this is the consumer offsets topic which uses producer ids from incoming
+ *                                TxnOffsetCommit, but has no sequence number to validate and does not depend
+ *                                on the deduplication which sequence numbers provide.
+ * @param loadingFromLog This parameter indicates whether the new append is being loaded directly from the log.
+ *                       This is used to repopulate producer state when the broker is initialized. The only
+ *                       difference in behavior is that we do not validate the sequence number of the first append
+ *                       since we may have lost previous sequence numbers when segments were removed due to log
+ *                       retention enforcement.
  */
-private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
+private[log] class ProducerAppendInfo(val producerId: Long,
+                                      initialEntry: ProducerIdEntry,
+                                      validateSequenceNumbers: Boolean,
+                                      loadingFromLog: Boolean) {
   private var producerEpoch = initialEntry.producerEpoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
@@ -73,14 +90,11 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   private var coordinatorEpoch = initialEntry.coordinatorEpoch
   private val transactions = ListBuffer.empty[TxnMetadata]
 
-  def this(producerId: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
-    this(producerId, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
-
-  private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int, shouldValidateSequenceNumbers: Boolean) = {
+  private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
     if (this.producerEpoch > producerEpoch) {
       throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
         s"with a newer epoch. $producerEpoch (request epoch), ${this.producerEpoch} (server epoch)")
-    } else if (shouldValidateSequenceNumbers) {
+    } else if (validateSequenceNumbers) {
       if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < producerEpoch) {
         if (firstSeq != 0)
           throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
@@ -100,7 +114,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     }
   }
 
-  def append(batch: RecordBatch, shouldValidateSequenceNumbers: Boolean = true): Option[CompletedTxn] = {
+  def append(batch: RecordBatch): Option[CompletedTxn] = {
     if (batch.isControlBatch) {
       val record = batch.iterator.next()
       val endTxnMarker = EndTransactionMarker.deserialize(record)
@@ -108,7 +122,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
       Some(completedTxn)
     } else {
       append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
-        batch.isTransactional, shouldValidateSequenceNumbers)
+        batch.isTransactional)
       None
     }
   }
@@ -118,12 +132,11 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
              lastSeq: Int,
              lastTimestamp: Long,
              lastOffset: Long,
-             isTransactional: Boolean,
-             shouldValidateSequenceNumbers: Boolean): Unit = {
+             isTransactional: Boolean): Unit = {
     if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
       // skip validation if this is the first entry when loading from the log. Log retention
-      // will generally have removed the beginning entries from each PID
-      validateAppend(epoch, firstSeq, lastSeq, shouldValidateSequenceNumbers)
+      // will generally have removed the beginning entries from each producer id
+      validateAppend(epoch, firstSeq, lastSeq)
 
     this.producerEpoch = epoch
     this.firstSeq = firstSeq
@@ -303,18 +316,18 @@ object ProducerStateManager {
 }
 
 /**
- * Maintains a mapping from ProducerIds (PIDs) to metadata about the last appended entries (e.g.
+ * Maintains a mapping from ProducerIds to metadata about the last appended entries (e.g.
  * epoch, sequence number, last offset, etc.)
  *
  * The sequence number is the last number successfully appended to the partition for the given identifier.
  * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
  * appended to the partition.
  *
- * As long as a PID is contained in the map, the corresponding producer can continue to write data.
- * However, PIDs can be expired due to lack of recent use or if the last written entry has been deleted from
+ * As long as a producer id is contained in the map, the corresponding producer can continue to write data.
+ * However, producer ids can be expired due to lack of recent use or if the last written entry has been deleted from
  * the log (e.g. if the retention policy is "delete"). For compacted topics, the log cleaner will ensure
- * that the most recent entry from a given PID is retained in the log provided it hasn't expired due to
- * age. This ensures that PIDs will not be expired until either the max expiration time has been reached,
+ * that the most recent entry from a given producer id is retained in the log provided it hasn't expired due to
+ * age. This ensures that producer ids will not be expired until either the max expiration time has been reached,
  * or if the topic also is configured for deletion, the segment containing the last written offset has
  * been deleted.
  */
@@ -325,6 +338,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   import ProducerStateManager._
   import java.util
 
+  private val validateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
@@ -415,7 +429,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
 
   /**
-   * Expire any PIDs which have been idle longer than the configured maximum expiration timeout.
+   * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
    */
   def removeExpiredProducers(currentTimeMs: Long) {
     producers.retain { case (producerId, lastEntry) =>
@@ -424,11 +438,17 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Truncate the PID mapping to the given offset range and reload the entries from the most recent
+   * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
    * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
    * or equal to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
+    // remove all out of range snapshots
+    deleteSnapshotFiles { file =>
+      val offset = offsetFromFilename(file.getName)
+      offset > logEndOffset || offset <= logStartOffset
+    }
+
     if (logEndOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
@@ -436,22 +456,22 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // since we assume that the offset is less than or equal to the high watermark, it is
       // safe to clear the unreplicated transactions
       unreplicatedTxns.clear()
-      deleteSnapshotFiles { file =>
-        val offset = offsetFromFilename(file.getName)
-        offset > logEndOffset || offset <= logStartOffset
-      }
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
       evictUnretainedProducers(logStartOffset)
     }
   }
 
+  def prepareUpdate(producerId: Long, loadingFromLog: Boolean): ProducerAppendInfo =
+    new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.Empty), validateSequenceNumbers,
+      loadingFromLog)
+
   /**
    * Update the mapping with the given append information
    */
   def update(appendInfo: ProducerAppendInfo): Unit = {
     if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
-      throw new IllegalArgumentException("Invalid PID passed to update")
+      throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId} passed to update")
 
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)
@@ -465,7 +485,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Get the last written entry for the given PID.
+   * Get the last written entry for the given producer id.
    */
   def lastEntry(producerId: Long): Option[ProducerIdEntry] = producers.get(producerId)
 
@@ -532,7 +552,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Truncate the PID mapping and remove all snapshots. This resets the state of the mapping.
+   * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
    */
   def truncate() {
     producers.clear()

@@ -199,6 +199,21 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case TXN_OFFSET_COMMIT:
                 request = new TxnOffsetCommitRequest(struct, version);
                 break;
+            case DESCRIBE_ACLS:
+                request = new DescribeAclsRequest(struct, version);
+                break;
+            case CREATE_ACLS:
+                request = new CreateAclsRequest(struct, version);
+                break;
+            case DELETE_ACLS:
+                request = new DeleteAclsRequest(struct, version);
+                break;
+            case DESCRIBE_CONFIGS:
+                request = new DescribeConfigsRequest(struct, version);
+                break;
+            case ALTER_CONFIGS:
+                request = new AlterConfigsRequest(struct, version);
+                break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));

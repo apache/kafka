@@ -197,7 +197,7 @@ class TransactionCoordinator(brokerId: Int,
 
         case Ongoing =>
           // indicate to abort the current ongoing txn first
-          Right(coordinatorEpoch, txnMetadata.prepareNoTransit())
+          Right(coordinatorEpoch, txnMetadata.prepareFenceProducerEpoch())
       }
     }
   }
@@ -266,9 +266,17 @@ class TransactionCoordinator(brokerId: Int,
       txnManager.loadTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch, txnMarkerChannelManager.addTxnMarkersToSend)
   }
 
-  def handleTxnEmigration(txnTopicPartitionId: Int) {
-      txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId)
+  def handleTxnEmigration(txnTopicPartitionId: Int, coordinatorEpoch: Int) {
+      txnManager.removeTransactionsForTxnTopicPartition(txnTopicPartitionId, coordinatorEpoch)
       txnMarkerChannelManager.removeMarkersForTxnTopicPartition(txnTopicPartitionId)
+  }
+
+  private def logInvalidStateTransitionAndReturnError(transactionalId: String,
+                                                      transactionState: TransactionState,
+                                                      transactionResult: TransactionResult) = {
+    error(s"transactionalId: $transactionalId -- Current state is $transactionState, but received transaction " +
+      s"marker result: $transactionResult")
+    Left(Errors.INVALID_TXN_STATE)
   }
 
   def handleEndTransaction(transactionalId: String,
@@ -306,24 +314,24 @@ class TransactionCoordinator(brokerId: Int,
                 if (txnMarkerResult == TransactionResult.COMMIT)
                   Left(Errors.NONE)
                 else
-                  Left(Errors.INVALID_TXN_STATE)
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case CompleteAbort =>
                 if (txnMarkerResult == TransactionResult.ABORT)
                   Left(Errors.NONE)
                 else
-                  Left(Errors.INVALID_TXN_STATE)
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case PrepareCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
                   Left(Errors.CONCURRENT_TRANSACTIONS)
                 else
-                  Left(Errors.INVALID_TXN_STATE)
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case PrepareAbort =>
                 if (txnMarkerResult == TransactionResult.ABORT)
                   Left(Errors.CONCURRENT_TRANSACTIONS)
                 else
-                  Left(Errors.INVALID_TXN_STATE)
+                  logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
-                Left(Errors.INVALID_TXN_STATE)
+                logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
             }
           }
       }
@@ -349,15 +357,15 @@ class TransactionCoordinator(brokerId: Int,
                         Left(Errors.CONCURRENT_TRANSACTIONS)
                       else txnMetadata.state match {
                         case Empty| Ongoing | CompleteCommit | CompleteAbort =>
-                          Left(Errors.INVALID_TXN_STATE)
+                          logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                         case PrepareCommit =>
                           if (txnMarkerResult != TransactionResult.COMMIT)
-                            Left(Errors.INVALID_TXN_STATE)
+                            logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                         case PrepareAbort =>
                           if (txnMarkerResult != TransactionResult.ABORT)
-                            Left(Errors.INVALID_TXN_STATE)
+                            logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
                             Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
                       }
@@ -374,8 +382,8 @@ class TransactionCoordinator(brokerId: Int,
                     throw new IllegalStateException("Cannot find the metadata in coordinator's cache while it is still the leader of the txn topic partition")
                   } else {
                     // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-                    info(s"Updating $transactionalId's transaction state to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId failed after the transaction message " +
-                      s"has been appended to the log. The partition ${partitionFor(transactionalId)} may have migrated as the metadata is no longer in the cache")
+                    info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
+                      s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
 
                     Left(Errors.NOT_COORDINATOR)
                   }

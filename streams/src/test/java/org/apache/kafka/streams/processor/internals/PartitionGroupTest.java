@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import static org.junit.Assert.assertEquals;
-
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -32,6 +30,8 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+
+import static org.junit.Assert.assertEquals;
 
 public class PartitionGroupTest {
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
@@ -58,7 +58,7 @@ public class PartitionGroupTest {
         assertEquals(0, group.numBuffered());
 
         // add three 3 records with timestamp 1, 3, 5 to partition-1
-        List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue));
@@ -66,7 +66,7 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list1);
 
         // add three 3 records with timestamp 2, 4, 6 to partition-2
-        List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
             new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
@@ -79,7 +79,7 @@ public class PartitionGroupTest {
         assertEquals(1L, group.timestamp());
 
         StampedRecord record;
-        PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
 
         // get one record, now the time should be advanced
         record = group.nextRecord(info);
@@ -100,7 +100,7 @@ public class PartitionGroupTest {
         assertEquals(3L, group.timestamp());
 
         // add three 3 records with timestamp 2, 4, 6 to partition-1 again
-        List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
+        final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(
             new ConsumerRecord<>("topic", 1, 2L, recordKey, recordValue),
             new ConsumerRecord<>("topic", 1, 4L, recordKey, recordValue));
 

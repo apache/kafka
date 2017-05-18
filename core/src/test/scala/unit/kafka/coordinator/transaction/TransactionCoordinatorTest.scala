@@ -499,7 +499,7 @@ class TransactionCoordinatorTest {
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata)))
       .anyTimes()
 
-    val originalMetadata = new TransactionMetadata(pid, epoch, txnTimeoutMs, Ongoing, partitions, 0, 0)
+    val originalMetadata = new TransactionMetadata(pid, (epoch + 1).toShort, txnTimeoutMs, Ongoing, partitions, 0, 0)
     EasyMock.expect(transactionManager.appendTransactionToLog(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
@@ -521,11 +521,11 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRemoveTransactionsForPartitionOnEmigration(): Unit = {
-    EasyMock.expect(transactionManager.removeTransactionsForTxnTopicPartition(0))
+    EasyMock.expect(transactionManager.removeTransactionsForTxnTopicPartition(0, coordinatorEpoch))
     EasyMock.expect(transactionMarkerChannelManager.removeMarkersForTxnTopicPartition(0))
     EasyMock.replay(transactionManager, transactionMarkerChannelManager)
 
-    coordinator.handleTxnEmigration(0)
+    coordinator.handleTxnEmigration(0, coordinatorEpoch)
 
     EasyMock.verify(transactionManager, transactionMarkerChannelManager)
   }

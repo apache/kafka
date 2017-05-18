@@ -70,9 +70,9 @@ private[transaction] case object CompleteCommit extends TransactionState { val b
 private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
 private[transaction] object TransactionMetadata {
-  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
-  def apply(pid: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(pid, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
+  def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, state: TransactionState, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, state, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
   def byteToState(byte: Byte): TransactionState = {
     byte match {
@@ -135,16 +135,26 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   }
 
   def removePartition(topicPartition: TopicPartition): Unit = {
-    if (pendingState.isDefined || (state != PrepareCommit && state != PrepareAbort))
-      throw new IllegalStateException(s"Transation metadata's current state is $state, and its pending state is $state " +
+    if (state != PrepareCommit && state != PrepareAbort)
+      throw new IllegalStateException(s"Transaction metadata's current state is $state, and its pending state is $pendingState " +
         s"while trying to remove partitions whose txn marker has been sent, this is not expected")
 
     topicPartitions -= topicPartition
   }
 
-  def prepareNoTransit(): TransactionMetadataTransition =
-    // do not call transitTo as it will set the pending state
+  // this is visible for test only
+  def prepareNoTransit(): TransactionMetadataTransition = {
+    // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
     TransactionMetadataTransition(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
+  }
+
+  def prepareFenceProducerEpoch(): TransactionMetadataTransition = {
+    // bump up the epoch to let the txn markers be able to override the current producer epoch
+    producerEpoch = (producerEpoch + 1).toShort
+
+    // do not call transitTo as it will set the pending state, a follow-up call to abort the transaction will set its pending state
+    TransactionMetadataTransition(producerId, producerEpoch, txnTimeoutMs, state, topicPartitions.toSet, txnStartTimestamp, txnLastUpdateTimestamp)
+  }
 
   def prepareIncrementProducerEpoch(newTxnTimeoutMs: Int,
                                     updateTimestamp: Long): TransactionMetadataTransition = {
@@ -212,7 +222,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
     // metadata transition is valid only if all the following conditions are met:
     //
     // 1. the new state is already indicated in the pending state.
-    // 2. the pid is the same (i.e. this field should never be changed)
+    // 2. the producerId is the same (i.e. this field should never be changed)
     // 3. the epoch should be either the same value or old value + 1.
     // 4. the last update time is no smaller than the old value.
     // 4. the old partitions set is a subset of the new partitions set.

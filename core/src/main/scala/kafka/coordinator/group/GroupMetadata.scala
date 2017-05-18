@@ -146,7 +146,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private val members = new mutable.HashMap[String, MemberMetadata]
   private val offsets = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
-  // A map from a PID to the open offset commits for that pid.
+  // A map from a producer id to the open offset commits for that producer id.
   private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, OffsetAndMetadata]]()
   private var receivedTransactionalOffsetCommits = false
   private var receivedConsumerOffsetCommits = false

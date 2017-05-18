@@ -28,7 +28,7 @@ public class TopicPartitionInfo {
     private final List<Node> replicas;
     private final List<Node> isr;
 
-    TopicPartitionInfo(int partition, Node leader, List<Node> replicas, List<Node> isr) {
+    public TopicPartitionInfo(int partition, Node leader, List<Node> replicas, List<Node> isr) {
         this.partition = partition;
         this.leader = leader;
         this.replicas = replicas;

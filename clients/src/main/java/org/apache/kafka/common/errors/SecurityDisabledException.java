@@ -14,30 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+/**
+ * An error indicating that security is disabled on the broker.
+ */
+public class SecurityDisabledException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-class KStreamForeach<K, V> implements ProcessorSupplier<K, V> {
-
-    private final ForeachAction<K, V> action;
-
-    public KStreamForeach(ForeachAction<K, V> action) {
-        this.action = action;
+    public SecurityDisabledException(String message) {
+        super(message);
     }
 
-    @Override
-    public Processor<K, V> get() {
-        return new KStreamForeachProcessor();
-    }
-
-    private class KStreamForeachProcessor extends AbstractProcessor<K, V> {
-        @Override
-        public void process(K key, V value) {
-            action.apply(key, value);
-        }
+    public SecurityDisabledException(String message, Throwable cause) {
+        super(message, cause);
     }
 }
