@@ -18,14 +18,17 @@
 package kafka.log
 
 import java.io._
+
 import org.junit.Assert._
-import java.util.{Collections, Arrays}
+import java.util.{Arrays, Collections}
+
 import org.junit._
 import org.scalatest.junit.JUnitSuite
+
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
-import kafka.common.InvalidOffsetException
+import org.apache.kafka.common.errors.InvalidOffsetException
 
 class OffsetIndexTest extends JUnitSuite {
   

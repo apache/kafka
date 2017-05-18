@@ -16,7 +16,8 @@
  */
 package kafka.security.auth
 
-import kafka.common.{BaseEnum, KafkaException}
+import kafka.common.BaseEnum
+import org.apache.kafka.common.KafkaException
 
 /**
  * Different operations a client may perform on kafka resources.

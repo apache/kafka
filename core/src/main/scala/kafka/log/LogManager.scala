@@ -22,11 +22,11 @@ import java.nio.file.Files
 import java.util.concurrent._
 
 import kafka.admin.AdminUtils
-import kafka.common.{KafkaException, KafkaStorageException}
+import kafka.common.KafkaStorageException
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._

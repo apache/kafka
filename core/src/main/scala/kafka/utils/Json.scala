@@ -16,7 +16,8 @@
  */
  package kafka.utils
 
-import kafka.common._
+import org.apache.kafka.common.KafkaException
+
 import scala.collection._
 import util.parsing.json.JSON
 

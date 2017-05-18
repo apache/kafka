@@ -19,11 +19,11 @@ package kafka.controller
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
-import com.yammer.metrics.core.{Gauge, Meter}
+import com.yammer.metrics.core.Gauge
 import kafka.admin.{AdminUtils, PreferredReplicaLeaderElectionCommand}
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.common.{TopicAndPartition, _}
+import kafka.common.{StateChangeFailedException, TopicAndPartition}
 import kafka.log.LogConfig
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server._
@@ -31,6 +31,7 @@ import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.{ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}

@@ -20,9 +20,8 @@ package kafka.integration
 import java.io.File
 import java.util.Arrays
 
-import kafka.common.KafkaException
 import kafka.server._
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -31,6 +30,7 @@ import org.junit.{After, Before}
 import scala.collection.mutable.Buffer
 import java.util.Properties
 
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.ListenerName
 
 /**
