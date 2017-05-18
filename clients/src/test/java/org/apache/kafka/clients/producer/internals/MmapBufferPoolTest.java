@@ -23,7 +23,6 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 
@@ -36,7 +35,7 @@ public class MmapBufferPoolTest {
         long totalMemory = 64 * 1024;
         int size = 1024;
         File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
-        BufferPool pool = new MmapBufferPool(storefile, totalMemory, size);
+        BufferPool pool = new MmapBufferPool(totalMemory, size, storefile);
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
@@ -64,7 +63,7 @@ public class MmapBufferPoolTest {
     @Test(expected = IllegalArgumentException.class)
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
         File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
-        BufferPool pool = new MmapBufferPool(storefile, 1024, 512);
+        BufferPool pool = new MmapBufferPool(1024, 512, storefile);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);

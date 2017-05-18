@@ -37,7 +37,7 @@ public class MmapBufferPool implements BufferPool {
     private final BlockingDeque<ByteBuffer> free;
     private MappedByteBuffer fileBuffer;
     
-    public MmapBufferPool(File backingFileName, long totalMemory, int chunkSize) throws IOException {
+    public MmapBufferPool(long totalMemory, int chunkSize, File backingFileName) throws IOException {
         this.totalMemory = totalMemory;
         this.availableMemory = totalMemory;
         this.chunkSize = chunkSize;

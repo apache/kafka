@@ -124,7 +124,7 @@ public final class RecordAccumulator {
             this.free = new ByteBufferPool(totalSize, batchSize, metrics, time, metricGrpName);
         } else {
             try {
-                this.free = new MmapBufferPool(backingFile, totalSize, batchSize);
+                this.free = new MmapBufferPool(totalSize, batchSize, backingFile);
             } catch (IOException e) {
                 throw new KafkaException("Failed to create mmap-based buffer.", e);
             }
