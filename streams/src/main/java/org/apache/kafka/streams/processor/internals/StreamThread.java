@@ -747,7 +747,7 @@ public class StreamThread extends Thread {
         // note that once we set recordsProcessedBeforeCommit, it will never be UNLIMITED_RECORDS again, so
         // we will never process all records again. This might be an issue if the initial measurement
         // was off due to a slow start.
-        if (processLatency > commitTime) {
+        if (processLatency > 0 && processLatency > commitTime) {
             // push down
             recordsProcessedBeforeCommit = Math.max(1, (commitTime * totalProcessed) / processLatency);
             log.debug("{} processing latency {} > commit time {} for {} records. Adjusting down recordsProcessedBeforeCommit={}",
