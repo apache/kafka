@@ -111,6 +111,8 @@ public class KafkaBasedLogTest {
     private KafkaBasedLog<String, String> store;
 
     @Mock
+    private Runnable initializer;
+    @Mock
     private KafkaProducer<String, String> producer;
     private MockConsumer<String, String> consumer;
 
@@ -131,7 +133,7 @@ public class KafkaBasedLogTest {
     @Before
     public void setUp() throws Exception {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
-                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time);
+                TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
@@ -462,6 +464,9 @@ public class KafkaBasedLogTest {
 
 
     private void expectStart() throws Exception {
+        initializer.run();
+        EasyMock.expectLastCall().times(1);
+
         PowerMock.expectPrivate(store, "createProducer")
                 .andReturn(producer);
         PowerMock.expectPrivate(store, "createConsumer")
