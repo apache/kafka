@@ -162,11 +162,11 @@ public class MmapBufferPool implements BufferPool {
 
     // Protected for testing.
     protected ByteBuffer allocateByteBuffer(int size) {
-        ByteBuffer fileBufferSlice = this.fileBuffer.slice();
-        fileBufferSlice.limit(size);
-        this.fileBuffer.position(this.fileBuffer.position() + size);
-
-        return fileBufferSlice;
+        ByteBuffer newBuffer = this.fileBuffer.duplicate();
+        int newBoundary = this.fileBuffer.position() + size;
+        newBuffer.limit(newBoundary);
+        this.fileBuffer.position(newBoundary);
+        return newBuffer;
     }
 
     @Override
