@@ -43,10 +43,10 @@ import scala.collection.JavaConverters._
 
 object TransactionStateManager {
   // default transaction management config values
-  // TODO: this needs to be replaces by the config values
   val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
   val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
-  val DefaultRemoveExpiredTransactionsIntervalMs: Int = TimeUnit.MINUTES.toMillis(1).toInt
+  val DefaultAbortTimedOutTransactionsIntervalMs: Int = TimeUnit.MINUTES.toMillis(1).toInt
+  val DefaultRemoveExpiredTransactionsIntervalMs: Int = TimeUnit.HOURS.toMillis(1).toInt
 }
 
 /**
@@ -89,7 +89,7 @@ class TransactionStateManager(brokerId: Int,
 
   // this is best-effort expiration and hence not grabing the lock on metadata upon checking its state
   // we will get the lock when actually trying to transit the transaction metadata to abort later.
-  def transactionsToExpire(): Iterable[TransactionalIdAndProducerIdEpoch] = {
+  def timedOutTransactions(): Iterable[TransactionalIdAndProducerIdEpoch] = {
     val now = time.milliseconds()
     transactionMetadataCache.flatMap { case (_, entry) =>
         entry.metadataPerTransactionalId.filter { case (txnId, txnMetadata) =>
@@ -108,8 +108,59 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def enablePidExpiration() {
-    // TODO: add producer id expiration logic
+  def enableTransactionalIdExpiration() {
+    scheduler.schedule("transactionalId-expiration", () => {
+      inLock(stateLock) {
+        val now = time.milliseconds()
+
+        val transactionalIdByPartition: Map[Int, mutable.Iterable[String]] = transactionMetadataCache.flatMap { case (_, entry) =>
+          entry.metadataPerTransactionalId.filter { case (_, txnMetadata) =>
+            txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
+          }.map { case (transactionalId, _) =>
+            transactionalId
+          }
+        }.groupBy { transactionalId =>
+          partitionFor(transactionalId)
+        }
+
+        val recordsPerPartition = transactionalIdByPartition
+          .map { case (partition, transactionalIds) =>
+            val deletes: Array[SimpleRecord] = transactionalIds.map { transactionalId =>
+              new SimpleRecord(now, TransactionLog.keyToBytes(transactionalId), null)
+            }.toArray
+            val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType, deletes: _*)
+            val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
+            (topicPartition, records)
+          }
+
+        def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit ={
+          responses.foreach { case (topicPartition, response) =>
+            response.error match {
+              case Errors.NONE =>
+                inLock(stateLock) {
+                  val idsToRemove = transactionalIdByPartition(topicPartition.partition())
+                  transactionMetadataCache.get(topicPartition.partition)
+                  .foreach{ txnMetadataEntry =>
+                    idsToRemove.foreach { transactionalId =>
+                      txnMetadataEntry.metadataPerTransactionalId.remove(transactionalId)}
+                  }
+                }
+              case _ =>
+                debug(s"writing transactionalId tombstones for partition: ${topicPartition.partition} failed with error: ${response.error.message()}")
+            }
+          }
+        }
+
+        replicaManager.appendRecords(
+          30000, // TODO: what is a reasonable timeout?
+          TransactionLog.EnforcedRequiredAcks,
+          internalTopicsAllowed = true,
+          isFromClient = false,
+          recordsPerPartition,
+          removeFromCacheCallback
+          )
+      }
+    }, period=config.transactionalIdExpirationMs)
   }
 
   /**
@@ -514,6 +565,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
                                                   transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
                                                   transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
+                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
                                                   removeExpiredTransactionsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short)
