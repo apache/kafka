@@ -237,7 +237,7 @@ object AclCommand {
     if (opts.options.has(opts.topicOpt))
       opts.options.valuesOf(opts.topicOpt).asScala.foreach(topic => resources += new Resource(Topic, topic.trim))
 
-    if (opts.options.has(opts.clusterOpt))
+    if (opts.options.has(opts.clusterOpt) || opts.options.has(opts.idempotentOpt))
       resources += Resource.ClusterResource
 
     if (opts.options.has(opts.groupOpt))
@@ -382,8 +382,8 @@ object AclCommand {
       if (options.has(producerOpt) && !options.has(topicOpt))
         CommandLineUtils.printUsageAndDie(parser, "With --producer you must specify a --topic")
 
-      if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && options.has(clusterOpt))))
-        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster option should be specified.")
+      if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && (options.has(clusterOpt) || options.has(idempotentOpt)))))
+        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --idempotent option should be specified.")
     }
   }
 
