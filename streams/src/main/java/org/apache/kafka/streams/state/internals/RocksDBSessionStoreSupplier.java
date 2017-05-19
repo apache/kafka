@@ -50,6 +50,7 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
 
     public SessionStore<K, V> get() {
         final SessionKeySchema keySchema = new SessionKeySchema();
+        final long segmentInterval = Segments.segmentInterval(retentionPeriod, NUM_SEGMENTS);
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(name,
                                                                                     retentionPeriod,
                                                                                     NUM_SEGMENTS,
@@ -62,7 +63,7 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
             final RocksDBSessionStore<Bytes, byte[]> sessionStore
                     = RocksDBSessionStore.bytesStore(metered);
 
-            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
+            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde, segmentInterval);
         }
 
         if (cached) {
@@ -71,7 +72,7 @@ public class RocksDBSessionStoreSupplier<K, V> extends AbstractStoreSupplier<K, 
             final RocksDBSessionStore<Bytes, byte[]> sessionStore
                     = RocksDBSessionStore.bytesStore(metered);
 
-            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde);
+            return new CachingSessionStore<>(sessionStore, keySerde, valueSerde, segmentInterval);
         }
 
         if (logged) {

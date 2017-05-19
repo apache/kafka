@@ -40,6 +40,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     private final SessionKeySchema keySchema;
     private final Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
+    private final SegmentedCacheFunction cacheFunction;
     private String cacheName;
     private ThreadCache cache;
     private StateSerdes<K, AGG> serdes;
@@ -49,12 +50,14 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
                         final Serde<K> keySerde,
-                        final Serde<AGG> aggSerde) {
+                        final Serde<AGG> aggSerde,
+                        final long segmentInterval) {
         super(bytesStore);
         this.bytesStore = bytesStore;
         this.keySerde = keySerde;
         this.aggSerde = aggSerde;
         this.keySchema = new SessionKeySchema();
+        this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
     }
 
     public void init(final ProcessorContext context, final StateStore root) {
@@ -91,15 +94,43 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                                                            final long latestSessionStartTime) {
         validateStoreOpen();
         final Bytes binarySessionId = Bytes.wrap(serdes.rawKey(key));
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName,
-                                                                                  keySchema.lowerRange(binarySessionId, earliestSessionEndTime),
-                                                                                  keySchema.upperRange(binarySessionId, latestSessionStartTime));
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(binarySessionId, earliestSessionEndTime, latestSessionStartTime);
+
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(binarySessionId, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(binarySessionId, latestSessionStartTime));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(
+            binarySessionId, earliestSessionEndTime, latestSessionStartTime
+        );
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionId,
+                                                                             binarySessionId,
                                                                              earliestSessionEndTime,
                                                                              latestSessionStartTime);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition);
-        return new MergedSortedCacheSessionStoreIterator<>(filteredCacheIterator, storeIterator, serdes);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        return new MergedSortedCacheSessionStoreIterator<>(filteredCacheIterator, storeIterator, serdes, cacheFunction);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(K keyFrom,
+                                                           K keyTo,
+                                                           long earliestSessionEndTime,
+                                                           long latestSessionStartTime) {
+        validateStoreOpen();
+        final Bytes binarySessionIdFrom = Bytes.wrap(serdes.rawKey(keyFrom));
+        final Bytes binarySessionIdTo = Bytes.wrap(serdes.rawKey(keyTo));
+
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(binarySessionIdFrom, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(binarySessionIdTo, latestSessionStartTime));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(
+            binarySessionIdFrom, binarySessionIdTo, earliestSessionEndTime, latestSessionStartTime
+        );
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(binarySessionIdFrom, binarySessionIdTo,
+                                                                             earliestSessionEndTime,
+                                                                             latestSessionStartTime);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        return new MergedSortedCacheSessionStoreIterator<>(filteredCacheIterator, storeIterator, serdes, cacheFunction);
     }
 
     @Override
@@ -114,7 +145,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         final Bytes binaryKey = SessionKeySerde.toBinary(key, serdes.keySerializer(), topic);
         final LRUCacheEntry entry = new LRUCacheEntry(serdes.rawValue(value), true, context.offset(),
                                                       key.window().end(), context.partition(), context.topic());
-        cache.put(cacheName, binaryKey, entry);
+        cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
     }
 
     @Override
@@ -122,8 +153,15 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         return findSessions(key, 0, Long.MAX_VALUE);
     }
 
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
+        return findSessions(from, to, 0, Long.MAX_VALUE);
+    }
+
+
+
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final Bytes binaryKey = entry.key();
+        final Bytes binaryKey = cacheFunction.key(entry.key());
         final RecordContext current = context.recordContext();
         context.setRecordContext(entry.recordContext());
         try {

@@ -38,6 +38,7 @@ import static org.junit.Assert.assertEquals;
 
 public class CompositeReadOnlyWindowStoreTest {
 
+    private static final long WINDOW_SIZE = 30_000;
     private final String storeName = "window-store";
     private StateStoreProviderStub stubProviderOne;
     private StateStoreProviderStub stubProviderTwo;
@@ -54,10 +55,10 @@ public class CompositeReadOnlyWindowStoreTest {
     public void before() {
         stubProviderOne = new StateStoreProviderStub(false);
         stubProviderTwo = new StateStoreProviderStub(false);
-        underlyingWindowStore = new ReadOnlyWindowStoreStub<>();
+        underlyingWindowStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderOne.addStore(storeName, underlyingWindowStore);
 
-        otherUnderlyingStore = new ReadOnlyWindowStoreStub<>();
+        otherUnderlyingStore = new ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderOne.addStore("other-window-store", otherUnderlyingStore);
 
 
@@ -89,7 +90,7 @@ public class CompositeReadOnlyWindowStoreTest {
     @Test
     public void shouldFindValueForKeyWhenMultiStores() throws Exception {
         final ReadOnlyWindowStoreStub<String, String> secondUnderlying = new
-            ReadOnlyWindowStoreStub<>();
+            ReadOnlyWindowStoreStub<>(WINDOW_SIZE);
         stubProviderTwo.addStore(storeName, secondUnderlying);
 
         underlyingWindowStore.put("key-one", "value-one", 0L);
