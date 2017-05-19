@@ -68,7 +68,6 @@ public class EosIntegrationTest {
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
-    private static ZkUtils zkUtils = null;
 
     private static String applicationId;
     private final static String CONSUMER_GROUP_ID = "readCommitted";
@@ -85,48 +84,13 @@ public class EosIntegrationTest {
 
     private int testNumber = 0;
 
-    @BeforeClass
-    public static void prepare() {
-        zkUtils = ZkUtils.apply(CLUSTER.zKConnectString(),
-            30000,
-            30000,
-            JaasUtils.isZkSecurityEnabled());
-    }
-
     @Before
     public void createTopics() throws Exception {
         applicationId = "appId-" + ++testNumber;
-        try {
-            CLUSTER.deleteTopic(SINGLE_PARTITION_INPUT_TOPIC);
-        } catch (final Exception e) { }
-        try {
-            CLUSTER.deleteTopic(MULTI_PARTITION_INPUT_TOPIC);
-        } catch (final Exception e) { }
-        try {
-            CLUSTER.deleteTopic(SINGLE_PARTITION_OUTPUT_TOPIC);
-        } catch (final Exception e) { }
-        try {
-            CLUSTER.deleteTopic(MULTI_PARTITION_OUTPUT_TOPIC);
-        } catch (final Exception e) { }
+        CLUSTER.deleteTopicsAndWait(SINGLE_PARTITION_INPUT_TOPIC, MULTI_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC, MULTI_PARTITION_OUTPUT_TOPIC);
 
-        TestUtils.waitForCondition(new TopicsGotDeletedCondition(), 120000, "Topics not deleted after 120 seconds.");
-
-        CLUSTER.createTopic(SINGLE_PARTITION_INPUT_TOPIC);
+        CLUSTER.createTopics(SINGLE_PARTITION_INPUT_TOPIC, SINGLE_PARTITION_OUTPUT_TOPIC);
         CLUSTER.createTopic(MULTI_PARTITION_INPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
-        CLUSTER.createTopic(SINGLE_PARTITION_OUTPUT_TOPIC);
-        CLUSTER.createTopic(MULTI_PARTITION_OUTPUT_TOPIC, NUM_TOPIC_PARTITIONS, 1);
-    }
-
-    private final class TopicsGotDeletedCondition implements TestCondition {
-        @Override
-        public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            return !allTopics.contains(SINGLE_PARTITION_INPUT_TOPIC)
-                && !allTopics.contains(MULTI_PARTITION_INPUT_TOPIC)
-                && !allTopics.contains(SINGLE_PARTITION_OUTPUT_TOPIC)
-                && !allTopics.contains(MULTI_PARTITION_OUTPUT_TOPIC);
-        }
     }
 
     @Test
@@ -158,7 +122,6 @@ public class EosIntegrationTest {
             .mapValues(new ValueMapper<Long, Long>() {
                 @Override
                 public Long apply(final Long value) {
-                    System.out.println("processing: " + value);
                     return value;
                 }
             })
@@ -184,10 +147,10 @@ public class EosIntegrationTest {
 
                 final List<KeyValue<Long, Long>> inputData = new ArrayList<KeyValue<Long, Long>>() {
                     {
-                        add(new KeyValue<>(0L, factor * 100 + 0L));
+                        add(new KeyValue<>(0L, factor * 100));
                         add(new KeyValue<>(0L, factor * 100 + 1L));
                         add(new KeyValue<>(0L, factor * 100 + 2L));
-                        add(new KeyValue<>(1L, factor * 100 + 0L));
+                        add(new KeyValue<>(1L, factor * 100));
                         add(new KeyValue<>(1L, factor * 100 + 1L));
                         add(new KeyValue<>(1L, factor * 100 + 2L));
                     }
@@ -486,6 +449,7 @@ public class EosIntegrationTest {
         }
         final KStream<Long, Long> input = builder.stream(MULTI_PARTITION_INPUT_TOPIC);
         input.transform(new TransformerSupplier<Long, Long, KeyValue<Long, Long>>() {
+            @SuppressWarnings("unchecked")
             @Override
             public Transformer<Long, Long, KeyValue<Long, Long>> get() {
                 return new Transformer<Long, Long, KeyValue<Long, Long>>() {
@@ -702,7 +666,7 @@ public class EosIntegrationTest {
                     LongDeserializer.class,
                     new Properties() {
                         {
-                            //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
+                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
                         }
                     }),
                 SINGLE_PARTITION_OUTPUT_TOPIC,
@@ -716,7 +680,7 @@ public class EosIntegrationTest {
                 dataBeforeFailure.size()
             ));
 
-            //assertThat(committedRecords, equalTo(expectedCommittedRecords));
+            assertThat(committedRecords, equalTo(expectedCommittedRecords));
             assertThat(uncommittedRecords, equalTo(expectedUncommittedRecords));
 
             injectError = true;
