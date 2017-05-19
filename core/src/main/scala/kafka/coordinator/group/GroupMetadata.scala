@@ -359,6 +359,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         // We may hit this case if the partition in question has emigrated.
     }
   }
+
   /* Complete a pending transactional offset commit. This is called after a commit or abort marker is fully written
    * to the log.
    */
@@ -379,22 +380,26 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasPendingOffsetCommitsFromProducer(producerId: Long) =
     pendingTransactionalOffsetCommits.contains(producerId)
 
-  def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, CommitRecordMetadataAndOffset] = {
+  def removeOffsets(topicPartitions: Seq[TopicPartition]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
     topicPartitions.flatMap { topicPartition =>
       pendingOffsetCommits.remove(topicPartition)
       pendingTransactionalOffsetCommits.foreach { case (_, pendingOffsets) =>
         pendingOffsets.remove(topicPartition)
       }
       val removedOffset = offsets.remove(topicPartition)
-      removedOffset.map(topicPartition -> _)
+      removedOffset.map(topicPartition -> _.offsetAndMetadata)
     }.toMap
   }
 
   def removeExpiredOffsets(startMs: Long) = {
-    val expiredOffsets = offsets.filter {
-      case (topicPartition, commitRecordMetadataAndOffset) =>
-        commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp < startMs && !pendingOffsetCommits.contains(topicPartition)
-    }
+    val expiredOffsets = offsets
+      .filter {
+        case (topicPartition, commitRecordMetadataAndOffset) =>
+          commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp < startMs && !pendingOffsetCommits.contains(topicPartition)
+      }
+      .map { case (topicPartition, commitRecordOffsetAndMetadata) =>
+        (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
+      }
     offsets --= expiredOffsets.keySet
     expiredOffsets.toMap
   }
