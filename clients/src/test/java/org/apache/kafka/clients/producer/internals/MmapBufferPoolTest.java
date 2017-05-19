@@ -164,4 +164,21 @@ public class MmapBufferPoolTest {
         long endTimeMs = Time.SYSTEM.milliseconds();
         assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
     }
+
+    /**
+     * Test if the  waiter that is waiting on availability of more memory is cleaned up when a timeout occurs
+     */
+    @Test
+    public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(2, 1, time, storefile);
+        pool.allocate(1, maxBlockTimeMs);
+        try {
+            pool.allocate(2, maxBlockTimeMs);
+            fail("The buffer allocated more memory than its maximum value 2");
+        } catch (TimeoutException e) {
+            // this is good
+        }
+        assertTrue(pool.queued() == 0);
+    }
 }
