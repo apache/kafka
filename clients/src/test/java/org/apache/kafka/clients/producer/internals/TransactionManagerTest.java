@@ -523,7 +523,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testHandlingOfUnknownTopicPartitionError() throws InterruptedException {
+    public void testHandlingOfUnknownTopicPartitionErrorOnAddPartitions() throws InterruptedException {
         client.setNode(brokerNode);
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
@@ -552,6 +552,42 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());  // Send AddPartitionsRequest
         assertFalse(transactionManager.transactionContainsPartition(tp0));  // The partition should not yet be added.
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest successfully.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+
+        sender.run(time.milliseconds());  // Send ProduceRequest.
+        assertTrue(responseFuture.isDone());
+    }
+
+    @Test
+    public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() throws InterruptedException {
+        client.setNode(brokerNode);
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+
+        sender.run(time.milliseconds());  // get pid.
+
+        assertTrue(transactionManager.hasProducerId());
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
         prepareProduceResponse(Errors.NONE, pid, epoch);
