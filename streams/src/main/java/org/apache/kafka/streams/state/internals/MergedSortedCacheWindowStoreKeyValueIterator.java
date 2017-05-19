@@ -14,61 +14,62 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
-/**
- * Merges two iterators. Assumes each of them is sorted by key
- *
- * @param <K>
- * @param <AGG>
- */
-class MergedSortedCacheSessionStoreIterator<K, AGG> extends AbstractMergedSortedCacheStoreIterator<Windowed<K>, Windowed<Bytes>, AGG, byte[]> {
+class MergedSortedCacheWindowStoreKeyValueIterator<K, V>
+    extends AbstractMergedSortedCacheStoreIterator<Windowed<K>, Windowed<Bytes>, V, byte[]> {
 
-    private final StateSerdes<K, AGG> serdes;
+    private final StateSerdes<K, V> serdes;
+    private final long windowSize;
     private final SegmentedCacheFunction cacheFunction;
 
-    MergedSortedCacheSessionStoreIterator(final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator,
-                                          final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator,
-                                          final StateSerdes<K, AGG> serdes,
-                                          final SegmentedCacheFunction cacheFunction) {
-        super(cacheIterator, storeIterator);
+    MergedSortedCacheWindowStoreKeyValueIterator(
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator,
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator,
+        final StateSerdes<K, V> serdes,
+        final long windowSize,
+        final SegmentedCacheFunction cacheFunction
+    ) {
+        super(filteredCacheIterator, underlyingIterator);
         this.serdes = serdes;
+        this.windowSize = windowSize;
         this.cacheFunction = cacheFunction;
     }
 
     @Override
-    public KeyValue<Windowed<K>, AGG> deserializeStorePair(final KeyValue<Windowed<Bytes>, byte[]> pair) {
+    Windowed<K> deserializeStoreKey(final Windowed<Bytes> key) {
+        return new Windowed<>(serdes.keyFrom(key.key().get()), key.window());
+    }
+
+    @Override
+    KeyValue<Windowed<K>, V> deserializeStorePair(final KeyValue<Windowed<Bytes>, byte[]> pair) {
         return KeyValue.pair(deserializeStoreKey(pair.key), serdes.valueFrom(pair.value));
     }
 
     @Override
     Windowed<K> deserializeCacheKey(final Bytes cacheKey) {
         byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        return SessionKeySerde.from(binaryKey, serdes.keyDeserializer(), serdes.topic());
+
+        final long timestamp = WindowStoreUtils.timestampFromBinaryKey(binaryKey);
+        final K key = WindowStoreUtils.keyFromBinaryKey(binaryKey, serdes);
+        return new Windowed<>(key, WindowStoreUtils.timeWindowForSize(timestamp, windowSize));
     }
 
-
     @Override
-    AGG deserializeCacheValue(final LRUCacheEntry cacheEntry) {
+    V deserializeCacheValue(final LRUCacheEntry cacheEntry) {
         return serdes.valueFrom(cacheEntry.value);
     }
 
     @Override
-    public Windowed<K> deserializeStoreKey(final Windowed<Bytes> key) {
-        final K originalKey = serdes.keyFrom(key.key().get());
-        return new Windowed<>(originalKey, key.window());
-    }
-
-    @Override
-    public int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        Bytes storeKeyBytes = SessionKeySerde.bytesToBinary(storeKey);
+    int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
+        Bytes storeKeyBytes = WindowStoreUtils.toBinaryKey(storeKey.key().get(), storeKey.window().start(), 0);
         return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }
