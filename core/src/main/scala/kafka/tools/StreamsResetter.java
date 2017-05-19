@@ -197,7 +197,7 @@ public class StreamsResetter {
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("consumer property");
-        consumerConfigOption = optionParser.accepts("consumer.config", "Consumer configuration properties file, Note that " + consumerPropertyOption.toString() + " takes precedence over this config")
+        consumerConfigOption = optionParser.accepts("consumer-config", "Consumer configuration properties file, Note that " + consumerPropertyOption.toString() + " takes precedence over this config")
                 .withRequiredArg()
                 .ofType(String.class)
                 .describedAs("Consumer config property file");
