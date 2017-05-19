@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -390,31 +391,27 @@ public class Sender implements Runnable {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
                     ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
-                    if (response.wasDisconnected()) {
-                        log.debug("Broker {} disconnected while awaiting InitProducerId response", response.destination());
-                    } else if (response.versionMismatch() != null) {
-                        transactionManager.setError(response.versionMismatch());
-                        break;
+                    InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
+                    Errors error = initProducerIdResponse.error();
+                    if (error == Errors.NONE) {
+                        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
+                                initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+                    } else if (error.exception() instanceof RetriableException) {
+                        log.debug("Retriable error from InitProducerId response", error.message());
                     } else {
-                        InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
-                        Errors error = initProducerIdResponse.error();
-                        if (error == Errors.NONE) {
-                            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
-                                    initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
-                            transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
-                        } else if (error.exception() instanceof RetriableException) {
-                            log.debug("Retriable error from InitProducerId response", error.message());
-                        } else {
-                            transactionManager.setError(error.exception());
-                            break;
-                        }
+                        transactionManager.setError(error.exception());
+                        break;
                     }
                 } else {
                     log.debug("Could not find an available broker to send InitProducerIdRequest to. " +
                             "We will back off and try again.");
                 }
+            } catch (UnsupportedVersionException e) {
+                transactionManager.setError(e);
+                break;
             } catch (IOException e) {
-                log.warn("Received an exception while trying to get a producer id. Will back off and retry.", e);
+                log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
