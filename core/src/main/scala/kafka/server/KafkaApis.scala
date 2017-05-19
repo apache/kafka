@@ -378,14 +378,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (produceRequest.isTransactional) {
-      if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, produceRequest.transactionalId))) {
+      if (!authorize(request.session, Write, new Resource(TransactionalId, produceRequest.transactionalId))) {
         sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
         return
       }
       // Note that authorization to a transactionalId implies ProducerId authorization
 
-    } else if (produceRequest.isIdempotent && !authorize(request.session, Write, Resource.ProducerIdResource)) {
-      sendErrorResponse(Errors.PRODUCER_ID_AUTHORIZATION_FAILED)
+    } else if (produceRequest.isIdempotent && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+      sendErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED)
       return
     }
 
@@ -1069,7 +1069,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         !authorize(request.session, Describe, new Resource(Group, findCoordinatorRequest.coordinatorKey)))
       sendErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED)
     else if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION &&
-        !authorize(request.session, Describe, new Resource(ProducerTransactionalId, findCoordinatorRequest.coordinatorKey)))
+        !authorize(request.session, Describe, new Resource(TransactionalId, findCoordinatorRequest.coordinatorKey)))
       sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
     else {
       // get metadata (and create the topic if necessary)
@@ -1432,12 +1432,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (transactionalId != null) {
-      if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+      if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId))) {
         sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
         return
       }
-    } else if (!authorize(request.session, Write, Resource.ProducerIdResource)) {
-      sendErrorResponse(Errors.PRODUCER_ID_AUTHORIZATION_FAILED)
+    } else if (!authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+      sendErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED)
       return
     }
 
@@ -1456,7 +1456,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val endTxnRequest = request.body[EndTxnRequest]
     val transactionalId = endTxnRequest.transactionalId
 
-    if (authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+    if (authorize(request.session, Write, new Resource(TransactionalId, transactionalId))) {
       def sendResponseCallback(error: Errors) {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val responseBody = new EndTxnResponse(requestThrottleMs, error)
@@ -1542,7 +1542,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val transactionalId = addPartitionsToTxnRequest.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
 
-    if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
+    if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         addPartitionsToTxnRequest.getErrorResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception))
     else {
@@ -1597,7 +1597,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = addOffsetsToTxnRequest.consumerGroupId
     val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
 
-    if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
+    if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new AddOffsetsToTxnResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     else if (!authorize(request.session, Read, new Resource(Group, groupId)))
@@ -1633,7 +1633,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // authorize for the transactionalId and the consumer group. Note that we skip producerId authorization
     // since it is implied by transactionalId authorization
-    if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, txnOffsetCommitRequest.transactionalId)))
+    if (!authorize(request.session, Write, new Resource(TransactionalId, txnOffsetCommitRequest.transactionalId)))
       sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
     else if (!authorize(request.session, Read, new Resource(Group, txnOffsetCommitRequest.consumerGroupId)))
       sendErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED)

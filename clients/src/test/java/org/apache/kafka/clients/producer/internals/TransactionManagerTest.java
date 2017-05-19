@@ -413,7 +413,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
@@ -450,7 +450,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         TransactionalRequestResult commitResult = transactionManager.beginCommittingTransaction();
         assertFalse(responseFuture.isDone());
@@ -504,7 +504,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
 
         TransactionalRequestResult abortResult = transactionManager.beginAbortingTransaction();
         assertFalse(responseFuture.isDone());
@@ -644,7 +644,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                                                                   "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         assertFalse(responseFuture.isDone());
         prepareAddPartitionsToTxnPartitionErrorResponse(tp0, error);
         sender.run(time.milliseconds());  // attempt send addPartitions.
@@ -660,19 +660,6 @@ public class TransactionManagerTest {
                 return true;
             }
         }, new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, error)));
-    }
-
-    private static class MockCallback implements Callback {
-        private final TransactionManager transactionManager;
-        public MockCallback(TransactionManager transactionManager) {
-            this.transactionManager = transactionManager;
-        }
-        @Override
-        public void onCompletion(RecordMetadata metadata, Exception exception) {
-            if (exception != null && transactionManager != null) {
-                transactionManager.setError(exception);
-            }
-        }
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,

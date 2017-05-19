@@ -24,10 +24,10 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClientUtils;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -191,7 +191,10 @@ public class Sender implements Runnable {
     void run(long now) {
         if (transactionManager != null) {
             if (!transactionManager.isTransactional()) {
-                maybeWaitForProducerId();
+                if (!maybeWaitForProducerId()) {
+                    client.poll(retryBackoffMs, now);
+                    return;
+                }
             } else if (maybeSendTransactionalRequest(now)) {
                 client.poll(retryBackoffMs, now);
                 return;
@@ -282,7 +285,8 @@ public class Sender implements Runnable {
     private boolean maybeSendTransactionalRequest(long now) {
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
         if (nextRequestHandler == null) {
-            log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionManager.transactionalId());
+            log.trace("TransactionalId: {} -- There are no pending transactional requests to send",
+                    transactionManager.transactionalId());
             return false;
         }
 
@@ -360,7 +364,7 @@ public class Sender implements Runnable {
         initiateClose();
     }
 
-    private ClientResponse sendAndAwaitInitPidRequest(Node node) throws IOException {
+    private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
         String nodeId = node.idString();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, null);
@@ -375,32 +379,36 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private void maybeWaitForProducerId() {
+    private boolean maybeWaitForProducerId() {
         while (!transactionManager.hasProducerId() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
                 if (node != null) {
-                    ClientResponse response = sendAndAwaitInitPidRequest(node);
-
-                    if (response.hasResponse() && (response.responseBody() instanceof InitProducerIdResponse)) {
-                        InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
-                        Exception exception = initProducerIdResponse.error().exception();
-                        if (exception != null && !(exception instanceof  RetriableException)) {
-                            transactionManager.setError(exception);
-                            return;
-                        }
-                        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
-                                initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
-                        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+                    ClientResponse response = sendAndAwaitInitProducerIdRequest(node);
+                    if (response.wasDisconnected()) {
+                        log.debug("Broker {} disconnected while awaiting InitProducerId response", response.destination());
+                    } else if (response.versionMismatch() != null) {
+                        transactionManager.setError(response.versionMismatch());
+                        break;
                     } else {
-                        log.error("Received an unexpected response type for an InitProducerIdRequest from {}. " +
-                                "We will back off and try again.", node);
+                        InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response.responseBody();
+                        Errors error = initProducerIdResponse.error();
+                        if (error == Errors.NONE) {
+                            ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
+                                    initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                            transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+                        } else if (error.exception() instanceof RetriableException) {
+                            log.debug("Retriable error from InitProducerId response", error.message());
+                        } else {
+                            transactionManager.setError(error.exception());
+                            break;
+                        }
                     }
                 } else {
                     log.debug("Could not find an available broker to send InitProducerIdRequest to. " +
                             "We will back off and try again.");
                 }
-            } catch (Exception e) {
+            } catch (IOException e) {
                 log.warn("Received an exception while trying to get a producer id. Will back off and retry.", e);
             }
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
@@ -408,13 +416,12 @@ public class Sender implements Runnable {
             metadata.requestUpdate();
         }
 
-        if (transactionManager.isInErrorState()) {
-            Exception lastError = transactionManager.lastError();
-            this.accumulator.abortBatches(lastError instanceof KafkaException ?
-                    (KafkaException) lastError : new KafkaException(lastError));
-            log.error("TransactionalId: {} -- aborting producer batches because the transaction manager is in an error state.",
-                    transactionManager.transactionalId());
+        if (transactionManager.isInErrorState() && accumulator.hasUnflushedBatches()) {
+            log.error("Aborting producer batches due to fatal error", transactionManager.lastError());
+            accumulator.abortBatches(transactionManager.lastError());
         }
+
+        return transactionManager.hasProducerId();
     }
 
     /**
@@ -486,9 +493,9 @@ public class Sender implements Runnable {
                         error);
                 if (transactionManager == null) {
                     reenqueueBatch(batch, now);
-                } else if (transactionManager.producerIdAndEpoch().producerId == batch.producerId() &&
-                        transactionManager.producerIdAndEpoch().epoch == batch.producerEpoch()) {
-                    // If idempotence is enabled only retry the request if the current producer id is the same as the producer id of the batch.
+                } else if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+                    // If idempotence is enabled only retry the request if the current producer id is the same as
+                    // the producer id of the batch.
                     log.debug("Retrying batch to topic-partition {}. Sequence number : {}", batch.topicPartition,
                             transactionManager.sequenceNumber(batch.topicPartition));
                     reenqueueBatch(batch, now);
@@ -502,12 +509,10 @@ public class Sender implements Runnable {
                 final RuntimeException exception;
                 if (error == Errors.TOPIC_AUTHORIZATION_FAILED)
                     exception = new TopicAuthorizationException(batch.topicPartition.topic());
+                else if (error == Errors.CLUSTER_AUTHORIZATION_FAILED)
+                    exception = new ClusterAuthorizationException("The producer is not authorized to do idempotent sends");
                 else
                     exception = error.exception();
-                if (error == Errors.OUT_OF_ORDER_SEQUENCE_NUMBER && batch.producerId() == transactionManager.producerIdAndEpoch().producerId)
-                    log.error("The broker received an out of order sequence number for correlation id {}, topic-partition " +
-                                    "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
-                            correlationId, batch.topicPartition, response.baseOffset);
                 // tell the user the result of their request
                 failBatch(batch, response, exception);
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
@@ -522,12 +527,6 @@ public class Sender implements Runnable {
         } else {
             completeBatch(batch, response);
 
-            if (transactionManager != null && transactionManager.producerIdAndEpoch().producerId == batch.producerId()
-                    && transactionManager.producerIdAndEpoch().epoch == batch.producerEpoch()) {
-                transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
-                log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
-                        transactionManager.sequenceNumber(batch.topicPartition));
-            }
         }
 
         // Unmute the completed partition.
@@ -541,18 +540,37 @@ public class Sender implements Runnable {
     }
 
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
+        if (transactionManager != null && transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+            transactionManager.incrementSequenceNumber(batch.topicPartition, batch.recordCount);
+            log.debug("Incremented sequence number for topic-partition {} to {}", batch.topicPartition,
+                    transactionManager.sequenceNumber(batch.topicPartition));
+        }
+
         batch.done(response.baseOffset, response.logAppendTime, null);
         this.accumulator.deallocate(batch);
     }
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
-        if (transactionManager != null && !transactionManager.isTransactional()
-                && batch.producerId() == transactionManager.producerIdAndEpoch().producerId) {
-            // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
-            // about the previously committed message. Note that this will discard the producer id and sequence
-            // numbers for all existing partitions.
-            transactionManager.resetProducerId();
+        if (transactionManager != null) {
+            if (exception instanceof OutOfOrderSequenceException && transactionManager.hasProducerId(batch.producerId())) {
+                log.error("The broker received an out of order sequence number for topic-partition " +
+                                "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
+                        batch.topicPartition, response.baseOffset);
+
+                if (transactionManager.isTransactional())
+                    transactionManager.setError(exception);
+                else
+                    // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
+                    // about the previously committed message. Note that this will discard the producer id and sequence
+                    // numbers for all existing partitions.
+                    transactionManager.resetProducerId();
+            } else if (transactionManager.isTransactional() || exception instanceof ClusterAuthorizationException) {
+                // any batch failure is treated as fatal for transactional producers. Cluster authorization
+                // errors (which imply no IdempotentWrite permission) are also fatal for the idempotent producer.
+                transactionManager.setError(exception);
+            }
         }
+
         batch.done(response.baseOffset, response.logAppendTime, exception);
         this.accumulator.deallocate(batch);
     }

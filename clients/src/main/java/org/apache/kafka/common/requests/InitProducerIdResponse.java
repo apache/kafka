@@ -29,7 +29,7 @@ public class InitProducerIdResponse extends AbstractResponse {
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
     //   TransactionalIdAuthorizationFailed
-    //   ProducerIdAuthorizationFailed
+    //   ClusterAuthorizationFailed
 
     private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
