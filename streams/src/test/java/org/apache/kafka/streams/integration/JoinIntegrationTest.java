@@ -36,7 +36,6 @@ import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.AfterClass;
@@ -48,11 +47,9 @@ import org.junit.experimental.categories.Category;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.Set;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -107,8 +104,6 @@ public class JoinIntegrationTest {
         }
     };
 
-    private final TestCondition topicsGotDeleted = new TopicsGotDeletedCondition();
-
     @BeforeClass
     public static void setupConfigsAndUtils() throws Exception {
         PRODUCER_CONFIG.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -147,9 +142,7 @@ public class JoinIntegrationTest {
 
     @Before
     public void prepareTopology() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC_1);
-        CLUSTER.createTopic(INPUT_TOPIC_2);
-        CLUSTER.createTopic(OUTPUT_TOPIC);
+        CLUSTER.createTopics(INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
 
         builder = new KStreamBuilder();
         leftTable = builder.table(INPUT_TOPIC_1, "leftTable");
@@ -160,11 +153,7 @@ public class JoinIntegrationTest {
 
     @After
     public void cleanup() throws Exception {
-        CLUSTER.deleteTopic(INPUT_TOPIC_1);
-        CLUSTER.deleteTopic(INPUT_TOPIC_2);
-        CLUSTER.deleteTopic(OUTPUT_TOPIC);
-
-        TestUtils.waitForCondition(topicsGotDeleted, 120000, "Topics not deleted after 120 seconds.");
+        CLUSTER.deleteTopicsAndWait(120000, INPUT_TOPIC_1, INPUT_TOPIC_2, OUTPUT_TOPIC);
     }
 
     private void checkResult(final String outputTopic, final List<String> expectedResult) throws Exception {
@@ -412,15 +401,6 @@ public class JoinIntegrationTest {
         leftTable.outerJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
 
         runTest(expectedResult);
-    }
-
-    private final class TopicsGotDeletedCondition implements TestCondition {
-        @Override
-        public boolean conditionMet() {
-            final Set<String> allTopics = new HashSet<>();
-            allTopics.addAll(scala.collection.JavaConversions.seqAsJavaList(zkUtils.getAllTopics()));
-            return !allTopics.contains(INPUT_TOPIC_1) && !allTopics.contains(INPUT_TOPIC_2) && !allTopics.contains(OUTPUT_TOPIC);
-        }
     }
 
     private final class Input<V> {
