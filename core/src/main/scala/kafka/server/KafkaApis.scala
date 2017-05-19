@@ -117,31 +117,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          def response(throttleTimeMs: Int): AbstractResponse = {
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          throttleTimeMs =>
             request.body[AddPartitionsToTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
-          }
-          response
         }, handleAddPartitionToTxnRequest)
-        case ApiKeys.ADD_OFFSETS_TO_TXN => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          def response(throttleTimeMs: Int): AbstractResponse = {
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          throttleTimeMs =>
             request.body[AddOffsetsToTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
-          }
-          response
         }, handleAddOffsetsToTxnRequest)
-        case ApiKeys.END_TXN => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          def response(throttleTimeMs: Int): AbstractResponse = {
+        case ApiKeys.END_TXN => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          throttleTimeMs =>
             request.body[EndTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
-          }
-          response
         }, handleEndTxnRequest)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          def response(throttleTimeMs: Int): AbstractResponse = {
+        case ApiKeys.WRITE_TXN_MARKERS => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          throttleTimeMs =>
             request.body[WriteTxnMarkersRequest].getErrorResponse(throttleTimeMs, error.exception())
-          }
-          response
         }, handleWriteTxnMarkersRequest)
-        case ApiKeys.TXN_OFFSET_COMMIT =>  handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+        case ApiKeys.TXN_OFFSET_COMMIT =>  handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
           def response(throttleTimeMs: Int): AbstractResponse = {
             request.body[TxnOffsetCommitRequest].getErrorResponse(throttleTimeMs, error.exception())
           }
@@ -1544,13 +1536,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleWithApiVersionAtLeast(version: ApiVersion,
-                                  request: RequestChannel.Request,
-                                  createErrorResponse: Errors => Int => AbstractResponse,
-                                  handler: (RequestChannel.Request) => Unit): Unit = {
-      if (config.logMessageFormatVersion < version)
-        sendResponseMaybeThrottle(request, createErrorResponse(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT))
-      else if (config.interBrokerProtocolVersion < version)
+  def handleWithInterBrokerVersionAtLeast(version: ApiVersion,
+                                          request: RequestChannel.Request,
+                                          createErrorResponse: Errors => Int => AbstractResponse,
+                                          handler: (RequestChannel.Request) => Unit): Unit = {
+      if (config.interBrokerProtocolVersion < version)
         sendResponseMaybeThrottle(request, createErrorResponse(Errors.INVALID_REQUEST))
       else
         handler(request)
@@ -1589,23 +1579,37 @@ class KafkaApis(val requestChannel: RequestChannel,
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AddPartitionsToTxnResponse(requestThrottleMs, partitionErrors.asJava))
       } else {
-        // Send response callback
-        def sendResponseCallback(error: Errors): Unit = {
-          def createResponse(requestThrottleMs: Int): AbstractResponse = {
-            val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
-              partitionsToAdd.asScala.map{tp => (tp, error)}.toMap.asJava)
-            trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
-            responseBody
+        val (_, incorrectMessageFormat) = partitionsToAdd.asScala.partition { tp =>
+          replicaManager.getMagic(tp) match {
+            case Some(magic) if magic >= RecordBatch.MAGIC_VALUE_V2 => true
+            case _ => false
           }
-
-          sendResponseMaybeThrottle(request, createResponse)
         }
 
-        txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-          addPartitionsToTxnRequest.producerId(),
-          addPartitionsToTxnRequest.producerEpoch(),
-          partitionsToAdd.asScala.toSet,
-          sendResponseCallback)
+        if (incorrectMessageFormat.nonEmpty)
+          sendResponseMaybeThrottle(request, throttleTimeMs =>
+            new AddPartitionsToTxnResponse(throttleTimeMs,
+              incorrectMessageFormat.map{ tp => (tp, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT)}.toMap.asJava))
+        else {
+          // Send response callback
+          def sendResponseCallback(error: Errors): Unit = {
+            def createResponse(requestThrottleMs: Int): AbstractResponse = {
+              val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
+                partitionsToAdd.asScala.map { tp => (tp, error) }.toMap.asJava)
+              trace(s"Completed $transactionalId's AddPartitionsToTxnRequest with partitions $partitionsToAdd: errors: $error from client ${request.header.clientId}")
+              responseBody
+            }
+
+            sendResponseMaybeThrottle(request, createResponse)
+          }
+
+
+          txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+            addPartitionsToTxnRequest.producerId(),
+            addPartitionsToTxnRequest.producerEpoch(),
+            partitionsToAdd.asScala.toSet,
+            sendResponseCallback)
+        }
       }
     }
 
