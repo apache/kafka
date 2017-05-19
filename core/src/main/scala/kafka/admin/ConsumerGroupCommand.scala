@@ -552,7 +552,10 @@ object ConsumerGroupCommand extends Logging {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
         parseTopicPartitionsToReset(topics)
       } else {
-        CommandLineUtils.printUsageAndDie(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
+        if (opts.options.has(opts.resetFromFileOpt))
+          adminClient.listGroupOffsets(groupId).keys
+        else
+          CommandLineUtils.printUsageAndDie(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
       }
     }
 
@@ -570,7 +573,9 @@ object ConsumerGroupCommand extends Logging {
       if (opts.options.has(opts.resetToOffsetOpt)) {
         val offset = opts.options.valueOf(opts.resetToOffsetOpt)
         partitionsToReset.map {
-          topicPartition => (topicPartition, new OffsetAndMetadata(offset))
+          topicPartition =>
+            val newOffset: Long = checkOffsetRange(topicPartition, offset)
+            (topicPartition, new OffsetAndMetadata(newOffset))
         }.toMap
       } else if (opts.options.has(opts.resetToEarliestOpt)) {
         partitionsToReset.map { topicPartition =>
@@ -594,19 +599,7 @@ object ConsumerGroupCommand extends Logging {
             throw new IllegalArgumentException(s"Cannot shift offset for partition $topicPartition since there is no current committed offset"))
 
           val shiftedOffset = currentOffset + shiftBy
-          val newOffset = getLogEndOffset(topicPartition) match {
-            case LogOffsetResult.LogOffset(endOffset) if shiftedOffset > endOffset =>
-              warn(s"New offset ($shiftedOffset) is higher than latest offset. Value will be set to $endOffset")
-              endOffset
-
-            case _ => getLogStartOffset(topicPartition) match {
-              case LogOffsetResult.LogOffset(startOffset) if shiftedOffset < startOffset =>
-                warn(s"New offset ($shiftedOffset) is lower than earliest offset. Value will be set to $startOffset")
-                startOffset
-
-              case _ => shiftedOffset
-            }
-          }
+          val newOffset: Long = checkOffsetRange(topicPartition, shiftedOffset)
           (topicPartition, new OffsetAndMetadata(newOffset))
         }.toMap
       } else if (opts.options.has(opts.resetToDatetimeOpt)) {
@@ -635,10 +628,11 @@ object ConsumerGroupCommand extends Logging {
         val resetPlanPath = opts.options.valueOf(opts.resetFromFileOpt)
         val resetPlanCsv = Utils.readFileAsString(resetPlanPath)
         val resetPlan = parseResetPlan(resetPlanCsv)
-        partitionsToReset.map { topicPartition =>
-            if (resetPlan.keySet.contains(topicPartition))
-              (topicPartition, resetPlan(topicPartition))
-            else null
+        resetPlan.keySet.map { topicPartition =>
+            if (partitionsToReset.exists(tp => tp.equals(topicPartition))) {
+              val newOffset: Long = checkOffsetRange(topicPartition, resetPlan(topicPartition).offset())
+              (topicPartition, new OffsetAndMetadata(newOffset))
+            } else null
         }.toMap
       } else {
         val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
@@ -648,6 +642,23 @@ object ConsumerGroupCommand extends Logging {
           }.orNull
         }.toMap
       }
+    }
+
+    private def checkOffsetRange(topicPartition: TopicPartition, shiftedOffset: Long) = {
+      val newOffset = getLogEndOffset(topicPartition) match {
+        case LogOffsetResult.LogOffset(endOffset) if shiftedOffset > endOffset =>
+          warn(s"New offset ($shiftedOffset) is higher than latest offset. Value will be set to $endOffset")
+          endOffset
+
+        case _ => getLogStartOffset(topicPartition) match {
+          case LogOffsetResult.LogOffset(startOffset) if shiftedOffset < startOffset =>
+            warn(s"New offset ($shiftedOffset) is lower than earliest offset. Value will be set to $startOffset")
+            startOffset
+
+          case _ => shiftedOffset
+        }
+      }
+      newOffset
     }
 
     private def getDateTime: java.lang.Long = {
