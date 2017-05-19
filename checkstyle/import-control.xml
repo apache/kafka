@@ -108,8 +108,10 @@
     </subpackage>
 
     <subpackage name="requests">
+      <allow pkg="org.apache.kafka.clients.admin" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.network" />
+      <allow pkg="org.apache.kafka.common.requests" />
       <allow pkg="org.apache.kafka.common.record" />
       <!-- for testing -->
       <allow pkg="org.apache.kafka.common.errors" />
@@ -251,6 +253,11 @@
         <allow pkg="javax.servlet" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
+      </subpackage>
+
+      <subpackage name="isolation">
+        <allow pkg="com.fasterxml.jackson" />
+        <allow pkg="org.apache.maven.artifact.versioning" />
       </subpackage>
     </subpackage>
 

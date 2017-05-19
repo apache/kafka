@@ -17,6 +17,7 @@
 package org.apache.kafka.common.protocol;
 
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.errors.BrokerAuthorizationException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.ConcurrentTransactionsException;
@@ -62,6 +63,7 @@ import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -487,9 +489,19 @@ public enum Errors {
         public ApiException build(String message) {
             return new ProducerIdAuthorizationException(message);
         }
+    }),
+    SECURITY_DISABLED(55, "Security features are disabled.", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new SecurityDisabledException(message);
+        }
+    }),
+    BROKER_AUTHORIZATION_FAILED(56, "Broker authorization failed", new ApiExceptionBuilder() {
+        @Override
+        public ApiException build(String message) {
+            return new BrokerAuthorizationException(message);
+        }
     });
-
-
              
     private interface ApiExceptionBuilder {
         ApiException build(String message);

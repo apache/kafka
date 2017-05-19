@@ -17,26 +17,41 @@
 package kafka.security.auth
 
 import kafka.common.{BaseEnum, KafkaException}
+import org.apache.kafka.clients.admin.AclPermissionType
+
+import scala.util.{Failure, Success, Try}
 
 /**
  * PermissionType.
  */
 
 
-sealed trait PermissionType extends BaseEnum
+sealed trait PermissionType extends BaseEnum {
+  val toJava: AclPermissionType
+}
 
 case object Allow extends PermissionType {
   val name = "Allow"
+  val toJava = AclPermissionType.ALLOW
 }
 
 case object Deny extends PermissionType {
   val name = "Deny"
+  val toJava = AclPermissionType.DENY
 }
 
 object PermissionType {
   def fromString(permissionType: String): PermissionType = {
     val pType = values.find(pType => pType.name.equalsIgnoreCase(permissionType))
     pType.getOrElse(throw new KafkaException(permissionType + " not a valid permissionType name. The valid names are " + values.mkString(",")))
+  }
+
+  def fromJava(permissionType: AclPermissionType): Try[PermissionType] = {
+    try {
+      Success(fromString(permissionType.toString))
+    } catch {
+      case throwable: Throwable => Failure(throwable)
+    }
   }
 
   def values: Seq[PermissionType] = List(Allow, Deny)

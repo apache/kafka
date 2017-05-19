@@ -86,8 +86,9 @@ class WorkerSourceTask extends WorkerTask {
                             OffsetStorageReader offsetReader,
                             OffsetStorageWriter offsetWriter,
                             WorkerConfig workerConfig,
+                            ClassLoader loader,
                             Time time) {
-        super(id, statusListener, initialState);
+        super(id, statusListener, initialState, loader);
 
         this.workerConfig = workerConfig;
         this.task = task;

@@ -95,11 +95,16 @@ class TransactionCoordinator(brokerId: Int,
   def handleInitProducerId(transactionalId: String,
                            transactionTimeoutMs: Int,
                            responseCallback: InitProducerIdCallback): Unit = {
-    if (transactionalId == null || transactionalId.isEmpty) {
-      // if the transactional id is not specified, then always blindly accept the request
+
+    if (transactionalId == null) {
+      // if the transactional id is null, then always blindly accept the request
       // and return a new producerId from the producerId manager
       val producerId = producerIdManager.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
+    } else if (transactionalId.isEmpty) {
+      // if transactional id is empty then return error as invalid request. This is
+      // to make TransactionCoordinator's behavior consistent with producer client
+      responseCallback(initTransactionError(Errors.INVALID_REQUEST))
     } else if (!txnManager.validateTransactionTimeoutMs(transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
@@ -234,7 +239,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
-            } else if (partitions.subsetOf(txnMetadata.topicPartitions)) {
+            } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
               Left(Errors.NONE)
             } else {

@@ -19,7 +19,7 @@
               files=".*/requests/AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="KerberosLogin.java"/>
+              files="KerberosLogin.java|RequestResponseTest.java"/>
 
     <suppress checks="ParameterNumber"
               files="NetworkClient.java"/>
@@ -40,20 +40,23 @@
               files=".*/protocol/Errors.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(Utils|KafkaLZ4BlockOutputStream).java"/>
+              files="(Utils|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
               files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|SsLTransportLayer|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer).java"/>
 
     <suppress checks="JavaNCSS"
-              files="KerberosLogin.java"/>
+              files="AbstractRequest.java|KerberosLogin.java"/>
+
+    <suppress checks="JavaNCSS"
+              files="AbstractRequest.java"/>
 
     <suppress checks="NPathComplexity"
               files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|SslTransportLayer|Sender).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse|TransactionManager)Test.java"/>
+              files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse|TransactionManager|KafkaAdminClient)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher)Test.java"/>
@@ -63,10 +66,10 @@
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerder.java"/>
+              files="DistributedHerder(|Test).java"/>
 
     <suppress checks="MethodLength"
-              files="KafkaConfigBackingStore.java"/>
+              files="(KafkaConfigBackingStore|RequestResponseTest).java"/>
 
     <suppress checks="ParameterNumber"
               files="WorkerSourceTask.java"/>

@@ -80,14 +80,14 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldAcceptInitPidAndReturnNextPidWhenTransactionalIdIsEmpty(): Unit = {
+  def shouldReturnInvalidRequestWhenTransactionalIdIsEmpty(): Unit = {
     mockPidManager()
     EasyMock.replay(pidManager)
 
     coordinator.handleInitProducerId("", txnTimeoutMs, initProducerIdMockCallback)
-    assertEquals(InitProducerIdResult(0L, 0, Errors.NONE), result)
+    assertEquals(InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
     coordinator.handleInitProducerId("", txnTimeoutMs, initProducerIdMockCallback)
-    assertEquals(InitProducerIdResult(1L, 0, Errors.NONE), result)
+    assertEquals(InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
   }
 
   @Test
@@ -653,7 +653,13 @@ class TransactionCoordinatorTest {
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareMetadata))))
       .once()
 
-    val newMetadata = prepareMetadata.copy().prepareComplete(now)
+    val newMetadata = TransactionMetadataTransition(producerId = pid,
+      producerEpoch = epoch,
+      txnTimeoutMs = txnTimeoutMs,
+      txnState = finalState,
+      topicPartitions = Set.empty[TopicPartition],
+      txnStartTimestamp = prepareMetadata.txnStartTimestamp,
+      txnLastUpdateTimestamp = now)
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkersToSend(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),

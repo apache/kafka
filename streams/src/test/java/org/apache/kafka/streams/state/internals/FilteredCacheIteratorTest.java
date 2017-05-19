@@ -34,6 +34,18 @@ import static org.junit.Assert.assertTrue;
 
 public class FilteredCacheIteratorTest {
 
+    private static final CacheFunction IDENTITY_FUNCTION = new CacheFunction() {
+        @Override
+        public Bytes key(Bytes cacheKey) {
+            return cacheKey;
+        }
+
+        @Override
+        public Bytes cacheKey(Bytes key) {
+            return key;
+        }
+    };
+
     @SuppressWarnings("unchecked")
     private final InMemoryKeyValueStore<Bytes, LRUCacheEntry> store = new InMemoryKeyValueStore("name", null, null);
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
@@ -58,8 +70,8 @@ public class FilteredCacheIteratorTest {
             }
         };
         allIterator = new FilteredCacheIterator(
-                new DelegatingPeekingKeyValueIterator<>("",
-                                                        store.all()), allCondition);
+            new DelegatingPeekingKeyValueIterator<>("",
+                                                    store.all()), allCondition, IDENTITY_FUNCTION);
 
         final HasNextCondition firstEntryCondition = new HasNextCondition() {
             @Override
@@ -69,7 +81,7 @@ public class FilteredCacheIteratorTest {
         };
         firstEntryIterator = new FilteredCacheIterator(
                 new DelegatingPeekingKeyValueIterator<>("",
-                                                        store.all()), firstEntryCondition);
+                                                        store.all()), firstEntryCondition, IDENTITY_FUNCTION);
 
     }
 

@@ -16,23 +16,27 @@ package kafka.server
 
 import java.net.Socket
 import java.nio.ByteBuffer
-import java.util.{LinkedHashMap, Properties}
+import java.util.{Collections, LinkedHashMap, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
+
 import kafka.admin.AdminUtils
+import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType, ResourceFilter, Resource => AdminResource, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.{Authenticator, ListenerName, TransportLayer}
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
+import org.apache.kafka.common.requests.{Resource => RResource, ResourceType => RResourceType, _}
 import org.apache.kafka.common.security.auth.{DefaultPrincipalBuilder, KafkaPrincipal}
 import org.junit.Assert._
-import org.junit.{Before, After, Test}
+import org.junit.{After, Before, Test}
+
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 
@@ -260,7 +264,30 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.TXN_OFFSET_COMMIT =>
           new TxnOffsetCommitRequest.Builder("test-txn-group", 2, 0, Map.empty.asJava)
 
-        case key =>
+        case ApiKeys.DESCRIBE_ACLS =>
+          new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
+
+        case ApiKeys.CREATE_ACLS =>
+          new CreateAclsRequest.Builder(Collections.singletonList(new AclCreation(new AclBinding(
+            new AdminResource(AdminResourceType.TOPIC, "mytopic"),
+            new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.WRITE, AclPermissionType.DENY)))))
+
+        case ApiKeys.DELETE_ACLS =>
+          new DeleteAclsRequest.Builder(Collections.singletonList(new AclBindingFilter(
+            new ResourceFilter(AdminResourceType.TOPIC, null),
+            new AccessControlEntryFilter("User:ANONYMOUS", "*", AclOperation.ANY, AclPermissionType.DENY))))
+
+        case ApiKeys.DESCRIBE_CONFIGS =>
+          new DescribeConfigsRequest.Builder(Collections.singleton(new RResource(RResourceType.TOPIC, tp.topic)))
+
+        case ApiKeys.ALTER_CONFIGS =>
+          new AlterConfigsRequest.Builder(
+            Collections.singletonMap(new RResource(RResourceType.TOPIC, tp.topic),
+              new AlterConfigsRequest.Config(Collections.singleton(
+                new AlterConfigsRequest.ConfigEntry(LogConfig.MaxMessageBytesProp, "1000000")
+              ))), true)
+
+        case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }
   }
@@ -346,6 +373,11 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.ADD_OFFSETS_TO_TXN => new AddOffsetsToTxnResponse(response).throttleTimeMs
       case ApiKeys.END_TXN => new EndTxnResponse(response).throttleTimeMs
       case ApiKeys.TXN_OFFSET_COMMIT => new TxnOffsetCommitResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_ACLS => new DescribeAclsResponse(response).throttleTimeMs
+      case ApiKeys.CREATE_ACLS => new CreateAclsResponse(response).throttleTimeMs
+      case ApiKeys.DELETE_ACLS => new DeleteAclsResponse(response).throttleTimeMs
+      case ApiKeys.DESCRIBE_CONFIGS => new DescribeConfigsResponse(response).throttleTimeMs
+      case ApiKeys.ALTER_CONFIGS => new AlterConfigsResponse(response).throttleTimeMs
       case requestId => throw new IllegalArgumentException(s"No throttle time for $requestId")
     }
   }

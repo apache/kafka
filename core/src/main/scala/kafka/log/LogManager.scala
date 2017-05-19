@@ -44,7 +44,7 @@ import scala.collection._
  */
 @threadsafe
 class LogManager(val logDirs: Array[File],
-                 val topicConfigs: Map[String, LogConfig],
+                 val topicConfigs: Map[String, LogConfig], // note that this doesn't get updated after creation
                  val defaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
                  ioThreads: Int,

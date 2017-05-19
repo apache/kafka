@@ -35,17 +35,22 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
 
   private val TopicResources = Set(new Resource(Topic, "test-1"), new Resource(Topic, "test-2"))
   private val GroupResources = Set(new Resource(Group, "testGroup-1"), new Resource(Group, "testGroup-2"))
+  private val BrokerResources = Set(new Resource(Broker, "0"), new Resource(Broker, "1"))
 
   private val ResourceToCommand = Map[Set[Resource], Array[String]](
     TopicResources -> Array("--topic", "test-1", "--topic", "test-2"),
     Set(Resource.ClusterResource) -> Array("--cluster"),
-    GroupResources -> Array("--group", "testGroup-1", "--group", "testGroup-2")
+    GroupResources -> Array("--group", "testGroup-1", "--group", "testGroup-2"),
+    BrokerResources -> Array("--broker", "0", "--broker", "1")
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
-    TopicResources -> (Set(Read, Write, Describe, Delete), Array("--operation", "Read" , "--operation", "Write", "--operation", "Describe", "--operation", "Delete")),
+    TopicResources -> (Set(Read, Write, Describe, Delete, DescribeConfigs, AlterConfigs),
+      Array("--operation", "Read" , "--operation", "Write", "--operation", "Describe", "--operation", "Delete",
+        "--operation", "DescribeConfigs", "--operation", "AlterConfigs")),
     Set(Resource.ClusterResource) -> (Set(Create, ClusterAction), Array("--operation", "Create", "--operation", "ClusterAction")),
-    GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe"))
+    GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe")),
+    BrokerResources -> (Set(DescribeConfigs), Array("--operation", "DescribeConfigs"))
   )
 
   private val ProducerResourceToAcls = Map[Set[Resource], Set[Acl]](

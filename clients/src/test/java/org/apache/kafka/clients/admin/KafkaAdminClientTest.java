@@ -16,20 +16,30 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
+import org.apache.kafka.clients.admin.DeleteAclsResults.FilterResults;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.CreateTopicsResponse.Error;
+import org.apache.kafka.common.requests.ApiError;
+import org.apache.kafka.common.requests.CreateAclsResponse;
+import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.requests.DeleteAclsResponse;
+import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
+import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.DescribeAclsResponse;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -38,20 +48,17 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
+
 
 /**
  * A unit test for KafkaAdminClient.
  *
- * See for an integration test of the KafkaAdminClient.
- * Also see KafkaAdminClientIntegrationTest for a unit test of the admin client.
+ * See KafkaAdminClientIntegrationTest for an integration test of the KafkaAdminClient.
  */
 public class KafkaAdminClientTest {
     @Rule
@@ -86,7 +93,7 @@ public class KafkaAdminClientTest {
         assertEquals("Null exception.", KafkaAdminClient.prettyPrintException(null));
         assertEquals("TimeoutException", KafkaAdminClient.prettyPrintException(new TimeoutException()));
         assertEquals("TimeoutException: The foobar timed out.",
-            KafkaAdminClient.prettyPrintException(new TimeoutException("The foobar timed out.")));
+                KafkaAdminClient.prettyPrintException(new TimeoutException("The foobar timed out.")));
     }
 
     private static Map<String, Object> newStrMap(String... vals) {
@@ -115,55 +122,36 @@ public class KafkaAdminClientTest {
             ids.add(id);
         }
         assertEquals("myCustomId",
-            KafkaAdminClient.generateClientId(newConfMap(AdminClientConfig.CLIENT_ID_CONFIG, "myCustomId")));
+                KafkaAdminClient.generateClientId(newConfMap(AdminClientConfig.CLIENT_ID_CONFIG, "myCustomId")));
     }
 
-    private static class MockKafkaAdminClientContext implements AutoCloseable {
-        final static String CLUSTER_ID = "mockClusterId";
-        final AdminClientConfig adminClientConfig;
-        final Metadata metadata;
-        final HashMap<Integer, Node> nodes;
-        final MockClient mockClient;
-        final AdminClient client;
-        Cluster cluster;
-
-        MockKafkaAdminClientContext(Map<String, Object> config) {
-            this.adminClientConfig = new AdminClientConfig(config);
-            this.metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
-            this.nodes = new HashMap<Integer, Node>();
-            this.nodes.put(0, new Node(0, "localhost", 8121));
-            this.nodes.put(1, new Node(1, "localhost", 8122));
-            this.nodes.put(2, new Node(2, "localhost", 8123));
-            this.mockClient = new MockClient(Time.SYSTEM, this.metadata);
-            this.client = KafkaAdminClient.create(adminClientConfig, mockClient, metadata);
-            this.cluster = new Cluster(CLUSTER_ID,  nodes.values(),
+    private static MockKafkaAdminClientEnv mockClientEnv(String... configVals) {
+        HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+        nodes.put(1, new Node(1, "localhost", 8122));
+        nodes.put(2, new Node(2, "localhost", 8123));
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
-        }
-
-        @Override
-        public void close() {
-            this.client.close();
-        }
+        return new MockKafkaAdminClientEnv(cluster, configVals);
     }
 
     @Test
     public void testCloseAdminClient() throws Exception {
-        try (MockKafkaAdminClientContext ctx = new MockKafkaAdminClientContext(newStrMap())) {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
         }
     }
 
     private static void assertFutureError(Future<?> future, Class<? extends Throwable> exceptionClass)
-        throws InterruptedException {
+            throws InterruptedException {
         try {
             future.get();
             fail("Expected a " + exceptionClass.getSimpleName() + " exception, but got success.");
         } catch (ExecutionException ee) {
             Throwable cause = ee.getCause();
             assertEquals("Expected a " + exceptionClass.getSimpleName() + " exception, but got " +
-                cause.getClass().getSimpleName(),
-                exceptionClass, cause.getClass());
+                            cause.getClass().getSimpleName(),
+                    exceptionClass, cause.getClass());
         }
     }
 
@@ -172,35 +160,181 @@ public class KafkaAdminClientTest {
      */
     @Test
     public void testTimeoutWithoutMetadata() throws Exception {
-        try (MockKafkaAdminClientContext ctx = new MockKafkaAdminClientContext(newStrMap(
-            AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10"))) {
-            ctx.mockClient.setNodeApiVersions(NodeApiVersions.create());
-            ctx.mockClient.setNode(new Node(0, "localhost", 8121));
-            ctx.mockClient.prepareResponse(new CreateTopicsResponse(new HashMap<String, Error>() {{
-                    put("myTopic", new Error(Errors.NONE, ""));
-                }}));
-            KafkaFuture<Void> future = ctx.client.
-                createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
-                        put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
-                    }})), new CreateTopicsOptions().timeoutMs(1000)).all();
+        try (MockKafkaAdminClientEnv env = mockClientEnv(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "10")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().setNode(new Node(0, "localhost", 8121));
+            env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
+            KafkaFuture<Void> future = env.adminClient().createTopics(
+                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2})))),
+                    new CreateTopicsOptions().timeoutMs(1000)).all();
             assertFutureError(future, TimeoutException.class);
         }
     }
 
     @Test
     public void testCreateTopics() throws Exception {
-        try (MockKafkaAdminClientContext ctx = new MockKafkaAdminClientContext(newStrMap())) {
-            ctx.mockClient.setNodeApiVersions(NodeApiVersions.create());
-            ctx.mockClient.prepareMetadataUpdate(ctx.cluster, Collections.<String>emptySet());
-            ctx.mockClient.setNode(ctx.nodes.get(0));
-            ctx.mockClient.prepareResponse(new CreateTopicsResponse(new HashMap<String, Error>() {{
-                    put("myTopic", new Error(Errors.NONE, ""));
-                }}));
-            KafkaFuture<Void> future = ctx.client.
-                createTopics(Collections.singleton(new NewTopic("myTopic", new HashMap<Integer, List<Integer>>() {{
-                        put(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2}));
-                    }})), new CreateTopicsOptions().timeoutMs(10000)).all();
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+            env.kafkaClient().prepareResponse(new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
+            KafkaFuture<Void> future = env.adminClient().createTopics(
+                    Collections.singleton(new NewTopic("myTopic", Collections.singletonMap(Integer.valueOf(0), Arrays.asList(new Integer[]{0, 1, 2})))),
+                    new CreateTopicsOptions().timeoutMs(10000)).all();
             future.get();
         }
+    }
+
+    private static final AclBinding ACL1 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic3"),
+        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.ALLOW));
+    private static final AclBinding ACL2 = new AclBinding(new Resource(ResourceType.TOPIC, "mytopic4"),
+        new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY));
+    private static final AclBindingFilter FILTER1 = new AclBindingFilter(new ResourceFilter(ResourceType.ANY, null),
+        new AccessControlEntryFilter("User:ANONYMOUS", null, AclOperation.ANY, AclPermissionType.ANY));
+    private static final AclBindingFilter FILTER2 = new AclBindingFilter(new ResourceFilter(ResourceType.ANY, null),
+        new AccessControlEntryFilter("User:bob", null, AclOperation.ANY, AclPermissionType.ANY));
+
+    @Test
+    public void testDescribeAcls() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            // Test a call where we get back ACL1 and ACL2.
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, null,
+                new ArrayList<AclBinding>() {{
+                        add(ACL1);
+                        add(ACL2);
+                    }}));
+            assertCollectionIs(env.adminClient().describeAcls(FILTER1).all().get(), ACL1, ACL2);
+
+            // Test a call where we get back no results.
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, null,
+                Collections.<AclBinding>emptySet()));
+            assertTrue(env.adminClient().describeAcls(FILTER2).all().get().isEmpty());
+
+            // Test a call where we get back an error.
+            env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
+                new SecurityDisabledException("Security is disabled"), Collections.<AclBinding>emptySet()));
+            assertFutureError(env.adminClient().describeAcls(FILTER2).all(), SecurityDisabledException.class);
+        }
+    }
+
+    @Test
+    public void testCreateAcls() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            // Test a call where we successfully create two ACLs.
+            env.kafkaClient().prepareResponse(new CreateAclsResponse(0,
+                new ArrayList<AclCreationResponse>() {{
+                        add(new AclCreationResponse(null));
+                        add(new AclCreationResponse(null));
+                    }}));
+            CreateAclsResults results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
+                        add(ACL1);
+                        add(ACL2);
+                    }});
+            assertCollectionIs(results.results().keySet(), ACL1, ACL2);
+            for (KafkaFuture<Void> future : results.results().values()) {
+                future.get();
+            }
+            results.all().get();
+
+            // Test a call where we fail to create one ACL.
+            env.kafkaClient().prepareResponse(new CreateAclsResponse(0,
+                    new ArrayList<AclCreationResponse>() {{
+                        add(new AclCreationResponse(new SecurityDisabledException("Security is disabled")));
+                        add(new AclCreationResponse(null));
+                    }}));
+            results = env.adminClient().createAcls(new ArrayList<AclBinding>() {{
+                    add(ACL1);
+                    add(ACL2);
+                }});
+            assertCollectionIs(results.results().keySet(), ACL1, ACL2);
+            assertFutureError(results.results().get(ACL1), SecurityDisabledException.class);
+            results.results().get(ACL2).get();
+            assertFutureError(results.all(), SecurityDisabledException.class);
+        }
+    }
+
+    @Test
+    public void testDeleteAcls() throws Exception {
+        try (MockKafkaAdminClientEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
+            env.kafkaClient().setNode(env.cluster().controller());
+
+            // Test a call where one filter has an error.
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, new ArrayList<AclFilterResponse>() {{
+                    add(new AclFilterResponse(null,
+                            new ArrayList<AclDeletionResult>() {{
+                                add(new AclDeletionResult(null, ACL1));
+                                add(new AclDeletionResult(null, ACL2));
+                            }}));
+                    add(new AclFilterResponse(new SecurityDisabledException("No security"),
+                        Collections.<AclDeletionResult>emptySet()));
+                }}));
+            DeleteAclsResults results = env.adminClient().deleteAcls(new ArrayList<AclBindingFilter>() {{
+                        add(FILTER1);
+                        add(FILTER2);
+                    }});
+            Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.results();
+            FilterResults filter1Results = filterResults.get(FILTER1).get();
+            assertEquals(null, filter1Results.acls().get(0).exception());
+            assertEquals(ACL1, filter1Results.acls().get(0).acl());
+            assertEquals(null, filter1Results.acls().get(1).exception());
+            assertEquals(ACL2, filter1Results.acls().get(1).acl());
+            assertTrue(filterResults.get(FILTER2).isCompletedExceptionally());
+            assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
+            assertFutureError(results.all(), SecurityDisabledException.class);
+
+            // Test a call where one deletion result has an error.
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, new ArrayList<AclFilterResponse>() {{
+                    add(new AclFilterResponse(null,
+                        new ArrayList<AclDeletionResult>() {{
+                                add(new AclDeletionResult(null, ACL1));
+                                add(new AclDeletionResult(new SecurityDisabledException("No security"), ACL2));
+                            }}));
+                    add(new AclFilterResponse(null, Collections.<AclDeletionResult>emptySet()));
+                }}));
+            results = env.adminClient().deleteAcls(
+                    new ArrayList<AclBindingFilter>() {{
+                            add(FILTER1);
+                            add(FILTER2);
+                        }});
+            assertTrue(results.results().get(FILTER2).get().acls().isEmpty());
+            assertFutureError(results.all(), SecurityDisabledException.class);
+
+            // Test a call where there are no errors.
+            env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, new ArrayList<AclFilterResponse>() {{
+                    add(new AclFilterResponse(null,
+                        new ArrayList<AclDeletionResult>() {{
+                                add(new AclDeletionResult(null, ACL1));
+                            }}));
+                    add(new AclFilterResponse(null,
+                        new ArrayList<AclDeletionResult>() {{
+                                add(new AclDeletionResult(null, ACL2));
+                            }}));
+                }}));
+            results = env.adminClient().deleteAcls(
+                    new ArrayList<AclBindingFilter>() {{
+                        add(FILTER1);
+                        add(FILTER2);
+                    }});
+            Collection<AclBinding> deleted = results.all().get();
+            assertCollectionIs(deleted, ACL1, ACL2);
+        }
+    }
+
+    private static <T> void assertCollectionIs(Collection<T> collection, T... elements) {
+        for (T element : elements) {
+            assertTrue("Did not find " + element, collection.contains(element));
+        }
+        assertEquals("There are unexpected extra elements in the collection.",
+            elements.length, collection.size());
     }
 }
