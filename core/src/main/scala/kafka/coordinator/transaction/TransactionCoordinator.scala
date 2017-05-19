@@ -109,24 +109,23 @@ class TransactionCoordinator(brokerId: Int,
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
+      val producerId = producerIdManager.generateProducerId()
+      val now = time.milliseconds()
+      val createdMetadata = new TransactionMetadata(producerId = producerId,
+        producerEpoch = 0,
+        txnTimeoutMs = transactionTimeoutMs,
+        state = Empty,
+        topicPartitions = collection.mutable.Set.empty[TopicPartition],
+        txnLastUpdateTimestamp = now)
+
       // only try to get a new producerId and update the cache if the transactional id is unknown
-      val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
+      val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId, createdMetadata) match {
         case Left(err) =>
           Left(initTransactionError(err))
 
-        case Right(None) =>
-          val producerId = producerIdManager.generateProducerId()
-          val now = time.milliseconds()
-          val createdMetadata = new TransactionMetadata(producerId = producerId,
-            producerEpoch = 0,
-            txnTimeoutMs = transactionTimeoutMs,
-            state = Empty,
-            topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            txnLastUpdateTimestamp = now)
-
-          val epochAndMetadata = txnManager.addTransaction(transactionalId, createdMetadata)
-          val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
-          val txnMetadata = epochAndMetadata.transactionMetadata
+        case Right(Some(existingEpochAndMetadata)) =>
+          val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
+          val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
           // there might be a concurrent thread that has just updated the mapping
           // with the transactional id at the same time (hence reference equality will fail);
@@ -139,13 +138,8 @@ class TransactionCoordinator(brokerId: Int,
             }
           }
 
-        case Right(Some(existingEpochAndMetadata)) =>
-          val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
-          val txnMetadata = existingEpochAndMetadata.transactionMetadata
-
-          txnMetadata synchronized {
-            initProducerIdWithExistingMetadata(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
-          }
+        case Right(None) =>
+          throw new IllegalStateException("Trying to add metadata to the cache still returns NONE; this is not expected")
       }
 
       result match {
@@ -217,7 +211,7 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid producerId mapping error.
-      val result: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
+      val result: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
         case Left(err) =>
           Left(err)
 
@@ -283,7 +277,7 @@ class TransactionCoordinator(brokerId: Int,
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
-      val preAppendResult: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
+      val preAppendResult: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
         case Left(err) =>
           Left(err)
 
@@ -344,7 +338,7 @@ class TransactionCoordinator(brokerId: Int,
               // we do NOT need to grab the read lock until we have completed putting into the sender queue,
               // since even if the coordinator epoch has changed after the check (e.g. a leader emigration followed by an immediate immigration),
               // the enqueued markers will still be cleared by the sender upon receiving the COORDINATOR_EPOCH_INVALID error code
-              val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
+              val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
                 case Left(err) =>
                   Left(err)
 

@@ -197,7 +197,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
         case Errors.NONE =>
           trace(s"Completed sending transaction markers for $transactionalId as $txnResult")
 
-          txnStateManager.getTransactionState(transactionalId) match {
+          txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
             case Left(Errors.NOT_COORDINATOR) =>
               info(s"I am no longer the coordinator for $transactionalId with coordinator epoch $coordinatorEpoch; cancel appending $newMetadata to transaction log")
 
@@ -244,12 +244,8 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
       }
     }
 
-    // watch for both the transactional id and the transaction topic partition id,
-    // so we can cancel all the delayed operations for the same partition id;
-    // NOTE this is only possible because the hashcode of Int / String never overlaps
     val delayedTxnMarker = new DelayedTxnMarker(txnMetadata, appendToLogCallback)
-    val txnTopicPartition = txnStateManager.partitionFor(transactionalId)
-    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId, txnTopicPartition))
+    txnMarkerPurgatory.tryCompleteElseWatch(delayedTxnMarker, Seq(transactionalId))
 
     addTxnMarkersToBrokerQueue(transactionalId, txnMetadata.producerId, txnMetadata.producerEpoch, txnResult, coordinatorEpoch, txnMetadata.topicPartitions.toSet)
   }
@@ -283,7 +279,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   def removeMarkersForTxnTopicPartition(txnTopicPartitionId: Int): Unit = {
-    txnMarkerPurgatory.cancelForKey(txnTopicPartitionId)
     markersQueuePerBroker.foreach { case(_, brokerQueue) =>
       brokerQueue.removeMarkersForTxnTopicPartition(txnTopicPartitionId).foreach { queue =>
         for (entry: TxnIdAndMarkerEntry <- queue.asScala)
@@ -298,8 +293,6 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     txnMarkerPurgatory.cancelForKey(transactionalId)
   }
 
-  // FIXME: Currently, operations registered under partition in txnMarkerPurgatory
-  // are only cleaned during coordinator immigration, which happens rarely. This means potential memory leak
   def completeSendMarkersForTxnId(transactionalId: String): Unit = {
     txnMarkerPurgatory.checkAndComplete(transactionalId)
   }

@@ -85,12 +85,15 @@ class TransactionStateManager(brokerId: Int,
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
-  // this is best-effort expiration and hence not grabing the lock on metadata upon checking its state
+  // this is best-effort expiration and hence not grabbing the lock on metadata upon checking its state
   // we will get the lock when actually trying to transit the transaction metadata to abort later.
   def transactionsToExpire(): Iterable[TransactionalIdAndProducerIdEpoch] = {
     val now = time.milliseconds()
-    transactionMetadataCache.flatMap { case (txnPartition, entry) =>
-        entry.metadataPerTransactionalId.filter { case (txnId, txnMetadata) =>
+    inReadLock(stateLock) {
+      transactionMetadataCache.filter { case (txnPartitionId, _) =>
+        !leavingPartitions.exists(_.txnPartitionId == txnPartitionId)
+      }.flatMap { case (_, entry) =>
+        entry.metadataPerTransactionalId.filter { case (_, txnMetadata) =>
           if (txnMetadata.pendingTransitionInProgress) {
             false
           } else {
@@ -103,6 +106,7 @@ class TransactionStateManager(brokerId: Int,
         }.map { case (txnId, txnMetadata) =>
           TransactionalIdAndProducerIdEpoch(txnId, txnMetadata.producerId, txnMetadata.producerEpoch)
         }
+      }
     }
   }
 
@@ -111,67 +115,44 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-   * Get the transaction metadata associated with the given transactional id, or None if not found, or an error if
-   * the coordinator does not own the transaction partition or is still loading it
+   * Get the transaction metadata associated with the given transactional id, or an error if
+   * the coordinator does not own the transaction partition or is still loading it; if not found
+   * either return None or create a new metadata and added to the cache
    *
-   * Need to grab the state lock before calling this function
+   * This function is covered by the state read lock
    */
-  def getTransactionState(transactionalId: String): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = inReadLock(stateLock) {
+  def getAndMaybeAddTransactionState(transactionalId: String,
+                                     txnMetadata: TransactionMetadata = null): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]
+  = inReadLock(stateLock) {
     val partitionId = partitionFor(transactionalId)
 
-    // we only need to check loading partition set but not leaving partition set here since there are three possible cases:
-    //    1) it is not in the leaving partitions set, hence safe to return COORDINATOR_LOAD_IN_PROGRESS
-    //    2) it is in the leaving partitions with a smaller epoch than the latest loading epoch, hence safe to return COORDINATOR_LOAD_IN_PROGRESS
-    //    3) it is in the leaving partition with a larger epoch, return true is also OK since the client will then retry
-    //       later be notified that this coordinator is no longer be the transaction coordinator for him
-    //
-    //    4) it is NOT possible to be in the leaving partition with the same epoch
     if (loadingPartitions.exists(_.txnPartitionId == partitionId))
       return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
+
+    if (leavingPartitions.exists(_.txnPartitionId == partitionId))
+      Right(None)
 
     transactionMetadataCache.get(partitionId) match {
       case Some(cacheEntry) =>
         cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
           case null =>
-            Right(None)
-          case txnMetadata =>
-            // we only need to check leaving partition set but not loading partition set here since there are three possible cases:
-            //    1) it is not in the loading partitions set, hence safe to return NONE
-            //    2) it is in the loading partitions with a smaller epoch, hence safe to return NONE
-            //    3) it is in the loading partition with a larger epoch, return NONE is also fine as it
-            //       indicates the metadata is not exist at least for now.
-            //
-            //    4) it is NOT possible to be in the loading partition with the same epoch
-            if (leavingPartitions.exists(_.txnPartitionId == partitionId))
+            if (txnMetadata != null) {
+              val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
+              if (currentTxnMetadata != null) {
+                Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
+              } else {
+                Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
+              }
+            } else {
               Right(None)
-            else
-              Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
+            }
+
+          case currentTxnMetadata =>
+            Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
         }
+
       case None =>
         Left(Errors.NOT_COORDINATOR)
-      }
-  }
-
-  /**
-   * Add a new transaction metadata, or retrieve the metadata if it already exists with the associated transactional id
-   * along with the current coordinator epoch for that belonging transaction topic partition
-   *
-   * Need to grab the state lock before calling this function
-   */
-  def addTransaction(transactionalId: String, txnMetadata: TransactionMetadata): CoordinatorEpochAndTxnMetadata = {
-    val partitionId = partitionFor(transactionalId)
-
-    transactionMetadataCache.get(partitionId) match {
-      case Some(txnMetadataCacheEntry) =>
-        val currentTxnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-        if (currentTxnMetadata != null) {
-          CoordinatorEpochAndTxnMetadata(txnMetadataCacheEntry.coordinatorEpoch, currentTxnMetadata)
-        } else {
-          CoordinatorEpochAndTxnMetadata(txnMetadataCacheEntry.coordinatorEpoch, txnMetadata)
-        }
-
-      case None =>
-        throw new IllegalStateException(s"The metadata cache entry for txn partition $partitionId does not exist.")
     }
   }
 
@@ -449,7 +430,7 @@ class TransactionStateManager(brokerId: Int,
       if (responseError == Errors.NONE) {
         // now try to update the cache: we need to update the status in-place instead of
         // overwriting the whole object to ensure synchronization
-        getTransactionState(transactionalId) match {
+        getAndMaybeAddTransactionState(transactionalId) match {
 
           case Left(err) =>
             responseCallback(err)
@@ -489,7 +470,7 @@ class TransactionStateManager(brokerId: Int,
     // until we have appended to log to avoid the scenario that an emigration and immigration happens after
     // the check when handling the request
     inReadLock(stateLock) {
-      getTransactionState(transactionalId) match {
+      getAndMaybeAddTransactionState(transactionalId) match {
         case Left(err) =>
           responseCallback(err)
 
