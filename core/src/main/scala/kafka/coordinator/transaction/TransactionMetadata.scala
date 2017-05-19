@@ -185,7 +185,7 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
   def prepareComplete(updateTimestamp: Long): TransactionMetadataTransition = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
-    prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, topicPartitions.toSet, txnStartTimestamp, updateTimestamp)
+    prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition], txnStartTimestamp, updateTimestamp)
   }
 
   // visible for testing only

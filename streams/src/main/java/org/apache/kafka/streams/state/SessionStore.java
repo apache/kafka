@@ -29,8 +29,23 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     /**
      * Fetch any sessions with the matching key and the sessions end is &ge; earliestSessionEndTime and the sessions
      * start is &le; latestSessionStartTime
+     *
+     * @param key the key to return sessions for
+     * @param earliestSessionEndTime
+     * @return iterator of sessions with the matching key and aggregated values
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, long earliestSessionEndTime, final long latestSessionStartTime);
+
+    /**
+     * Fetch any sessions in the given range of keys and the sessions end is &ge; earliestSessionEndTime and the sessions
+     * start is &le; latestSessionStartTime
+     *
+     * @param keyFrom The first key that could be in the range
+     * @param keyTo The last key that could be in the range
+     * @param earliestSessionEndTime
+     * @return iterator of sessions with the matching keys and aggregated values
+     */
+    KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, long earliestSessionEndTime, final long latestSessionStartTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store

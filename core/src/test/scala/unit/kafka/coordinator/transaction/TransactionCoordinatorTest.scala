@@ -672,7 +672,13 @@ class TransactionCoordinatorTest {
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareMetadata)))
       .once()
 
-    val newMetadata = prepareMetadata.copy().prepareComplete(now)
+    val newMetadata = TransactionMetadataTransition(producerId = pid,
+      producerEpoch = epoch,
+      txnTimeoutMs = txnTimeoutMs,
+      txnState = finalState,
+      topicPartitions = Set.empty[TopicPartition],
+      txnStartTimestamp = prepareMetadata.txnStartTimestamp,
+      txnLastUpdateTimestamp = now)
     EasyMock.expect(transactionMarkerChannelManager.addTxnMarkersToSend(
       EasyMock.eq(transactionalId),
       EasyMock.eq(coordinatorEpoch),
