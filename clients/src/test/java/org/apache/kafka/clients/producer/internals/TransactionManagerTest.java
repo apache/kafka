@@ -582,20 +582,6 @@ public class TransactionManagerTest {
 
         assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
-        transactionManager.maybeAddPartitionToTransaction(tp0);
-
-        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
-                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
-
-        assertFalse(responseFuture.isDone());
-
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
-        prepareProduceResponse(Errors.NONE, pid, epoch);
-        sender.run(time.milliseconds());  // Send AddPartitionsRequest successfully.
-        assertTrue(transactionManager.transactionContainsPartition(tp0));
-
-        sender.run(time.milliseconds());  // Send ProduceRequest.
-        assertTrue(responseFuture.isDone());
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(tp1, new OffsetAndMetadata(1));
@@ -631,15 +617,6 @@ public class TransactionManagerTest {
 
         assertTrue(addOffsetsResult.isCompleted());
         assertTrue(addOffsetsResult.isSuccessful());
-
-        transactionManager.beginCommittingTransaction();
-        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
-        sender.run(time.milliseconds());  // commit.
-
-        assertFalse(transactionManager.isInTransaction());
-        assertFalse(transactionManager.isCompletingTransaction());
-        assertFalse(transactionManager.transactionContainsPartition(tp0));
-        assertTrue(transactionManager.isReadyForTransaction());
     }
 
     @Test
