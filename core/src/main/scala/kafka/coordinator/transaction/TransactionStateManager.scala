@@ -466,41 +466,36 @@ class TransactionStateManager(brokerId: Int,
       responseCallback(responseError)
     }
 
-    // note that we need to grab the read lock and double check the metadata and coordinator epoch again
-    // until we have appended to log to avoid the scenario that an emigration and immigration happens after
-    // the check when handling the request
-    inReadLock(stateLock) {
-      getAndMaybeAddTransactionState(transactionalId) match {
-        case Left(err) =>
-          responseCallback(err)
+    getAndMaybeAddTransactionState(transactionalId) match {
+      case Left(err) =>
+        responseCallback(err)
 
-        case Right(Some(epochAndMetadata)) =>
-          val metadata = epochAndMetadata.transactionMetadata
+      case Right(Some(epochAndMetadata)) =>
+        val metadata = epochAndMetadata.transactionMetadata
 
-          metadata synchronized {
-            if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
-              // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
-              responseCallback(Errors.NOT_COORDINATOR)
-            } else {
-              // do not need to check the metadata object itself since no current thread should be able to modify it
-              // under the same coordinator epoch, so directly append to txn log now
+        metadata synchronized {
+          if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
+            // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
+            responseCallback(Errors.NOT_COORDINATOR)
+          } else {
+            // do not need to check the metadata object itself since no current thread should be able to modify it
+            // under the same coordinator epoch, so directly append to txn log now
 
-              replicaManager.appendRecords(
-                newMetadata.txnTimeoutMs.toLong,
-                TransactionLog.EnforcedRequiredAcks,
-                internalTopicsAllowed = true,
-                isFromClient = false,
-                recordsPerPartition,
-                updateCacheCallback)
+            replicaManager.appendRecords(
+              newMetadata.txnTimeoutMs.toLong,
+              TransactionLog.EnforcedRequiredAcks,
+              internalTopicsAllowed = true,
+              isFromClient = false,
+              recordsPerPartition,
+              updateCacheCallback)
 
-              trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
-            }
+            trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }
+        }
 
-        case Right(None) =>
-          // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
-          responseCallback(Errors.NOT_COORDINATOR)
-      }
+      case Right(None) =>
+        // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
+        responseCallback(Errors.NOT_COORDINATOR)
     }
   }
 

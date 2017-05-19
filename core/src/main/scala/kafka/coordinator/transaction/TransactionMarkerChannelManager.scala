@@ -147,6 +147,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     // wake up the thread in case it is blocked inside poll
     networkClient.wakeup()
     txnMarkerSendThread.shutdown()
+    txnMarkerPurgatory.shutdown()
     markersQueuePerBroker.clear()
   }
 

@@ -46,7 +46,6 @@ class TransactionCoordinatorTest {
   private val epoch:Short = 1
   private val txnTimeoutMs = 1
 
-  private val txnMarkerPurgatory = new DelayedOperationPurgatory[DelayedTxnMarker]("test", new MockTimer, reaperEnabled = false)
   private val partitions = mutable.Set[TopicPartition](new TopicPartition("topic1", 0))
   private val scheduler = new MockScheduler(time)
 
@@ -55,7 +54,6 @@ class TransactionCoordinatorTest {
     pidManager,
     transactionManager,
     transactionMarkerChannelManager,
-    txnMarkerPurgatory,
     time)
 
   var result: InitProducerIdResult = _
