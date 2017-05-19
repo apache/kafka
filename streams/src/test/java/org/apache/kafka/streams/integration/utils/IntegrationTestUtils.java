@@ -1,22 +1,27 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.integration.utils;
 
+import kafka.api.PartitionStateInfo;
+import kafka.api.Request;
+import kafka.server.KafkaServer;
+import kafka.server.MetadataCache;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -24,12 +29,14 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
+import scala.Option;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,77 +54,16 @@ import java.util.concurrent.Future;
  */
 public class IntegrationTestUtils {
 
-    public static final int UNLIMITED_MESSAGES = -1;
     public static final long DEFAULT_TIMEOUT = 30 * 1000L;
-
-    /**
-     * Returns up to `maxMessages` message-values from the topic.
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer configuration
-     * @param maxMessages    Maximum number of messages to read via the consumer.
-     * @return The values retrieved via the consumer.
-     */
-    public static <V> List<V> readValues(final String topic, final Properties consumerConfig, final int maxMessages) {
-        final List<V> returnList = new ArrayList<>();
-        final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumerConfig, maxMessages);
-        for (final KeyValue<?, V> kv : kvs) {
-            returnList.add(kv.value);
-        }
-        return returnList;
-    }
-
-    /**
-     * Returns as many messages as possible from the topic until a (currently hardcoded) timeout is
-     * reached.
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer configuration
-     * @return The KeyValue elements retrieved via the consumer.
-     */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig) {
-        return readKeyValues(topic, consumerConfig, UNLIMITED_MESSAGES);
-    }
-
-    /**
-     * Returns up to `maxMessages` by reading via the provided consumer (the topic(s) to read from
-     * are already configured in the consumer).
-     *
-     * @param topic          Kafka topic to read messages from
-     * @param consumerConfig Kafka consumer configuration
-     * @param maxMessages    Maximum number of messages to read via the consumer
-     * @return The KeyValue elements retrieved via the consumer
-     */
-    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic, final Properties consumerConfig, final int maxMessages) {
-        final KafkaConsumer<K, V> consumer = new KafkaConsumer<>(consumerConfig);
-        consumer.subscribe(Collections.singletonList(topic));
-        final int pollIntervalMs = 100;
-        final int maxTotalPollTimeMs = 2000;
-        int totalPollTimeMs = 0;
-        final List<KeyValue<K, V>> consumedValues = new ArrayList<>();
-        while (totalPollTimeMs < maxTotalPollTimeMs && continueConsuming(consumedValues.size(), maxMessages)) {
-            totalPollTimeMs += pollIntervalMs;
-            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
-            for (final ConsumerRecord<K, V> record : records) {
-                consumedValues.add(new KeyValue<>(record.key(), record.value()));
-            }
-        }
-
-        consumer.close();
-
-        return consumedValues;
-    }
-
-    private static boolean continueConsuming(final int messagesConsumed, final int maxMessages) {
-        return maxMessages <= 0 || messagesConsumed < maxMessages;
-    }
+    public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
 
     /**
      * Removes local state stores.  Useful to reset state in-between integration test runs.
      *
      * @param streamsConfiguration Streams configuration settings
      */
-    public static void purgeLocalStreamsState(final Properties streamsConfiguration) throws IOException {
+    public static void purgeLocalStreamsState(final Properties streamsConfiguration) throws
+        IOException {
         final String tmpDir = TestUtils.IO_TMP_DIR.getPath();
         final String path = streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         if (path != null) {
@@ -154,14 +100,14 @@ public class IntegrationTestUtils {
                                                                          final Properties producerConfig,
                                                                          final Long timestamp)
         throws ExecutionException, InterruptedException {
-        final Producer<K, V> producer = new KafkaProducer<>(producerConfig);
-        for (final KeyValue<K, V> record : records) {
-            final Future<RecordMetadata> f = producer.send(
-                new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
-            f.get();
+        try (Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+            for (final KeyValue<K, V> record : records) {
+                final Future<RecordMetadata> f = producer.send(
+                    new ProducerRecord<>(topic, null, timestamp, record.key, record.value));
+                f.get();
+            }
+            producer.flush();
         }
-        producer.flush();
-        producer.close();
     }
 
     public static <V> void produceValuesSynchronously(
@@ -198,20 +144,21 @@ public class IntegrationTestUtils {
                                                                                   final int expectedNumRecords,
                                                                                   final long waitTime) throws InterruptedException {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
-
-        final TestCondition valuesRead = new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                final List<KeyValue<K, V>> readData = readKeyValues(topic, consumerConfig);
-                accumData.addAll(readData);
-                return accumData.size() >= expectedNumRecords;
-            }
-        };
-
-        final String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
-
-        TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
-
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            final TestCondition valuesRead = new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final List<KeyValue<K, V>> readData =
+                        readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                    accumData.addAll(readData);
+                    return accumData.size() >= expectedNumRecords;
+                }
+            };
+            final String conditionDetails =
+                "Expecting " + expectedNumRecords + " records from topic " + topic +
+                    " while only received " + accumData.size() + ": " + accumData;
+            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+        }
         return accumData;
     }
 
@@ -238,21 +185,161 @@ public class IntegrationTestUtils {
                                                                 final int expectedNumRecords,
                                                                 final long waitTime) throws InterruptedException {
         final List<V> accumData = new ArrayList<>();
-
-        final TestCondition valuesRead = new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                final List<V> readData = readValues(topic, consumerConfig, expectedNumRecords);
-                accumData.addAll(readData);
-                return accumData.size() >= expectedNumRecords;
-            }
-        };
-
-        final String conditionDetails = "Did not receive " + expectedNumRecords + " number of records";
-
-        TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
-
+        try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
+            final TestCondition valuesRead = new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final List<V> readData =
+                        readValues(topic, consumer, waitTime, expectedNumRecords);
+                    accumData.addAll(readData);
+                    return accumData.size() >= expectedNumRecords;
+                }
+            };
+            final String conditionDetails =
+                "Expecting " + expectedNumRecords + " records from topic " + topic +
+                    " while only received " + accumData.size() + ": " + accumData;
+            TestUtils.waitForCondition(valuesRead, waitTime, conditionDetails);
+        }
         return accumData;
     }
 
+    public static void waitForTopicPartitions(final List<KafkaServer> servers,
+                                              final List<TopicPartition> partitions,
+                                              final long timeout) throws InterruptedException {
+        final long end = System.currentTimeMillis() + timeout;
+        for (final TopicPartition partition : partitions) {
+            final long remaining = end - System.currentTimeMillis();
+            if (remaining <= 0) {
+                throw new AssertionError("timed out while waiting for partitions to become available. Timeout=" + timeout);
+            }
+            waitUntilMetadataIsPropagated(servers, partition.topic(), partition.partition(), remaining);
+        }
+    }
+
+    public static void waitUntilMetadataIsPropagated(final List<KafkaServer> servers,
+                                                     final String topic,
+                                                     final int partition,
+                                                     final long timeout) throws InterruptedException {
+        TestUtils.waitForCondition(new TestCondition() {
+            @Override
+            public boolean conditionMet() {
+                for (final KafkaServer server : servers) {
+                    final MetadataCache metadataCache = server.apis().metadataCache();
+                    final Option<PartitionStateInfo> partitionInfo =
+                            metadataCache.getPartitionInfo(topic, partition);
+                    if (partitionInfo.isEmpty()) {
+                        return false;
+                    }
+                    final PartitionStateInfo partitionStateInfo = partitionInfo.get();
+                    if (!Request.isValidBrokerId(partitionStateInfo.leaderIsrAndControllerEpoch().leaderAndIsr().leader())) {
+                        return false;
+                    }
+                }
+                return true;
+            }
+        }, timeout, "metadata for topic=" + topic + " partition=" + partition + " not propagated to all brokers");
+
+    }
+
+    /**
+     * Returns up to `maxMessages` message-values from the topic.
+     *
+     * @param topic          Kafka topic to read messages from
+     * @param consumerConfig Kafka consumer config
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer.
+     * @return The values retrieved via the consumer.
+     */
+    public static <V> List<V> readValues(final String topic, final Properties consumerConfig,
+        final long waitTime, final int maxMessages) {
+        final List<V> returnList;
+        try (final Consumer<Object, V> consumer = createConsumer(consumerConfig)) {
+            returnList = readValues(topic, consumer, waitTime, maxMessages);
+        }
+        return returnList;
+    }
+
+    /**
+     * Returns up to `maxMessages` by reading via the provided consumer (the topic(s) to read from
+     * are already configured in the consumer).
+     *
+     * @param topic          Kafka topic to read messages from
+     * @param consumerConfig Kafka consumer config
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer
+     * @return The KeyValue elements retrieved via the consumer
+     */
+    public static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
+        final Properties consumerConfig, final long waitTime, final int maxMessages) {
+        final List<KeyValue<K, V>> consumedValues;
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+            consumedValues = readKeyValues(topic, consumer, waitTime, maxMessages);
+        }
+        return consumedValues;
+    }
+
+    /**
+     * Returns up to `maxMessages` message-values from the topic.
+     *
+     * @param topic          Kafka topic to read messages from
+     * @param consumer       Kafka consumer
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer.
+     * @return The values retrieved via the consumer.
+     */
+    private static <V> List<V> readValues(final String topic, final Consumer<Object, V> consumer, final long waitTime, final int maxMessages) {
+        final List<V> returnList = new ArrayList<>();
+        final List<KeyValue<Object, V>> kvs = readKeyValues(topic, consumer, waitTime, maxMessages);
+        for (final KeyValue<?, V> kv : kvs) {
+            returnList.add(kv.value);
+        }
+        return returnList;
+    }
+
+    /**
+     * Returns up to `maxMessages` by reading via the provided consumer (the topic(s) to read from
+     * are already configured in the consumer).
+     *
+     * @param topic          Kafka topic to read messages from
+     * @param consumer       Kafka consumer
+     * @param waitTime       Maximum wait time in milliseconds
+     * @param maxMessages    Maximum number of messages to read via the consumer
+     * @return The KeyValue elements retrieved via the consumer
+     */
+    private static <K, V> List<KeyValue<K, V>> readKeyValues(final String topic,
+        final Consumer<K, V> consumer, final long waitTime, final int maxMessages) {
+        final List<KeyValue<K, V>> consumedValues;
+        consumer.subscribe(Collections.singletonList(topic));
+        final int pollIntervalMs = 100;
+        consumedValues = new ArrayList<>();
+        int totalPollTimeMs = 0;
+        while (totalPollTimeMs < waitTime &&
+            continueConsuming(consumedValues.size(), maxMessages)) {
+            totalPollTimeMs += pollIntervalMs;
+            final ConsumerRecords<K, V> records = consumer.poll(pollIntervalMs);
+            for (final ConsumerRecord<K, V> record : records) {
+                consumedValues.add(new KeyValue<>(record.key(), record.value()));
+            }
+        }
+        return consumedValues;
+    }
+
+    private static boolean continueConsuming(final int messagesConsumed, final int maxMessages) {
+        return maxMessages <= 0 || messagesConsumed < maxMessages;
+    }
+
+    /**
+     * Sets up a {@link KafkaConsumer} from a copy of the given configuration that has
+     * {@link ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} set to "earliest" and {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
+     * set to "true" to prevent missing events as well as repeat consumption.
+     * @param consumerConfig Consumer configuration
+     * @return Consumer
+     */
+    private static <K, V> KafkaConsumer<K, V> createConsumer(final Properties consumerConfig) {
+        final Properties filtered = new Properties();
+        filtered.putAll(consumerConfig);
+        filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
+        return new KafkaConsumer<>(filtered);
+    }
 }

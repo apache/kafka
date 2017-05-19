@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,12 +30,13 @@ import java.util.NoSuchElementException;
  */
 class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
     private final Bytes from;
     private final Bytes to;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
+    private final Iterator<Segment> segments;
+    private final HasNextCondition hasNextCondition;
+
     private KeyValueStore<Bytes, byte[]> currentSegment;
+    private KeyValueIterator<Bytes, byte[]> currentIterator;
 
     SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
@@ -62,7 +63,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         return currentIterator.peekNextKey();
     }
 
-    @SuppressWarnings("unchecked")
+    @Override
     public boolean hasNext() {
         boolean hasNext = false;
         while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
@@ -86,7 +87,6 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     }
 
     public void remove() {
-        throw new UnsupportedOperationException("remove not supported");
+        throw new UnsupportedOperationException("remove() is not supported in " + getClass().getName());
     }
-
 }

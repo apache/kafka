@@ -1,23 +1,21 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -27,6 +25,7 @@ import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.SegmentedBytesStoreStub;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -39,6 +38,25 @@ import static org.junit.Assert.assertTrue;
 
 public class ChangeLoggingSegmentedBytesStoreTest {
 
+    private final NoOpRecordCollector collector = new NoOpRecordCollector() {
+        @Override
+        public <K, V> void send(final String topic,
+                                K key,
+                                V value,
+                                Integer partition,
+                                Long timestamp,
+                                Serializer<K> keySerializer,
+                                Serializer<V> valueSerializer) {
+            sent.put(key, value);
+        }
+    };
+    private final MockProcessorContext context = new MockProcessorContext(
+        TestUtils.tempDirectory(),
+        Serdes.String(),
+        Serdes.Long(),
+        collector,
+        new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+
     private final SegmentedBytesStoreStub bytesStore = new SegmentedBytesStoreStub();
     private final ChangeLoggingSegmentedBytesStore store = new ChangeLoggingSegmentedBytesStore(bytesStore);
     private final Map sent = new HashMap<>();
@@ -46,20 +64,14 @@ public class ChangeLoggingSegmentedBytesStoreTest {
     @SuppressWarnings("unchecked")
     @Before
     public void setUp() throws Exception {
-        final NoOpRecordCollector collector = new NoOpRecordCollector() {
-            @Override
-            public <K, V> void send(final ProducerRecord<K, V> record, final Serializer<K> keySerializer, final Serializer<V> valueSerializer) {
-                sent.put(record.key(), record.value());
-            }
-        };
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      collector,
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         context.setTime(0);
         store.init(context, store);
+    }
+
+    @After
+    public void after() {
+        context.close();
+        store.close();
     }
 
     @SuppressWarnings("unchecked")

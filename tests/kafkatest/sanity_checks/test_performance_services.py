@@ -21,7 +21,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 from kafkatest.services.performance import latency, compute_aggregate_throughput
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import TRUNK, LATEST_0_8_2, LATEST_0_9, KafkaVersion
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, KafkaVersion
 
 
 class PerformanceServiceTest(Test):
@@ -42,8 +42,8 @@ class PerformanceServiceTest(Test):
     @parametrize(version=str(LATEST_0_8_2), new_consumer=False)
     @parametrize(version=str(LATEST_0_9), new_consumer=False)
     @parametrize(version=str(LATEST_0_9))
-    @parametrize(version=str(TRUNK), new_consumer=False)
-    @parametrize(version=str(TRUNK))
+    @parametrize(version=str(DEV_BRANCH), new_consumer=False)
+    @parametrize(version=str(DEV_BRANCH))
     def test_version(self, version=str(LATEST_0_9), new_consumer=True):
         """
         Sanity check out producer performance service - verify that we can run the service with a small

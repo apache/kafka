@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -36,6 +35,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -43,27 +44,31 @@ import static org.junit.Assert.assertTrue;
 public class RocksDBSessionStoreTest {
 
     private SessionStore<String, Long> sessionStore;
+    private MockProcessorContext context;
 
     @Before
     public void before() {
+        final SessionKeySchema schema = new SessionKeySchema();
+        schema.init("topic");
+
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, new SessionKeySchema());
+                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, schema);
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),
                                                  Serdes.Long());
 
-        final MockProcessorContext context = new MockProcessorContext(null,
-                                                                      TestUtils.tempDirectory(),
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      new NoOpRecordCollector(),
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        context = new MockProcessorContext(TestUtils.tempDirectory(),
+                                           Serdes.String(),
+                                           Serdes.Long(),
+                                           new NoOpRecordCollector(),
+                                           new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         sessionStore.init(context, sessionStore);
     }
 
     @After
     public void close() {
+        context.close();
         sessionStore.close();
     }
 
@@ -144,6 +149,49 @@ public class RocksDBSessionStoreTest {
         assertEquals(session2, results.next().key);
         assertEquals(session3, results.next().key);
         assertFalse(results.hasNext());
+    }
+
+    @Test
+    public void shouldFetchExactKeys() throws Exception {
+        final RocksDBSegmentedBytesStore bytesStore =
+                new RocksDBSegmentedBytesStore("session-store", 0x7a00000000000000L, 2, new SessionKeySchema());
+
+        sessionStore = new RocksDBSessionStore<>(bytesStore,
+                                                 Serdes.String(),
+                                                 Serdes.Long());
+
+        sessionStore.init(context, sessionStore);
+
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 0)), 2L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
+
+        KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0, Long.MAX_VALUE);
+        List<Long> results = new ArrayList<>();
+        while (iterator.hasNext()) {
+            results.add(iterator.next().value);
+        }
+
+        assertThat(results, equalTo(Arrays.asList(1L, 3L, 5L)));
+
+
+        iterator = sessionStore.findSessions("aa", 0, Long.MAX_VALUE);
+        results = new ArrayList<>();
+        while (iterator.hasNext()) {
+            results.add(iterator.next().value);
+        }
+
+        assertThat(results, equalTo(Arrays.asList(2L, 4L)));
+
+
+        final KeyValueIterator<Windowed<String>, Long> rangeIterator = sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE);
+        final List<Long> rangeResults = new ArrayList<>();
+        while (rangeIterator.hasNext()) {
+            rangeResults.add(rangeIterator.next().value);
+        }
+        assertThat(rangeResults, equalTo(Arrays.asList(1L, 3L, 2L, 4L, 5L)));
     }
 
     static List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Windowed<String>, Long> iterator) {

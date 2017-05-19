@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,12 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.fail;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,6 +26,10 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+
 public abstract class AbstractKeyValueStoreTest {
 
 
@@ -38,13 +37,14 @@ public abstract class AbstractKeyValueStoreTest {
                                                                       Class<K> keyClass, Class<V> valueClass,
                                                                       boolean useContextSerdes);
 
+    protected MockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @Before
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        final MockProcessorContext context = (MockProcessorContext) driver.context();
+        context = (MockProcessorContext) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context, Integer.class, String.class, false);
     }
@@ -52,6 +52,8 @@ public abstract class AbstractKeyValueStoreTest {
     @After
     public void after() {
         store.close();
+        context.close();
+        driver.clear();
     }
 
     @Test
@@ -152,11 +154,12 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, false);
+        context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 
@@ -172,11 +175,12 @@ public abstract class AbstractKeyValueStoreTest {
         driver.addEntryToRestoreLog(0, "zero");
         driver.addEntryToRestoreLog(1, "one");
         driver.addEntryToRestoreLog(2, "two");
-        driver.addEntryToRestoreLog(4, "four");
+        driver.addEntryToRestoreLog(3, "three");
 
         // Create the store, which should register with the context and automatically
         // receive the restore entries ...
         store = createKeyValueStore(driver.context(), Integer.class, String.class, true);
+        context.restore(store.name(), driver.restoredEntries());
         // Verify that the store's contents were properly restored ...
         assertEquals(0, driver.checkForRestoredEntries(store));
 

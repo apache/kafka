@@ -19,11 +19,10 @@ package kafka.message
 
 import java.nio._
 
-import org.apache.kafka.common.record.{Record, TimestampType}
+import org.apache.kafka.common.record.{CompressionType, LegacyRecord, TimestampType}
 
 import scala.math._
-import kafka.utils._
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{ByteUtils, Crc32}
 
 /**
  * Constants related to messages
@@ -98,7 +97,7 @@ object Message {
     MessageHeaderSizeMap(toMagicValue) - MessageHeaderSizeMap(fromMagicValue)
 
 
-  def fromRecord(record: Record): Message = {
+  def fromRecord(record: LegacyRecord): Message = {
     val wrapperTimestamp: Option[Long] = if (record.wrapperRecordTimestamp == null) None else Some(record.wrapperRecordTimestamp)
     val wrapperTimestampType = Option(record.wrapperRecordTimestampType)
     new Message(record.buffer, wrapperTimestamp, wrapperTimestampType)
@@ -139,9 +138,9 @@ class Message(val buffer: ByteBuffer,
   
   import kafka.message.Message._
 
-  private[message] def asRecord: Record = wrapperMessageTimestamp match {
-    case None => new Record(buffer)
-    case Some(timestamp) => new Record(buffer, timestamp, wrapperMessageTimestampType.orNull)
+  private[message] def asRecord: LegacyRecord = wrapperMessageTimestamp match {
+    case None => new LegacyRecord(buffer)
+    case Some(timestamp) => new LegacyRecord(buffer, timestamp, wrapperMessageTimestampType.orNull)
   }
 
   /**
@@ -178,10 +177,7 @@ class Message(val buffer: ByteBuffer,
     // skip crc, we will fill that in at the end
     buffer.position(MagicOffset)
     buffer.put(magicValue)
-    val attributes: Byte =
-      if (codec.codec > 0)
-        timestampType.updateAttributes((CompressionCodeMask & codec.codec).toByte)
-      else 0
+    val attributes: Byte = LegacyRecord.computeAttributes(magicValue, CompressionType.forId(codec.codec), timestampType)
     buffer.put(attributes)
     // Only put timestamp when "magic" value is greater than 0
     if (magic > MagicValue_V0)
@@ -201,9 +197,12 @@ class Message(val buffer: ByteBuffer,
     buffer.rewind()
 
     // now compute the checksum and fill it in
-    Utils.writeUnsignedInt(buffer, CrcOffset, computeChecksum)
+    ByteUtils.writeUnsignedInt(buffer, CrcOffset, computeChecksum)
   }
-  
+
+  def this(bytes: Array[Byte], key: Array[Byte], timestamp: Long, timestampType: TimestampType, codec: CompressionCodec, magicValue: Byte) =
+    this(bytes = bytes, key = key, timestamp = timestamp, timestampType = timestampType, codec = codec, payloadOffset = 0, payloadSize = -1, magicValue = magicValue)
+
   def this(bytes: Array[Byte], key: Array[Byte], timestamp: Long, codec: CompressionCodec, magicValue: Byte) =
     this(bytes = bytes, key = key, timestamp = timestamp, timestampType = TimestampType.CREATE_TIME, codec = codec, payloadOffset = 0, payloadSize = -1, magicValue = magicValue)
   
@@ -223,12 +222,12 @@ class Message(val buffer: ByteBuffer,
    * Compute the checksum of the message from the message contents
    */
   def computeChecksum: Long =
-    Utils.computeChecksum(buffer, MagicOffset, buffer.limit - MagicOffset)
+    Crc32.crc32(buffer, MagicOffset, buffer.limit - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message
    */
-  def checksum: Long = Utils.readUnsignedInt(buffer, CrcOffset)
+  def checksum: Long = ByteUtils.readUnsignedInt(buffer, CrcOffset)
   
     /**
    * Returns true if the crc stored with the message matches the crc computed off the message contents
@@ -314,13 +313,8 @@ class Message(val buffer: ByteBuffer,
   /**
    * The timestamp type of the message
    */
-  def timestampType = {
-    if (magic == MagicValue_V0)
-      TimestampType.NO_TIMESTAMP_TYPE
-    else
-      wrapperMessageTimestampType.getOrElse(TimestampType.forAttributes(attributes))
-  }
-  
+  def timestampType = LegacyRecord.timestampType(magic, wrapperMessageTimestampType.orNull, attributes)
+
   /**
    * The compression codec used with this message
    */

@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -41,6 +41,7 @@ import java.util.Map;
 public class GlobalStreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalStreamThread.class);
+
     private final StreamsConfig config;
     private final Consumer<byte[], byte[]> consumer;
     private final StateDirectory stateDirectory;
@@ -57,17 +58,15 @@ public class GlobalStreamThread extends Thread {
                               final StateDirectory stateDirectory,
                               final Metrics metrics,
                               final Time time,
-                              final String clientId
-    ) {
-        super("GlobalStreamThread");
-        this.topology = topology;
+                              final String threadClientId) {
+        super(threadClientId);
+        this.time = time;
         this.config = config;
+        this.topology = topology;
         this.consumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.time = time;
         long cacheSizeBytes = Math.max(0, config.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG) /
                 (config.getInt(StreamsConfig.NUM_STREAM_THREADS_CONFIG) + 1));
-        final String threadClientId = clientId + "-" + getName();
         this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId, Collections.singletonMap("client-id", threadClientId));
         this.cache = new ThreadCache(threadClientId, cacheSizeBytes, streamsMetrics);
     }

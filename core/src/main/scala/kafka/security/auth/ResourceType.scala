@@ -24,23 +24,37 @@ import org.apache.kafka.common.protocol.Errors
  */
 
 
-sealed trait ResourceType extends BaseEnum { def errorCode: Short }
+sealed trait ResourceType extends BaseEnum { def error: Errors }
 
 case object Cluster extends ResourceType {
   val name = "Cluster"
-  val errorCode = Errors.CLUSTER_AUTHORIZATION_FAILED.code
+  val error = Errors.CLUSTER_AUTHORIZATION_FAILED
+}
+
+case object Broker extends ResourceType {
+  val name = "Broker"
+  val error = Errors.BROKER_AUTHORIZATION_FAILED
 }
 
 case object Topic extends ResourceType {
   val name = "Topic"
-  val errorCode = Errors.TOPIC_AUTHORIZATION_FAILED.code
+  val error = Errors.TOPIC_AUTHORIZATION_FAILED
 }
 
 case object Group extends ResourceType {
   val name = "Group"
-  val errorCode = Errors.GROUP_AUTHORIZATION_FAILED.code
+  val error = Errors.GROUP_AUTHORIZATION_FAILED
 }
 
+case object ProducerTransactionalId extends ResourceType {
+  val name = "ProducerTransactionalId"
+  val error = Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
+}
+
+case object ProducerIdResource extends ResourceType {
+  val name = "ProducerIdResource"
+  val error = Errors.PRODUCER_ID_AUTHORIZATION_FAILED
+}
 
 object ResourceType {
 
@@ -49,5 +63,5 @@ object ResourceType {
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))
   }
 
-  def values: Seq[ResourceType] = List(Cluster, Topic, Group)
+  def values: Seq[ResourceType] = List(Cluster, Topic, Group, ProducerTransactionalId, ProducerIdResource, Broker)
 }

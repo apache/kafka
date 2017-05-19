@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -34,7 +33,11 @@ import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -42,7 +45,9 @@ import static org.junit.Assert.fail;
 public class GlobalStreamThreadTest {
     private final KStreamBuilder builder = new KStreamBuilder();
     private final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+    private final MockTime time = new MockTime();
     private GlobalStreamThread globalStreamThread;
+    private StreamsConfig config;
 
     @Before
     public void before() {
@@ -50,18 +55,18 @@ public class GlobalStreamThreadTest {
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
-        final StreamsConfig config = new StreamsConfig(properties);
+        config = new StreamsConfig(properties);
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath()),
+                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
                                                     new Metrics(),
                                                     new MockTime(),
-                                                    "client");
+                                                    "clientId");
     }
 
     @Test
-    public void shouldThrowStreamsExceptionOnStartupIfThereIsAnException() throws Exception {
+    public void shouldThrowStreamsExceptionOnStartupIfThereIsAStreamsException() throws Exception {
         // should throw as the MockConsumer hasn't been configured and there are no
         // partitions available
         try {
@@ -69,6 +74,33 @@ public class GlobalStreamThreadTest {
             fail("Should have thrown StreamsException if start up failed");
         } catch (StreamsException e) {
             // ok
+        }
+        assertFalse(globalStreamThread.stillRunning());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldThrowStreamsExceptionOnStartupIfExceptionOccurred() throws Exception {
+        final MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer(OffsetResetStrategy.EARLIEST) {
+            @Override
+            public List<PartitionInfo> partitionsFor(final String topic) {
+                throw new RuntimeException("KABOOM!");
+            }
+        };
+        globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
+                                                    config,
+                                                    mockConsumer,
+                                                    new StateDirectory("appId", TestUtils.tempDirectory().getPath(), time),
+                                                    new Metrics(),
+                                                    new MockTime(),
+                                                    "clientId");
+
+        try {
+            globalStreamThread.start();
+            fail("Should have thrown StreamsException if start up failed");
+        } catch (StreamsException e) {
+            assertThat(e.getCause(), instanceOf(RuntimeException.class));
+            assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
         }
         assertFalse(globalStreamThread.stillRunning());
     }

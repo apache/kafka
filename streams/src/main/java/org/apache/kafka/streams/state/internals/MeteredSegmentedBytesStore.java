@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
@@ -27,7 +26,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
-class MeteredSegmentedBytesStore implements SegmentedBytesStore {
+class MeteredSegmentedBytesStore extends WrappedStateStore.AbstractStateStore implements SegmentedBytesStore {
 
     private final SegmentedBytesStore inner;
     private final String metricScope;
@@ -40,28 +39,26 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
     private Sensor getTime;
     private Sensor removeTime;
 
-    MeteredSegmentedBytesStore(final SegmentedBytesStore inner, String metricScope, Time time) {
+    MeteredSegmentedBytesStore(final SegmentedBytesStore inner,
+                               final String metricScope,
+                               final Time time) {
+        super(inner);
         this.inner = inner;
         this.metricScope = metricScope;
         this.time = time != null ? time : new SystemTime();
     }
 
     @Override
-    public String name() {
-        return inner.name();
-    }
-
-    @Override
     public void init(ProcessorContext context, StateStore root) {
         final String name = name();
         this.metrics = context.metrics();
-        this.putTime = this.metrics.addLatencySensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
-        this.fetchTime = this.metrics.addLatencySensor(metricScope, name, "fetch", Sensor.RecordingLevel.DEBUG);
-        this.flushTime = this.metrics.addLatencySensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
-        this.getTime = this.metrics.addLatencySensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
-        this.removeTime = this.metrics.addLatencySensor(metricScope, name, "remove", Sensor.RecordingLevel.DEBUG);
+        this.putTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "put", Sensor.RecordingLevel.DEBUG);
+        this.fetchTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "fetch", Sensor.RecordingLevel.DEBUG);
+        this.flushTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "flush", Sensor.RecordingLevel.DEBUG);
+        this.getTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "get", Sensor.RecordingLevel.DEBUG);
+        this.removeTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "remove", Sensor.RecordingLevel.DEBUG);
 
-        final Sensor restoreTime = this.metrics.addLatencySensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
+        final Sensor restoreTime = this.metrics.addLatencyAndThroughputSensor(metricScope, name, "restore", Sensor.RecordingLevel.DEBUG);
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {
@@ -69,16 +66,6 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         } finally {
             this.metrics.recordLatency(restoreTime, startNs, time.nanoseconds());
         }
-    }
-
-    @Override
-    public boolean persistent() {
-        return inner.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return inner.isOpen();
     }
 
     @Override
@@ -92,8 +79,13 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, long timeFrom, long timeTo) {
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         return new MeteredSegmentedBytesStoreIterator(inner.fetch(key, timeFrom, timeTo), this.fetchTime);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+        return new MeteredSegmentedBytesStoreIterator(inner.fetch(keyFrom, keyTo, from, to), this.fetchTime);
     }
 
     @Override
@@ -114,11 +106,6 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         } finally {
             this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
         }
-    }
-
-    @Override
-    public void close() {
-        inner.close();
     }
 
     @Override
@@ -171,7 +158,5 @@ class MeteredSegmentedBytesStore implements SegmentedBytesStore {
         public Bytes peekNextKey() {
             return iter.peekNextKey();
         }
-
     }
-
 }

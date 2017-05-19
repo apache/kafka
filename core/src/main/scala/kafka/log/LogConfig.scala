@@ -56,6 +56,7 @@ object Defaults {
   val MessageTimestampDifferenceMaxMs = kafka.server.Defaults.LogMessageTimestampDifferenceMaxMs
   val LeaderReplicationThrottledReplicas = Collections.emptyList[String]()
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
+  val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props, false) {
@@ -320,17 +321,7 @@ object LogConfig {
     val names = configNames
     for(name <- props.asScala.keys)
       if (!names.contains(name))
-        throw new InvalidConfigurationException(s"Unknown Log configuration $name.")
-  }
-
-  /**
-    * Check that the property values are valid relative to each other
-    */
-  def validateValues(props: Properties) {
-    val segmentBytes = if (props.getProperty(SegmentBytesProp) == null) Defaults.SegmentSize else props.getProperty(SegmentBytesProp).toLong
-    val retentionBytes = if (props.getProperty(RetentionBytesProp) == null) Defaults.RetentionSize else props.getProperty(RetentionBytesProp).toLong
-    if (segmentBytes > retentionBytes && retentionBytes != -1)
-      throw new InvalidConfigurationException(s"segment.bytes ${segmentBytes} is not less than or equal to retention.bytes ${retentionBytes}")
+        throw new InvalidConfigurationException(s"Unknown topic config name: $name")
   }
 
   /**
@@ -339,7 +330,6 @@ object LogConfig {
   def validate(props: Properties) {
     validateNames(props)
     configDef.parse(props)
-    validateValues(props)
   }
 
 }

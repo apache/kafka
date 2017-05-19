@@ -33,14 +33,15 @@ class ClientIdQuotaTest extends BaseQuotaTest {
     this.serverConfig.setProperty(KafkaConfig.ConsumerQuotaBytesPerSecondDefaultProp, defaultConsumerQuota.toString)
     super.setUp()
   }
-
-  override def overrideQuotas(producerQuota: Long, consumerQuota: Long) {
+  override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double) {
     val producerProps = new Properties()
     producerProps.put(DynamicConfig.Client.ProducerByteRateOverrideProp, producerQuota.toString)
+    producerProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
     updateQuotaOverride(producerClientId, producerProps)
 
     val consumerProps = new Properties()
     consumerProps.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, consumerQuota.toString)
+    consumerProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, requestQuota.toString)
     updateQuotaOverride(consumerClientId, consumerProps)
   }
   override def removeQuotaOverrides() {

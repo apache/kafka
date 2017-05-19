@@ -55,7 +55,11 @@ class ListConsumerGroupTest extends KafkaServerTestHarness {
   def testListGroupWithNoExistingGroup() {
     val opts = new ConsumerGroupCommandOptions(Array("--zookeeper", zkConnect))
     val consumerGroupCommand = new ZkConsumerGroupService(opts)
-    assert(consumerGroupCommand.listGroups().isEmpty)
+    try {
+      assert(consumerGroupCommand.listGroups().isEmpty)
+    } finally {
+      consumerGroupCommand.close()
+    }
   }
 
   @Test

@@ -24,15 +24,15 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.7.0"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.13.0'
+    classpath "org.ajoberstar:grgit:1.9.2"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.14.0'
     classpath 'org.scoverage:gradle-scoverage:2.1.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:1.2.4'
   }
 }
 
 allprojects {
   apply plugin: 'idea'
-  apply plugin: 'eclipse'
   apply plugin: "jacoco"
 
   repositories {
@@ -68,7 +68,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "3.2.1"
+  gradleVersion = "3.5"
   buildVersionFileName = "kafka-version.properties"
 
   maxPermSizeArgs = []
@@ -110,16 +110,23 @@ if (new File('.git').exists()) {
         'gradlew.bat',
         '**/README.md',
         '**/id_rsa',
-        '**/id_rsa.pub'
+        '**/id_rsa.pub',
+        'checkstyle/suppressions.xml'
     ])
   }
 }
 
 subprojects {
   apply plugin: 'java'
+  // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
+  if (!project.name.equals('connect')) {
+    apply plugin: 'eclipse'
+    fineTuneEclipseClasspathFile(eclipse, project)
+  }
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
+  apply plugin: 'findbugs'
 
   sourceCompatibility = 1.7
 
@@ -161,6 +168,10 @@ subprojects {
     }
   }
 
+  def testLoggingEvents = ["passed", "skipped", "failed"]
+  def testShowStandardStreams = false
+  def testExceptionFormat = 'full'
+
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
 
@@ -169,29 +180,63 @@ subprojects {
     jvmArgs = maxPermSizeArgs
 
     testLogging {
-      events = userTestLoggingEvents ?: ["passed", "skipped", "failed"]
-      showStandardStreams = userShowStandardStreams ?: false
-      exceptionFormat = 'full'
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
     }
 
   }
 
+  task integrationTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+    }
+    useJUnit {
+      includeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
+  }
+
+  task unitTest(type: Test, dependsOn: compileJava) {
+    maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
+
+    minHeapSize = "256m"
+    maxHeapSize = "2048m"
+    jvmArgs = maxPermSizeArgs
+
+    testLogging {
+      events = userTestLoggingEvents ?: testLoggingEvents
+      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
+      exceptionFormat = testExceptionFormat
+    }
+    useJUnit {
+      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    }
+  }
+
   jar {
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
   }
 
   task srcJar(type: Jar) {
     classifier = 'sources'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from sourceSets.main.allSource
   }
 
   task javadocJar(type: Jar, dependsOn: javadoc) {
     classifier 'javadoc'
-    from '../LICENSE'
-    from '../NOTICE'
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from javadoc.destinationDir
   }
 
@@ -213,15 +258,15 @@ subprojects {
   if(!sourceSets.test.allSource.isEmpty()) {
     task testJar(type: Jar) {
       classifier = 'test'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.output
     }
 
     task testSrcJar(type: Jar, dependsOn: testJar) {
       classifier = 'test-sources'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from sourceSets.test.allSource
     }
 
@@ -234,8 +279,8 @@ subprojects {
   plugins.withType(ScalaPlugin) {
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
-      from '../LICENSE'
-      from '../NOTICE'
+      from "$rootDir/LICENSE"
+      from "$rootDir/NOTICE"
       from scaladoc.destinationDir
     }
 
@@ -252,7 +297,6 @@ subprojects {
       "-deprecation",
       "-unchecked",
       "-encoding", "utf8",
-      "-target:jvm-${sourceCompatibility}".toString(),
       "-Xlog-reflective-calls",
       "-feature",
       "-language:postfixOps",
@@ -269,8 +313,24 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = [importControlFile: "$rootDir/checkstyle/import-control.xml"]
+    // version 7.x requires Java 8
+    toolVersion = '6.19'
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
+
+  findbugs {
+    toolVersion = "3.0.1"
+    excludeFilter = file("$rootDir/gradle/findbugs-exclude.xml")
+    ignoreFailures = false
+  }
+  test.dependsOn('findbugsMain')
+
+  tasks.withType(FindBugs) {
+    reports {
+      xml.enabled (project.hasProperty('xmlFindBugsReport'))
+      html.enabled (!project.hasProperty('xmlFindBugsReport'))
+    }
+  }
 
   // Ignore core since its a scala project
   if (it.path != ':core') {
@@ -285,6 +345,47 @@ subprojects {
         xml.enabled = true
         csv.enabled = false
       }
+    }
+  }
+
+  def coverageGen = it.path == ':core' ? 'reportScoverage' : 'jacocoTestReport'
+  task reportCoverage(dependsOn: [coverageGen])
+
+}
+
+gradle.taskGraph.whenReady { taskGraph ->
+  taskGraph.getAllTasks().findAll { it.name.contains('findbugsScoverage') || it.name.contains('findbugsTest') }.each { task ->
+    task.enabled = false
+  }
+}
+
+def fineTuneEclipseClasspathFile(eclipse, project) {
+  eclipse.classpath.file {
+    beforeMerged { cp ->
+      cp.entries.clear()
+      // for the core project add the directories defined under test/scala as separate source directories
+      if (project.name.equals('core')) {
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/integration", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/other", null))
+        cp.entries.add(new org.gradle.plugins.ide.eclipse.model.SourceFolder("src/test/scala/unit", null))
+      }
+    }
+    whenMerged { cp ->
+      // for the core project exclude the separate sub-directories defined under test/scala. These are added as source dirs above
+      if (project.name.equals('core')) {
+        cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
+      }
+      /* 
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+       * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
+       * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
+       */
+      cp.entries.findAll { it.kind == "output" }*.path = "build_eclipse"
+      /*
+       * Some projects have explicitly added test output dependencies. These are required for the gradle build but not required
+       * in Eclipse since the dependent projects are added as dependencies. So clean up these from the generated classpath.
+       */
+      cp.entries.removeAll { it.kind == "lib" && it.path.matches(".*/build/(classes|resources)/test") }
     }
   }
 }
@@ -313,50 +414,50 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   }
 }
 
-task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportScoverage'])
+task reportCoverage(dependsOn: ['jacocoRootReport', 'core:reportCoverage'])
 
-for ( sv in ['2_10', '2_11', '2_12'] ) {
-  String svInDot = sv.replaceAll( "_", ".")
+for ( sv in availableScalaVersions ) {
+  String taskSuffix = sv.replaceAll("\\.", "_")
 
-  tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
+  tasks.create(name: "jar_core_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:jar']
   }
 
-  tasks.create(name: "test_core_${sv}", type: GradleBuild) {
+  tasks.create(name: "test_core_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:test']
   }
 
-  tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
+  tasks.create(name: "srcJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:srcJar']
   }
 
-  tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
+  tasks.create(name: "docsJar_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:docsJar']
   }
 
-  tasks.create(name: "install_${sv}", type: GradleBuild) {
+  tasks.create(name: "install_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['install']
   }
 
-  tasks.create(name: "releaseTarGz_${sv}", type: GradleBuild) {
+  tasks.create(name: "releaseTarGz_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['releaseTarGz']
   }
 
-  tasks.create(name: "uploadCoreArchives_${sv}", type: GradleBuild) {
+  tasks.create(name: "uploadCoreArchives_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
-    startParameter.projectProperties += [scalaVersion: "${svInDot}"]
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
     tasks = ['core:uploadArchives']
   }
 }
@@ -364,21 +465,26 @@ for ( sv in ['2_10', '2_11', '2_12'] ) {
 def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file']
 def pkgs = ['clients', 'examples', 'log4j-appender', 'tools', 'streams', 'streams:examples'] + connectPkgs
 
+/** Create one task per default Scala version */
+def withDefScalaVersions(taskName) {
+  defaultScalaVersions.collect { taskName + '_' + it.replaceAll('\\.', '_') }
+}
+
 tasks.create(name: "jarConnect", dependsOn: connectPkgs.collect { it + ":jar" }) {}
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_10', 'jar_core_2_11'] + pkgs.collect { it + ":jar" }) { }
+tasks.create(name: "jarAll", dependsOn: withDefScalaVersions('jar_core') + pkgs.collect { it + ":jar" }) { }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_10', 'srcJar_2_11'] + pkgs.collect { it + ":srcJar" }) { }
+tasks.create(name: "srcJarAll", dependsOn: withDefScalaVersions('srcJar') + pkgs.collect { it + ":srcJar" }) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_10', 'docsJar_2_11'] + pkgs.collect { it + ":docsJar" }) { }
+tasks.create(name: "docsJarAll", dependsOn: withDefScalaVersions('docsJar') + pkgs.collect { it + ":docsJar" }) { }
 
 tasks.create(name: "testConnect", dependsOn: connectPkgs.collect { it + ":test" }) {}
-tasks.create(name: "testAll", dependsOn: ['test_core_2_10', 'test_core_2_11'] + pkgs.collect { it + ":test" }) { }
+tasks.create(name: "testAll", dependsOn: withDefScalaVersions('test_core') + pkgs.collect { it + ":test" }) { }
 
-tasks.create(name: "installAll", dependsOn: ['install_2_10', 'install_2_11'] + pkgs.collect { it + ":install" }) { }
+tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_10', 'releaseTarGz_2_11']) { }
+tasks.create(name: "releaseTarGzAll", dependsOn: withDefScalaVersions('releaseTarGz')) { }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_10', 'uploadCoreArchives_2_11'] + pkgs.collect { it + ":uploadArchives" }) { }
+tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadCoreArchives') + pkgs.collect { it + ":uploadArchives" }) { }
 
 project(':core') {
   println "Building project 'core' with Scala version ${versions.scala}"
@@ -395,10 +501,7 @@ project(':core') {
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    // These modules were broken out of core scala in 2.10. We can remove special handling when 2.10 support is dropped.
-    if (versions.baseScala != '2.10') {
-      compile libs.scalaParserCombinators
-    }
+    compile libs.scalaParserCombinators
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
@@ -508,11 +611,11 @@ project(':core') {
 
   task siteDocsTar(dependsOn: ['genProtocolErrorDocs', 'genProtocolApiKeyDocs', 'genProtocolMessageDocs',
                                'genProducerConfigDocs', 'genConsumerConfigDocs', 'genKafkaConfigDocs',
-                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs',
+                               'genTopicConfigDocs', ':connect:runtime:genConnectConfigDocs', ':connect:runtime:genConnectTransformationDocs',
                                ':streams:genStreamsConfigDocs'], type: Tar) {
     classifier = 'site-docs'
     compression = Compression.GZIP
-    from project.file("../docs")
+    from project.file("$rootDir/docs")
     into 'site-docs'
     duplicatesStrategy 'exclude'
   }
@@ -520,10 +623,10 @@ project(':core') {
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${versions.baseScala}-${version}"
     compression = Compression.GZIP
-    from(project.file("../bin")) { into "bin/" }
-    from(project.file("../config")) { into "config/" }
-    from '../LICENSE'
-    from '../NOTICE'
+    from(project.file("$rootDir/bin")) { into "bin/" }
+    from(project.file("$rootDir/config")) { into "config/" }
+    from "$rootDir/LICENSE"
+    from "$rootDir/NOTICE"
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
     from(project.siteDocsTar) { into("site-docs/") }
@@ -607,12 +710,12 @@ project(':clients') {
   task determineCommitId {
     ext.commitId = "unknown"
     def takeFromHash = 16
-    if (file("../.git/HEAD").exists()) {
-      def headRef = file("../.git/HEAD").text
+    if (file("$rootDir/.git/HEAD").exists()) {
+      def headRef = file("$rootDir/.git/HEAD").text
       if (headRef.contains('ref: ')) {
         headRef = headRef.replaceAll('ref: ', '').trim()
-        if (file("../.git/$headRef").exists()) {
-        commitId = file("../.git/$headRef").text.trim().take(takeFromHash)
+        if (file("$rootDir/.git/$headRef").exists()) {
+        commitId = file("$rootDir/.git/$headRef").text.trim().take(takeFromHash)
         }
       } else {
         commitId = headRef.trim().take(takeFromHash)
@@ -653,6 +756,7 @@ project(':clients') {
     include "**/org/apache/kafka/clients/producer/*"
     include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/errors/*"
+    include "**/org/apache/kafka/common/header/*"
     include "**/org/apache/kafka/common/serialization/*"
     include "**/org/apache/kafka/common/config/*"
   }
@@ -767,6 +871,48 @@ project(':streams:examples') {
   }
 }
 
+project(':jmh-benchmarks') {
+
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  shadowJar {
+    baseName = 'kafka-jmh-benchmarks-all'
+    classifier = null
+    version = null
+  }
+
+  dependencies {
+      compile project(':clients')
+      compile project(':streams')
+      compile 'org.openjdk.jmh:jmh-core:1.18'
+      compile 'org.openjdk.jmh:jmh-generator-annprocess:1.18'
+      compile 'org.openjdk.jmh:jmh-core-benchmarks:1.18'
+  }
+
+  jar {
+    manifest {
+      attributes "Main-Class": "org.openjdk.jmh.Main"
+    }
+  }
+
+
+  task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
+
+    main="-jar"
+
+    doFirst {
+      if (System.getProperty("jmhArgs")) {
+          args System.getProperty("jmhArgs").split(',')
+      }
+      args = [shadowJar.archivePath, *args]
+    }
+  }
+
+  javadoc {
+     enabled = false
+  }
+}
+
 project(':log4j-appender') {
   archivesBaseName = "kafka-log4j-appender"
 
@@ -794,6 +940,7 @@ project(':connect:api') {
     testCompile libs.junit
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -831,6 +978,7 @@ project(':connect:transforms') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -868,6 +1016,7 @@ project(':connect:json') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {
@@ -906,10 +1055,8 @@ project(':connect:runtime') {
     compile libs.jettyServer
     compile libs.jettyServlet
     compile libs.jettyServlets
-    compile(libs.reflections) {
-      // Exclude because of LGPL license
-      exclude group: 'com.google.code.findbugs', module: 'annotations'
-    }
+    compile(libs.reflections)
+    compile(libs.mavenArtifact)
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.easymock
@@ -918,6 +1065,7 @@ project(':connect:runtime') {
     testCompile libs.powermockEasymock
 
     testCompile project(":connect:json")
+    testCompile project(':clients').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }
@@ -948,6 +1096,13 @@ project(':connect:runtime') {
     if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
     standardOutput = new File(generatedDocsDir, "connect_config.html").newOutputStream()
   }
+
+  task genConnectTransformationDocs(type: JavaExec) {
+    classpath = sourceSets.main.runtimeClasspath
+    main = 'org.apache.kafka.connect.tools.TransformationDoc'
+    if( !generatedDocsDir.exists() ) { generatedDocsDir.mkdirs() }
+    standardOutput = new File(generatedDocsDir, "connect_transforms.html").newOutputStream()
+  }
 }
 
 project(':connect:file') {
@@ -963,6 +1118,7 @@ project(':connect:file') {
     testCompile libs.powermockEasymock
 
     testRuntime libs.slf4jlog4j
+    testCompile project(':clients').sourceSets.test.output
   }
 
   javadoc {

@@ -21,6 +21,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.{Partition, Replica}
 import kafka.log.Log
+import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
+import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -53,7 +55,8 @@ class IsrExpirationTest {
   @Before
   def setUp() {
     replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, null, new AtomicBoolean(false),
-      QuotaFactory.instantiate(configs.head, metrics, time).follower)
+      QuotaFactory.instantiate(configs.head, metrics, time).follower, new BrokerTopicStats,
+      new MetadataCache(configs.head.brokerId))
   }
 
   @After
@@ -78,7 +81,9 @@ class IsrExpirationTest {
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(15L), MemoryRecords.EMPTY),
                                                     hw = 15L,
+                                                    leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 15L,
+                                                    followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1))
     var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
@@ -130,7 +135,9 @@ class IsrExpirationTest {
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(10L), MemoryRecords.EMPTY),
                                                     hw = 10L,
+                                                    leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 15L,
+                                                    followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1))
 
@@ -144,7 +151,9 @@ class IsrExpirationTest {
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
       r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(11L), MemoryRecords.EMPTY),
                             hw = 11L,
+                            leaderLogStartOffset = 0L,
                             leaderLogEndOffset = 15L,
+                            followerLogStartOffset = 0L,
                             fetchTimeMs = time.milliseconds,
                             readSize = -1))
     }
@@ -161,7 +170,9 @@ class IsrExpirationTest {
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
       r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(15L), MemoryRecords.EMPTY),
                             hw = 15L,
+                            leaderLogStartOffset = 0L,
                             leaderLogEndOffset = 15L,
+                            followerLogStartOffset = 0L,
                             fetchTimeMs = time.milliseconds,
                             readSize = -1))
     }
@@ -185,7 +196,9 @@ class IsrExpirationTest {
     for (replica <- partition.assignedReplicas - leaderReplica)
       replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(0L), MemoryRecords.EMPTY),
                                                     hw = 0L,
+                                                    leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 0L,
+                                                    followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1))
     // set the leader and its hw and the hw update time
@@ -195,6 +208,9 @@ class IsrExpirationTest {
 
   private def logMock: Log = {
     val log = EasyMock.createMock(classOf[kafka.log.Log])
+    val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
+    EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
+    EasyMock.expect(log.leaderEpochCache).andReturn(cache).anyTimes()
     EasyMock.replay(log)
     log
   }

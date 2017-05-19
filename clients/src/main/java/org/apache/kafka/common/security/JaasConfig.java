@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.common.security;
 
 import java.io.IOException;
@@ -32,11 +31,10 @@ import javax.security.auth.login.AppConfigurationEntry.LoginModuleControlFlag;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.network.LoginType;
 
 /**
  * JAAS configuration parser that constructs a JAAS configuration object with a single
- * login context from the the Kafka configuration option {@link SaslConfigs#SASL_JAAS_CONFIG}.
+ * login context from the Kafka configuration option {@link SaslConfigs#SASL_JAAS_CONFIG}.
  * <p/>
  * JAAS configuration file format is described <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/jgss/tutorials/LoginConfigFile.html">here</a>.
  * The format of the property value is:
@@ -51,7 +49,7 @@ class JaasConfig extends Configuration {
     private final String loginContextName;
     private final List<AppConfigurationEntry> configEntries;
 
-    public JaasConfig(LoginType loginType, String jaasConfigParams) {
+    public JaasConfig(String loginContextName, String jaasConfigParams) {
         StreamTokenizer tokenizer = new StreamTokenizer(new StringReader(jaasConfigParams));
         tokenizer.slashSlashComments(true);
         tokenizer.slashStarComments(true);
@@ -67,7 +65,7 @@ class JaasConfig extends Configuration {
             if (configEntries.isEmpty())
                 throw new IllegalArgumentException("Login module not specified in JAAS config");
 
-            this.loginContextName = loginType.contextName();
+            this.loginContextName = loginContextName;
 
         } catch (IOException e) {
             throw new KafkaException("Unexpected exception while parsing JAAS config");

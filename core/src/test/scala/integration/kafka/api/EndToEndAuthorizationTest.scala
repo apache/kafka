@@ -169,7 +169,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
                                 maxBlockMs = 3000L,
                                 securityProtocol = this.securityProtocol,
                                 trustStoreFile = this.trustStoreFile,
-                                saslProperties = this.saslProperties,
+                                saslProperties = this.clientSaslProperties,
                                 props = Some(producerConfig))
   }
   

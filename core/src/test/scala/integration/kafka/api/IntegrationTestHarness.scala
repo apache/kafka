@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import java.util.Properties
 
-import kafka.common.Topic
 import org.apache.kafka.clients.producer.KafkaProducer
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
@@ -33,7 +32,7 @@ import scala.collection.mutable.Buffer
 /**
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
-trait IntegrationTestHarness extends KafkaServerTestHarness {
+abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   val producerCount: Int
   val consumerCount: Int
@@ -45,17 +44,23 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   val consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
   val producers = Buffer[KafkaProducer[Array[Byte], Array[Byte]]]()
 
-  override def generateConfigs() = {
+  override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = saslProperties)
+      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
+    cfgs.foreach { config =>
+      config.setProperty(KafkaConfig.ListenersProp, s"${listenerName.value}://localhost:${TestUtils.RandomPort}")
+      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
+      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, listenerName.value)
+      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
+    }
     cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
   override def setUp() {
-    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
-    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
+    val producerSecurityProps = TestUtils.producerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
+    val consumerSecurityProps = TestUtils.consumerSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
     super.setUp()
     producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
     producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[org.apache.kafka.common.serialization.ByteArraySerializer])
@@ -69,19 +74,14 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       consumers += createNewConsumer
     }
 
-    // create the consumer offset topic
-    TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName,
-      serverConfig.getProperty(KafkaConfig.OffsetsTopicPartitionsProp).toInt,
-      serverConfig.getProperty(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
-      servers,
-      servers.head.groupCoordinator.offsetsTopicConfigs)
+    TestUtils.createOffsetsTopic(zkUtils, servers)
   }
 
   def createNewProducer: KafkaProducer[Array[Byte], Array[Byte]] = {
       TestUtils.createNewProducer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
-                                  saslProperties = this.saslProperties,
+                                  saslProperties = this.clientSaslProperties,
                                   props = Some(producerConfig))
   }
   
@@ -89,7 +89,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       TestUtils.createNewConsumer(brokerList,
                                   securityProtocol = this.securityProtocol,
                                   trustStoreFile = this.trustStoreFile,
-                                  saslProperties = this.saslProperties,
+                                  saslProperties = this.clientSaslProperties,
                                   props = Some(consumerConfig))
   }
 

@@ -2,6 +2,7 @@ dist
 *classes
 target/
 build/
+build_eclipse/
 .gradle/
 lib_managed/
 src_managed/
@@ -43,3 +44,5 @@ tests/venv
 .cache
 
 docs/generated/
+
+.release-settings.json

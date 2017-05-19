@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -26,6 +26,7 @@ import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -46,7 +47,7 @@ public class MockClient implements KafkaClient {
         }
     };
 
-    private class FutureResponse {
+    private static class FutureResponse {
         public final AbstractResponse responseBody;
         public final boolean disconnected;
         public final RequestMatcher requestMatcher;
@@ -63,7 +64,7 @@ public class MockClient implements KafkaClient {
 
     private final Time time;
     private final Metadata metadata;
-    private int correlation = 0;
+    private Set<String> unavailableTopics;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
     private final Map<Node, Long> blackedOut = new HashMap<>();
@@ -72,16 +73,17 @@ public class MockClient implements KafkaClient {
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
     private final Queue<ClientResponse> responses = new ConcurrentLinkedDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
-    private final Queue<Cluster> metadataUpdates = new ArrayDeque<>();
+    private final Queue<MetadataUpdate> metadataUpdates = new ArrayDeque<>();
+    private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
 
     public MockClient(Time time) {
-        this.time = time;
-        this.metadata = null;
+        this(time, null);
     }
 
     public MockClient(Time time, Metadata metadata) {
         this.time = time;
         this.metadata = metadata;
+        this.unavailableTopics = Collections.emptySet();
     }
 
     @Override
@@ -130,7 +132,8 @@ public class MockClient implements KafkaClient {
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
             if (request.destination().equals(node)) {
-                responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                short version = request.requestBuilder().desiredOrLatestVersion();
+                responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), now, true, null, null));
                 iter.remove();
             }
@@ -146,11 +149,13 @@ public class MockClient implements KafkaClient {
             if (futureResp.node != null && !request.destination().equals(futureResp.node.idString()))
                 continue;
 
-            AbstractRequest abstractRequest = request.requestBuilder().build();
+            AbstractRequest.Builder<?> builder = request.requestBuilder();
+            short version = nodeApiVersions.usableVersion(request.apiKey(), builder.desiredVersion());
+            AbstractRequest abstractRequest = request.requestBuilder().build(version);
             if (!futureResp.requestMatcher.matches(abstractRequest))
-                throw new IllegalStateException("Next in line response did not match expected request");
-
-            ClientResponse resp = new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                throw new IllegalStateException("Next in line response did not match expected request, request: "
+                        + abstractRequest);
+            ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                     request.createdTimeMs(), time.milliseconds(), futureResp.disconnected, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
@@ -165,15 +170,17 @@ public class MockClient implements KafkaClient {
         List<ClientResponse> copy = new ArrayList<>(this.responses);
 
         if (metadata != null && metadata.updateRequested()) {
-            Cluster cluster = metadataUpdates.poll();
-            if (cluster == null)
-                metadata.update(metadata.fetch(), time.milliseconds());
-            else
-                metadata.update(cluster, time.milliseconds());
+            MetadataUpdate metadataUpdate = metadataUpdates.poll();
+            if (metadataUpdate == null)
+                metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
+            else {
+                this.unavailableTopics = metadataUpdate.unavailableTopics;
+                metadata.update(metadataUpdate.cluster, metadataUpdate.unavailableTopics, time.milliseconds());
+            }
         }
 
-        while (!this.responses.isEmpty()) {
-            ClientResponse response = this.responses.poll();
+        ClientResponse response;
+        while ((response = this.responses.poll()) != null) {
             response.onComplete();
         }
 
@@ -190,7 +197,8 @@ public class MockClient implements KafkaClient {
 
     public void respond(AbstractResponse response, boolean disconnected) {
         ClientRequest request = requests.remove();
-        responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+        short version = request.requestBuilder().desiredOrLatestVersion();
+        responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                 request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
     }
 
@@ -204,7 +212,8 @@ public class MockClient implements KafkaClient {
             ClientRequest request = iterator.next();
             if (request.destination().equals(node.idString())) {
                 iterator.remove();
-                responses.add(new ClientResponse(request.makeHeader(), request.callback(), request.destination(),
+                short version = request.requestBuilder().desiredOrLatestVersion();
+                responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                         request.createdTimeMs(), time.milliseconds(), disconnected, null, response));
                 return;
             }
@@ -275,8 +284,8 @@ public class MockClient implements KafkaClient {
         metadataUpdates.clear();
     }
 
-    public void prepareMetadataUpdate(Cluster cluster) {
-        metadataUpdates.add(cluster);
+    public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics));
     }
 
     public void setNode(Node node) {
@@ -289,8 +298,23 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
+    public boolean hasInFlightRequests() {
+        return !requests.isEmpty();
+    }
+
+    @Override
     public int inFlightRequestCount(String node) {
-        return requests.size();
+        int result = 0;
+        for (ClientRequest req : requests) {
+            if (req.destination().equals(node))
+                ++result;
+        }
+        return result;
+    }
+
+    @Override
+    public boolean hasInFlightRequests(String node) {
+        return inFlightRequestCount(node) > 0;
     }
 
     @Override
@@ -334,4 +358,16 @@ public class MockClient implements KafkaClient {
         boolean matches(AbstractRequest body);
     }
 
+    public void setNodeApiVersions(NodeApiVersions nodeApiVersions) {
+        this.nodeApiVersions = nodeApiVersions;
+    }
+
+    private static class MetadataUpdate {
+        final Cluster cluster;
+        final Set<String> unavailableTopics;
+        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
+            this.cluster = cluster;
+            this.unavailableTopics = unavailableTopics;
+        }
+    }
 }

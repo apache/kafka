@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -31,13 +34,28 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.PowerMockRunner;
+
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.createNiceMock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.anyLong;
+import static org.easymock.EasyMock.anyDouble;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.anyString;
 
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.junit.Assert.assertEquals;
 
+
+@RunWith(PowerMockRunner.class)
 public class BufferPoolTest {
     private final MockTime time = new MockTime();
     private final Metrics metrics = new Metrics(time);
@@ -170,6 +188,7 @@ public class BufferPoolTest {
         } catch (TimeoutException e) {
             // this is good
         }
+        assertTrue("available memory" + pool.availableMemory(), pool.availableMemory() >= 9 && pool.availableMemory() <= 10);
         long endTimeMs = Time.SYSTEM.milliseconds();
         assertTrue("Allocation should finish not much later than maxBlockTimeMs", endTimeMs - beginTimeMs < maxBlockTimeMs + 1000);
     }
@@ -224,6 +243,35 @@ public class BufferPoolTest {
         assertEquals(pool.queued(), 0);
     }
 
+    @PrepareForTest({Sensor.class, MetricName.class})
+    @Test
+    public void testCleanupMemoryAvailabilityOnMetricsException() throws Exception {
+        Metrics mockedMetrics = createNiceMock(Metrics.class);
+        Sensor mockedSensor = createNiceMock(Sensor.class);
+        MetricName metricName = createNiceMock(MetricName.class);
+
+        expect(mockedMetrics.sensor(BufferPool.WAIT_TIME_SENSOR_NAME)).andReturn(mockedSensor);
+
+        mockedSensor.record(anyDouble(), anyLong());
+        expectLastCall().andThrow(new OutOfMemoryError());
+        expect(mockedMetrics.metricName(anyString(), eq(metricGroup), anyString())).andReturn(metricName);
+        mockedSensor.add(metricName, new Rate(TimeUnit.NANOSECONDS));
+
+        replay(mockedMetrics, mockedSensor, metricName);
+
+        BufferPool bufferPool = new BufferPool(2, 1, mockedMetrics, time,  metricGroup);
+        bufferPool.allocate(1, 0);
+        try {
+            bufferPool.allocate(2, 1000);
+            assertTrue("Expected oom.", false);
+        } catch (OutOfMemoryError expected) {
+        }
+        assertEquals(1, bufferPool.availableMemory());
+        assertEquals(0, bufferPool.queued());
+        //This shouldn't timeout
+        bufferPool.allocate(1, 0);
+    }
+
     private static class BufferPoolAllocator implements Runnable {
         BufferPool pool;
         long maxBlockTimeMs;
@@ -266,6 +314,35 @@ public class BufferPoolTest {
         for (StressTestThread thread : threads)
             assertTrue("Thread should have completed all iterations successfully.", thread.success.get());
         assertEquals(totalMemory, pool.availableMemory());
+    }
+
+    @Test
+    public void testLargeAvailableMemory() throws Exception {
+        long memory = 20_000_000_000L;
+        int poolableSize = 2_000_000_000;
+        final AtomicInteger freeSize = new AtomicInteger(0);
+        BufferPool pool = new BufferPool(memory, poolableSize, metrics, time, metricGroup) {
+            @Override
+            protected ByteBuffer allocateByteBuffer(int size) {
+                // Ignore size to avoid OOM due to large buffers
+                return ByteBuffer.allocate(0);
+            }
+
+            @Override
+            protected int freeSize() {
+                return freeSize.get();
+            }
+        };
+        pool.allocate(poolableSize, 0);
+        assertEquals(18_000_000_000L, pool.availableMemory());
+        pool.allocate(poolableSize, 0);
+        assertEquals(16_000_000_000L, pool.availableMemory());
+
+        // Emulate `deallocate` by increasing `freeSize`
+        freeSize.incrementAndGet();
+        assertEquals(18_000_000_000L, pool.availableMemory());
+        freeSize.incrementAndGet();
+        assertEquals(20_000_000_000L, pool.availableMemory());
     }
 
     public static class StressTestThread extends Thread {

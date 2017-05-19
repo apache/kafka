@@ -1,60 +1,86 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied.  See the License for the
- * specific language governing permissions and limitations
- * under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.NoSuchElementException;
+class RocksDBWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<K, V> {
 
-class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
+    // this is optimizing the case when this store is already a bytes store, in which we can avoid Bytes.wrap() costs
+    private static class RocksDBWindowBytesStore extends RocksDBWindowStore<Bytes, byte[]> {
+        RocksDBWindowBytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates, final long windowSize) {
+            super(inner, Serdes.Bytes(), Serdes.ByteArray(), retainDuplicates, windowSize);
+        }
 
-    private final String name;
-    private final SegmentedBytesStore bytesStore;
-    private final boolean retainDuplicates;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private ProcessorContext context;
-    private int seqnum = 0;
-    private StateSerdes<K, V> serdes;
+        @Override
+        public void put(Bytes key, byte[] value, long timestamp) {
+            maybeUpdateSeqnumForDups();
 
+            bytesStore.put(WindowStoreUtils.toBinaryKey(key.get(), timestamp, seqnum), value);
+        }
 
-    RocksDBWindowStore(String name, boolean retainDuplicates, Serde<K> keySerde, Serde<V> valueSerde, final SegmentedBytesStore bytesStore) {
-        this.name = name;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
-        this.retainDuplicates = retainDuplicates;
-        this.bytesStore = bytesStore;
+        @Override
+        public WindowStoreIterator<byte[]> fetch(Bytes key, long timeFrom, long timeTo) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(key, timeFrom, timeTo);
+            return WindowStoreIteratorWrapper.bytesIterator(bytesIterator, serdes, windowSize).valuesIterator();
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(Bytes from, Bytes to, long timeFrom, long timeTo) {
+            final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(from, to, timeFrom, timeTo);
+            return WindowStoreIteratorWrapper.bytesIterator(bytesIterator, serdes, windowSize).keyValueIterator();
+        }
     }
 
+    static RocksDBWindowStore<Bytes, byte[]> bytesStore(final SegmentedBytesStore inner, final boolean retainDuplicates, final long windowSize) {
+        return new RocksDBWindowBytesStore(inner, retainDuplicates, windowSize);
+    }
 
-    @Override
-    public String name() {
-        return name;
+    private final Serde<K> keySerde;
+    private final Serde<V> valueSerde;
+    private final boolean retainDuplicates;
+    protected final long windowSize;
+    protected final SegmentedBytesStore bytesStore;
+
+    private ProcessorContext context;
+    protected StateSerdes<K, V> serdes;
+    protected int seqnum = 0;
+
+    RocksDBWindowStore(final SegmentedBytesStore bytesStore,
+                       final Serde<K> keySerde,
+                       final Serde<V> valueSerde,
+                       final boolean retainDuplicates,
+                       final long windowSize) {
+        super(bytesStore);
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        this.bytesStore = bytesStore;
+        this.retainDuplicates = retainDuplicates;
+        this.windowSize = windowSize;
     }
 
     @Override
@@ -62,31 +88,11 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         // construct the serde
-        this.serdes = new StateSerdes<>(name,
-                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name()),
+                                   keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+                                   valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         bytesStore.init(context, root);
-    }
-
-    @Override
-    public boolean persistent() {
-        return true;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return bytesStore.isOpen();
-    }
-
-    @Override
-    public void flush() {
-        bytesStore.flush();
-    }
-
-    @Override
-    public void close() {
-        bytesStore.close();
     }
 
     @Override
@@ -96,57 +102,26 @@ class RocksDBWindowStore<K, V> implements WindowStore<K, V> {
 
     @Override
     public void put(K key, V value, long timestamp) {
-        if (retainDuplicates) {
-            seqnum = (seqnum + 1) & 0x7FFFFFFF;
-        }
-        bytesStore.put(Bytes.wrap(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes)), serdes.rawValue(value));
+        maybeUpdateSeqnumForDups();
+
+        bytesStore.put(WindowStoreUtils.toBinaryKey(key, timestamp, seqnum, serdes), serdes.rawValue(value));
     }
 
-
-    @SuppressWarnings("unchecked")
     @Override
     public WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
-        return new TheWindowStoreIterator<>(bytesIterator, serdes);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
     }
 
-    private static class TheWindowStoreIterator<V> implements WindowStoreIterator<V> {
-        private final KeyValueIterator<Bytes, byte[]> actual;
-        private final StateSerdes<?, V> serdes;
-
-        TheWindowStoreIterator(final KeyValueIterator<Bytes, byte[]> actual, final StateSerdes<?, V> serdes) {
-            this.actual = actual;
-            this.serdes = serdes;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return actual.hasNext();
-        }
-
-        /**
-         * @throws NoSuchElementException if no next element exists
-         */
-        @Override
-        public KeyValue<Long, V> next() {
-            if (!actual.hasNext()) {
-                throw new NoSuchElementException();
-            }
-            final KeyValue<Bytes, byte[]> next = actual.next();
-            final long timestamp = WindowStoreUtils.timestampFromBinaryKey(next.key.get());
-            final V value = serdes.valueFrom(next.value);
-            return KeyValue.pair(timestamp, value);
-        }
-
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public void close() {
-            actual.close();
-        }
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
+        return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
+    void maybeUpdateSeqnumForDups() {
+        if (retainDuplicates) {
+            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+        }
+    }
 }

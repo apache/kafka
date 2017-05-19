@@ -107,17 +107,17 @@ class DeleteTopicsRequestTest extends BaseRequestTest {
   private def validateTopicIsDeleted(topic: String): Unit = {
     val metadata = sendMetadataRequest(new MetadataRequest.
         Builder(List(topic).asJava).build).topicMetadata.asScala
-    TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error() == Errors.NONE),
+    TestUtils.waitUntilTrue (() => !metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE),
       s"The topic $topic should not exist")
   }
 
   private def sendDeleteTopicsRequest(request: DeleteTopicsRequest, socketServer: SocketServer = controllerSocketServer): DeleteTopicsResponse = {
-    val response = send(request, ApiKeys.DELETE_TOPICS, socketServer)
+    val response = connectAndSend(request, ApiKeys.DELETE_TOPICS, socketServer)
     DeleteTopicsResponse.parse(response, request.version)
   }
 
   private def sendMetadataRequest(request: MetadataRequest): MetadataResponse = {
-    val response = send(request, ApiKeys.METADATA)
-    MetadataResponse.parse(response)
+    val response = connectAndSend(request, ApiKeys.METADATA)
+    MetadataResponse.parse(response, request.version)
   }
 }

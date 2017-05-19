@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.config;
 
@@ -46,15 +50,23 @@ public class AbstractConfig {
     /* the parsed values */
     private final Map<String, Object> values;
 
+    private final ConfigDef definition;
+
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         /* check that all the keys are really strings */
-        for (Object key : originals.keySet())
-            if (!(key instanceof String))
-                throw new ConfigException(key.toString(), originals.get(key), "Key must be a string.");
+        for (Map.Entry<?, ?> entry : originals.entrySet())
+            if (!(entry.getKey() instanceof String))
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
+        Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
+        for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
+            this.values.put(update.getKey(), update.getValue());
+        }
+        definition.parse(this.values);
         this.used = Collections.synchronizedSet(new HashSet<String>());
+        this.definition = definition;
         if (doLog)
             logAll();
     }
@@ -63,10 +75,15 @@ public class AbstractConfig {
         this(definition, originals, true);
     }
 
-    public AbstractConfig(Map<String, Object> parsedConfig) {
-        this.values = parsedConfig;
-        this.originals = new HashMap<>();
-        this.used = Collections.synchronizedSet(new HashSet<String>());
+    /**
+     * Called directly after user configs got parsed (and thus default values got set).
+     * This allows to change default values for "secondary defaults" if required.
+     *
+     * @param parsedValues unmodifiable map of current configuration
+     * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
+     */
+    protected Map<String, Object> postProcessParsedConfig(Map<String, Object> parsedValues) {
+        return Collections.emptyMap();
     }
 
     protected Object get(String key) {
@@ -107,6 +124,13 @@ public class AbstractConfig {
 
     public String getString(String key) {
         return (String) get(key);
+    }
+
+    public ConfigDef.Type typeOf(String key) {
+        ConfigDef.ConfigKey configKey = definition.configKeys().get(key);
+        if (configKey == null)
+            return null;
+        return configKey.type;
     }
 
     public Password getPassword(String key) {
@@ -152,10 +176,29 @@ public class AbstractConfig {
      * @return a Map containing the settings with the prefix
      */
     public Map<String, Object> originalsWithPrefix(String prefix) {
-        Map<String, Object> result = new RecordingMap<>(prefix);
+        Map<String, Object> result = new RecordingMap<>(prefix, false);
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
             if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length())
                 result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
+     * Put all keys that do not start with {@code prefix} and their parsed values in the result map and then
+     * put all the remaining keys with the prefix stripped and their parsed values in the result map.
+     *
+     * This is useful if one wants to allow prefixed configs to override default ones.
+     */
+    public Map<String, Object> valuesWithPrefixOverride(String prefix) {
+        Map<String, Object> result = new RecordingMap<>(values(), prefix, true);
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                String keyWithNoPrefix = entry.getKey().substring(prefix.length());
+                ConfigDef.ConfigKey configKey = definition.configKeys().get(keyWithNoPrefix);
+                if (configKey != null)
+                    result.put(keyWithNoPrefix, definition.parseValue(configKey, entry.getValue(), true));
+            }
         }
         return result;
     }
@@ -217,26 +260,41 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
+        return getConfiguredInstances(key, t, Collections.EMPTY_MAP);
+    }
+
+    /**
+     * Get a list of configured instances of the given class specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * @param key The configuration key for the class
+     * @param t The interface the class should implement
+     * @param configOverrides Configuration overrides to use.
+     * @return The list of configured instances
+     */
+    public <T> List<T> getConfiguredInstances(String key, Class<T> t, Map<String, Object> configOverrides) {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
         if (klasses == null)
             return objects;
+        Map<String, Object> configPairs = originals();
+        configPairs.putAll(configOverrides);
         for (Object klass : klasses) {
             Object o;
             if (klass instanceof String) {
                 try {
                     o = Utils.newInstance((String) klass, t);
                 } catch (ClassNotFoundException e) {
-                    throw new KafkaException(klass + " ClassNotFoundException exception occured", e);
+                    throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
                 }
             } else if (klass instanceof Class<?>) {
                 o = Utils.newInstance((Class<?>) klass);
             } else
-                throw new KafkaException("List contains element of type " + klass.getClass() + ", expected String or Class");
+                throw new KafkaException("List contains element of type " + klass.getClass().getName() + ", expected String or Class");
             if (!t.isInstance(o))
                 throw new KafkaException(klass + " is not an instance of " + t.getName());
             if (o instanceof Configurable)
-                ((Configurable) o).configure(originals());
+                ((Configurable) o).configure(configPairs);
             objects.add(t.cast(o));
         }
         return objects;
@@ -264,34 +322,40 @@ public class AbstractConfig {
     private class RecordingMap<V> extends HashMap<String, V> {
 
         private final String prefix;
+        private final boolean withIgnoreFallback;
 
         RecordingMap() {
-            this("");
+            this("", false);
         }
 
-        RecordingMap(String prefix) {
+        RecordingMap(String prefix, boolean withIgnoreFallback) {
             this.prefix = prefix;
+            this.withIgnoreFallback = withIgnoreFallback;
         }
 
         RecordingMap(Map<String, ? extends V> m) {
-            this(m, "");
+            this(m, "", false);
         }
 
-        RecordingMap(Map<String, ? extends V> m, String prefix) {
+        RecordingMap(Map<String, ? extends V> m, String prefix, boolean withIgnoreFallback) {
             super(m);
             this.prefix = prefix;
+            this.withIgnoreFallback = withIgnoreFallback;
         }
 
         @Override
         public V get(Object key) {
             if (key instanceof String) {
+                String stringKey = (String) key;
                 String keyWithPrefix;
                 if (prefix.isEmpty()) {
-                    keyWithPrefix = (String) key;
+                    keyWithPrefix = stringKey;
                 } else {
-                    keyWithPrefix = prefix + key;
+                    keyWithPrefix = prefix + stringKey;
                 }
                 ignore(keyWithPrefix);
+                if (withIgnoreFallback)
+                    ignore(stringKey);
             }
             return super.get(key);
         }

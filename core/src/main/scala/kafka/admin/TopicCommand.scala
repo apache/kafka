@@ -18,8 +18,9 @@
 package kafka.admin
 
 import java.util.Properties
+
 import joptsimple._
-import kafka.common.{AdminCommandFailedException, Topic}
+import kafka.common.AdminCommandFailedException
 import kafka.consumer.Whitelist
 import kafka.log.LogConfig
 import kafka.server.ConfigType
@@ -27,6 +28,7 @@ import kafka.utils.ZkUtils._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.kafka.common.errors.TopicExistsException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Utils
 
@@ -73,7 +75,7 @@ object TopicCommand extends Logging {
         exitCode = 1
     } finally {
       zkUtils.close()
-      System.exit(exitCode)
+      Exit.exit(exitCode)
     }
 
   }
@@ -135,7 +137,7 @@ object TopicCommand extends Logging {
       }
 
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == Topic.GroupMetadataTopicName) {
+        if (topic == Topic.GROUP_METADATA_TOPIC_NAME) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
@@ -360,7 +362,7 @@ object TopicCommand extends Logging {
     println("Are you sure you want to continue? [y/n]")
     if (!Console.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
-      System.exit(0)
+      Exit.exit(0)
     }
   }
 

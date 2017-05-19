@@ -1,13 +1,13 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -27,10 +27,25 @@ import org.apache.kafka.streams.processor.StateStore;
 public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
 
     /**
-     * Fetch any sessions with the matching key and the sessions end is &le earliestEndTime and the sessions
-     * start is &ge latestStartTime
+     * Fetch any sessions with the matching key and the sessions end is &ge; earliestSessionEndTime and the sessions
+     * start is &le; latestSessionStartTime
+     *
+     * @param key the key to return sessions for
+     * @param earliestSessionEndTime
+     * @return iterator of sessions with the matching key and aggregated values
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, long earliestSessionEndTime, final long latestSessionStartTime);
+
+    /**
+     * Fetch any sessions in the given range of keys and the sessions end is &ge; earliestSessionEndTime and the sessions
+     * start is &le; latestSessionStartTime
+     *
+     * @param keyFrom The first key that could be in the range
+     * @param keyTo The last key that could be in the range
+     * @param earliestSessionEndTime
+     * @return iterator of sessions with the matching keys and aggregated values
+     */
+    KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, long earliestSessionEndTime, final long latestSessionStartTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store

@@ -1,12 +1,12 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,8 @@ import java.util.Locale;
 import java.util.Objects;
 
 public final class ListenerName {
+
+    private static final String CONFIG_STATIC_PREFIX = "listener.name";
 
     /**
      * Create an instance with the security protocol name as the value.
@@ -40,7 +42,7 @@ public final class ListenerName {
     private final String value;
 
     public ListenerName(String value) {
-        Objects.requireNonNull("value should not be null");
+        Objects.requireNonNull(value, "value should not be null");
         this.value = value;
     }
 
@@ -64,5 +66,9 @@ public final class ListenerName {
     @Override
     public String toString() {
         return "ListenerName(" + value + ")";
+    }
+
+    public String configPrefix() {
+        return CONFIG_STATIC_PREFIX + "." + value.toLowerCase(Locale.ROOT) + ".";
     }
 }

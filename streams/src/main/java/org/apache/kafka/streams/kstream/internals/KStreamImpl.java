@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
@@ -23,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -41,9 +41,10 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.Stores;
 
 import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Array;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
@@ -56,6 +57,8 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     private static final String BRANCHCHILD_NAME = "KSTREAM-BRANCHCHILD-";
 
     public static final String FILTER_NAME = "KSTREAM-FILTER-";
+
+    public static final String PEEK_NAME = "KSTREAM-PEEK-";
 
     private static final String FLATMAP_NAME = "KSTREAM-FLATMAP-";
 
@@ -191,7 +194,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde, streamName), this.name);
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, streamName), keySerde, valSerde), this.name);
     }
 
 
@@ -223,11 +226,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
         try {
-
-            PrintStream printStream = new PrintStream(new FileOutputStream(filePath));
-            topology.addProcessor(name, new KeyValuePrinter<>(printStream, keySerde, valSerde, streamName), this.name);
-
-        } catch (FileNotFoundException e) {
+            PrintWriter printWriter = null;
+            printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, streamName), keySerde, valSerde), this.name);
+        } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
         }
@@ -314,7 +316,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(action, "action can't be null");
         String name = topology.newName(FOREACH_NAME);
 
-        topology.addProcessor(name, new KStreamForeach<>(action), this.name);
+        topology.addProcessor(name, new KStreamPeek<>(action, false), this.name);
+    }
+
+    @Override
+    public KStream<K, V> peek(final ForeachAction<? super K, ? super V> action) {
+        Objects.requireNonNull(action, "action can't be null");
+        final String name = topology.newName(PEEK_NAME);
+
+        topology.addProcessor(name, new KStreamPeek<>(action, true), this.name);
+
+        return new KStreamImpl<>(topology, name, sourceNodes, repartitionRequired);
     }
 
     @Override
@@ -349,23 +361,23 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @SuppressWarnings("unchecked")
     @Override
-    public void to(Serde<K> keySerde, Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, String topic) {
+    public void to(final Serde<K> keySerde, final Serde<V> valSerde, StreamPartitioner<? super K, ? super V> partitioner, final String topic) {
         Objects.requireNonNull(topic, "topic can't be null");
-        String name = topology.newName(SINK_NAME);
+        final String name = topology.newName(SINK_NAME);
 
-        Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
-        Serializer<V> valSerializer = valSerde == null ? null : valSerde.serializer();
+        final Serializer<K> keySerializer = keySerde == null ? null : keySerde.serializer();
+        final Serializer<V> valSerializer = valSerde == null ? null : valSerde.serializer();
 
         if (partitioner == null && keySerializer != null && keySerializer instanceof WindowedSerializer) {
-            WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
-            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(windowedSerializer);
+            final WindowedSerializer<Object> windowedSerializer = (WindowedSerializer<Object>) keySerializer;
+            partitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>(topic, windowedSerializer);
         }
 
         topology.addSink(name, topic, keySerializer, valSerializer, partitioner, this.name);
     }
 
     @Override
-    public <K1, V1> KStream<K1, V1> transform(TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier, String... stateStoreNames) {
+    public <K1, V1> KStream<K1, V1> transform(TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier, String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
         String name = topology.newName(TRANSFORM_NAME);
 
@@ -606,7 +618,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
         final String name = topology.newName(leftJoin ? LEFTJOIN_NAME : JOIN_NAME);
         topology.addProcessor(name, new KStreamKTableJoin<>(((KTableImpl<K, ?, V1>) other).valueGetterSupplier(), joiner, leftJoin), this.name);
-        topology.connectProcessorAndStateStores(name, other.getStoreName());
+        topology.connectProcessorAndStateStores(name, ((KTableImpl<K, ?, V1>) other).internalStoreName());
         topology.connectProcessors(this.name, ((KTableImpl<K, ?, V1>) other).name);
 
         return new KStreamImpl<>(topology, name, allSourceNodes, false);
@@ -711,20 +723,20 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
 
             KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindow.name(),
-                                                                                   windows.before + windows.after + 1,
+                                                                                   windows.beforeMs + windows.afterMs + 1,
                                                                                    windows.maintainMs());
             KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindow.name(),
-                                                                                    windows.before + windows.after + 1,
+                                                                                    windows.beforeMs + windows.afterMs + 1,
                                                                                     windows.maintainMs());
 
             final KStreamKStreamJoin<K1, R, ? super V1, ? super V2> joinThis = new KStreamKStreamJoin<>(otherWindow.name(),
-                windows.before,
-                windows.after,
+                windows.beforeMs,
+                windows.afterMs,
                 joiner,
                 leftOuter);
             final KStreamKStreamJoin<K1, R, ? super V2, ? super V1> joinOther = new KStreamKStreamJoin<>(thisWindow.name(),
-                windows.after,
-                windows.before,
+                windows.afterMs,
+                windows.beforeMs,
                 reverseJoiner(joiner),
                 rightOuter);
 

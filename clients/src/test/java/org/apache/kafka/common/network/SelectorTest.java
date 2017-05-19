@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.network;
 
@@ -77,7 +81,7 @@ public class SelectorTest {
 
         // disconnect
         this.server.closeConnections();
-        while (!selector.disconnected().contains(node))
+        while (!selector.disconnected().containsKey(node))
             selector.poll(1000L);
 
         // reconnect and do another request
@@ -111,7 +115,7 @@ public class SelectorTest {
      */
     @Test(expected = IOException.class)
     public void testNoRouteToHost() throws Exception {
-        selector.connect("0", new InetSocketAddress("asdf.asdf.dsc", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", new InetSocketAddress("some.invalid.hostname.foo.bar.local", server.port), BUFFER_SIZE, BUFFER_SIZE);
     }
 
     /**
@@ -123,8 +127,10 @@ public class SelectorTest {
         ServerSocket nonListeningSocket = new ServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
         selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
-        while (selector.disconnected().contains(node))
+        while (selector.disconnected().containsKey(node)) {
+            assertEquals(ChannelState.NOT_CONNECTED, selector.disconnected().get(node));
             selector.poll(1000L);
+        }
         nonListeningSocket.close();
     }
 
@@ -258,10 +264,11 @@ public class SelectorTest {
         time.sleep(6000); // The max idle time is 5000ms
         selector.poll(0);
 
-        assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
+        assertTrue("The idle connection should have been closed", selector.disconnected().containsKey(id));
+        assertEquals(ChannelState.EXPIRED, selector.disconnected().get(id));
     }
 
-    
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
@@ -272,7 +279,7 @@ public class SelectorTest {
                     return asString(receive);
         }
     }
-    
+
     protected void connect(String node, InetSocketAddress serverAddr) throws IOException {
         selector.connect(node, serverAddr, BUFFER_SIZE, BUFFER_SIZE);
     }

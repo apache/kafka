@@ -25,8 +25,9 @@ import java.util.{Properties, Random}
 import joptsimple._
 import kafka.log._
 import kafka.message._
+import kafka.server.BrokerTopicStats
 import kafka.utils._
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 
 import scala.math._
@@ -102,8 +103,12 @@ object TestLinearWriteSpeed {
     val rand = new Random
     rand.nextBytes(buffer.array)
     val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
-    val messageSet = MemoryRecords.withRecords(CompressionType.forId(compressionCodec.codec),
-      (0 until numMessages).map(_ => Record.create(new Array[Byte](messageSize))): _*)
+    val createTime = System.currentTimeMillis
+    val messageSet = {
+      val compressionType = CompressionType.forId(compressionCodec.codec)
+      val records = (0 until numMessages).map(_ => new SimpleRecord(createTime, null, new Array[Byte](messageSize)))
+      MemoryRecords.withRecords(compressionType, records: _*)
+    }
 
     val writables = new Array[Writable](numFiles)
     val scheduler = new KafkaScheduler(1)
@@ -121,7 +126,7 @@ object TestLinearWriteSpeed {
         writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
       } else {
         System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
-        System.exit(1)
+        Exit.exit(1)
       }
     }
     bytesToWrite = (bytesToWrite / numFiles) * numFiles
@@ -202,9 +207,9 @@ object TestLinearWriteSpeed {
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: MemoryRecords) extends Writable {
     Utils.delete(dir)
-    val log = new Log(dir, config, 0L, scheduler, Time.SYSTEM)
+    val log = new Log(dir, config, 0L, 0L, scheduler, new BrokerTopicStats, Time.SYSTEM)
     def write(): Int = {
-      log.append(messages, true)
+      log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes
     }
     def close() {

@@ -17,15 +17,15 @@
 
 package kafka.log
 
-import java.io.{File, RandomAccessFile}
+import java.io.{File, IOException, RandomAccessFile}
 import java.nio.{ByteBuffer, MappedByteBuffer}
 import java.nio.channels.FileChannel
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 
 import kafka.log.IndexSearchType.IndexSearchEntity
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.{CoreUtils, Logging, Os}
-import org.apache.kafka.common.utils.Utils
+import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.utils.{OperatingSystem, Utils}
 import sun.nio.ch.DirectBuffer
 
 import scala.math.ceil
@@ -37,7 +37,7 @@ import scala.math.ceil
  * @param baseOffset the base offset of the segment that this index is corresponding to.
  * @param maxIndexSize The maximum index size in bytes.
  */
-abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1)
+abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long, val maxIndexSize: Int = -1, val writable: Boolean)
     extends Logging {
 
   protected def entrySize: Int
@@ -47,7 +47,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   @volatile
   protected var mmap: MappedByteBuffer = {
     val newlyCreated = file.createNewFile()
-    val raf = new RandomAccessFile(file, "rw")
+    val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
       /* pre-allocate the file if necessary */
       if(newlyCreated) {
@@ -58,8 +58,12 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
       /* memory-map the file */
       val len = raf.length()
-      val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
-
+      val idx = {
+        if (writable)
+          raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+        else
+          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+      }
       /* set the position in the index for the next entry */
       if(newlyCreated)
         idx.position(0)
@@ -104,8 +108,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       val position = mmap.position
 
       /* Windows won't let us modify the file length while the file is mmapped :-( */
-      if(Os.isWindows)
-        forceUnmap(mmap)
+      if (OperatingSystem.IS_WINDOWS)
+        forceUnmap(mmap);
       try {
         raf.setLength(roundedNewSize)
         mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
@@ -141,8 +145,16 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    */
   def delete(): Boolean = {
     info(s"Deleting index ${file.getAbsolutePath}")
-    if(Os.isWindows)
+    inLock(lock) {
+      // On JVM, a memory mapping is typically unmapped by garbage collector.
+      // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
+      // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
+      // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
       CoreUtils.swallow(forceUnmap(mmap))
+      // Accessing unmapped mmap crashes JVM by SEGV.
+      // Accessing it after this method called sounds like a bug but for safety, assign null and do not allow later access.
+      mmap = null
+    }
     file.delete()
   }
 
@@ -185,7 +197,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   def truncateTo(offset: Long): Unit
 
   /**
-   * Forcefully free the buffer's mmap. We do this only on windows.
+   * Forcefully free the buffer's mmap.
    */
   protected def forceUnmap(m: MappedByteBuffer) {
     try {
@@ -208,12 +220,11 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * and this requires synchronizing reads.
    */
   protected def maybeLock[T](lock: Lock)(fun: => T): T = {
-    if(Os.isWindows)
+    if (OperatingSystem.IS_WINDOWS)
       lock.lock()
-    try {
-      fun
-    } finally {
-      if(Os.isWindows)
+    try fun
+    finally {
+      if (OperatingSystem.IS_WINDOWS)
         lock.unlock()
     }
   }
@@ -235,14 +246,26 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @param target The index key to look for
    * @return The slot found or -1 if the least entry in the index is larger than the target key or the index is empty
    */
-  protected def indexSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int = {
+  protected def largestLowerBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
+    indexSlotRangeFor(idx, target, searchEntity)._1
+
+  /**
+   * Find the smallest entry greater than or equal the target key or value. If none can be found, -1 is returned.
+   */
+  protected def smallestUpperBoundSlotFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): Int =
+    indexSlotRangeFor(idx, target, searchEntity)._2
+
+  /**
+   * Lookup lower and upper bounds for the given target.
+   */
+  private def indexSlotRangeFor(idx: ByteBuffer, target: Long, searchEntity: IndexSearchEntity): (Int, Int) = {
     // check if the index is empty
     if(_entries == 0)
-      return -1
+      return (-1, -1)
 
     // check if the target offset is smaller than the least offset
     if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
-      return -1
+      return (-1, 0)
 
     // binary search for the entry
     var lo = 0
@@ -256,9 +279,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       else if(compareResult < 0)
         lo = mid
       else
-        return mid
+        return (mid, mid)
     }
-    lo
+
+    (lo, if (lo == _entries - 1) -1 else lo + 1)
   }
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {

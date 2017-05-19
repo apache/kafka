@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -19,16 +19,17 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * The {@link ValueMapper} interface for mapping a value to a new value of arbitrary type.
+ * The {@code ValueMapper} interface for mapping a value to a new value of arbitrary type.
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object)} is invoked individually for each record
- * of a stream.
- * Thus, if {@link ValueMapper} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the
- * record's key is preserved.
+ * of a stream (cf. {@link ValueTransformer} for stateful value transformation).
+ * If {@code ValueMapper} is applied to a {@link org.apache.kafka.streams.KeyValue key-value pair} record the record's
+ * key is preserved.
  * If a record's key and value should be modified {@link KeyValueMapper} can be used.
  *
  * @param <V>  value type
  * @param <VR> mapped value type
  * @see KeyValueMapper
+ * @see ValueTransformer
  * @see KStream#mapValues(ValueMapper)
  * @see KStream#flatMapValues(ValueMapper)
  * @see KTable#mapValues(ValueMapper)

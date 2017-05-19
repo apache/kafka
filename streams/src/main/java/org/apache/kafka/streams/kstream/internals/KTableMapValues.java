@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,25 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.KeyValueStore;
 
 
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private final KTableImpl<K, ?, V> parent;
     private final ValueMapper<? super V, ? extends V1> mapper;
-
+    private final String queryableName;
     private boolean sendOldValues = false;
 
-    public KTableMapValues(KTableImpl<K, ?, V> parent, ValueMapper<? super V, ? extends V1> mapper) {
+    public KTableMapValues(final KTableImpl<K, ?, V> parent, final ValueMapper<? super V, ? extends V1> mapper,
+                           final String queryableName) {
         this.parent = parent;
         this.mapper = mapper;
+        this.queryableName = queryableName;
     }
 
     @Override
@@ -74,12 +76,30 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
     private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
 
+        private KeyValueStore<K, V1> store;
+        private TupleForwarder<K, V1> tupleForwarder;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(ProcessorContext context) {
+            super.init(context);
+            if (queryableName != null) {
+                store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
+                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context, sendOldValues), sendOldValues);
+            }
+        }
+
         @Override
         public void process(K key, Change<V> change) {
             V1 newValue = computeValue(change.newValue);
             V1 oldValue = sendOldValues ? computeValue(change.oldValue) : null;
 
-            context().forward(key, new Change<>(newValue, oldValue));
+            if (queryableName != null) {
+                store.put(key, newValue);
+                tupleForwarder.maybeForward(key, newValue, oldValue);
+            } else {
+                context().forward(key, new Change<>(newValue, oldValue));
+            }
         }
     }
 

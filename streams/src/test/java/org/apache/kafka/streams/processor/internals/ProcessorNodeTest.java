@@ -1,20 +1,19 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
@@ -103,7 +102,7 @@ public class ProcessorNodeTest {
         String name = "task." + context.taskId() + "." + node.name();
         String[] entities = {"all", name};
         String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        String throughputOperation =  "process-throughput";
+        String throughputOperation =  "forward";
         String groupName = "stream-processor-node-metrics";
         Map<String, String> tags = Collections.singletonMap("processor-node-id", node.name());
 
@@ -115,16 +114,18 @@ public class ProcessorNodeTest {
 
         for (String entity : entities) {
             for (String operation : latencyOperations) {
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-avg-latency", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
                     "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-max-latency", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
                     "The max latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
-                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-qps", groupName,
+                assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-rate", groupName,
                     "The average number of occurrence of " + entity + " " + operation + " operation per second.", tags)));
             }
-            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-qps", groupName,
+            assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + throughputOperation + "-rate", groupName,
                 "The average number of occurrence of " + entity + " " + throughputOperation + " operation per second.", tags)));
         }
+
+        context.close();
     }
 
 }

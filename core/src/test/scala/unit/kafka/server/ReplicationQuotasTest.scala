@@ -31,7 +31,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-
 import scala.collection.JavaConverters._
 
 /**
@@ -51,15 +50,10 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
   val topic = "topic1"
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
   @After
   override def tearDown() {
-    brokers.par.foreach(_.shutdown())
     producer.close()
+    shutdownServers(brokers)
     super.tearDown()
   }
 
@@ -202,6 +196,7 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     val start = System.currentTimeMillis()
 
     //Start the new broker (and hence start replicating)
+    debug("Starting new broker")
     brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
     waitForOffsetsToMatch(msgCount, 0, 101)
 

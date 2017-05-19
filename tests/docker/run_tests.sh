@@ -18,6 +18,11 @@
 #   TC_PATHS="tests/kafkatest/tests/streams tests/kafkatest/tests/tools" bash tests/docker/run_tests.sh
 set -x
 
+die() {
+    echo $@
+    exit 1
+}
+
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TESTS_DIR=`dirname ${SCRIPT_DIR}`
 KAFKA_SRC=`dirname ${TESTS_DIR}`
@@ -40,13 +45,14 @@ docker run --rm -it ${KAFKA_IMAGE} "true"
 if [[ $? != 0 || ${KAFKA_IMAGE_REBUILD} != "" ]]; then
     echo "kafka image ${KAFKA_IMAGE} does not exist. Building it from scratch."
     COMMIT_INFO=$(git describe HEAD)
-    docker build -t ${KAFKA_IMAGE} --label=commit_info=${COMMIT_INFO} ${SCRIPT_DIR}
+    docker build -t ${KAFKA_IMAGE} --label=commit_info=${COMMIT_INFO} ${SCRIPT_DIR} \
+        || die "docker build failed"
 fi
 
 echo "Using kafka image: ${KAFKA_IMAGE}"
 docker inspect ${KAFKA_IMAGE}
 for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
-  docker run -d -t --name knode${i} --network knw -v ${KAFKA_SRC}:/kafka_src ${KAFKA_IMAGE}
+  docker run -d -t --name knode${i} --network knw -v ${KAFKA_SRC}:/opt/kafka-dev ${KAFKA_IMAGE}
 done
 
 docker info
@@ -55,18 +61,8 @@ docker network inspect knw
 
 for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
   echo knode${i}
-  docker exec knode${i} bash -c "(tar xfz /kafka_src/core/build/distributions/kafka_*SNAPSHOT.tgz -C /opt || echo missing kafka tgz did you build kafka tarball) && mv /opt/kafka*SNAPSHOT /opt/kafka-trunk && ls -l /opt"
-  docker exec knode01 bash -c "ssh knode$i hostname"
-done
-
-# hack to copy test dependencies
-# this is required for running MiniKDC
-(cd ${KAFKA_SRC} && ./gradlew copyDependantTestLibs)
-for i in $(seq -w 1 ${KAFKA_NUM_CONTAINERS}); do
-  echo knode${i}
-  docker exec knode${i} bash -c "cp /kafka_src/core/build/dependant-testlibs/* /opt/kafka-trunk/libs/"
   docker exec knode01 bash -c "ssh knode$i hostname"
 done
 
 bash tests/cluster_file_generator.sh > tests/cluster_file.json
-docker exec knode01 bash -c "cd /kafka_src; ducktape ${_DUCKTAPE_OPTIONS} --cluster-file tests/cluster_file.json ${TC_PATHS:-tests/kafkatest/tests}"
+docker exec knode01 bash -c "cd /opt/kafka-dev; ducktape ${_DUCKTAPE_OPTIONS} --cluster-file tests/cluster_file.json ${TC_PATHS:-tests/kafkatest/tests}"

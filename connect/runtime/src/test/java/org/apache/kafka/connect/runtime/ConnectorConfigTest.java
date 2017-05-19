@@ -1,38 +1,48 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- * <p/>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p/>
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- **/
-
+ */
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.transforms.Transformation;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ConnectorConfigTest<R extends ConnectRecord<R>> {
+
+    private static final Plugins MOCK_PLUGINS = new Plugins(new HashMap<String, String>()) {
+        @Override
+        public Set<PluginDesc<Transformation>> transformations() {
+            return Collections.emptySet();
+        }
+    };
 
     public static abstract class TestConnector extends Connector {
     }
@@ -68,7 +78,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         Map<String, String> props = new HashMap<>();
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
-        new ConnectorConfig(props);
+        new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
     @Test(expected = ConfigException.class)
@@ -77,7 +87,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("name", "test");
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "dangler");
-        new ConnectorConfig(props);
+        new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
     @Test(expected = ConfigException.class)
@@ -87,7 +97,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", "uninstantiable");
-        new ConnectorConfig(props);
+        new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
     @Test(expected = ConfigException.class)
@@ -97,7 +107,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("connector.class", TestConnector.class.getName());
         props.put("transforms", "a");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
-        new ConnectorConfig(props);
+        new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
     @Test
@@ -109,7 +119,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "40");
         try {
-            new ConnectorConfig(props);
+            new ConnectorConfig(MOCK_PLUGINS, props);
             fail();
         } catch (ConfigException e) {
             assertTrue(e.getMessage().contains("Value must be at least 42"));
@@ -124,7 +134,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms", "a");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
-        final ConnectorConfig config = new ConnectorConfig(props);
+        final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
         final List<Transformation<R>> transformations = config.transformations();
         assertEquals(1, transformations.size());
         final SimpleTransformation xform = (SimpleTransformation) transformations.get(0);
@@ -139,7 +149,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms", "a, b");
         props.put("transforms.a.type", SimpleTransformation.class.getName());
         props.put("transforms.a.magic.number", "42");
-        new ConnectorConfig(props);
+        new ConnectorConfig(MOCK_PLUGINS, props);
     }
 
     @Test
@@ -152,7 +162,7 @@ public class ConnectorConfigTest<R extends ConnectRecord<R>> {
         props.put("transforms.a.magic.number", "42");
         props.put("transforms.b.type", SimpleTransformation.class.getName());
         props.put("transforms.b.magic.number", "84");
-        final ConnectorConfig config = new ConnectorConfig(props);
+        final ConnectorConfig config = new ConnectorConfig(MOCK_PLUGINS, props);
         final List<Transformation<R>> transformations = config.transformations();
         assertEquals(2, transformations.size());
         assertEquals(42, ((SimpleTransformation) transformations.get(0)).magicNumber);

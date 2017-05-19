@@ -16,6 +16,7 @@
 from ducktape.utils.util import wait_until
 
 from ducktape.mark import matrix
+from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -103,11 +104,12 @@ class ReplicationTest(ProduceConsumeValidateTest):
 
         self.topic = "test_topic"
         self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk, topics={self.topic: {
-                                                                    "partitions": 3,
-                                                                    "replication-factor": 3,
-                                                                    'configs': {"min.insync.replicas": 2}}
-                                                                })
+        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk,
+                                  topics={self.topic: {
+                                      "partitions": 3,
+                                      "replication-factor": 3,
+                                      'configs': {"min.insync.replicas": 2}}
+                                  })
         self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
@@ -122,14 +124,25 @@ class ReplicationTest(ProduceConsumeValidateTest):
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader"],
-            security_protocol=["PLAINTEXT", "SSL", "SASL_PLAINTEXT", "SASL_SSL"])
+            security_protocol=["PLAINTEXT"],
+            enable_idempotence=[True])
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
+            broker_type=["leader"],
+            security_protocol=["PLAINTEXT", "SASL_SSL"])
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["controller"],
             security_protocol=["PLAINTEXT", "SASL_SSL"])
     @matrix(failure_mode=["hard_bounce"],
             broker_type=["leader"],
             security_protocol=["SASL_SSL"], client_sasl_mechanism=["PLAIN"], interbroker_sasl_mechanism=["PLAIN", "GSSAPI"])
-    def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type, client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI"):
+    @parametrize(failure_mode="hard_bounce",
+            broker_type="leader",
+            security_protocol="SASL_SSL", client_sasl_mechanism="SCRAM-SHA-256", interbroker_sasl_mechanism="SCRAM-SHA-512")
+    @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
+            security_protocol=["PLAINTEXT"], broker_type=["leader"], compression_type=["gzip"])
+    def test_replication_with_broker_failure(self, failure_mode, security_protocol, broker_type,
+                                             client_sasl_mechanism="GSSAPI", interbroker_sasl_mechanism="GSSAPI",
+                                             compression_type=None, enable_idempotence=False):
         """Replication tests.
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
@@ -148,8 +161,11 @@ class ReplicationTest(ProduceConsumeValidateTest):
         self.kafka.client_sasl_mechanism = client_sasl_mechanism
         self.kafka.interbroker_sasl_mechanism = interbroker_sasl_mechanism
         new_consumer = False if self.kafka.security_protocol == "PLAINTEXT" else True
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
+        self.enable_idempotence = enable_idempotence
+        compression_types = None if not compression_type else [compression_type] * self.num_producers
+        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
+                                           throughput=self.producer_throughput, compression_types=compression_types,
+                                           enable_idempotence=enable_idempotence)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, new_consumer=new_consumer, consumer_timeout_ms=60000, message_validator=is_int)
         self.kafka.start()
-        
         self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self, broker_type))

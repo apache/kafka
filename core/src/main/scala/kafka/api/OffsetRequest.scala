@@ -115,10 +115,10 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val partitionOffsetResponseMap = requestInfo.map { case (topicAndPartition, _) =>
-        (topicAndPartition, PartitionOffsetsResponse(Errors.forException(e).code, Nil))
+        (topicAndPartition, PartitionOffsetsResponse(Errors.forException(e), Nil))
     }
     val errorResponse = OffsetResponse(correlationId, partitionOffsetResponseMap)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
+    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

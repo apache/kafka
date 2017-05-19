@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.requests;
 
@@ -35,8 +39,7 @@ public class RequestHeader extends AbstractRequestResponse {
     private final String clientId;
     private final int correlationId;
 
-    public RequestHeader(Struct header) {
-        super(header);
+    public RequestHeader(Struct struct) {
         apiKey = struct.getShort(API_KEY_FIELD);
         apiVersion = struct.getShort(API_VERSION_FIELD);
         clientId = struct.getString(CLIENT_ID_FIELD);
@@ -44,15 +47,19 @@ public class RequestHeader extends AbstractRequestResponse {
     }
 
     public RequestHeader(short apiKey, short version, String client, int correlation) {
-        super(new Struct(Protocol.REQUEST_HEADER));
-        struct.set(API_KEY_FIELD, apiKey);
-        struct.set(API_VERSION_FIELD, version);
-        struct.set(CLIENT_ID_FIELD, client);
-        struct.set(CORRELATION_ID_FIELD, correlation);
         this.apiKey = apiKey;
         this.apiVersion = version;
         this.clientId = client;
         this.correlationId = correlation;
+    }
+
+    public Struct toStruct() {
+        Struct struct = new Struct(Protocol.REQUEST_HEADER);
+        struct.set(API_KEY_FIELD, apiKey);
+        struct.set(API_VERSION_FIELD, apiVersion);
+        struct.set(CLIENT_ID_FIELD, clientId);
+        struct.set(CORRELATION_ID_FIELD, correlationId);
+        return struct;
     }
 
     public short apiKey() {
@@ -71,7 +78,16 @@ public class RequestHeader extends AbstractRequestResponse {
         return correlationId;
     }
 
+    public ResponseHeader toResponseHeader() {
+        return new ResponseHeader(correlationId);
+    }
+
     public static RequestHeader parse(ByteBuffer buffer) {
         return new RequestHeader(Protocol.REQUEST_HEADER.read(buffer));
+    }
+
+    @Override
+    public String toString() {
+        return toStruct().toString();
     }
 }

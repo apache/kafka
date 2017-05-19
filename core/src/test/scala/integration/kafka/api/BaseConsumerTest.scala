@@ -13,15 +13,13 @@
 package kafka.api
 
 import java.util
-import java.util.Collections
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.common.{MetricName, PartitionInfo, TopicPartition}
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
-import kafka.common.Topic
 import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -30,11 +28,12 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.internals.Topic
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
  */
-abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
+abstract class BaseConsumerTest extends IntegrationTestHarness {
 
   val epsilon = 0.1
   val producerCount = 1
@@ -53,6 +52,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
+  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -103,7 +103,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(Topic.GroupMetadataTopicName).asScala
+      parts = consumer0.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts.head.leader())
 
@@ -116,104 +116,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
     // the failover should not cause a rebalance
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
-  }
-
-  @Test
-  def testPerPartitionLagMetricsCleanUpWithSubscribe() {
-    val numMessages = 1000
-    val topic2 = "topic2"
-    TestUtils.createTopic(this.zkUtils, topic2, 2, serverCount, this.servers)
-    // send some messages.
-    sendRecords(numMessages, tp)
-    // Test subscribe
-    // Create a consumer and consumer some messages.
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithSubscribe")
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithSubscribe")
-    val consumer = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    try {
-      val listener0 = new TestConsumerReassignmentListener
-      consumer.subscribe(List(topic, topic2).asJava, listener0)
-      var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-      TestUtils.waitUntilTrue(() => {
-          records = consumer.poll(100)
-          !records.records(tp).isEmpty
-        }, "Consumer did not consume any message before timeout.")
-      assertEquals("should be assigned once", 1, listener0.callsToAssigned)
-      // Verify the metric exist.
-      val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
-      val fetchLag0 = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      assertNotNull(fetchLag0)
-      val expectedLag = numMessages - records.count
-      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.value, epsilon)
-
-      // Remove topic from subscription
-      consumer.subscribe(List(topic2).asJava, listener0)
-      TestUtils.waitUntilTrue(() => {
-        consumer.poll(100)
-        listener0.callsToAssigned >= 2
-      }, "Expected rebalance did not occur.")
-      // Verify the metric has gone
-      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-      assertNull(consumer.metrics.get(new MetricName(tp2 + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-    } finally {
-      consumer.close()
-    }
-  }
-
-  @Test
-  def testPerPartitionLagMetricsCleanUpWithAssign() {
-    val numMessages = 1000
-    // Test assign
-    // send some messages.
-    sendRecords(numMessages, tp)
-    sendRecords(numMessages, tp2)
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
-    val consumer = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    try {
-      consumer.assign(List(tp).asJava)
-      var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-      TestUtils.waitUntilTrue(() => {
-          records = consumer.poll(100)
-          !records.records(tp).isEmpty
-        }, "Consumer did not consume any message before timeout.")
-      // Verify the metric exist.
-      val tags = Collections.singletonMap("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-      val fetchLag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      assertNotNull(fetchLag)
-      val expectedLag = numMessages - records.count
-      assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.value, epsilon)
-
-      consumer.assign(List(tp2).asJava)
-      TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
-      assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
-    } finally {
-      consumer.close()
-    }
-  }
-
-  @Test
-  def testPerPartitionLagWithMaxPollRecords() {
-    val numMessages = 1000
-    val maxPollRecords = 10
-    sendRecords(numMessages, tp)
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
-    consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
-    val consumer = new KafkaConsumer(this.consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer())
-    consumer.assign(List(tp).asJava)
-    try {
-      var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-      TestUtils.waitUntilTrue(() => {
-          records = consumer.poll(100)
-          !records.isEmpty
-        }, "Consumer did not consume any message before timeout.")
-      val tags = Collections.singletonMap("client-id", "testPerPartitionLagWithMaxPollRecords")
-      val lag = consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags))
-      assertEquals(s"The lag should be ${numMessages - records.count}", numMessages - records.count, lag.value, epsilon)
-    } finally {
-      consumer.close()
-    }
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
@@ -354,7 +256,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness with Logging {
      */
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
       if (subscriptionChanged) {
-        throw new IllegalStateException("Do not call subscribe until the previous subsribe request is processed.")
+        throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
       }
       topicsSubscription = newTopicsToSubscribe
       subscriptionChanged = true

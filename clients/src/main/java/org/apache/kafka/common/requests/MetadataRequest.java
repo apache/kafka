@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.common.requests;
 
@@ -16,7 +20,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -51,8 +54,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         @Override
-        public MetadataRequest build() {
-            short version = version();
+        public MetadataRequest build(short version) {
             if (version < 1) {
                 throw new UnsupportedVersionException("MetadataRequest " +
                         "versions older than 1 are not supported.");
@@ -79,27 +81,18 @@ public class MetadataRequest extends AbstractRequest {
 
     private final List<String> topics;
 
-    public static MetadataRequest allTopics(short version) {
-        return new MetadataRequest.Builder(null).setVersion(version).build();
-    }
-
     /**
-     * In v0 null is not allowed and and empty list indicates requesting all topics.
+     * In v0 null is not allowed and an empty list indicates requesting all topics.
      * Note: modern clients do not support sending v0 requests.
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
     public MetadataRequest(List<String> topics, short version) {
-        super(new Struct(ProtoUtils.requestSchema(ApiKeys.METADATA.id, version)),
-                version);
-        if (topics == null)
-            struct.set(TOPICS_KEY_NAME, null);
-        else
-            struct.set(TOPICS_KEY_NAME, topics.toArray());
+        super(version);
         this.topics = topics;
     }
 
     public MetadataRequest(Struct struct, short version) {
-        super(struct, version);
+        super(version);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
             topics = new ArrayList<>();
@@ -112,7 +105,7 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<MetadataResponse.TopicMetadata> topicMetadatas = new ArrayList<>();
         Errors error = Errors.forException(e);
         List<MetadataResponse.PartitionMetadata> partitions = Collections.emptyList();
@@ -127,10 +120,12 @@ public class MetadataRequest extends AbstractRequest {
             case 0:
             case 1:
             case 2:
-                return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas, versionId);
+                return new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
+            case 3:
+                return new MetadataResponse(throttleTimeMs, Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID, topicMetadatas);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
+                        versionId, this.getClass().getSimpleName(), ApiKeys.METADATA.latestVersion()));
         }
     }
 
@@ -142,12 +137,17 @@ public class MetadataRequest extends AbstractRequest {
         return topics;
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer, int versionId) {
-        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer),
-                (short) versionId);
+    public static MetadataRequest parse(ByteBuffer buffer, short version) {
+        return new MetadataRequest(ApiKeys.METADATA.parseRequest(version, buffer), version);
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer) {
-        return parse(buffer, ProtoUtils.latestVersion(ApiKeys.METADATA.id));
+    @Override
+    protected Struct toStruct() {
+        Struct struct = new Struct(ApiKeys.METADATA.requestSchema(version()));
+        if (topics == null)
+            struct.set(TOPICS_KEY_NAME, null);
+        else
+            struct.set(TOPICS_KEY_NAME, topics.toArray());
+        return struct;
     }
 }

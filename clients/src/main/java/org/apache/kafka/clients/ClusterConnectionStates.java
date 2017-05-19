@@ -1,14 +1,18 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients;
 
@@ -32,7 +36,7 @@ final class ClusterConnectionStates {
      * Return true iff we can currently initiate a new connection. This will be the case if we are not
      * connected and haven't been connected for at least the minimum reconnection backoff period.
      * @param id the connection id to check
-     * @param now the current time in MS
+     * @param now the current time in ms
      * @return true if we can initiate a new connection
      */
     public boolean canConnect(String id, long now) {
@@ -133,6 +137,15 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Return true if the connection has been disconnected
+     * @param id The id of the node to check
+     */
+    public boolean isDisconnected(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state == ConnectionState.DISCONNECTED;
+    }
+
+    /**
      * Remove the given node from the tracked connection states. The main difference between this and `disconnected`
      * is the impact on `connectionDelay`: it will be 0 after this call whereas `reconnectBackoffMs` will be taken
      * into account after `disconnected` is called.
@@ -151,7 +164,7 @@ final class ClusterConnectionStates {
     public ConnectionState connectionState(String id) {
         return nodeState(id).state;
     }
-    
+
     /**
      * Get the state of a given node.
      * @param id the connection to fetch the state for

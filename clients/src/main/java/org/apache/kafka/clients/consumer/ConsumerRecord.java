@@ -1,18 +1,24 @@
-/**
- * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
- * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
- * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
- * License. You may obtain a copy of the License at
- * 
- * http://www.apache.org/licenses/LICENSE-2.0
- * 
- * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
- * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations under the License.
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
 /**
@@ -21,7 +27,7 @@ import org.apache.kafka.common.record.TimestampType;
  * to the record in a Kafka partition, and a timestamp as marked by the corresponding ProducerRecord.
  */
 public class ConsumerRecord<K, V> {
-    public static final long NO_TIMESTAMP = Record.NO_TIMESTAMP;
+    public static final long NO_TIMESTAMP = RecordBatch.NO_TIMESTAMP;
     public static final int NULL_SIZE = -1;
     public static final int NULL_CHECKSUM = -1;
 
@@ -33,6 +39,7 @@ public class ConsumerRecord<K, V> {
     private final long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
+    private final Headers headers;
     private final K key;
     private final V value;
 
@@ -58,7 +65,8 @@ public class ConsumerRecord<K, V> {
 
 
     /**
-     * Creates a record to be received from a specified topic and partition
+     * Creates a record to be received from a specified topic and partition (provided for
+     * compatibility with Kafka 0.10 before the message format supported headers).
      *
      * @param topic The topic this record is received from
      * @param partition The partition of the topic this record is received from
@@ -81,6 +89,35 @@ public class ConsumerRecord<K, V> {
                           int serializedValueSize,
                           K key,
                           V value) {
+        this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize, key, value, new RecordHeaders());
+    }
+
+    /**
+     * Creates a record to be received from a specified topic and partition
+     *
+     * @param topic The topic this record is received from
+     * @param partition The partition of the topic this record is received from
+     * @param offset The offset of this record in the corresponding Kafka partition
+     * @param timestamp The timestamp of the record.
+     * @param timestampType The timestamp type
+     * @param checksum The checksum (CRC32) of the full record
+     * @param serializedKeySize The length of the serialized key
+     * @param serializedValueSize The length of the serialized value
+     * @param key The key of the record, if one exists (null is allowed)
+     * @param value The record contents
+     * @param headers The headers of the record.
+     */
+    public ConsumerRecord(String topic,
+                          int partition,
+                          long offset,
+                          long timestamp,
+                          TimestampType timestampType,
+                          long checksum,
+                          int serializedKeySize,
+                          int serializedValueSize,
+                          K key,
+                          V value,
+                          Headers headers) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         this.topic = topic;
@@ -93,6 +130,7 @@ public class ConsumerRecord<K, V> {
         this.serializedValueSize = serializedValueSize;
         this.key = key;
         this.value = value;
+        this.headers = headers;
     }
 
     /**
@@ -109,6 +147,13 @@ public class ConsumerRecord<K, V> {
         return this.partition;
     }
 
+    /**
+     * The headers
+     */
+    public Headers headers() {
+        return headers;
+    }
+    
     /**
      * The key (or null if no key is specified)
      */
@@ -173,6 +218,7 @@ public class ConsumerRecord<K, V> {
                + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum
                + ", serialized key size = "  + serializedKeySize
                + ", serialized value size = " + serializedValueSize
+               + ", headers = " + headers
                + ", key = " + key + ", value = " + value + ")";
     }
 }
