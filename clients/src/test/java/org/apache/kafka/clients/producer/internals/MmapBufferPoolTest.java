@@ -26,6 +26,8 @@ import org.powermock.modules.junit4.PowerMockRunner;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.Random;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -76,6 +78,37 @@ public class MmapBufferPoolTest {
         pool.allocate(1025, maxBlockTimeMs);
     }
 
+    /**
+     * Test that delayed allocation blocks
+     */
+    @Test
+    public void testDelayedAllocation() throws Exception {
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(5 * 1024, 1024, time, storefile);
+        ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
+        CountDownLatch doDealloc = asyncDeallocate(pool, buffer);
+        CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
+        assertEquals("Allocation shouldn't have happened yet, waiting on memory.", 1L, allocation.getCount());
+        doDealloc.countDown(); // return the memory
+        assertTrue("Allocation should succeed soon after de-allocation", allocation.await(1, TimeUnit.SECONDS));
+    }
+
+    private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
+        final CountDownLatch latch = new CountDownLatch(1);
+        Thread thread = new Thread() {
+            public void run() {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+                pool.deallocate(buffer);
+            }
+        };
+        thread.start();
+        return latch;
+    }
+
     private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
         Thread thread = new Thread() {
             public void run() {
@@ -84,6 +117,23 @@ public class MmapBufferPoolTest {
             }
         };
         thread.start();
+    }
+
+    private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
+        final CountDownLatch completed = new CountDownLatch(1);
+        Thread thread = new Thread() {
+            public void run() {
+                try {
+                    pool.allocate(size, maxBlockTimeMs);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                } finally {
+                    completed.countDown();
+                }
+            }
+        };
+        thread.start();
+        return completed;
     }
 
     /**
