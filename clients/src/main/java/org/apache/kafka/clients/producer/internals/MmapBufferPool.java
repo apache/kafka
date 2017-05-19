@@ -237,10 +237,12 @@ public class MmapBufferPool implements BufferPool {
         return this.poolableSize;
     }
 
+    /**
+     * The total memory managed by this pool
+     */
     @Override
     public long totalMemory() {
-     // TODO write me
-        return 0;
+        return this.totalMemory;
     }
 
     // package-private method used only for testing
