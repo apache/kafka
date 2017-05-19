@@ -697,7 +697,7 @@ class TransactionCoordinatorTest {
       .andReturn(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareMetadata)))
       .once()
 
-    val newMetadata = TransactionMetadataTransition(producerId = producerId,
+    val newMetadata = TxnTransitMetadata(producerId = producerId,
       producerEpoch = producerEpoch,
       txnTimeoutMs = txnTimeoutMs,
       txnState = finalState,

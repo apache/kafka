@@ -66,11 +66,9 @@ class TransactionStateManagerTest {
   val transactionalId2: String = "two"
   val txnMessageKeyBytes1: Array[Byte] = TransactionLog.keyToBytes(transactionalId1)
   val txnMessageKeyBytes2: Array[Byte] = TransactionLog.keyToBytes(transactionalId2)
-  val pidMappings: Map[String, Long] = Map[String, Long](transactionalId1 -> 1L, transactionalId2 -> 2L)
-  var txnMetadata1: TransactionMetadata = TransactionMetadata(transactionalId1, pidMappings(transactionalId1), 1,
-    transactionTimeoutMs, 0)
-  var txnMetadata2: TransactionMetadata = TransactionMetadata(transactionalId2, pidMappings(transactionalId2), 1,
-    transactionTimeoutMs, 0)
+  val producerIds: Map[String, Long] = Map[String, Long](transactionalId1 -> 1L, transactionalId2 -> 2L)
+  var txnMetadata1: TransactionMetadata = transactionMetadata(transactionalId1, producerIds(transactionalId1))
+  var txnMetadata2: TransactionMetadata = transactionMetadata(transactionalId2, producerIds(transactionalId2))
 
   var expectedError: Errors = Errors.NONE
 
@@ -353,7 +351,7 @@ class TransactionStateManagerTest {
 
   private def transactionMetadata(transactionalId: String,
                                   producerId: Long,
-                                  state: TransactionState,
+                                  state: TransactionState = Empty,
                                   txnTimeout: Int = transactionTimeoutMs): TransactionMetadata = {
     TransactionMetadata(transactionalId, producerId, 0.toShort, txnTimeout, state, time.milliseconds())
   }
