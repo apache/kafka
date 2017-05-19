@@ -196,7 +196,6 @@ public final class ProducerBatch {
 
             // A newly created batch can always host the first message.
             if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
-                batch.close();
                 batches.add(batch);
                 batch = createBatchOffAccumulatorForRecord(this.topicPartition, this.recordsBuilder.compressionType(),
                                                            record, splitBatchSize, this.createdMs);
@@ -204,10 +203,9 @@ public final class ProducerBatch {
             }
         }
         // Close the last batch and add it to the batch list after split.
-        if (batch != null) {
-            batch.close();
+        if (batch != null)
             batches.add(batch);
-        }
+
         produceFuture.set(ProduceResponse.INVALID_OFFSET, NO_TIMESTAMP, new RecordBatchTooLargeException());
         produceFuture.done();
         return batches;

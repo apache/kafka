@@ -539,8 +539,10 @@ public class SenderTest {
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         Metrics m = new Metrics();
+        TransactionManager txnManager = new TransactionManager("testSplitBatchAndSend", 0);
+        txnManager.setPidAndEpoch(new PidAndEpoch(123456L, (short) 0));
         accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,
-                                            new ApiVersions(), null);
+                                            new ApiVersions(), txnManager);
         try {
             Sender sender = new Sender(client,
                                        metadata,
@@ -553,7 +555,7 @@ public class SenderTest {
                                        time,
                                        REQUEST_TIMEOUT,
                                        1000L,
-                                       null,
+                                       txnManager,
                                        new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             Cluster cluster1 = TestUtils.clusterWith(2, topic, 2);
@@ -566,6 +568,7 @@ public class SenderTest {
                     accumulator.append(tp2, 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // connect
             sender.run(time.milliseconds()); // send produce request
+            assertEquals("The sequence number should be 0", 0, txnManager.sequenceNumber(tp2).longValue());
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.valueOf(id), "localhost", 0);
@@ -576,10 +579,11 @@ public class SenderTest {
             responseMap.put(tp2, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
             client.respond(new ProduceResponse(responseMap));
             sender.run(time.milliseconds()); // split and reenqueue
-            // The compression ratio should have been improved twice.
-            assertEquals(CompressionType.GZIP.rate - 2 * CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
+            // The compression ratio should have been improved once.
+            assertEquals(CompressionType.GZIP.rate - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
                     CompressionRatioEstimator.estimation(topic, CompressionType.GZIP), 0.01);
             sender.run(time.milliseconds()); // send produce request
+            assertEquals("The sequence number should be 0", 0, txnManager.sequenceNumber(tp2).longValue());
             assertFalse("The future shouldn't have been done.", f1.isDone());
             assertFalse("The future shouldn't have been done.", f2.isDone());
             id = client.requests().peek().destination();
@@ -592,6 +596,7 @@ public class SenderTest {
             client.respond(new ProduceResponse(responseMap));
             sender.run(time.milliseconds()); // receive
             assertTrue("The future should have been done.", f1.isDone());
+            assertEquals("The sequence number should be 1", 1, txnManager.sequenceNumber(tp2).longValue());
             assertFalse("The future shouldn't have been done.", f2.isDone());
             assertEquals("Offset of the first message should be 0", 0L, f1.get().offset());
             sender.run(time.milliseconds()); // send produce request
@@ -605,6 +610,7 @@ public class SenderTest {
             client.respond(new ProduceResponse(responseMap));
             sender.run(time.milliseconds()); // receive
             assertTrue("The future should have been done.", f2.isDone());
+            assertEquals("The sequence number should be 2", 2, txnManager.sequenceNumber(tp2).longValue());
             assertEquals("Offset of the first message should be 1", 1L, f2.get().offset());
             assertTrue("There should be no batch in the accumulator", accumulator.batches().get(tp2).isEmpty());
 

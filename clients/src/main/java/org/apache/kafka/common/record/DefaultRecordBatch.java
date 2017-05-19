@@ -30,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import org.apache.kafka.common.utils.Utils;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -440,7 +441,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
     static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
+        return batchSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
     }
 
     /**

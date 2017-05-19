@@ -494,9 +494,7 @@ public class DefaultRecord implements Record {
     }
 
     static int recordSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        int keySize = key == null ? -1 : key.length;
-        int valueSize = value == null ? -1 : value.length;
-        return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
+        return recordSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
     }
 
     static int recordSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {

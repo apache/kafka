@@ -329,14 +329,16 @@ public final class RecordAccumulator {
 
     /**
      * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     * @return the number of split batches.
      */
-    public void splitAndReenqueue(ProducerBatch bigBatch) {
+    public int splitAndReenqueue(ProducerBatch bigBatch) {
         // Reset the estimated compression ratio to the initial value or the big batch compression ratio, whichever
         // is bigger. There are several different ways to do the reset. We chose the most conservative one to ensure
         // the split doesn't happen too often.
         CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression,
                                                 Math.max(1.0f, (float) bigBatch.compressionRatio()));
         Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
+        int numSplitBatches = dq.size();
         Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
         while (!dq.isEmpty()) {
             ProducerBatch batch = dq.pollLast();
@@ -347,6 +349,7 @@ public final class RecordAccumulator {
                 partitionDequeue.addFirst(batch);
             }
         }
+        return numSplitBatches;
     }
 
     /**
