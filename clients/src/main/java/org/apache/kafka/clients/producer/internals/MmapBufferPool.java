@@ -27,7 +27,6 @@ import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel.MapMode;
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -35,7 +34,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class MmapBufferPool implements BufferPool {
     
     private final long totalMemory;
-    private final int chunkSize;
+    private final int poolableSize;
     /** This memory is accounted for separately from the poolable buffers in free. */
     private long availableMemory;
     private final Time time;
@@ -45,8 +44,8 @@ public class MmapBufferPool implements BufferPool {
     private final Deque<Condition> waiters;
     private MappedByteBuffer fileBuffer;
     
-    public MmapBufferPool(long totalMemory, int chunkSize, Time time, File backingFileName) throws IOException {
-        this.chunkSize = chunkSize;
+    public MmapBufferPool(long totalMemory, int poolableSize, Time time, File backingFileName) throws IOException {
+        this.poolableSize = poolableSize;
         this.lock = new ReentrantLock();
         this.free = new ArrayDeque<>();
         this.waiters = new ArrayDeque<>();
@@ -78,12 +77,12 @@ public class MmapBufferPool implements BufferPool {
         this.lock.lock();
         try {
             // check if we have a free buffer of the right size pooled
-            if (size == chunkSize && !this.free.isEmpty())
+            if (size == poolableSize && !this.free.isEmpty())
                 return this.free.pollFirst();
 
             // now check if the request is immediately satisfiable with the
             // memory on hand or if we need to block
-            int freeListSize = freeSize() * this.chunkSize;
+            int freeListSize = freeSize() * this.poolableSize;
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request
@@ -122,7 +121,7 @@ public class MmapBufferPool implements BufferPool {
 
                         // check if we can satisfy this request from the free list,
                         // otherwise allocate memory
-                        if (accumulated == 0 && size == this.chunkSize && !this.free.isEmpty()) {
+                        if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
                             // just grab a buffer from the free list
                             buffer = this.free.pollFirst();
                             accumulated = size;
@@ -175,7 +174,7 @@ public class MmapBufferPool implements BufferPool {
         lock.lock();
         try {
             int sliceSize = buffer.limit() - buffer.position();
-            if (size == this.chunkSize && size == sliceSize) {
+            if (size == this.poolableSize && size == sliceSize) {
                 this.free.add(buffer);
             } else {
                 this.availableMemory += size;
@@ -198,7 +197,7 @@ public class MmapBufferPool implements BufferPool {
     public long availableMemory() {
         lock.lock();
         try {
-            return this.availableMemory + freeSize() * (long) this.chunkSize;
+            return this.availableMemory + freeSize() * (long) this.poolableSize;
         } finally {
           lock.unlock();
         }
@@ -235,8 +234,7 @@ public class MmapBufferPool implements BufferPool {
 
     @Override
     public int poolableSize() {
-     // TODO write me
-        return 0;
+        return this.poolableSize;
     }
 
     @Override
