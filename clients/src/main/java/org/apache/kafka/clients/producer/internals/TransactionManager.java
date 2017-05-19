@@ -347,12 +347,6 @@ public class TransactionManager {
     }
 
     TxnRequestHandler nextRequestHandler() {
-        if (hasInflightRequest()) {
-            log.trace("TransactionalId: {} -- There is already an in-flight transactional request. Going to wait for the response.",
-                    transactionalId);
-            return null;
-        }
-
         if (!newPartitionsToBeAddedToTransaction.isEmpty())
             pendingRequests.add(addPartitionsToTransactionHandler());
 
@@ -645,6 +639,7 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
+
             for (TopicPartition topicPartition : pendingPartitionsToBeAddedToTransaction) {
                 final Errors error = errors.get(topicPartition);
                 if (error == Errors.NONE || error == null) {
@@ -732,7 +727,6 @@ public class TransactionManager {
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE) {
                 reenqueue();
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
-                System.out.println("good we're here");
                 fatal(error.exception());
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
                 fatal(new GroupAuthorizationException(builder.coordinatorKey()));

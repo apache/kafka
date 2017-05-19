@@ -195,9 +195,14 @@ public class Sender implements Runnable {
                     client.poll(retryBackoffMs, now);
                     return;
                 }
-            } else if (maybeSendTransactionalRequest(now)) {
+            } else if (transactionManager.hasInflightRequest() || maybeSendTransactionalRequest(now)) {
                 client.poll(retryBackoffMs, now);
                 return;
+            }
+
+            if (transactionManager.isInErrorState() && accumulator.hasUnflushedBatches()) {
+                log.error("Aborting producer batches due to fatal error", transactionManager.lastError());
+                accumulator.abortBatches(transactionManager.lastError());
             }
         }
 
@@ -414,11 +419,6 @@ public class Sender implements Runnable {
             log.trace("Retry InitProducerIdRequest in {}ms.", retryBackoffMs);
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
-        }
-
-        if (transactionManager.isInErrorState() && accumulator.hasUnflushedBatches()) {
-            log.error("Aborting producer batches due to fatal error", transactionManager.lastError());
-            accumulator.abortBatches(transactionManager.lastError());
         }
 
         return transactionManager.hasProducerId();

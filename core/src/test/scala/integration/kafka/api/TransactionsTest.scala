@@ -120,7 +120,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     consumer.subscribe(List(topic1))
     producer.initTransactions()
 
-    val random = new Random()
     var shouldCommit = false
     var recordsProcessed = 0
     try {
@@ -334,7 +333,6 @@ class TransactionsTest extends KafkaServerTestHarness {
         fail("Should not be able to send messages from a fenced producer.")
       } catch {
         case e : ProducerFencedException =>
-          producer1.close()
         case e : ExecutionException =>
           assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
         case e : Exception =>
