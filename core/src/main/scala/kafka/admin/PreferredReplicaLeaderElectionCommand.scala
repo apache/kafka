@@ -93,9 +93,9 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
             if (duplicatePartitions.nonEmpty)
               throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))
             partitionsSet
-          case None => throw new AdminOperationException("Preferred replica election data is empty")
+          case None => throw new AdminOperationException("Preferred replica election data is empty or has invalid format")
         }
-      case None => throw new AdminOperationException("Preferred replica election data is empty")
+      case None => throw new AdminOperationException("Preferred replica election data is empty or contains invalid json")
     }
   }
 

@@ -118,7 +118,7 @@ object Broker {
 
           Broker(id, endpoints, rack)
         case None =>
-          throw new BrokerNotAvailableException(s"Broker id $id does not exist")
+          throw new BrokerNotAvailableException(s"Broker info for $id contains invalid json")
       }
     } catch {
       case t: Throwable =>

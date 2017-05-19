@@ -73,4 +73,27 @@ class ZkUtilsTest extends ZooKeeperTestHarness {
     val clusterId = "test"
     assertEquals(zkUtils.ClusterId.fromJson(zkUtils.ClusterId.toJson(clusterId)), clusterId)
   }
+
+  @Test
+  def testInvalidPartitionJson(): Unit = {
+    try {
+      ZkUtils.parsePartitionReassignmentDataWithoutDedup("""{"partitions": [{"topic": "foo"},], "version": 1}""")
+      assert(false, "Invalid json should throw an exception")
+    } catch {
+      case e: Exception =>
+    }
+  }
+
+  @Test
+  def testMissingKeyPartitionJson(): Unit = {
+    try {
+      ZkUtils.parsePartitionReassignmentDataWithoutDedup("""{"partitions": [{"topic": "foo"}], "version": 1}""")
+      assert(false, "Invalid format should throw an exception")
+    } catch {
+      case e: Exception =>
+        assertTrue("Exception should explain which key is missing, got: %s".format(e.getMessage),
+          e.getMessage.contains("partition"))
+    }
+  }
+
 }

@@ -620,6 +620,7 @@ object AdminUtils extends Logging with AdminUtilities {
     if (str != null) {
       Json.parseFull(str) match {
         case None => // there are no config overrides
+          // TODO: are any non-empty non-json strings valid here?
         case Some(mapAnon: Map[_, _]) =>
           val map = mapAnon collect { case (k: String, v: Any) => k -> v }
           require(map("version") == 1)
