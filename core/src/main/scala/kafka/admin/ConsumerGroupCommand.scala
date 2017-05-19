@@ -536,7 +536,7 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Iterable[TopicPartition] = topicArgs.flatMap {
+    private def parseTopicPartitionsToReset(topicArgs: Seq[String]): Seq[TopicPartition] = topicArgs.flatMap {
       case topicArg if topicArg.contains(":") =>
         val topicAndPartitions = topicArg.split(":")
         val topic = topicAndPartitions(0)
@@ -545,15 +545,17 @@ object ConsumerGroupCommand extends Logging {
         .map(partitionInfo => new TopicPartition(topic, partitionInfo.partition))
     }
 
-    private def getPartitionsToReset(groupId: String): Iterable[TopicPartition] = {
+    private def getPartitionsToReset(groupId: String): Seq[TopicPartition] = {
+      val allTopicPartitions = adminClient.listGroupOffsets(groupId).keys.toSeq
       if (opts.options.has(opts.allTopicsOpt)) {
-        adminClient.listGroupOffsets(groupId).keys
+        allTopicPartitions
       } else if (opts.options.has(opts.topicOpt)) {
         val topics = opts.options.valuesOf(opts.topicOpt).asScala
-        parseTopicPartitionsToReset(topics)
+        val topicPartitions = parseTopicPartitionsToReset(topics)
+        allTopicPartitions.filter(topicPartition => topicPartitions.contains(topicPartition))
       } else {
         if (opts.options.has(opts.resetFromFileOpt))
-          adminClient.listGroupOffsets(groupId).keys
+          allTopicPartitions
         else
           CommandLineUtils.printUsageAndDie(opts.parser, "One of the reset scopes should be defined: --all-topics, --topic.")
       }
