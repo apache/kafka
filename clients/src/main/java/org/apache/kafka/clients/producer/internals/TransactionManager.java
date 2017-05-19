@@ -259,21 +259,6 @@ public class TransactionManager {
             transitionTo(State.ERROR, exception);
     }
 
-    private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
-        if (isInErrorState()) {
-            if (requestHandler instanceof EndTxnHandler) {
-                // we allow abort requests to break out of the error state. The state and the last error
-                // will be cleared when the request returns
-                EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
-                if (endTxnHandler.builder.result() == TransactionResult.ABORT)
-                    return false;
-            }
-            requestHandler.fatal(lastError);
-            return true;
-        }
-        return false;
-    }
-
     /**
      * Get the current producer id and epoch without blocking. Callers must use {@link ProducerIdAndEpoch#isValid()} to
      * verify that the result is valid.
@@ -444,6 +429,21 @@ public class TransactionManager {
             else
                 throw new KafkaException(errorMessage);
         }
+    }
+
+    private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
+        if (isInErrorState()) {
+            if (requestHandler instanceof EndTxnHandler) {
+                // we allow abort requests to break out of the error state. The state and the last error
+                // will be cleared when the request returns
+                EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
+                if (endTxnHandler.builder.result() == TransactionResult.ABORT)
+                    return false;
+            }
+            requestHandler.fatal(lastError);
+            return true;
+        }
+        return false;
     }
 
     private void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
