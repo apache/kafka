@@ -25,7 +25,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.admin.{AdminUtils, RackAwareMode}
-import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
+import kafka.api.{ApiVersion, ControlledShutdownRequest, ControlledShutdownResponse, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
 import kafka.common.{KafkaStorageException, OffsetAndMetadata, OffsetMetadata, TopicAndPartition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
@@ -117,11 +117,36 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
-        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
-        case ApiKeys.END_TXN => handleEndTxnRequest(request)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
-        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          def response(throttleTimeMs: Int): AbstractResponse = {
+            request.body[AddPartitionsToTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
+          }
+          response
+        }, handleAddPartitionToTxnRequest)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          def response(throttleTimeMs: Int): AbstractResponse = {
+            request.body[AddOffsetsToTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
+          }
+          response
+        }, handleAddOffsetsToTxnRequest)
+        case ApiKeys.END_TXN => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          def response(throttleTimeMs: Int): AbstractResponse = {
+            request.body[EndTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
+          }
+          response
+        }, handleEndTxnRequest)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          def response(throttleTimeMs: Int): AbstractResponse = {
+            request.body[WriteTxnMarkersRequest].getErrorResponse(throttleTimeMs, error.exception())
+          }
+          response
+        }, handleWriteTxnMarkersRequest)
+        case ApiKeys.TXN_OFFSET_COMMIT =>  handleWithApiVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
+          def response(throttleTimeMs: Int): AbstractResponse = {
+            request.body[TxnOffsetCommitRequest].getErrorResponse(throttleTimeMs, error.exception())
+          }
+          response
+        }, handleTxnOffsetCommitRequest)
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
@@ -1517,6 +1542,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         entriesPerPartition = controlRecords,
         sendResponseCallback(producerId, marker.transactionResult))
     }
+  }
+
+  def handleWithApiVersionAtLeast(version: ApiVersion,
+                                  request: RequestChannel.Request,
+                                  createErrorResponse: Errors => Int => AbstractResponse,
+                                  handler: (RequestChannel.Request) => Unit): Unit = {
+      if (config.logMessageFormatVersion < version)
+        sendResponseMaybeThrottle(request, createErrorResponse(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT))
+      else if (config.interBrokerProtocolVersion < version)
+        sendResponseMaybeThrottle(request, createErrorResponse(Errors.INVALID_REQUEST))
+      else
+        handler(request)
   }
 
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {
