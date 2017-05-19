@@ -138,7 +138,7 @@ public class StreamsResetter {
 
     private void parseArguments(final String[] args) throws IOException {
         final OptionParser optionParser = new OptionParser();
-        applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id)")
+        applicationIdOption = optionParser.accepts("application-id", "The Kafka Streams application ID (application.id).")
             .withRequiredArg()
             .ofType(String.class)
             .describedAs("id")
@@ -148,7 +148,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .defaultsTo("localhost:9092")
             .describedAs("urls");
-        zookeeperOption = optionParser.accepts("zookeeper", "Format: HOST:POST")
+        zookeeperOption = optionParser.accepts("zookeeper", "Zookeeper url with format: HOST:POST")
             .withRequiredArg()
             .ofType(String.class)
             .defaultsTo("localhost:2181")
@@ -163,7 +163,7 @@ public class StreamsResetter {
             .ofType(String.class)
             .withValuesSeparatedBy(',')
             .describedAs("list");
-        dryRunOption = optionParser.accepts("dry-run", "Option to indicate to run streams reset tool to display actions it will perform");
+        dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
 
         try {
             options = optionParser.parse(args);
