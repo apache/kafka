@@ -289,6 +289,16 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void testToString()
+    {
+        streams.start();
+        String streamString = streams.toString();
+        streams.close();
+        Assert.assertNotEquals("streamString should not be empty", "", streamString);
+        Assert.assertNotNull("streamString should not be null", streamString);
+    }
+
 
     public static class StateListenerStub implements KafkaStreams.StateListener {
         public int numChanges = 0;
