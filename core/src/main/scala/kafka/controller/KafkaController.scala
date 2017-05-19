@@ -42,7 +42,10 @@ import scala.collection._
 import scala.util.Try
 
 class ControllerContext(val zkUtils: ZkUtils) {
+  val controllerStats = new ControllerStats
+
   var controllerChannelManager: ControllerChannelManager = null
+
   var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty
   var epoch: Int = KafkaController.InitialControllerEpoch - 1
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1
@@ -150,10 +153,12 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   val controllerContext = new ControllerContext(zkUtils)
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)
+
   // have a separate scheduler for the controller to be able to start and stop independently of the
   // kafka server
   private val kafkaScheduler = new KafkaScheduler(1)
-  val topicDeletionManager: TopicDeletionManager = new TopicDeletionManager(this)
+
+  val topicDeletionManager = new TopicDeletionManager(this)
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
   private val preferredReplicaPartitionLeaderSelector = new PreferredReplicaPartitionLeaderSelector(controllerContext)
@@ -162,6 +167,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   private val controllerEventQueue = new LinkedBlockingQueue[ControllerEvent]
   private val controllerEventThread = new ControllerEventThread("controller-event-thread")
+
   private val brokerChangeListener = new BrokerChangeListener(this)
   private val topicChangeListener = new TopicChangeListener(this)
   private val topicDeletionListener = new TopicDeletionListener(this)
@@ -169,6 +175,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   private val partitionReassignmentListener = new PartitionReassignmentListener(this)
   private val preferredReplicaElectionListener = new PreferredReplicaElectionListener(this)
   private val isrChangeNotificationListener = new IsrChangeNotificationListener(this)
+
   private val activeControllerId = new AtomicInteger(-1)
   private val offlinePartitionCount = new AtomicInteger(0)
   private val preferredReplicaImbalanceCount = new AtomicInteger(0)
@@ -1155,7 +1162,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
   case class BrokerChange(currentBrokerList: Seq[String]) extends ControllerEvent {
     override def process(): Unit = {
       if (!isActive) return
-      ControllerStats.leaderElectionTimer.time {
+      controllerContext.controllerStats.leaderElectionTimer.time {
         try {
           val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
           val curBrokerIds = curBrokers.map(_.id)
@@ -1713,16 +1720,9 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
   }
 }
 
-object ControllerStats extends KafkaMetricsGroup {
-
-  private val _uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
-  private val _leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-
-  // KafkaServer needs to initialize controller metrics during startup. We perform initialization
-  // through method calls to avoid Scala compiler warnings.
-  def uncleanLeaderElectionRate: Meter = _uncleanLeaderElectionRate
-
-  def leaderElectionTimer: KafkaTimer = _leaderElectionTimer
+private[controller] class ControllerStats extends KafkaMetricsGroup {
+  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
+  val leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 }
 
 sealed trait ControllerEvent {

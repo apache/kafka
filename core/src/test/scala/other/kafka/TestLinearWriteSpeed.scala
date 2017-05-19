@@ -25,6 +25,7 @@ import java.util.{Properties, Random}
 import joptsimple._
 import kafka.log._
 import kafka.message._
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -206,7 +207,7 @@ object TestLinearWriteSpeed {
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: MemoryRecords) extends Writable {
     Utils.delete(dir)
-    val log = new Log(dir, config, 0L, 0L, scheduler, Time.SYSTEM)
+    val log = new Log(dir, config, 0L, 0L, scheduler, new BrokerTopicStats, Time.SYSTEM)
     def write(): Int = {
       log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes

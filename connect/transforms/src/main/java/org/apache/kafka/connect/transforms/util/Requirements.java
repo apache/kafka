@@ -32,6 +32,7 @@ public class Requirements {
         }
     }
 
+    @SuppressWarnings("unchecked")
     public static Map<String, Object> requireMap(Object value, String purpose) {
         if (!(value instanceof Map)) {
             throw new DataException("Only Map objects supported in absence of schema for [" + purpose + "], found: " + nullSafeClassName(value));

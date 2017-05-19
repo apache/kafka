@@ -44,6 +44,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import java.util.Map.{Entry => JEntry}
 import java.lang.{Long => JLong}
+import java.util.regex.Pattern
+
+import org.apache.kafka.common.internals.Topic
 
 object LogAppendInfo {
   val UnknownLogAppendInfo = LogAppendInfo(-1, -1, RecordBatch.NO_TIMESTAMP, -1L, RecordBatch.NO_TIMESTAMP,
@@ -110,9 +113,10 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
  *                       Other activities such as log cleaning are not affected by logStartOffset.
  * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
  * @param scheduler The thread pool scheduler used for background actions
+ * @param brokerTopicStats Container for Broker Topic Yammer Metrics
  * @param time The time instance used for checking the clock
- * @param maxPidExpirationMs The maximum amount of time to wait before a PID is considered expired
- * @param pidExpirationCheckIntervalMs How often to check for PIDs which need to be expired
+ * @param maxProducerIdExpirationMs The maximum amount of time to wait before a producer id is considered expired
+ * @param producerIdExpirationCheckIntervalMs How often to check for producer ids which need to be expired
  */
 @threadsafe
 class Log(@volatile var dir: File,
@@ -120,9 +124,10 @@ class Log(@volatile var dir: File,
           @volatile var logStartOffset: Long = 0L,
           @volatile var recoveryPoint: Long = 0L,
           scheduler: Scheduler,
+          brokerTopicStats: BrokerTopicStats,
           time: Time = Time.SYSTEM,
-          val maxPidExpirationMs: Int = 60 * 60 * 1000,
-          val pidExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
+          val maxProducerIdExpirationMs: Int = 60 * 60 * 1000,
+          val producerIdExpirationCheckIntervalMs: Int = 10 * 60 * 1000) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
 
@@ -146,7 +151,7 @@ class Log(@volatile var dir: File,
   /* The earliest offset which is part of an incomplete transaction. This is used to compute the LSO. */
   @volatile var firstUnstableOffset: Option[LogOffsetMetadata] = None
 
-  private val producerStateManager = new ProducerStateManager(topicPartition, dir, maxPidExpirationMs)
+  private val producerStateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -204,7 +209,7 @@ class Log(@volatile var dir: File,
     lock synchronized {
       producerStateManager.removeExpiredProducers(time.milliseconds)
     }
-  }, period = pidExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
+  }, period = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
   /** The name of this log */
   def name  = dir.getName()
@@ -254,7 +259,7 @@ class Log(@volatile var dir: File,
       if (isIndexFile(file)) {
         // if it is an index file, make sure it has a corresponding .log file
         val offset = offsetFromFilename(filename)
-        val logFile = logFilename(dir, offset)
+        val logFile = Log.logFile(dir, offset)
         if (!logFile.exists) {
           warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
           Files.deleteIfExists(file.toPath)
@@ -303,7 +308,7 @@ class Log(@volatile var dir: File,
   }
 
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochCache] = None): Int = lock synchronized {
-    val stateManager = new ProducerStateManager(topicPartition, dir, maxPidExpirationMs)
+    val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
     stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
       val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
@@ -311,6 +316,7 @@ class Log(@volatile var dir: File,
       if (fetchDataInfo != null)
         loadProducersFromLog(stateManager, fetchDataInfo.records)
     }
+    stateManager.updateMapEndOffset(segment.baseOffset)
     val bytesTruncated = segment.recover(config.maxMessageSize, stateManager, leaderEpochCache)
 
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
@@ -440,10 +446,8 @@ class Log(@volatile var dir: File,
     val loadedProducers = mutable.Map.empty[Long, ProducerAppendInfo]
     val completedTxns = ListBuffer.empty[CompletedTxn]
     records.batches.asScala.foreach { batch =>
-      if (batch.hasProducerId) {
-        val lastEntry = producerStateManager.lastEntry(batch.producerId)
-        updateProducers(batch, loadedProducers, completedTxns, lastEntry, loadingFromLog = true)
-      }
+      if (batch.hasProducerId)
+        updateProducers(batch, loadedProducers, completedTxns, loadingFromLog = true)
     }
     loadedProducers.values.foreach(producerStateManager.update)
     completedTxns.foreach(producerStateManager.completeTxn)
@@ -509,7 +513,7 @@ class Log(@volatile var dir: File,
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean = true, leaderEpoch: Int): LogAppendInfo = {
+  private def append(records: MemoryRecords, isFromClient: Boolean, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
     val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
     // return if we have no valid messages or if this is a duplicate of the last appended entry
@@ -557,8 +561,8 @@ class Log(@volatile var dir: File,
               if (batch.sizeInBytes > config.maxMessageSize) {
                 // we record the original message set size instead of the trimmed size
                 // to be consistent with pre-compression bytesRejectedRate recording
-                BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-                BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+                brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+                brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
                 throw new RecordTooLargeException("Message batch size is %d bytes which exceeds the maximum configured size of %d."
                   .format(batch.sizeInBytes, config.maxMessageSize))
               }
@@ -622,7 +626,7 @@ class Log(@volatile var dir: File,
           segment.updateTxnIndex(completedTxn, lastStableOffset)
         }
 
-        // always update the last pid map offset so that the snapshot reflects the current offset
+        // always update the last producer id map offset so that the snapshot reflects the current offset
         // even if there isn't any idempotent data being written
         producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
 
@@ -689,7 +693,7 @@ class Log(@volatile var dir: File,
       // the last appended entry to the client.
       if (isFromClient && maybeLastEntry.exists(_.isDuplicate(batch)))
         return (updatedProducers, completedTxns.toList, maybeLastEntry)
-      updateProducers(batch, updatedProducers, completedTxns, maybeLastEntry, loadingFromLog = false)
+      updateProducers(batch, updatedProducers, completedTxns, loadingFromLog = false)
     }
     (updatedProducers, completedTxns.toList, None)
   }
@@ -743,8 +747,8 @@ class Log(@volatile var dir: File,
       // Check if the message sizes are valid.
       val batchSize = batch.sizeInBytes
       if (batchSize > config.maxMessageSize) {
-        BrokerTopicStats.getBrokerTopicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
+        brokerTopicStats.topicStats(topicPartition.topic).bytesRejectedRate.mark(records.sizeInBytes)
+        brokerTopicStats.allTopicsStats.bytesRejectedRate.mark(records.sizeInBytes)
         throw new RecordTooLargeException(s"The record batch size is $batchSize bytes which exceeds the maximum configured " +
           s"value of ${config.maxMessageSize}.")
       }
@@ -774,12 +778,10 @@ class Log(@volatile var dir: File,
   private def updateProducers(batch: RecordBatch,
                               producers: mutable.Map[Long, ProducerAppendInfo],
                               completedTxns: ListBuffer[CompletedTxn],
-                              lastEntry: Option[ProducerIdEntry],
                               loadingFromLog: Boolean): Unit = {
-    val pid = batch.producerId
-    val appendInfo = producers.getOrElseUpdate(pid, new ProducerAppendInfo(pid, lastEntry, loadingFromLog))
-    val shouldValidateSequenceNumbers = topicPartition.topic() != Topic.GroupMetadataTopicName
-    val maybeCompletedTxn = appendInfo.append(batch, shouldValidateSequenceNumbers)
+    val producerId = batch.producerId
+    val appendInfo = producers.getOrElseUpdate(producerId, producerStateManager.prepareUpdate(producerId, loadingFromLog))
+    val maybeCompletedTxn = appendInfo.append(batch)
     maybeCompletedTxn.foreach(completedTxns += _)
   }
 
@@ -1137,7 +1139,7 @@ class Log(@volatile var dir: File,
     val start = time.nanoseconds
     lock synchronized {
       val newOffset = math.max(expectedNextOffset, logEndOffset)
-      val logFile = logFilename(dir, newOffset)
+      val logFile = Log.logFile(dir, newOffset)
       val offsetIdxFile = offsetIndexFile(dir, newOffset)
       val timeIdxFile = timeIndexFile(dir, newOffset)
       val txnIdxFile = transactionIndexFile(dir, newOffset)
@@ -1492,6 +1494,8 @@ object Log {
   /** a directory that is scheduled to be deleted */
   val DeleteDirSuffix = "-delete"
 
+  private val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
+
   val UnknownLogStartOffset = -1L
 
   /**
@@ -1515,8 +1519,17 @@ object Log {
    * @param dir The directory in which the log will reside
    * @param offset The base offset of the log file
    */
-  def logFilename(dir: File, offset: Long) =
+  def logFile(dir: File, offset: Long) =
     new File(dir, filenamePrefixFromOffset(offset) + LogFileSuffix)
+
+  /**
+    * Return a directory name to rename the log directory to for async deletion. The name will be in the following
+    * format: topic-partition.uniqueId-delete where topic, partition and uniqueId are variables.
+    */
+  def logDeleteDirName(logName: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    s"$logName.$uniqueId$DeleteDirSuffix"
+  }
 
   /**
    * Construct an index file name in the given dir using the given base offset
@@ -1537,7 +1550,7 @@ object Log {
     new File(dir, filenamePrefixFromOffset(offset) + TimeIndexFileSuffix)
 
   /**
-   * Construct a PID snapshot file using the given offset.
+   * Construct a producer id snapshot file using the given offset.
    *
    * @param dir The directory in which the log will reside
    * @param offset The last offset (exclusive) included in the snapshot
@@ -1555,32 +1568,36 @@ object Log {
    * Parse the topic and partition out of the directory name of a log
    */
   def parseTopicPartitionName(dir: File): TopicPartition = {
+    if (dir == null)
+      throw new KafkaException("dir should not be null")
 
     def exception(dir: File): KafkaException = {
-      new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
-        "'" + dir.getName + "' is not in the form of topic-partition or " +
-        "ongoing-deleting directory(topic-partition.uniqueId-delete)\n" +
-        "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
-        "directory")
+      new KafkaException(s"Found directory ${dir.getCanonicalPath}, '${dir.getName}' is not in the form of " +
+        "topic-partition or topic-partition.uniqueId-delete (if marked for deletion).\n" +
+        "Kafka's log directories (and children) should only contain Kafka topic data.")
     }
 
     val dirName = dir.getName
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
-    if (dirName.endsWith(DeleteDirSuffix) && !dirName.matches("^(\\S+)-(\\S+)\\.(\\S+)" + DeleteDirSuffix))
+    if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.indexOf('.'))
+      if (dirName.endsWith(DeleteDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')
     val topic = name.substring(0, index)
-    val partition = name.substring(index + 1)
-    if (topic.length < 1 || partition.length < 1)
+    val partitionString = name.substring(index + 1)
+    if (topic.isEmpty || partitionString.isEmpty)
       throw exception(dir)
 
-    new TopicPartition(topic, partition.toInt)
+    val partition =
+      try partitionString.toInt
+      catch { case _: NumberFormatException => throw exception(dir) }
+
+    new TopicPartition(topic, partition)
   }
 
   private def isIndexFile(file: File): Boolean = {

@@ -33,8 +33,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
     private static final String COORDINATOR_EPOCH_KEY_NAME = "coordinator_epoch";
     private static final String TXN_MARKER_ENTRY_KEY_NAME = "transaction_markers";
 
-    private static final String PID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
+    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
+    private static final String PRODUCER_EPOCH_KEY_NAME = "producer_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
     private static final String TOPIC_PARTITIONS_KEY_NAME = "topics";
     private static final String TOPIC_KEY_NAME = "topic";
@@ -138,8 +138,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         for (Object markerObj : markersArray) {
             Struct markerStruct = (Struct) markerObj;
 
-            long producerId = markerStruct.getLong(PID_KEY_NAME);
-            short producerEpoch = markerStruct.getShort(EPOCH_KEY_NAME);
+            long producerId = markerStruct.getLong(PRODUCER_ID_KEY_NAME);
+            short producerEpoch = markerStruct.getShort(PRODUCER_EPOCH_KEY_NAME);
             int coordinatorEpoch = markerStruct.getInt(COORDINATOR_EPOCH_KEY_NAME);
             TransactionResult result = TransactionResult.forId(markerStruct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
 
@@ -172,8 +172,8 @@ public class WriteTxnMarkersRequest extends AbstractRequest {
         int i = 0;
         for (TxnMarkerEntry entry : markers) {
             Struct markerStruct = struct.instance(TXN_MARKER_ENTRY_KEY_NAME);
-            markerStruct.set(PID_KEY_NAME, entry.producerId);
-            markerStruct.set(EPOCH_KEY_NAME, entry.producerEpoch);
+            markerStruct.set(PRODUCER_ID_KEY_NAME, entry.producerId);
+            markerStruct.set(PRODUCER_EPOCH_KEY_NAME, entry.producerEpoch);
             markerStruct.set(COORDINATOR_EPOCH_KEY_NAME, entry.coordinatorEpoch);
             markerStruct.set(TRANSACTION_RESULT_KEY_NAME, entry.result.id);
 

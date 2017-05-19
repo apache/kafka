@@ -136,20 +136,13 @@ public class RecordCollectorImpl implements RecordCollector {
         checkForException();
     }
 
-    /**
-     * Closes this RecordCollector
-     */
     @Override
     public void close() {
+        log.debug("{} Closing producer", logPrefix);
         producer.close();
         checkForException();
     }
 
-    /**
-     * The last ack'd offset from the producer
-     *
-     * @return the map from TopicPartition to offset
-     */
     @Override
     public Map<TopicPartition, Long> offsets() {
         return offsets;

@@ -18,13 +18,12 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 
-import kafka.common.Topic
-import kafka.common.Topic.TransactionStateTopicName
 import kafka.log.Log
 import kafka.server.{FetchDataInfo, LogOffsetMetadata, ReplicaManager}
 import kafka.utils.{MockScheduler, Pool, ZkUtils}
 import kafka.utils.TestUtils.fail
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.IsolationLevel
@@ -44,7 +43,7 @@ class TransactionStateManagerTest {
   val partitionId = 0
   val numPartitions = 2
   val transactionTimeoutMs: Int = 1000
-  val topicPartition = new TopicPartition(TransactionStateTopicName, partitionId)
+  val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
   val coordinatorEpoch = 10
 
   val txnRecords: mutable.ArrayBuffer[SimpleRecord] = mutable.ArrayBuffer[SimpleRecord]()
@@ -54,7 +53,7 @@ class TransactionStateManagerTest {
   val zkUtils: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
   val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
 
-  EasyMock.expect(zkUtils.getTopicPartitionCount(TransactionStateTopicName))
+  EasyMock.expect(zkUtils.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
     .andReturn(Some(numPartitions))
     .anyTimes()
 
@@ -177,7 +176,7 @@ class TransactionStateManagerTest {
     assertTrue(transactionManager.isCoordinatorFor(txnId1))
     assertTrue(transactionManager.isCoordinatorFor(txnId2))
 
-    transactionManager.removeTransactionsForTxnTopicPartition(partitionId)
+    transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
 
     // let the time advance to trigger the background thread removing
     scheduler.tick()
@@ -403,7 +402,7 @@ class TransactionStateManagerTest {
       EasyMock.capture(capturedArgument)))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = capturedArgument.getValue.apply(
-          Map(new TopicPartition(Topic.TransactionStateTopicName, partitionId) ->
+          Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
             new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
           )
         )

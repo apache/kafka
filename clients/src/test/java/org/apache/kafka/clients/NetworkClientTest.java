@@ -185,8 +185,8 @@ public class NetworkClientTest {
         // sleeping to make sure that the time since last send is greater than requestTimeOut
         time.sleep(3000);
         client.poll(3000, time.milliseconds());
-        String disconnectedNode = selector.disconnected().get(0);
-        assertEquals(node.idString(), disconnectedNode);
+        assertEquals(1, selector.disconnected().size());
+        assertTrue("Node not found in disconnected map", selector.disconnected().containsKey(node.idString()));
     }
 
     @Test

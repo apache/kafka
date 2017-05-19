@@ -22,6 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Properties;
 
 /**
  * The public interface for the {@link KafkaAdminClient}, which supports managing and inspecting topics,
@@ -31,6 +32,17 @@ import java.util.Map;
  */
 @InterfaceStability.Unstable
 public abstract class AdminClient implements AutoCloseable {
+
+    /**
+     * Create a new AdminClient with the given configuration.
+     *
+     * @param props         The configuration.
+     * @return              The new KafkaAdminClient.
+     */
+    public static AdminClient create(Properties props) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props));
+    }
+
     /**
      * Create a new AdminClient with the given configuration.
      *
@@ -38,7 +50,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return              The new KafkaAdminClient.
      */
     public static AdminClient create(Map<String, Object> conf) {
-        return KafkaAdminClient.create(new AdminClientConfig(conf));
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf));
     }
 
     /**
@@ -118,7 +130,7 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract ListTopicsResults listTopics(ListTopicsOptions options);
 
     /**
-     * Descripe an individual topic in the cluster, with the default options.
+     * Describe some topics in the cluster, with the default options.
      *
      * See {@link AdminClient#describeTopics(Collection<String>, DescribeTopicsOptions)}
      *
@@ -131,10 +143,10 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Descripe an individual topic in the cluster.
+     * Describe some topics in the cluster.
      *
      * Note that if auto.create.topics.enable is true on the brokers,
-     * AdminClient#describeTopic(topicName) may create a topic named topicName.
+     * describeTopics(topicName, ...) may create a topic named topicName.
      * There are two workarounds: either use AdminClient#listTopics and ensure
      * that the topic is present before describing, or disable
      * auto.create.topics.enable.
@@ -183,4 +195,129 @@ public abstract class AdminClient implements AutoCloseable {
      * @return                  The ApiVersionsResults.
      */
     public abstract ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
+
+    /**
+<<<<<<< HEAD
+     * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions),
+     * but uses the default options.
+     *
+     * @param filter            The filter to use.
+     * @return                  The DeleteAclsResult.
+     */
+    public DescribeAclsResults describeAcls(AclBindingFilter filter) {
+        return describeAcls(filter, new DescribeAclsOptions());
+    }
+
+    /**
+     * Lists access control lists (ACLs) according to the supplied filter.
+     *
+     * Note: it may take some time for changes made by createAcls or deleteAcls to be reflected
+     * in the output of describeAcls.
+     *
+     * @param filter            The filter to use.
+     * @param options           The options to use when listing the ACLs.
+     * @return                  The DeleteAclsResult.
+     */
+    public abstract DescribeAclsResults describeAcls(AclBindingFilter filter, DescribeAclsOptions options);
+
+    /**
+     * Similar to #{@link AdminClient#createAcls(Collection<AclBinding>, CreateAclsOptions),
+     * but uses the default options.
+     *
+     * @param acls              The ACLs to create
+     * @return                  The CreateAclsResult.
+     */
+    public CreateAclsResults createAcls(Collection<AclBinding> acls) {
+        return createAcls(acls, new CreateAclsOptions());
+    }
+
+    /**
+     * Creates access control lists (ACLs) which are bound to specific resources.
+     *
+     * If you attempt to add an ACL that duplicates an existing ACL, no error will be raised, but
+     * no changes will be made.
+     *
+     * @param acls              The ACLs to create
+     * @param options           The options to use when creating the ACLs.
+     * @return                  The CreateAclsResult.
+     */
+    public abstract CreateAclsResults createAcls(Collection<AclBinding> acls, CreateAclsOptions options);
+
+    /**
+     * Similar to #{@link AdminClient#deleteAcls(Collection<AclBinding>, DeleteAclsOptions),
+     * but uses the default options.
+     *
+     * @param filters           The filters to use.
+     * @return                  The DeleteAclsResult.
+     */
+    public DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters) {
+        return deleteAcls(filters, new DeleteAclsOptions());
+    }
+
+    /**
+     * Deletes access control lists (ACLs) according to the supplied filters.
+     *
+     * @param filters           The filters to use.
+     * @param options           The options to use when deleting the ACLs.
+     * @return                  The DeleteAclsResult.
+     */
+    public abstract DeleteAclsResults deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options);
+
+
+     /**
+     * Get the configuration for the specified resources with the default options.
+     *
+     * See {@link #describeConfigs(Collection, DescribeConfigsOptions)} for more details.
+     *
+     * @param resources         The resources (topic and broker resource types are currently supported)
+     * @return                  The DescribeConfigsResults
+     */
+    public DescribeConfigsResults describeConfigs(Collection<ConfigResource> resources) {
+        return describeConfigs(resources, new DescribeConfigsOptions());
+    }
+
+    /**
+     * Get the configuration for the specified resources.
+     *
+     * The returned configuration includes default values and the isDefault() method can be used to distinguish them
+     * from user supplied values.
+     *
+     * The value of config entries where isSensitive() is true is always {@code null} so that sensitive information
+     * is not disclosed.
+     *
+     * Config entries where isReadOnly() is true cannot be updated.
+     *
+     * @param resources         The resources (topic and broker resource types are currently supported)
+     * @param options           The options to use when describing configs
+     * @return                  The DescribeConfigsResults
+     */
+    public abstract DescribeConfigsResults describeConfigs(Collection<ConfigResource> resources,
+                                                           DescribeConfigsOptions options);
+
+    /**
+     * Update the configuration for the specified resources with the default options.
+     *
+     * See {@link #alterConfigs(Map, AlterConfigsOptions)} for more details.
+     *
+     * @param configs         The resources with their configs (topic is the only resource type with configs that can
+     *                        be updated currently)
+     * @return                The AlterConfigsResults
+     */
+    public AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs) {
+        return alterConfigs(configs, new AlterConfigsOptions());
+    }
+
+    /**
+     * Update the configuration for the specified resources with the default options.
+     *
+     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
+     * a particular resource are updated atomically.
+     *
+     * @param configs         The resources with their configs (topic is the only resource type with configs that can
+     *                        be updated currently)
+     * @param options         The options to use when describing configs
+     * @return                The AlterConfigsResults
+     */
+    public abstract AlterConfigsResults alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+
 }

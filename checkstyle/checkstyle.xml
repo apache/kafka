@@ -57,10 +57,13 @@
     <module name="LocalFinalVariableName"/>
     <module name="MemberName"/>
     <module name="ClassTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="MethodTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="InterfaceTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="PackageName"/>
     <module name="ParameterName"/>
@@ -111,7 +114,7 @@
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="35"/>
+      <property name="max" value="40"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->

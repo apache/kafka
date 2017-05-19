@@ -24,7 +24,7 @@ public class TopicListing {
     private final String name;
     private final boolean internal;
 
-    TopicListing(String name, boolean internal) {
+    public TopicListing(String name, boolean internal) {
         this.name = name;
         this.internal = internal;
     }

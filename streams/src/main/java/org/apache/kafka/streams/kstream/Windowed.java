@@ -72,7 +72,7 @@ public class Windowed<K> {
 
     @Override
     public String toString() {
-        return "[" + key + "@" + window.start() + "]";
+        return "[" + key + "@" + window.start() + "/" + window.end() + "]";
     }
 
     @Override

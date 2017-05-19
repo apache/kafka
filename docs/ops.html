@@ -449,19 +449,19 @@
   <p>
   Configure custom quota for (user=user1, client-id=clientA):
   <pre>
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
+  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
   Updated config for entity: user-principal 'user1', client-id 'clientA'.
   </pre>
 
   Configure custom quota for user=user1:
   <pre>
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-name user1
+  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1
   Updated config for entity: user-principal 'user1'.
   </pre>
 
   Configure custom quota for client-id=clientA:
   <pre>
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type clients --entity-name clientA
+  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-name clientA
   Updated config for entity: client-id 'clientA'.
   </pre>
 
@@ -469,48 +469,48 @@
   <p>
   Configure default client-id quota for user=userA:
   <pre>
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-name user1 --entity-type clients --entity-default
+  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-name user1 --entity-type clients --entity-default
   Updated config for entity: user-principal 'user1', default client-id.
   </pre>
 
   Configure default quota for user:
   <pre>
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type users --entity-default
+  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type users --entity-default
   Updated config for entity: default user-principal.
   </pre>
 
   Configure default quota for client-id:
   <pre>
-  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048' --entity-type clients --entity-default
+  > bin/kafka-configs.sh  --zookeeper localhost:2181 --alter --add-config 'producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200' --entity-type clients --entity-default
   Updated config for entity: default client-id.
   </pre>
 
   Here's how to describe the quota for a given (user, client-id):
   <pre>
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1 --entity-type clients --entity-name clientA
-  Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+  Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Describe quota for a given user:
   <pre>
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-name user1
-  Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048
+  Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Describe quota for a given client-id:
   <pre>
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type clients --entity-name clientA
-  Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+  Configs for client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   If entity name is not specified, all entities of the specified type are described. For example, describe all users:
   <pre>
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users
-  Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048
-  Configs for default user-principal are producer_byte_rate=1024,consumer_byte_rate=2048
+  Configs for user-principal 'user1' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
+  Configs for default user-principal are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   Similarly for (user, client):
   <pre>
   > bin/kafka-configs.sh  --zookeeper localhost:2181 --describe --entity-type users --entity-type clients
-  Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048
-  Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048
+  Configs for user-principal 'user1', default client-id are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
+  Configs for user-principal 'user1', client-id 'clientA' are producer_byte_rate=1024,consumer_byte_rate=2048,request_percentage=200
   </pre>
   <p>
   It is possible to set default quotas that apply to all client-ids by setting these configs on the brokers. These properties are applied only if quota overrides or defaults are not configured in Zookeeper. By default, each client-id receives an unlimited quota. The following sets the default quota per producer and consumer client-id to 10MB/sec.
@@ -834,11 +834,24 @@
         <td>between 0 and 1, ideally &gt 0.3</td>
       </tr>
       <tr>
-        <td>Quota metrics per (user, client-id), user or client-id</td>
+        <td>Bandwidth quota metrics per (user, client-id), user or client-id</td>
         <td>kafka.server:type={Produce|Fetch},user=([-.\w]+),client-id=([-.\w]+)</td>
         <td>Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0.
             byte-rate indicates the data produce/consume rate of the client in bytes/sec.
             For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.</td>
+      </tr>
+      <tr>
+        <td>Request quota metrics per (user, client-id), user or client-id</td>
+        <td>kafka.server:type=Request,user=([-.\w]+),client-id=([-.\w]+)</td>
+        <td>Two attributes. throttle-time indicates the amount of time in ms the client was throttled. Ideally = 0.
+            request-time indicates the percentage of time spent in broker network and I/O threads to process requests from client group.
+            For (user, client-id) quotas, both user and client-id are specified. If per-client-id quota is applied to the client, user is not specified. If per-user quota is applied, client-id is not specified.</td>
+      </tr>
+      <tr>
+        <td>Requests exempt from throttling</td>
+        <td>kafka.server:type=Request</td>
+        <td>exempt-throttle-time indicates the percentage of time spent in broker network and I/O threads to process requests
+            that are exempt from throttling.</td>
       </tr>
   </tbody></table>
 

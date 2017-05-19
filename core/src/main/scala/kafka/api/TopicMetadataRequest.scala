@@ -64,7 +64,7 @@ case class TopicMetadataRequest(versionId: Short,
       topic => TopicMetadata(topic, Nil, Errors.forException(e))
     }
     val errorResponse = TopicMetadataResponse(Seq(), topicMetadata, correlationId)
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
+    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

@@ -32,18 +32,24 @@ import org.junit.Test;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
+import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertTrue;
 
 public class StreamsConfigTest {
 
-    private Properties props = new Properties();
+    private final Properties props = new Properties();
     private StreamsConfig streamsConfig;
 
     @Before
@@ -58,40 +64,56 @@ public class StreamsConfigTest {
         streamsConfig = new StreamsConfig(props);
     }
 
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfApplicationIdIsNotSet() {
+        props.remove(StreamsConfig.APPLICATION_ID_CONFIG);
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfBootstrapServersIsNotSet() {
+        props.remove(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        new StreamsConfig(props);
+    }
+
     @Test
     public void testGetProducerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getProducerConfigs("client");
-        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), "client-producer");
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
+        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), clientId + "-producer");
         assertEquals(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), "100");
         assertNull(returnedProps.get("DUMMY"));
     }
 
     @Test
     public void testGetConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(null, "example-application", "client");
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-consumer");
-        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), "example-application");
+        final String groupId = "example-application";
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getConsumerConfigs(null, groupId, clientId);
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-consumer");
+        assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), groupId);
         assertEquals(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "1000");
         assertNull(returnedProps.get("DUMMY"));
     }
 
     @Test
     public void testGetRestoreConsumerConfigs() throws Exception {
-        Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs("client");
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "client-restore-consumer");
+        final String clientId = "client";
+        final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-restore-consumer");
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
         assertNull(returnedProps.get("DUMMY"));
     }
 
     @Test
     public void defaultSerdeShouldBeConfigured() {
-        Map<String, Object> serializerConfigs = new HashMap<>();
+        final Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", "UTF8");
         serializerConfigs.put("value.serializer.encoding", "UTF-16");
-        Serializer<String> serializer = Serdes.String().serializer();
+        final Serializer<String> serializer = Serdes.String().serializer();
 
-        String str = "my string for testing";
-        String topic = "my topic";
+        final String str = "my string for testing";
+        final String topic = "my topic";
 
         serializer.configure(serializerConfigs, true);
         assertEquals("Should get the original string after serialization and deserialization with the configured encoding",
@@ -104,14 +126,14 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSupportMultipleBootstrapServers() {
-        List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
-        String bootstrapServersString = Utils.join(expectedBootstrapServers, ",");
-        Properties props = new Properties();
+        final List<String> expectedBootstrapServers = Arrays.asList("broker1:9092", "broker2:9092");
+        final String bootstrapServersString = Utils.join(expectedBootstrapServers, ",");
+        final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "irrelevant");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServersString);
-        StreamsConfig config = new StreamsConfig(props);
+        final StreamsConfig config = new StreamsConfig(props);
 
-        List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
+        final List<String> actualBootstrapServers = config.getList(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
         assertEquals(expectedBootstrapServers, actualBootstrapServers);
     }
 
@@ -165,7 +187,7 @@ public class StreamsConfigTest {
         props.put(producerPrefix(ProducerConfig.BUFFER_MEMORY_CONFIG), 10);
         props.put(producerPrefix(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG), 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs("client");
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs("clientId");
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -195,7 +217,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, 10);
         props.put(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG, 1);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> configs = streamsConfig.getProducerConfigs("client");
+        final Map<String, Object> configs = streamsConfig.getProducerConfigs("clientId");
         assertEquals(10, configs.get(ProducerConfig.BUFFER_MEMORY_CONFIG));
         assertEquals(1, configs.get(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG));
     }
@@ -230,7 +252,7 @@ public class StreamsConfigTest {
     public void shouldOverrideStreamsDefaultProducerConfigs() throws Exception {
         props.put(StreamsConfig.producerPrefix(ProducerConfig.LINGER_MS_CONFIG), "10000");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("client");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
         assertEquals("10000", producerConfigs.get(ProducerConfig.LINGER_MS_CONFIG));
     }
 
@@ -239,7 +261,7 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "10");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("client");
+        final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs("clientId");
         assertEquals("latest", consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG));
         assertEquals("10", consumerConfigs.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
@@ -261,8 +283,111 @@ public class StreamsConfigTest {
     @Test
     public void shouldSetInternalLeaveGroupOnCloseConfigToFalseInConsumer() throws Exception {
         final StreamsConfig streamsConfig = new StreamsConfig(props);
-        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "group", "client");
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
         assertThat(consumerConfigs.get("internal.leave.group.on.close"), CoreMatchers.<Object>equalTo(false));
+    }
+
+    @Test
+    public void shouldAcceptAtLeastOnce() {
+        // don't use `StreamsConfig.AT_LEAST_ONCE` to actually do a useful test
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "at_least_once");
+        new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldAcceptExactlyOnce() {
+        // don't use `StreamsConfig.EXACLTY_ONCE` to actually do a useful test
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfNotAtLestOnceOrExactlyOnce() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "bad_value");
+        new StreamsConfig(props);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfConsumerIsolationLevelIsOverriddenIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+    }
+
+    @Test
+    public void shouldAllowSettingConsumerIsolationLevelIfEosDisabled() {
+        props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+    }
+
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfProducerEnableIdempotenceIsOverriddenIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test
+    public void shouldAllowSettingProducerEnableIdempotenceIfEosDisabled() {
+        props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowExceptionIfProducerMaxInFlightRequestPerConnectionsIsOverriddenIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test
+    public void shouldAllowSettingProducerMaxInFlightRequestPerConnectionsWhenEosDisabled() {
+        props.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "anyValue");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+        streamsConfig.getProducerConfigs("clientId");
+    }
+
+    @Test
+    public void shouldSetDifferentDefaultsIfEosEnabled() {
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final Map<String, Object> consumerConfigs = streamsConfig.getConsumerConfigs(null, "groupId", "clientId");
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+
+        assertThat((String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
+        assertThat((Integer) producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(Integer.MAX_VALUE));
+        assertThat((Integer) producerConfigs.get(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION), equalTo(1));
+        assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
+    }
+
+    @Test
+    public void shouldNotOverrideUserConfigRetriesIfExactlyOnceEnabled() {
+        final int numberOfRetries = 42;
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(ProducerConfig.RETRIES_CONFIG, numberOfRetries);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
+
+        assertThat((Integer) producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
+    }
+
+    @Test
+    public void shouldNotOverrideUserConfigCommitIntervalMsIfExactlyOnceEnabled() {
+        final long commitIntervalMs = 73L;
+        props.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, EXACTLY_ONCE);
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(commitIntervalMs));
     }
 
     static class MisconfiguredSerde implements Serde {

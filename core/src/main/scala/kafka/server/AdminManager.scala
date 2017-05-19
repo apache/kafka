@@ -16,18 +16,20 @@
   */
 package kafka.server
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.admin.AdminUtils
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, PolicyViolationException}
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
-import org.apache.kafka.common.requests.CreateTopicsResponse
+import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
@@ -63,7 +65,7 @@ class AdminManager(val config: KafkaConfig,
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
                    createInfo: Map[String, TopicDetails],
-                   responseCallback: Map[String, CreateTopicsResponse.Error] => Unit) {
+                   responseCallback: Map[String, ApiError] => Unit) {
 
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
@@ -114,15 +116,15 @@ class AdminManager(val config: KafkaConfig,
             else
               AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, assignments, configs, update = false)
         }
-        CreateTopicMetadata(topic, assignments, new CreateTopicsResponse.Error(Errors.NONE, null))
+        CreateTopicMetadata(topic, assignments, new ApiError(Errors.NONE, null))
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e@ (_: PolicyViolationException | _: ApiException) =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
+          CreateTopicMetadata(topic, Map(), ApiError.fromThrowable(e))
         case e: Throwable =>
           error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreateTopicMetadata(topic, Map(), new CreateTopicsResponse.Error(Errors.forException(e), e.getMessage))
+          CreateTopicMetadata(topic, Map(), ApiError.fromThrowable(e))
       }
     }
 
@@ -131,7 +133,7 @@ class AdminManager(val config: KafkaConfig,
       val results = metadata.map { createTopicMetadata =>
         // ignore topics that already have errors
         if (createTopicMetadata.error.is(Errors.NONE) && !validateOnly) {
-          (createTopicMetadata.topic, new CreateTopicsResponse.Error(Errors.REQUEST_TIMED_OUT, null))
+          (createTopicMetadata.topic, new ApiError(Errors.REQUEST_TIMED_OUT, null))
         } else {
           (createTopicMetadata.topic, createTopicMetadata.error)
         }
@@ -187,6 +189,99 @@ class AdminManager(val config: KafkaConfig,
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedDelete, delayedDeleteKeys)
     }
+  }
+
+  def describeConfigs(resourceToConfigNames: Map[Resource, Option[Set[String]]]): Map[Resource, DescribeConfigsResponse.Config] = {
+    resourceToConfigNames.map { case (resource, configNames) =>
+
+      def createResponseConfig(config: AbstractConfig, isReadOnly: Boolean, isDefault: String => Boolean): DescribeConfigsResponse.Config = {
+        val filteredConfigPairs = config.values.asScala.filter { case (configName, _) =>
+          /* Always returns true if configNames is None */
+          configNames.map(_.contains(configName)).getOrElse(true)
+        }.toIndexedSeq
+
+        val configEntries = filteredConfigPairs.map { case (name, value) =>
+          val configEntryType = config.typeOf(name)
+          val isSensitive = configEntryType == ConfigDef.Type.PASSWORD
+          val valueAsString =
+            if (isSensitive) null
+            else ConfigDef.convertToString(value, configEntryType)
+          new DescribeConfigsResponse.ConfigEntry(name, valueAsString, isSensitive, isDefault(name), isReadOnly)
+        }
+
+        new DescribeConfigsResponse.Config(new ApiError(Errors.NONE, null), configEntries.asJava)
+      }
+
+      try {
+        val resourceConfig = resource.`type` match {
+
+          case ResourceType.TOPIC =>
+            val topic = resource.name
+            Topic.validate(topic)
+            // Consider optimizing this by caching the configs or retrieving them from the `Log` when possible
+            val topicProps = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic)
+            val logConfig = LogConfig.fromProps(KafkaServer.copyKafkaConfigToLog(config), topicProps)
+            createResponseConfig(logConfig, isReadOnly = false, name => !topicProps.containsKey(name))
+
+          case ResourceType.BROKER =>
+            val brokerId = try resource.name.toInt catch {
+              case _: NumberFormatException =>
+                throw new InvalidRequestException(s"Broker id must be an integer, but it is: ${resource.name}")
+            }
+            if (brokerId == config.brokerId)
+              createResponseConfig(config, isReadOnly = true, name => !config.originals.containsKey(name))
+            else
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId}, but received $brokerId")
+
+          case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
+        }
+        resource -> resourceConfig
+      } catch {
+        case e: Throwable =>
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing describe configs request for resource $resource"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          resource -> new DescribeConfigsResponse.Config(ApiError.fromThrowable(e), Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
+      }
+    }.toMap
+  }
+
+  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[Resource, ApiError] = {
+    configs.map { case (resource, config) =>
+      try {
+        resource.`type` match {
+          case ResourceType.TOPIC =>
+            val topic = resource.name
+            val properties = new Properties
+            config.entries.asScala.foreach { configEntry =>
+              properties.setProperty(configEntry.name(), configEntry.value())
+            }
+            if (validateOnly)
+              AdminUtils.validateTopicConfig(zkUtils, topic, properties)
+            else
+              AdminUtils.changeTopicConfig(zkUtils, topic, properties)
+            resource -> new ApiError(Errors.NONE, null)
+          case resourceType =>
+            throw new InvalidRequestException(s"AlterConfigs is only supported for topics, but resource type is $resourceType")
+        }
+      } catch {
+        case e: ConfigException =>
+          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+          info(message)
+          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+        case e: Throwable =>
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing alter configs request for resource $resource"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          resource -> ApiError.fromThrowable(e)
+      }
+    }.toMap
   }
 
   def shutdown() {

@@ -75,7 +75,7 @@ public class SchemaBuilder implements Schema {
     // Additional parameters for logical types.
     private Map<String, String> parameters;
 
-    private SchemaBuilder(Type type) {
+    public SchemaBuilder(Type type) {
         this.type = type;
         if (type == Type.STRUCT) {
             fields = new LinkedHashMap<>();

@@ -252,7 +252,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
   /**
     * Safely updates the resources ACLs by ensuring reads and writes respect the expected zookeeper version.
-    * Continues to retry until it succesfully updates zookeeper.
+    * Continues to retry until it successfully updates zookeeper.
     *
     * Returns a boolean indicating if the content of the ACLs was actually changed.
     *

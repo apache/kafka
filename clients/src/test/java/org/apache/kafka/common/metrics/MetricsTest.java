@@ -424,6 +424,14 @@ public class MetricsTest {
         assertEquals(0.0, p25.value(), 1.0);
         assertEquals(0.0, p50.value(), 1.0);
         assertEquals(0.0, p75.value(), 1.0);
+
+        // record two more windows worth of sequential values
+        for (int i = 0; i < buckets; i++)
+            sensor.record(i);
+
+        assertEquals(25, p25.value(), 1.0);
+        assertEquals(50, p50.value(), 1.0);
+        assertEquals(75, p75.value(), 1.0);
     }
 
     @Test

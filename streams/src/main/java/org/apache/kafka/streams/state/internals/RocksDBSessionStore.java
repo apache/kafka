@@ -90,7 +90,15 @@ class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(Bytes.wrap(serdes.rawKey(key)), earliestSessionEndTime, latestSessionStartTime);
+        return findSessions(key, key, earliestSessionEndTime, latestSessionStartTime);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = bytesStore.fetch(
+            Bytes.wrap(serdes.rawKey(keyFrom)), Bytes.wrap(serdes.rawKey(keyTo)),
+            earliestSessionEndTime, latestSessionStartTime
+        );
         return new WrappedSessionStoreIterator<>(bytesIterator, serdes);
     }
 
@@ -100,12 +108,17 @@ class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
+        return findSessions(from, to, 0, Long.MAX_VALUE);
+    }
+
+    @Override
     public void remove(final Windowed<K> key) {
         bytesStore.remove(SessionKeySerde.toBinary(key, serdes.keySerializer(), topic));
     }
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), aggSerde.serializer().serialize(topic, aggregate));
+        bytesStore.put(SessionKeySerde.toBinary(sessionKey, serdes.keySerializer(), topic), serdes.rawValue(aggregate));
     }
 }

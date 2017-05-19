@@ -41,6 +41,7 @@ public class KafkaChannel {
     // processed after the channel is disconnected.
     private boolean disconnected;
     private boolean muted;
+    private ChannelState state;
 
     public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
         this.id = id;
@@ -50,6 +51,7 @@ public class KafkaChannel {
         this.maxReceiveSize = maxReceiveSize;
         this.disconnected = false;
         this.muted = false;
+        this.state = ChannelState.NOT_CONNECTED;
     }
 
     public void close() throws IOException {
@@ -72,6 +74,8 @@ public class KafkaChannel {
             transportLayer.handshake();
         if (transportLayer.ready() && !authenticator.complete())
             authenticator.authenticate();
+        if (ready())
+            state = ChannelState.READY;
     }
 
     public void disconnect() {
@@ -79,9 +83,19 @@ public class KafkaChannel {
         transportLayer.disconnect();
     }
 
+    public void state(ChannelState state) {
+        this.state = state;
+    }
+
+    public ChannelState state() {
+        return this.state;
+    }
 
     public boolean finishConnect() throws IOException {
-        return transportLayer.finishConnect();
+        boolean connected = transportLayer.finishConnect();
+        if (connected)
+            state = ready() ? ChannelState.READY : ChannelState.AUTHENTICATE;
+        return connected;
     }
 
     public boolean isConnected() {
