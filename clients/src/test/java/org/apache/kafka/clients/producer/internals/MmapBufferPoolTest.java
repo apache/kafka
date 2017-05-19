@@ -25,7 +25,9 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Deque;
+import java.util.List;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -63,6 +65,27 @@ public class MmapBufferPoolTest {
         pool.deallocate(buffer);
         assertEquals("All memory should be available", totalMemory, pool.availableMemory());
         assertEquals("Non-standard size didn't go to the free list.", totalMemory - size, pool.unallocatedMemory());
+    }
+
+    @Test
+    public void testMultipleAllocationsAndDeallocations() throws Exception {
+        long totalMemory = 64 * 1024;
+        int size = 1024;
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        MmapBufferPool pool = new MmapBufferPool(totalMemory, size, time, storefile);
+        List<ByteBuffer> buffers = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
+            buffers.add(buffer);
+
+            int expectedPosition = i * size;
+            assertEquals("buffer " + i + " should have position " + expectedPosition, expectedPosition, buffer.position() );
+        }
+
+        for (int i = 0; i < 2; i++)
+            pool.deallocate(buffers.get(i));
+        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
+        assertEquals("Two buffers on the free list", 2, pool.freeSize());
     }
 
     /**
