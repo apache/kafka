@@ -192,18 +192,22 @@ public class Sender implements Runnable {
     void run(long now) {
         if (transactionManager != null) {
             if (!transactionManager.isTransactional()) {
-                if (!maybeWaitForProducerId()) {
-                    client.poll(retryBackoffMs, now);
-                    return;
-                }
+                // this is an idempotent producer, so make sure we have a producer id
+                maybeWaitForProducerId();
             } else if (transactionManager.hasInflightRequest() || maybeSendTransactionalRequest(now)) {
+                // as long as there are outstanding transactional requests, we simply wait for them to return
                 client.poll(retryBackoffMs, now);
                 return;
             }
 
-            if (transactionManager.isInErrorState() && accumulator.hasUnflushedBatches()) {
-                log.error("Aborting producer batches due to fatal error", transactionManager.lastError());
-                accumulator.abortBatches(transactionManager.lastError());
+            // do not continue sending if the transaction manager is in a failed state or if there
+            // is no producer id (for the idempotent case).
+            if (transactionManager.isInErrorState() || !transactionManager.hasProducerId()) {
+                RuntimeException lastError = transactionManager.lastError();
+                if (lastError != null)
+                    maybeAbortBatches(lastError);
+                client.poll(retryBackoffMs, now);
+                return;
             }
         }
 
@@ -351,6 +355,13 @@ public class Sender implements Runnable {
         return true;
     }
 
+    private void maybeAbortBatches(RuntimeException exception) {
+        if (accumulator.hasUnflushedBatches()) {
+            log.error("Aborting producer batches due to fatal error", exception);
+            accumulator.abortBatches(exception);
+        }
+    }
+
     /**
      * Start closing the sender (won't actually complete until all data is sent out)
      */
@@ -385,7 +396,7 @@ public class Sender implements Runnable {
         return null;
     }
 
-    private boolean maybeWaitForProducerId() {
+    private void maybeWaitForProducerId() {
         while (!transactionManager.hasProducerId() && !transactionManager.isInErrorState()) {
             try {
                 Node node = awaitLeastLoadedNodeReady(requestTimeout);
@@ -417,8 +428,6 @@ public class Sender implements Runnable {
             time.sleep(retryBackoffMs);
             metadata.requestUpdate();
         }
-
-        return transactionManager.hasProducerId();
     }
 
     /**
