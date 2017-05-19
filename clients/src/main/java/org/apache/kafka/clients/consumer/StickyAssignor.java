@@ -195,8 +195,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         partitionMovements = new PartitionMovements();
 
         prepopulateCurrentAssignments(subscriptions, currentAssignment);
-        // make a deep copy of currentAssignment
-        Map<String, List<TopicPartition>> oldAssignment = deepCopy(currentAssignment);
+        boolean isFreshAssignment = currentAssignment.isEmpty();
 
         // a mapping of all topic partitions to all consumers that can be assigned to them
         final Map<TopicPartition, List<String>> partition2AllPotentialConsumers = new HashMap<>();
@@ -232,7 +231,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 currentPartitionConsumer.put(topicPartition, entry.getKey());
 
         List<TopicPartition> sortedPartitions = sortPartitions(
-                currentAssignment, oldAssignment.isEmpty(), partition2AllPotentialConsumers, consumer2AllPotentialPartitions);
+                currentAssignment, isFreshAssignment, partition2AllPotentialConsumers, consumer2AllPotentialPartitions);
 
         // all partitions that need to be assigned (initially set to all partitions but adjusted in the following loop)
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
@@ -272,7 +271,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         sortedCurrentSubscriptions.addAll(currentAssignment.keySet());
 
         balance(currentAssignment, sortedPartitions, unassignedPartitions, sortedCurrentSubscriptions,
-                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, oldAssignment, currentPartitionConsumer);
+                consumer2AllPotentialPartitions, partition2AllPotentialConsumers, currentPartitionConsumer);
         return currentAssignment;
     }
 
@@ -457,22 +456,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     /**
-     * @param col a collection of elements of type list
-     * @return true if all lists in the collection have the same members; false otherwise
-     */
-    private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
-        Iterator<List<T>> it = col.iterator();
-        List<T> cur = it.next();
-        while (it.hasNext()) {
-            List<T> next = it.next();
-            if (!(cur.containsAll(next) && next.containsAll(cur)))
-                return false;
-            cur = next;
-        }
-        return true;
-    }
-
-    /**
      * @return the consumer to which the given partition is assigned. The assignment should improve the overall balance
      * of the partition assignments to consumers.
      */
@@ -493,7 +476,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return null;
     }
 
-    private boolean canParticipateInReassignment(TopicPartition partition, Map<TopicPartition, List<String>> partition2AllPotentialConsumers) {
+    private boolean canParticipateInReassignment(TopicPartition partition,
+                                                 Map<TopicPartition, List<String>> partition2AllPotentialConsumers) {
         // if a partition has two or more potential consumers it is subject to reassignment.
         return partition2AllPotentialConsumers.get(partition).size() >= 2;
     }
@@ -530,7 +514,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                          TreeSet<String> sortedCurrentSubscriptions,
                          Map<String, List<TopicPartition>> consumer2AllPotentialPartitions,
                          Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
-                         Map<String, List<TopicPartition>> oldAssignment,
                          Map<TopicPartition, String> currentPartitionConsumer) {
         boolean initializing = currentAssignment.get(sortedCurrentSubscriptions.last()).isEmpty();
         boolean reassignmentPerformed = false;
@@ -704,6 +687,22 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
         }
         return partitions;
+    }
+
+    /**
+     * @param col a collection of elements of type list
+     * @return true if all lists in the collection have the same members; false otherwise
+     */
+    private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
+        Iterator<List<T>> it = col.iterator();
+        List<T> cur = it.next();
+        while (it.hasNext()) {
+            List<T> next = it.next();
+            if (!(cur.containsAll(next) && next.containsAll(cur)))
+                return false;
+            cur = next;
+        }
+        return true;
     }
 
     private void deepCopy(Map<String, List<TopicPartition>> source, Map<String, List<TopicPartition>> dest) {
