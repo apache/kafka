@@ -1287,6 +1287,22 @@ public class ConsumerCoordinatorTest {
         assertTrue(mockOffsetCommitCallback.exception instanceof IllegalArgumentException);
     }
 
+    @Test(expected = IllegalArgumentException.class)
+    public void testCommitSyncNegativeOffset() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
+        coordinator.commitOffsetsSync(Collections.singletonMap(tp, new OffsetAndMetadata(-1L)));
+    }
+
+    @Test
+    public void testCommitAsyncNegativeOffset() {
+        int invokedBeforeTest = defaultOffsetCommitCallback.invoked;
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE.code()));
+        coordinator.commitOffsetsAsync(Collections.singletonMap(tp, new OffsetAndMetadata(-1L)), null);
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+        assertEquals(invokedBeforeTest + 1, defaultOffsetCommitCallback.invoked);
+        assertTrue(defaultOffsetCommitCallback.exception instanceof IllegalArgumentException);
+    }
+
     @Test
     public void testRefreshOffset() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
