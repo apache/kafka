@@ -243,4 +243,8 @@ public class MmapBufferPool implements BufferPool {
         return 0;
     }
 
+    // package-private method used only for testing
+    Deque<Condition> waiters() {
+        return this.waiters;
+    }
 }

@@ -25,13 +25,13 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.io.File;
 import java.nio.ByteBuffer;
+import java.util.Deque;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 @RunWith(PowerMockRunner.class)
 public class MmapBufferPoolTest {
@@ -180,5 +180,40 @@ public class MmapBufferPoolTest {
             // this is good
         }
         assertTrue(pool.queued() == 0);
+    }
+
+    /**
+     * Test if the  waiter that is waiting on availability of more memory is cleaned up when an interruption occurs
+     */
+    @Test
+    public void testCleanupMemoryAvailabilityWaiterOnInterruption() throws Exception {
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        MmapBufferPool pool = new MmapBufferPool(2, 1, time, storefile);
+        long blockTime = 5000;
+        pool.allocate(1, maxBlockTimeMs);
+        Thread t1 = new Thread(new BufferPoolTest.BufferPoolAllocator(pool, blockTime));
+        Thread t2 = new Thread(new BufferPoolTest.BufferPoolAllocator(pool, blockTime));
+        // start thread t1 which will try to allocate more memory on to the Buffer pool
+        t1.start();
+        // sleep for 500ms. Condition variable c1 associated with pool.allocate() by thread t1 will be inserted in the waiters queue.
+        Thread.sleep(500);
+        Deque<Condition> waiters = pool.waiters();
+        // get the condition object associated with pool.allocate() by thread t1
+        Condition c1 = waiters.getFirst();
+        // start thread t2 which will try to allocate more memory on to the Buffer pool
+        t2.start();
+        // sleep for 500ms. Condition variable c2 associated with pool.allocate() by thread t2 will be inserted in the waiters queue. The waiters queue will have 2 entries c1 and c2.
+        Thread.sleep(500);
+        t1.interrupt();
+        // sleep for 500ms.
+        Thread.sleep(500);
+        // get the condition object associated with allocate() by thread t2
+        Condition c2 = waiters.getLast();
+        t2.interrupt();
+        assertNotEquals(c1, c2);
+        t1.join();
+        t2.join();
+        // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
+        assertEquals(pool.queued(), 0);
     }
 }

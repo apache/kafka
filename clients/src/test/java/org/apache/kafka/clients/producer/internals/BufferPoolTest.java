@@ -272,7 +272,7 @@ public class BufferPoolTest {
         bufferPool.allocate(1, 0);
     }
 
-    private static class BufferPoolAllocator implements Runnable {
+    protected static class BufferPoolAllocator implements Runnable {
         BufferPool pool;
         long maxBlockTimeMs;
 
