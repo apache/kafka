@@ -312,7 +312,7 @@ class GroupMetadataManager(brokerId: Int,
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
                     if (isTxnOffsetCommit)
-                      group.updateCommitRecordMetadataForPendingTxnOffsetWrite(producerId, topicPartition, CommitRecordMetadataAndOffset(status.baseOffset, offsetAndMetadata))
+                      group.updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId, topicPartition, CommitRecordMetadataAndOffset(status.baseOffset, offsetAndMetadata))
                     else
                       group.completePendingOffsetWrite(topicPartition, CommitRecordMetadataAndOffset(status.baseOffset, offsetAndMetadata))
                   }

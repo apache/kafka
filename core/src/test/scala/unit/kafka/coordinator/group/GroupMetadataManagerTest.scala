@@ -364,6 +364,98 @@ class GroupMetadataManagerTest {
     }
   }
 
+  @Test
+  def testGroupLoadWithConsumerAndTransactionalOffsetCommitsConsumerWins(): Unit = {
+    val groupMetadataTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+    val producerId = 1000L
+    val producerEpoch: Short = 2
+
+    val transactionalOffsetCommits = Map(
+      new TopicPartition("foo", 0) -> 23L
+    )
+
+    val consumerOffsetCommits = Map(
+      new TopicPartition("foo", 0) -> 24L
+    )
+
+    val buffer = ByteBuffer.allocate(1024)
+    var nextOffset = 0
+    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
+    nextOffset += appendConsumerOffsetCommit(buffer, nextOffset, consumerOffsetCommits)
+    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+    expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
+
+    EasyMock.replay(replicaManager)
+
+    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => ())
+
+    // The group should be loaded with pending offsets.
+    val group = groupMetadataManager.getGroup(groupId).getOrElse(fail("Group was not loaded into the cache"))
+    assertEquals(groupId, group.groupId)
+    assertEquals(Empty, group.currentState)
+    // Ensure that no offsets are materialized, but that we have offsets pending.
+    assertEquals(1, group.allOffsets.size)
+    assertTrue(group.hasOffsets)
+    assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
+    assertEquals(consumerOffsetCommits.size, group.allOffsets.size)
+    consumerOffsetCommits.foreach { case (topicPartition, offset) =>
+      assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+    }
+  }
+
+  @Test
+  def testGroupLoadWithConsumerAndTransactionalOffsetCommitsTransactionWins(): Unit = {
+    val groupMetadataTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
+    val producerId = 1000L
+    val producerEpoch: Short = 2
+
+    val transactionalOffsetCommits = Map(
+      new TopicPartition("foo", 0) -> 23L
+    )
+
+    val consumerOffsetCommits = Map(
+      new TopicPartition("foo", 0) -> 24L
+    )
+
+    val buffer = ByteBuffer.allocate(1024)
+    var nextOffset = 0
+    nextOffset += appendConsumerOffsetCommit(buffer, nextOffset, consumerOffsetCommits)
+    nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
+    nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
+    buffer.flip()
+
+    val records = MemoryRecords.readableRecords(buffer)
+    expectGroupMetadataLoad(groupMetadataTopicPartition, 0, records)
+
+    EasyMock.replay(replicaManager)
+
+    groupMetadataManager.loadGroupsAndOffsets(groupMetadataTopicPartition, _ => ())
+
+    // The group should be loaded with pending offsets.
+    val group = groupMetadataManager.getGroup(groupId).getOrElse(fail("Group was not loaded into the cache"))
+    assertEquals(groupId, group.groupId)
+    assertEquals(Empty, group.currentState)
+    // Ensure that no offsets are materialized, but that we have offsets pending.
+    assertEquals(1, group.allOffsets.size)
+    assertTrue(group.hasOffsets)
+    assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
+    assertEquals(consumerOffsetCommits.size, group.allOffsets.size)
+    transactionalOffsetCommits.foreach { case (topicPartition, offset) =>
+      assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+    }
+  }
+
+  private def appendConsumerOffsetCommit(buffer: ByteBuffer, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
+    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
+    val commitRecords = createCommittedOffsetRecords(offsets)
+    commitRecords.foreach(builder.append)
+    builder.build()
+    offsets.size
+  }
+
   private def appendTransactionalOffsetCommits(buffer: ByteBuffer, producerId: Long, producerEpoch: Short,
                                                baseOffset: Long, offsets: Map[TopicPartition, Long]): Int = {
     val builder = MemoryRecords.builder(buffer, CompressionType.NONE, baseOffset, producerId, producerEpoch, 0, true)

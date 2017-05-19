@@ -348,8 +348,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def updateCommitRecordMetadataForPendingTxnOffsetWrite(producerId: Long, topicPartition: TopicPartition,
-                                                         commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset) {
+  def updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition,
+                                                          commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset) {
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffset) =>
         if (pendingOffset.contains(topicPartition)
@@ -397,8 +397,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         case (topicPartition, commitRecordMetadataAndOffset) =>
           commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp < startMs && !pendingOffsetCommits.contains(topicPartition)
       }
-      .map { case (topicPartition, commitRecordOffsetAndMetadata) =>
-        (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
+      .map {
+        case (topicPartition, commitRecordOffsetAndMetadata) =>
+          (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
       }
     offsets --= expiredOffsets.keySet
     expiredOffsets.toMap
