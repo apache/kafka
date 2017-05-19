@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -304,7 +305,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
 
         to(keySerde, valSerde, partitioner, topic);
 
-        return topology.table(keySerde, valSerde, topic, internalStoreName);
+        return topology.table(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic, internalStoreName);
     }
 
     @Override
@@ -316,7 +317,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K> implements KTable<K, 
         Objects.requireNonNull(storeSupplier, "storeSupplier can't be null");
         to(keySerde, valSerde, partitioner, topic);
 
-        return topology.table(keySerde, valSerde, topic, storeSupplier);
+        return topology.table(null, new FailOnInvalidTimestamp(), keySerde, valSerde, topic, storeSupplier);
     }
 
     @Override
