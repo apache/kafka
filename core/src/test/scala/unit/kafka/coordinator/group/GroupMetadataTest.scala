@@ -296,12 +296,13 @@ class GroupMetadataTest extends JUnitSuite {
   def testOffsetCommit(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val offset = OffsetAndMetadata(37)
+    val commitRecordOffset = 3
 
     group.prepareOffsetCommit(Map(partition -> offset))
     assertTrue(group.hasOffsets)
     assertEquals(None, group.offset(partition))
 
-    group.completePendingOffsetWrite(partition, offset)
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(commitRecordOffset, offset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(offset), group.offset(partition))
   }
@@ -337,7 +338,7 @@ class GroupMetadataTest extends JUnitSuite {
     assertTrue(group.hasOffsets)
     assertEquals(None, group.offset(partition))
 
-    group.completePendingOffsetWrite(partition, secondOffset)
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(3L, secondOffset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(secondOffset), group.offset(partition))
   }
@@ -355,11 +356,11 @@ class GroupMetadataTest extends JUnitSuite {
     group.prepareOffsetCommit(Map(partition -> secondOffset))
     assertTrue(group.hasOffsets)
 
-    group.completePendingOffsetWrite(partition, firstOffset)
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(4L, firstOffset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(firstOffset), group.offset(partition))
 
-    group.completePendingOffsetWrite(partition, secondOffset)
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(5L, secondOffset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(secondOffset), group.offset(partition))
   }
