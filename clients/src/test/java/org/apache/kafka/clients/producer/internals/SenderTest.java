@@ -540,7 +540,7 @@ public class SenderTest {
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         Metrics m = new Metrics();
         TransactionManager txnManager = new TransactionManager("testSplitBatchAndSend", 0);
-        txnManager.setPidAndEpoch(new PidAndEpoch(123456L, (short) 0));
+        txnManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(123456L, (short) 0));
         accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.GZIP, 0L, 0L, m, time,
                                             new ApiVersions(), txnManager);
         try {
