@@ -678,7 +678,7 @@ public class TransactionManager {
 
             if (!unauthorizedTopics.isEmpty()) {
                 fatal(new TopicAuthorizationException(unauthorizedTopics));
-            } if (hasPartitionErrors) {
+            } else if (hasPartitionErrors) {
                 fatal(new KafkaException("Could not add partitions to transaction due to partition level errors"));
             } else {
                 partitionsInTransaction.addAll(pendingPartitionsToBeAddedToTransaction);
