@@ -43,7 +43,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
       def verifyMetadata(socketServer: SocketServer) = {
         val metadata = sendMetadataRequest(
-          new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
+          new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
         val metadataForTopic = metadata.filter(_.topic == topic).head
 
         val partitions = if (!details.replicasAssignments.isEmpty)
@@ -127,7 +127,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
   protected def validateTopicExists(topic: String): Unit = {
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
     val metadata = sendMetadataRequest(
-      new MetadataRequest.Builder(List(topic).asJava).build()).topicMetadata.asScala
+      new MetadataRequest.Builder(List(topic).asJava, true).build()).topicMetadata.asScala
     assertTrue("The topic should be created", metadata.exists(p => p.topic.equals(topic) && p.error == Errors.NONE))
   }
 

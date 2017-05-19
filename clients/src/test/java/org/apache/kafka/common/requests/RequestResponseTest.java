@@ -703,7 +703,7 @@ public class RequestResponseTest {
     }
 
     private MetadataRequest createMetadataRequest(int version, List<String> topics) {
-        return new MetadataRequest.Builder(topics).build((short) version);
+        return new MetadataRequest.Builder(topics, true).build((short) version);
     }
 
     private MetadataResponse createMetadataResponse() {

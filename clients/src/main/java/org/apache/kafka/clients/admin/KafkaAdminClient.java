@@ -282,7 +282,7 @@ public class KafkaAdminClient extends AdminClient {
 
         try {
             metadata = new Metadata(config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+                    config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
@@ -1155,7 +1155,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(topicNamesList);
+                return new MetadataRequest.Builder(topicNamesList, false);
             }
 
             @Override
@@ -1208,7 +1208,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(Collections.<String>emptyList());
+                return new MetadataRequest.Builder(Collections.<String>emptyList(), false);
             }
 
             @Override

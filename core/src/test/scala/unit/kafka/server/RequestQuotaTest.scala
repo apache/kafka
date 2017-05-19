@@ -173,7 +173,7 @@ class RequestQuotaTest extends BaseRequestTest {
           FetchRequest.Builder.forConsumer(0, 0, partitionMap)
 
         case ApiKeys.METADATA =>
-          new MetadataRequest.Builder(List(topic).asJava)
+          new MetadataRequest.Builder(List(topic).asJava, true)
 
         case ApiKeys.LIST_OFFSETS =>
           ListOffsetRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)

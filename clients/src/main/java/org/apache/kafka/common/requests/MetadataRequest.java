@@ -30,19 +30,24 @@ import java.util.List;
 
 public class MetadataRequest extends AbstractRequest {
 
+    private static final String TOPICS_KEY_NAME = "topics";
+    private static final String ALLOW_AUTO_TOPIC_CREATION_KEY_NAME = "allow_auto_topic_creation";
+
     public static class Builder extends AbstractRequest.Builder<MetadataRequest> {
         private static final List<String> ALL_TOPICS = null;
 
         // The list of topics, or null if we want to request metadata about all topics.
         private final List<String> topics;
+        private final boolean allowAutoTopicCreation;
 
         public static Builder allTopics() {
-            return new Builder(ALL_TOPICS);
+            return new Builder(ALL_TOPICS, false);
         }
 
-        public Builder(List<String> topics) {
+        public Builder(List<String> topics, boolean allowAutoTopicCreation) {
             super(ApiKeys.METADATA);
             this.topics = topics;
+            this.allowAutoTopicCreation = allowAutoTopicCreation;
         }
 
         public List<String> topics() {
@@ -59,7 +64,7 @@ public class MetadataRequest extends AbstractRequest {
                 throw new UnsupportedVersionException("MetadataRequest " +
                         "versions older than 1 are not supported.");
             }
-            return new MetadataRequest(this.topics, version);
+            return new MetadataRequest(this.topics, allowAutoTopicCreation, version);
         }
 
         @Override
@@ -77,18 +82,18 @@ public class MetadataRequest extends AbstractRequest {
         }
     }
 
-    private static final String TOPICS_KEY_NAME = "topics";
-
     private final List<String> topics;
+    private final boolean allowAutoTopicCreation;
 
     /**
      * In v0 null is not allowed and an empty list indicates requesting all topics.
      * Note: modern clients do not support sending v0 requests.
      * In v1 null indicates requesting all topics, and an empty list indicates requesting no topics.
      */
-    public MetadataRequest(List<String> topics, short version) {
+    public MetadataRequest(List<String> topics, boolean allowAutoTopicCreation, short version) {
         super(version);
         this.topics = topics;
+        this.allowAutoTopicCreation = allowAutoTopicCreation;
     }
 
     public MetadataRequest(Struct struct, short version) {
@@ -102,6 +107,10 @@ public class MetadataRequest extends AbstractRequest {
         } else {
             topics = null;
         }
+        if (struct.hasField(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME))
+            allowAutoTopicCreation = struct.getBoolean(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME);
+        else
+            allowAutoTopicCreation = true;
     }
 
     @Override
@@ -137,6 +146,10 @@ public class MetadataRequest extends AbstractRequest {
         return topics;
     }
 
+    public boolean allowAutoTopicCreation() {
+        return allowAutoTopicCreation;
+    }
+
     public static MetadataRequest parse(ByteBuffer buffer, short version) {
         return new MetadataRequest(ApiKeys.METADATA.parseRequest(version, buffer), version);
     }
@@ -148,6 +161,8 @@ public class MetadataRequest extends AbstractRequest {
             struct.set(TOPICS_KEY_NAME, null);
         else
             struct.set(TOPICS_KEY_NAME, topics.toArray());
+        if (struct.hasField(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME))
+            struct.set(ALLOW_AUTO_TOPIC_CREATION_KEY_NAME, allowAutoTopicCreation);
         return struct;
     }
 }
