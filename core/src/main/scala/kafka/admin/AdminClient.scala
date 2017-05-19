@@ -373,6 +373,7 @@ object AdminClient {
   val DefaultRequestTimeoutMs = 5000
   val DefaultMaxInFlightRequestsPerConnection = 100
   val DefaultReconnectBackoffMs = 50
+  val DefaultReconnectBackoffMax = 50
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
@@ -447,6 +448,7 @@ object AdminClient {
       "admin-" + AdminClientIdSequence.getAndIncrement(),
       DefaultMaxInFlightRequestsPerConnection,
       DefaultReconnectBackoffMs,
+      DefaultReconnectBackoffMax,
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       requestTimeoutMs,
