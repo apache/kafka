@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -32,6 +33,7 @@ import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
 public class MmapBufferPoolTest {
+    private final MockTime time = new MockTime();
     private final long maxBlockTimeMs = 2000;
 
     @Test
@@ -39,7 +41,7 @@ public class MmapBufferPoolTest {
         long totalMemory = 64 * 1024;
         int size = 1024;
         File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
-        BufferPool pool = new MmapBufferPool(totalMemory, size, storefile);
+        BufferPool pool = new MmapBufferPool(totalMemory, size, time, storefile);
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
@@ -67,7 +69,7 @@ public class MmapBufferPoolTest {
     @Test(expected = IllegalArgumentException.class)
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
         File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
-        BufferPool pool = new MmapBufferPool(1024, 512, storefile);
+        BufferPool pool = new MmapBufferPool(1024, 512, time, storefile);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
@@ -91,7 +93,7 @@ public class MmapBufferPoolTest {
     @Test
     public void testBlockTimeout() throws Exception {
         File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
-        BufferPool pool = new MmapBufferPool(10, 1, storefile);
+        BufferPool pool = new MmapBufferPool(10, 1, time, storefile);
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
