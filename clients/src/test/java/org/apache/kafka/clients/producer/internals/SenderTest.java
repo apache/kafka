@@ -657,6 +657,6 @@ public class SenderTest {
             }
         }, new InitProducerIdResponse(0, error, producerId, producerEpoch));
         sender.run(time.milliseconds());
-
     }
+
 }

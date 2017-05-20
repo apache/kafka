@@ -25,6 +25,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -42,6 +44,7 @@ import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -117,6 +120,7 @@ public class TransactionManagerTest {
                 transactionManager,
                 apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
+        client.setNode(brokerNode);
     }
 
     @Test(expected = IllegalStateException.class)
@@ -133,7 +137,6 @@ public class TransactionManagerTest {
         assertEquals((int) transactionManager.sequenceNumber(tp0), 3);
     }
 
-
     @Test
     public void testProducerIdReset() {
         TransactionManager transactionManager = new TransactionManager();
@@ -146,23 +149,13 @@ public class TransactionManagerTest {
 
     @Test
     public void testBasicTransaction() throws InterruptedException {
-        client.setNode(brokerNode);
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        doInitTransactions(pid, epoch);
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -198,13 +191,13 @@ public class TransactionManagerTest {
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
 
-        assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        assertEquals(null, transactionManager.coordinator(CoordinatorType.GROUP));
         sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
         sender.run(time.milliseconds());  // send find coordinator for group request
-        assertNotNull(transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
         assertTrue(transactionManager.hasPendingOffsetCommits());
 
         sender.run(time.milliseconds());  // send TxnOffsetCommitRequest commit.
@@ -223,42 +216,40 @@ public class TransactionManagerTest {
 
     @Test
     public void testDisconnectAndRetry() {
-        client.setNode(brokerNode);
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, true, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, true, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator, connection lost.
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
     }
 
     @Test
     public void testCoordinatorLost() {
-        client.setNode(brokerNode);
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
         TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
         prepareInitPidResponse(Errors.NOT_COORDINATOR, false, pid, epoch);
         sender.run(time.milliseconds());  // send pid, get not coordinator. Should resend the FindCoordinator and InitPid requests
 
-        assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        assertEquals(null, transactionManager.coordinator(CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isCompleted());
         prepareInitPidResponse(Errors.NONE, false, pid, epoch);
         sender.run(time.milliseconds());  // get pid and epoch
@@ -270,24 +261,94 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testFlushPendingPartitionsOnCommit() throws InterruptedException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
-        final long pid = 13131L;
-        final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-
+    public void testTransactionalIdAuthorizationFailureInFindCoordinator() {
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, false,
+                CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());  // find coordinator
         sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
 
-        sender.run(time.milliseconds());  // get pid.
+        sender.run(time.milliseconds()); // one more run to fail the InitProducerId future
+        assertTrue(initPidResult.isCompleted());
+        assertFalse(initPidResult.isSuccessful());
+        assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
+    }
 
-        assertTrue(transactionManager.hasProducerId());
+    @Test
+    public void testTransactionalIdAuthorizationFailureInInitProducerId() {
+        final long pid = 13131L;
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, false, pid, RecordBatch.NO_PRODUCER_EPOCH);
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(initPidResult.isCompleted());
+        assertFalse(initPidResult.isSuccessful());
+        assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
+
+        // transactional id auth failures should be fatal
+        try {
+            transactionManager.beginTransaction();
+            fail("Should have raised " + TransactionalIdAuthorizationException.class.getSimpleName());
+        } catch (KafkaException e) {
+            assertTrue(e.getCause() instanceof TransactionalIdAuthorizationException);
+        }
+
+        // this error cannot be recovered by aborting
+        try {
+            transactionManager.beginAbortingTransaction();
+            fail("Should have raised " + TransactionalIdAuthorizationException.class.getSimpleName());
+        } catch (KafkaException e) {
+            assertTrue(e.getCause() instanceof TransactionalIdAuthorizationException);
+        }
+    }
+
+    @Test
+    public void testGroupAuthorizationFailureInFindCoordinator() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                Collections.singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.run(time.milliseconds());  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.GROUP_AUTHORIZATION_FAILED, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.run(time.milliseconds());  // FindCoordinator Failed
+        sender.run(time.milliseconds());  // TxnOffsetCommit Aborted
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof GroupAuthorizationException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof GroupAuthorizationException);
+
+        GroupAuthorizationException exception = (GroupAuthorizationException) sendOffsetsResult.error();
+        assertEquals(consumerGroupId, exception.groupId());
+
+        // This is an abortable error
+        transactionManager.beginAbortingTransaction();
+    }
+
+    @Test
+    public void testFlushPendingPartitionsOnCommit() throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
@@ -328,23 +389,11 @@ public class TransactionManagerTest {
 
     @Test
     public void testMultipleAddPartitionsPerForOneProduce() throws InterruptedException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        doInitTransactions(pid, epoch);
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         // User does one producer.sed
         transactionManager.maybeAddPartitionToTransaction(tp0);
@@ -391,23 +440,11 @@ public class TransactionManagerTest {
 
     @Test(expected = ExecutionException.class)
     public void testProducerFencedException() throws InterruptedException, ExecutionException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        doInitTransactions(pid, epoch);
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -428,23 +465,11 @@ public class TransactionManagerTest {
 
     @Test
     public void testDisallowCommitOnProduceFailure() throws InterruptedException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        doInitTransactions(pid, epoch);
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -482,22 +507,10 @@ public class TransactionManagerTest {
 
     @Test
     public void testAllowAbortOnProduceFailure() throws InterruptedException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-        sender.run(time.milliseconds());  // get pid.
-
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
-        assertTrue(transactionManager.hasProducerId());
+        doInitTransactions(pid, epoch);
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
@@ -523,23 +536,11 @@ public class TransactionManagerTest {
 
     @Test
     public void testHandlingOfUnknownTopicPartitionErrorOnAddPartitions() throws InterruptedException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        doInitTransactions(pid, epoch);
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -563,23 +564,11 @@ public class TransactionManagerTest {
 
     @Test
     public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() throws InterruptedException {
-        client.setNode(brokerNode);
-        // This is called from the initTransactions method in the producer as the first order of business.
-        // It finds the coordinator and then gets a PID.
         final long pid = 13131L;
         final short epoch = 1;
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
 
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+        doInitTransactions(pid, epoch);
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
-
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -596,13 +585,13 @@ public class TransactionManagerTest {
         Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
         txnOffsetCommitResponse.put(tp1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
 
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
 
-        assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        assertEquals(null, transactionManager.coordinator(CoordinatorType.GROUP));
         sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
         sender.run(time.milliseconds());  // send find coordinator for group request
-        assertNotNull(transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
         assertTrue(transactionManager.hasPendingOffsetCommits());
 
         sender.run(time.milliseconds());  // send TxnOffsetCommitRequest request.
@@ -624,21 +613,11 @@ public class TransactionManagerTest {
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
-        client.setNode(brokerNode);
-        transactionManager.initializeTransactions();
-        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
-
-        sender.run(time.milliseconds());  // find coordinator
-        sender.run(time.milliseconds());
-
         final long pid = 1L;
         final short epoch = 1;
 
-        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+        doInitTransactions(pid, epoch);
 
-        sender.run(time.milliseconds());  // get pid.
-
-        assertTrue(transactionManager.hasProducerId());
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartitionToTransaction(tp0);
 
@@ -662,7 +641,7 @@ public class TransactionManagerTest {
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
-                                                final FindCoordinatorRequest.CoordinatorType coordinatorType,
+                                                final CoordinatorType coordinatorType,
                                                 final String coordinatorKey) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
@@ -772,5 +751,16 @@ public class TransactionManagerTest {
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
+    private void doInitTransactions(long pid, short epoch) {
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+        sender.run(time.milliseconds());  // get pid.
+        assertTrue(transactionManager.hasProducerId());
+    }
 
 }

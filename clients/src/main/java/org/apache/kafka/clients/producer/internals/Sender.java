@@ -414,7 +414,7 @@ public class Sender implements Runnable {
                     } else if (error.exception() instanceof RetriableException) {
                         log.debug("Retriable error from InitProducerId response", error.message());
                     } else {
-                        transactionManager.setError(error.exception());
+                        transactionManager.transitionToFatalError(error.exception());
                         break;
                     }
                 } else {
@@ -422,7 +422,7 @@ public class Sender implements Runnable {
                             "We will back off and try again.");
                 }
             } catch (UnsupportedVersionException e) {
-                transactionManager.setError(e);
+                transactionManager.transitionToFatalError(e);
                 break;
             } catch (IOException e) {
                 log.debug("Broker {} disconnected while awaiting InitProducerId response", e);
@@ -567,7 +567,7 @@ public class Sender implements Runnable {
                         batch.topicPartition, response.baseOffset);
 
                 if (transactionManager.isTransactional())
-                    transactionManager.setError(exception);
+                    transactionManager.transitionToAbortableError(exception);
                 else
                     // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
                     // about the previously committed message. Note that this will discard the producer id and sequence
@@ -576,7 +576,7 @@ public class Sender implements Runnable {
             } else if (transactionManager.isTransactional() || exception instanceof ClusterAuthorizationException) {
                 // any batch failure is treated as fatal for transactional producers. Cluster authorization
                 // errors (which imply no IdempotentWrite permission) are also fatal for the idempotent producer.
-                transactionManager.setError(exception);
+                transactionManager.transitionToFatalError(exception);
             }
         }
 

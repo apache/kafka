@@ -34,7 +34,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -52,7 +51,6 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.AbstractRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
@@ -697,19 +695,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new IllegalStateException("Cannot perform a 'send' before completing a call to initTransactions " +
                     "when transactions are enabled.");
 
-        if (transactionManager.isFenced())
-            throw Errors.INVALID_PRODUCER_EPOCH.exception();
-
         if (transactionManager.isInErrorState()) {
             Exception lastError = transactionManager.lastError();
-            if (lastError instanceof AuthorizationException)
-                throw (AuthorizationException) lastError;
             throw new KafkaException("Cannot perform send because at least one previous transactional or " +
                     "idempotent request has failed with errors.", lastError);
         }
         if (transactionManager.isCompletingTransaction())
             throw new IllegalStateException("Cannot call send while a commit or abort is in progress.");
-
     }
 
     private void setReadOnly(Headers headers) {
