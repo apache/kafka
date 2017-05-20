@@ -106,8 +106,7 @@ object ConsumerGroupCommand extends Logging {
       }
       else if (opts.options.has(opts.resetOffsetsOpt)) {
         val offsetsToReset = consumerGroupService.resetOffsets()
-        val export = opts.options.has(opts.exportOpt)
-        if (export) {
+        if (opts.options.has(opts.exportOpt)) {
           val exported = consumerGroupService.exportOffsetsToReset(offsetsToReset)
           println(exported)
         } else
@@ -631,18 +630,21 @@ object ConsumerGroupCommand extends Logging {
         val resetPlanCsv = Utils.readFileAsString(resetPlanPath)
         val resetPlan = parseResetPlan(resetPlanCsv)
         resetPlan.keySet.map { topicPartition =>
-            if (partitionsToReset.exists(tp => tp.equals(topicPartition))) {
-              val newOffset: Long = checkOffsetRange(topicPartition, resetPlan(topicPartition).offset())
-              (topicPartition, new OffsetAndMetadata(newOffset))
-            } else null
+          if (partitionsToReset.exists(tp => tp.equals(topicPartition))) {
+            val newOffset: Long = checkOffsetRange(topicPartition, resetPlan(topicPartition).offset())
+            (topicPartition, new OffsetAndMetadata(newOffset))
+          } else null
         }.toMap
-      } else {
+      } else if (opts.options.has(opts.resetToCurrentOpt)) {
         val currentCommittedOffsets = adminClient.listGroupOffsets(groupId)
         partitionsToReset.map { topicPartition =>
           currentCommittedOffsets.get(topicPartition).map { offset =>
             (topicPartition, new OffsetAndMetadata(offset))
           }.orNull
         }.toMap
+      } else {
+        CommandLineUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetByDurationOpt, opts.allResetOffsetScenarioOpts) )
+        Map.empty
       }
     }
 
@@ -724,6 +726,7 @@ object ConsumerGroupCommand extends Logging {
     val ResetByDurationDoc = "Reset offsets to offset by duration from current timestamp. Format: 'PnDTnHnMnS'"
     val ResetToEarliestDoc = "Reset offsets to earliest offset."
     val ResetToLatestDoc = "Reset offsets to latest offset."
+    val ResetToCurrentDoc = "Reset offsets to current offset."
     val ResetShiftByDoc = "Reset offsets shifting current offset by 'n', where 'n' can be positive or negative"
 
     val parser = new OptionParser
@@ -778,6 +781,7 @@ object ConsumerGroupCommand extends Logging {
                                    .ofType(classOf[String])
     val resetToEarliestOpt = parser.accepts("to-earliest", ResetToEarliestDoc)
     val resetToLatestOpt = parser.accepts("to-latest", ResetToLatestDoc)
+    val resetToCurrentOpt = parser.accepts("to-current", ResetToCurrentDoc)
     val resetShiftByOpt = parser.accepts("shift-by", ResetShiftByDoc)
                              .withRequiredArg()
                              .describedAs("number-of-offsets")
@@ -789,7 +793,7 @@ object ConsumerGroupCommand extends Logging {
 
     val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
-      resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetFromFileOpt)
+      resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
 
     def checkArgs() {
       // check required args
@@ -821,8 +825,10 @@ object ConsumerGroupCommand extends Logging {
         CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, allResetOffsetScenarioOpts - resetByDurationOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, allResetOffsetScenarioOpts - resetToEarliestOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, allResetOffsetScenarioOpts - resetToCurrentOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, allResetOffsetScenarioOpts - resetShiftByOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, allResetOffsetScenarioOpts - resetFromFileOpt)
+
 
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt - resetOffsetsOpt)
