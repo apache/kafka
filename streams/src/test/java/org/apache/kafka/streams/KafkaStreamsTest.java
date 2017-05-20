@@ -299,7 +299,6 @@ public class KafkaStreamsTest {
         Assert.assertNotNull("streamString should not be null", streamString);
         Assert.assertNotEquals("streamString contains non-empty appId", "", appId);
         Assert.assertNotNull("streamString contains non-null appId", appId);
-
     }
 
 
