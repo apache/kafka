@@ -182,6 +182,12 @@ public class DistributedConfig extends WorkerConfig {
                         atLeast(0L),
                         ConfigDef.Importance.LOW,
                         CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
+                .define(CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_CONFIG,
+                        ConfigDef.Type.LONG,
+                        50L,
+                        atLeast(0L),
+                        ConfigDef.Importance.LOW,
+                        CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                 .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                         ConfigDef.Type.LONG,
                         100L,
