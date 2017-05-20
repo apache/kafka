@@ -1489,6 +1489,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+      trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
       errors.put(producerId, responseStatus.mapValues(_.error).asJava)
 
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>

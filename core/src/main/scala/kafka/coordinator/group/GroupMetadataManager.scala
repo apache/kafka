@@ -324,7 +324,7 @@ class GroupMetadataManager(brokerId: Int,
                     removeProducerGroup(producerId, group.groupId)
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
                     if (isTxnOffsetCommit)
-                      group.failPendingTxnOffsetCommit(producerId, topicPartition, offsetAndMetadata)
+                      group.failPendingTxnOffsetCommit(producerId, topicPartition)
                     else
                       group.failPendingOffsetWrite(topicPartition, offsetAndMetadata)
                   }
@@ -536,7 +536,6 @@ class GroupMetadataManager(brokerId: Int,
                     val groupId = groupMetadataKey.key
                     val groupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, record.value)
                     if (groupMetadata != null) {
-                      trace(s"Loaded group metadata for group $groupId with generation ${groupMetadata.generationId}")
                       removedGroups.remove(groupId)
                       loadedGroups.put(groupId, groupMetadata)
                     } else {
@@ -577,6 +576,7 @@ class GroupMetadataManager(brokerId: Int,
           loadedGroups.values.foreach { group =>
             val offsets = groupOffsets.getOrElse(group.groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
             val pendingOffsets = pendingGroupOffsets.getOrElse(group.groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
+            trace(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
           }
@@ -587,6 +587,7 @@ class GroupMetadataManager(brokerId: Int,
             val group = new GroupMetadata(groupId)
             val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
             val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
+            trace(s"Loaded group metadata $group with offsets $offsets and pending offsets $pendingOffsets")
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
           }

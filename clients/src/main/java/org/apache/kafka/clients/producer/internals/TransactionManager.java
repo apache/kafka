@@ -411,6 +411,7 @@ public class TransactionManager {
             lastError = error;
         }
 
+        log.debug("TransactionalId {} -- Transition from state {} to {}", transactionalId, currentState, target);
         currentState = target;
     }
 
@@ -595,6 +596,10 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
             Errors error = initProducerIdResponse.error();
+
+            log.debug("TransactionalId {} -- Received InitProducerId response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
@@ -639,6 +644,9 @@ public class TransactionManager {
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
             Set<String> unauthorizedTopics = new HashSet<>();
+
+            log.debug("TransactionalId {} -- Received AddPartitionsToTxn response with errors {}",
+                    transactionalId, errors);
 
             for (TopicPartition topicPartition : pendingPartitionsToBeAddedToTransaction) {
                 final Errors error = errors.get(topicPartition);
@@ -714,6 +722,10 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             Errors error = findCoordinatorResponse.error();
+
+            log.debug("TransactionalId {} -- Received FindCoordinator response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
                 Node node = findCoordinatorResponse.node();
                 switch (builder.coordinatorType()) {
@@ -764,6 +776,10 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
+
+            log.debug("TransactionalId {} -- Received EndTxn response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
                 completeTransaction();
                 result.done();
@@ -808,6 +824,10 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = addOffsetsToTxnResponse.error();
+
+            log.debug("TransactionalId {} -- Received AddOffsetsToTxn response with error {}",
+                    transactionalId, error);
+
             if (error == Errors.NONE) {
                 // note the result is not completed until the TxnOffsetCommit returns
                 pendingRequests.add(txnOffsetCommitHandler(result, offsets, builder.consumerGroupId()));
@@ -862,7 +882,12 @@ public class TransactionManager {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
             boolean hadFailure = false;
-            for (Map.Entry<TopicPartition, Errors> entry : txnOffsetCommitResponse.errors().entrySet()) {
+            Map<TopicPartition, Errors> errors = txnOffsetCommitResponse.errors();
+
+            log.debug("TransactionalId {} -- Received TxnOffsetCommit response with errors {}",
+                    transactionalId, errors);
+
+            for (Map.Entry<TopicPartition, Errors> entry : errors.entrySet()) {
                 TopicPartition topicPartition = entry.getKey();
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {

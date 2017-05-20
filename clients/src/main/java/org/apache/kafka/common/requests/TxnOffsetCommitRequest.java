@@ -63,6 +63,18 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         public TxnOffsetCommitRequest build(short version) {
             return new TxnOffsetCommitRequest(version, transactionalId, consumerGroupId, producerId, producerEpoch, offsets);
         }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", consumerGroupId=").append(consumerGroupId).
+                    append(", offsets=").append(offsets).
+                    append(")");
+            return bld.toString();
+        }
     }
 
     private final String transactionalId;

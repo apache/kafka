@@ -309,9 +309,12 @@ public class Sender implements Runnable {
             return false;
         }
 
+        log.debug("TransactionalId: {} -- Sending transactional request {}", transactionManager.transactionalId(),
+                nextRequestHandler.requestBuilder());
+
         while (true) {
+            Node targetNode = null;
             try {
-                Node targetNode;
                 if (nextRequestHandler.needsCoordinator()) {
                     targetNode = transactionManager.coordinator(nextRequestHandler.coordinatorType());
                     if (targetNode == null) {
@@ -340,9 +343,9 @@ public class Sender implements Runnable {
                     return true;
                 }
             } catch (IOException e) {
-                log.warn("TransactionalId: {} -- Got an exception when trying to find a node to send transactional " +
+                log.debug("TransactionalId: {} -- Disconnect from {} while trying to send transactional " +
                                 "request {}. Going to back off and retry", transactionManager.transactionalId(),
-                        nextRequestHandler.requestBuilder(), e);
+                        targetNode, nextRequestHandler.requestBuilder());
             }
             log.trace("TransactionalId: {}. About to wait for {}ms before trying to send another transactional request.",
                     transactionManager.transactionalId(), retryBackoffMs);
