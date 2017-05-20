@@ -470,6 +470,10 @@ class TransactionStateManager(brokerId: Int,
       case Left(err) =>
         responseCallback(err)
 
+      case Right(None) =>
+        // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
+        responseCallback(Errors.NOT_COORDINATOR)
+
       case Right(Some(epochAndMetadata)) =>
         val metadata = epochAndMetadata.transactionMetadata
 
@@ -487,15 +491,12 @@ class TransactionStateManager(brokerId: Int,
               internalTopicsAllowed = true,
               isFromClient = false,
               recordsPerPartition,
-              updateCacheCallback)
+              updateCacheCallback,
+              delayedProduceSyncObject = newMetadata)
 
             trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }
         }
-
-      case Right(None) =>
-        // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
-        responseCallback(Errors.NOT_COORDINATOR)
     }
   }
 

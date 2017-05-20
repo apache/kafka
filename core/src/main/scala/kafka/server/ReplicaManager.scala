@@ -336,7 +336,8 @@ class ReplicaManager(val config: KafkaConfig,
                     internalTopicsAllowed: Boolean,
                     isFromClient: Boolean,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
+                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                    delayedProduceSyncObject: Object = null) {
 
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
@@ -354,7 +355,10 @@ class ReplicaManager(val config: KafkaConfig,
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
+        val delayedProduce = if (delayedProduceSyncObject != null)
+          new SafeDelayedProduce(timeout, delayedProduceSyncObject, produceMetadata, this, responseCallback)
+        else
+          new DelayedProduce(timeout, produceMetadata, this, responseCallback)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq

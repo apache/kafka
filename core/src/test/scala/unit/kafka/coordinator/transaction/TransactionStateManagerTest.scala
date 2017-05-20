@@ -227,6 +227,7 @@ class TransactionStateManagerTest {
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))), transactionManager.getAndMaybeAddTransactionState(txnId1))
 
     // append to log again with expected failures
+    txnMetadata1.pendingState = None
     val failedMetadata = txnMetadata1.prepareAddPartitions(Set[TopicPartition](new TopicPartition("topic2", 0)), time.milliseconds())
 
     // test COORDINATOR_NOT_AVAILABLE cases
@@ -422,15 +423,16 @@ class TransactionStateManagerTest {
       internalTopicsAllowed = EasyMock.eq(true),
       isFromClient = EasyMock.eq(false),
       EasyMock.anyObject().asInstanceOf[Map[TopicPartition, MemoryRecords]],
-      EasyMock.capture(capturedArgument)))
-      .andAnswer(new IAnswer[Unit] {
+      EasyMock.capture(capturedArgument),
+      EasyMock.anyObject())
+    ).andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = capturedArgument.getValue.apply(
           Map(new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId) ->
             new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
           )
         )
       }
-      )
+    )
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject()))
       .andStubReturn(Some(RecordBatch.MAGIC_VALUE_V1))
 

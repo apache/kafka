@@ -235,12 +235,12 @@ class GroupMetadataManager(brokerId: Int,
   def store(delayedStore: DelayedStore) {
     // call replica manager to append the group message
     replicaManager.appendRecords(
-      config.offsetCommitTimeoutMs.toLong,
-      config.offsetCommitRequiredAcks,
+      timeout = config.offsetCommitTimeoutMs.toLong,
+      requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
       isFromClient = false,
-      delayedStore.partitionRecords,
-      delayedStore.callback)
+      entriesPerPartition = delayedStore.partitionRecords,
+      responseCallback = delayedStore.callback)
   }
 
   /**

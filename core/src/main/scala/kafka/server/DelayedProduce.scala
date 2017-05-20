@@ -124,6 +124,19 @@ class DelayedProduce(delayMs: Long,
   }
 }
 
+class SafeDelayedProduce(delayMs: Long,
+                         syncObject: Object,
+                         produceMetadata: ProduceMetadata,
+                         replicaManager: ReplicaManager,
+                         responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
+  extends DelayedProduce(delayMs, produceMetadata, replicaManager, responseCallback) {
+
+  // overridden since tryComplete already synchronizes on the caller
+  override def safeTryComplete(): Boolean = syncObject synchronized {
+    tryComplete()
+  }
+}
+
 object DelayedProduceMetrics extends KafkaMetricsGroup {
 
   private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
