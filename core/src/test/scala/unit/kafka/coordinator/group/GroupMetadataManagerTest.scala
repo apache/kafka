@@ -396,7 +396,6 @@ class GroupMetadataManagerTest {
     val group = groupMetadataManager.getGroup(groupId).getOrElse(fail("Group was not loaded into the cache"))
     assertEquals(groupId, group.groupId)
     assertEquals(Empty, group.currentState)
-    // Ensure that no offsets are materialized, but that we have offsets pending.
     assertEquals(1, group.allOffsets.size)
     assertTrue(group.hasOffsets)
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
@@ -438,7 +437,6 @@ class GroupMetadataManagerTest {
     val group = groupMetadataManager.getGroup(groupId).getOrElse(fail("Group was not loaded into the cache"))
     assertEquals(groupId, group.groupId)
     assertEquals(Empty, group.currentState)
-    // Ensure that no offsets are materialized, but that we have offsets pending.
     assertEquals(1, group.allOffsets.size)
     assertTrue(group.hasOffsets)
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
