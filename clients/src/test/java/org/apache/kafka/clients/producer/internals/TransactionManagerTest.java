@@ -26,6 +26,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -67,6 +68,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -275,6 +278,8 @@ public class TransactionManagerTest {
         assertTrue(initPidResult.isCompleted());
         assertFalse(initPidResult.isSuccessful());
         assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
+
+        assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
     @Test
@@ -294,21 +299,7 @@ public class TransactionManagerTest {
         assertFalse(initPidResult.isSuccessful());
         assertTrue(initPidResult.error() instanceof TransactionalIdAuthorizationException);
 
-        // transactional id auth failures should be fatal
-        try {
-            transactionManager.beginTransaction();
-            fail("Should have raised " + TransactionalIdAuthorizationException.class.getSimpleName());
-        } catch (KafkaException e) {
-            assertTrue(e.getCause() instanceof TransactionalIdAuthorizationException);
-        }
-
-        // this error cannot be recovered by aborting
-        try {
-            transactionManager.beginAbortingTransaction();
-            fail("Should have raised " + TransactionalIdAuthorizationException.class.getSimpleName());
-        } catch (KafkaException e) {
-            assertTrue(e.getCause() instanceof TransactionalIdAuthorizationException);
-        }
+        assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
     @Test
@@ -321,7 +312,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
-                Collections.singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
+                singletonMap(new TopicPartition("foo", 0), new OffsetAndMetadata(39L)), consumerGroupId);
 
         prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
         sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
@@ -339,8 +330,142 @@ public class TransactionManagerTest {
         GroupAuthorizationException exception = (GroupAuthorizationException) sendOffsetsResult.error();
         assertEquals(consumerGroupId, exception.groupId());
 
-        // This is an abortable error
-        transactionManager.beginAbortingTransaction();
+        assertAbortableError(GroupAuthorizationException.class);
+    }
+
+    @Test
+    public void testGroupAuthorizationFailureInTxnOffsetCommit() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.run(time.milliseconds());  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.run(time.milliseconds());  // FindCoordinator Returned
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.GROUP_AUTHORIZATION_FAILED));
+        sender.run(time.milliseconds());  // TxnOffsetCommit Handled
+
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof GroupAuthorizationException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof GroupAuthorizationException);
+
+        GroupAuthorizationException exception = (GroupAuthorizationException) sendOffsetsResult.error();
+        assertEquals(consumerGroupId, exception.groupId());
+
+        assertAbortableError(GroupAuthorizationException.class);
+    }
+
+    @Test
+    public void testTransactionalIdAuthorizationFailureInAddOffsetsToTxn() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, consumerGroupId, pid, epoch);
+        sender.run(time.milliseconds());  // AddOffsetsToTxn Handled
+
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof TransactionalIdAuthorizationException);
+
+        assertFatalError(TransactionalIdAuthorizationException.class);
+    }
+
+    @Test
+    public void testTransactionalIdAuthorizationFailureInTxnOffsetCommit() {
+        final String consumerGroupId = "consumer";
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        TransactionalRequestResult sendOffsetsResult = transactionManager.sendOffsetsToTransaction(
+                singletonMap(tp, new OffsetAndMetadata(39L)), consumerGroupId);
+
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+        sender.run(time.milliseconds());  // AddOffsetsToTxn Handled, TxnOffsetCommit Enqueued
+        sender.run(time.milliseconds());  // FindCoordinator Enqueued
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        sender.run(time.milliseconds());  // FindCoordinator Returned
+
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, singletonMap(tp, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED));
+        sender.run(time.milliseconds());  // TxnOffsetCommit Handled
+
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
+        assertTrue(sendOffsetsResult.isCompleted());
+        assertFalse(sendOffsetsResult.isSuccessful());
+        assertTrue(sendOffsetsResult.error() instanceof TransactionalIdAuthorizationException);
+
+        assertFatalError(TransactionalIdAuthorizationException.class);
+    }
+
+    @Test
+    public void testTopicAuthorizationFailureInAddPartitions() {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp);
+
+        prepareAddPartitionsToTxn(tp, Errors.TOPIC_AUTHORIZATION_FAILED);
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof TopicAuthorizationException);
+
+        TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
+        assertEquals(singleton(tp.topic()), exception.unauthorizedTopics());
+
+        assertAbortableError(TopicAuthorizationException.class);
+    }
+
+    @Test
+    public void testTransactionalIdAuthorizationFailureInAddPartitions() {
+        final long pid = 13131L;
+        final short epoch = 1;
+        final TopicPartition tp = new TopicPartition("foo", 0);
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp);
+
+        prepareAddPartitionsToTxn(tp, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
+        sender.run(time.milliseconds());
+
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof TransactionalIdAuthorizationException);
+
+        assertFatalError(TransactionalIdAuthorizationException.class);
     }
 
     @Test
@@ -624,20 +749,20 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT).future;
         assertFalse(responseFuture.isDone());
-        prepareAddPartitionsToTxnPartitionErrorResponse(tp0, error);
+        prepareAddPartitionsToTxn(tp0, error);
         sender.run(time.milliseconds());  // attempt send addPartitions.
         assertTrue(transactionManager.isInErrorState());
         assertFalse(transactionManager.transactionContainsPartition(tp0));
     }
 
-    private void prepareAddPartitionsToTxnPartitionErrorResponse(final TopicPartition tp0, final Errors error) {
+    private void prepareAddPartitionsToTxn(final TopicPartition tp, final Errors error) {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                assertTrue(body instanceof AddPartitionsToTxnRequest);
-                return true;
+                return body instanceof AddPartitionsToTxnRequest &&
+                        ((AddPartitionsToTxnRequest) body).partitions().contains(tp);
             }
-        }, new AddPartitionsToTxnResponse(0, Collections.singletonMap(tp0, error)));
+        }, new AddPartitionsToTxnResponse(0, singletonMap(tp, error)));
     }
 
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
@@ -698,7 +823,7 @@ public class TransactionManagerTest {
                 assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
                 return true;
             }
-        }, new AddPartitionsToTxnResponse(0, Collections.singletonMap(topicPartition, error)));
+        }, new AddPartitionsToTxnResponse(0, singletonMap(topicPartition, error)));
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
@@ -747,7 +872,7 @@ public class TransactionManagerTest {
 
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
+        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
@@ -763,4 +888,38 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasProducerId());
     }
 
+    private void assertAbortableError(Class<? extends RuntimeException> cause) {
+        try {
+            transactionManager.beginTransaction();
+            fail("Should have raised " + cause.getSimpleName());
+        } catch (KafkaException e) {
+            assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
+            assertTrue(transactionManager.isInErrorState());
+        }
+
+        assertTrue(transactionManager.isInErrorState());
+        transactionManager.beginAbortingTransaction();
+        assertFalse(transactionManager.isInErrorState());
+    }
+
+    private void assertFatalError(Class<? extends RuntimeException> cause) {
+        assertTrue(transactionManager.isInErrorState());
+
+        try {
+            transactionManager.beginAbortingTransaction();
+            fail("Should have raised " + cause.getSimpleName());
+        } catch (KafkaException e) {
+            assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
+            assertTrue(transactionManager.isInErrorState());
+        }
+
+        // Transaction abort cannot clear fatal error state
+        try {
+            transactionManager.beginAbortingTransaction();
+            fail("Should have raised " + cause.getSimpleName());
+        } catch (KafkaException e) {
+            assertTrue(cause.isAssignableFrom(e.getCause().getClass()));
+            assertTrue(transactionManager.isInErrorState());
+        }
+    }
 }

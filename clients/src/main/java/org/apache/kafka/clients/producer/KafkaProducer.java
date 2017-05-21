@@ -645,7 +645,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = this.interceptors == null ? callback : new InterceptorCallback<>(callback, this.interceptors, tp);
 
-            if (transactionManager != null)
+            if (transactionManager != null && transactionManager.isTransactional())
                 transactionManager.maybeAddPartitionToTransaction(tp);
 
             RecordAccumulator.RecordAppendResult result = accumulator.append(tp, timestamp, serializedKey,

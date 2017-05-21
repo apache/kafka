@@ -23,7 +23,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -216,8 +215,12 @@ public class TransactionManager {
     }
 
     public synchronized void maybeAddPartitionToTransaction(TopicPartition topicPartition) {
-        if (!isInTransaction() || partitionsInTransaction.contains(topicPartition))
+        if (!isInTransaction())
+            throw new IllegalArgumentException("Cannot add partitions to a transaction in state " + currentState);
+
+        if (partitionsInTransaction.contains(topicPartition))
             return;
+
         newPartitionsToBeAddedToTransaction.add(topicPartition);
     }
 
@@ -235,10 +238,6 @@ public class TransactionManager {
 
     public boolean isTransactional() {
         return transactionalId != null;
-    }
-
-    public boolean isFenced() {
-        return lastError instanceof ProducerFencedException;
     }
 
     public boolean isCompletingTransaction() {
@@ -898,7 +897,7 @@ public class TransactionManager {
                 } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     hadFailure = true;
                 } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                    fatalError(new GroupAuthorizationException(builder.consumerGroupId()));
+                    abortableError(new GroupAuthorizationException(builder.consumerGroupId()));
                     return;
                 } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                     fatalError(error.exception());
