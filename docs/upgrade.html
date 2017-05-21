@@ -69,12 +69,17 @@
         producer's <code>batch.size</code> configuration.</li>
     <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
     <li>Deprecated constructors of MetricName and Cluster classes have been removed.</li>
+    <li>Added user headers support through a new Headers interface providing user headers read and write access.</li>
+    <li>ProducerRecord and ConsumerRecord expose the new Headers API via <code>Headers headers()</code> method call.</li>
+    <li>ExtendedSerializer and ExtendedDeserializer interfaces are introduced to support serialization and deserialization for headers. Headers will be ignored if the configured serializer and deserializer are not the above classes.</li>
 </ul>
 
 <h5><a id="upgrade_1100_new_protocols" href="#upgrade_1100_new_protocols">New Protocol Versions</a></h5>
 <ul>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-107%3A+Add+purgeDataBefore()+API+in+AdminClient">KIP-107</a>: FetchRequest v5 introduces a partition-level <code>log_start_offset</code> field. </li>
     <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-107%3A+Add+purgeDataBefore()+API+in+AdminClient">KIP-107</a>: FetchResponse v5 introduces a partition-level <code>log_start_offset</code> field. </li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-82+-+Add+Record+Headers">KIP-82</a>: ProduceRequest v3 introduces an array of <code>header</code> in the message protocol, containing <code>key</code> field and <code>value</code> field.</li>
+    <li> <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-82+-+Add+Record+Headers">KIP-82</a>: FetchResponse v5 introduces an array of <code>header</code> in the message protocol, containing <code>key</code> field and <code>value</code> field.</li>
 </ul>
 
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
