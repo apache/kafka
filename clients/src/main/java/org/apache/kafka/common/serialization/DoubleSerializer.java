@@ -18,7 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import java.util.Map;
 
-public class DoubleSerializer implements Serializer<Double> {
+public final class DoubleSerializer implements Serializer<Double> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {

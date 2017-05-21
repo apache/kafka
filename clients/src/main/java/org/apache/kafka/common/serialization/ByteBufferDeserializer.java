@@ -19,7 +19,7 @@ package org.apache.kafka.common.serialization;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
-public class ByteBufferDeserializer implements Deserializer<ByteBuffer> {
+public final class ByteBufferDeserializer implements Deserializer<ByteBuffer> {
 
     public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do

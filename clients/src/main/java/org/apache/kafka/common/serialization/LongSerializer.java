@@ -18,7 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import java.util.Map;
 
-public class LongSerializer implements Serializer<Long> {
+public final class LongSerializer implements Serializer<Long> {
 
     public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do

@@ -246,7 +246,7 @@ public class FetcherTest {
     public void testFetchedRecordsRaisesOnSerializationErrors() {
         // raise an exception from somewhere in the middle of the fetch response
         // so that we can verify that our position does not advance after raising
-        ByteArrayDeserializer deserializer = new ByteArrayDeserializer() {
+        Deserializer<byte[]> deserializer = new Deserializer<byte[]>() {
             int i = 0;
             @Override
             public byte[] deserialize(String topic, byte[] data) {
@@ -254,6 +254,10 @@ public class FetcherTest {
                     throw new SerializationException();
                 return data;
             }
+            @Override
+            public void close() { }
+            @Override
+            public void configure(Map<String, ?> configs, boolean isKey) { }
         };
 
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), deserializer, deserializer);

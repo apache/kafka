@@ -18,7 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import java.util.Map;
 
-public class IntegerSerializer implements Serializer<Integer> {
+public final class IntegerSerializer implements Serializer<Integer> {
 
     public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do

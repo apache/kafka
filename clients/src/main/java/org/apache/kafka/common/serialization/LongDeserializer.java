@@ -20,7 +20,7 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 
-public class LongDeserializer implements Deserializer<Long> {
+public final class LongDeserializer implements Deserializer<Long> {
 
     public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do

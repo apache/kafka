@@ -18,7 +18,7 @@ package org.apache.kafka.common.serialization;
 
 import java.util.Map;
 
-public class ByteArrayDeserializer implements Deserializer<byte[]> {
+public final class ByteArrayDeserializer implements Deserializer<byte[]> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {

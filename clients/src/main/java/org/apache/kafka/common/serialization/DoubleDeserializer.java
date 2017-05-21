@@ -20,7 +20,7 @@ import org.apache.kafka.common.errors.SerializationException;
 
 import java.util.Map;
 
-public class DoubleDeserializer implements Deserializer<Double> {
+public final class DoubleDeserializer implements Deserializer<Double> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {

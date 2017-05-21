@@ -20,7 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 
 import java.util.Map;
 
-public class BytesDeserializer implements Deserializer<Bytes> {
+public final class BytesDeserializer implements Deserializer<Bytes> {
 
     public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do
