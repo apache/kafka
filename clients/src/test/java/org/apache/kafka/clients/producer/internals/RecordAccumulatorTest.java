@@ -591,15 +591,20 @@ public class RecordAccumulatorTest {
         accum.splitAndReenqueue(drained.get(node1.id()).get(0));
         time.sleep(101L);
 
-        do {
-            drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-            if (!drained.isEmpty() && !drained.get(node1.id()).isEmpty())
-                drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
-        } while (acked.get() < 2 && !drained.isEmpty());
-        assertEquals("Both message should have been acked.", 2, acked.get());
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(drained.isEmpty());
+        assertFalse(drained.get(node1.id()).isEmpty());
+        drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
+        assertEquals("The first message should have been acked.", 1, acked.get());
         assertTrue(future1.isDone());
-        assertTrue(future2.isDone());
         assertEquals(0, future1.get().offset());
+
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(drained.isEmpty());
+        assertFalse(drained.get(node1.id()).isEmpty());
+        drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
+        assertEquals("Both message should have been acked.", 2, acked.get());
+        assertTrue(future2.isDone());
         assertEquals(1, future2.get().offset());
     }
 
@@ -616,13 +621,15 @@ public class RecordAccumulatorTest {
         int numSplitBatches = prepareSplitBatches(accum, seed, 100, 20);
         assertTrue("There should be some split batches", numSplitBatches > 0);
         // Drain all the split batches.
-        int drained = 0;
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
-        while (!accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty()) {
-            accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
-            drained++;
+        for (int i = 0; i < numSplitBatches; i++) {
+            Map<Integer, List<ProducerBatch>> drained =
+                accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+            assertFalse(drained.isEmpty());
+            assertFalse(drained.get(node1.id()).isEmpty());
         }
-        assertEquals(numSplitBatches, drained);
+        assertTrue("All the batches should have been drained.",
+                   accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty());
         assertEquals("The split batches should be allocated off the accumulator",
                      bufferCapacity, accum.bufferPoolAvailableMemory());
     }
@@ -642,7 +649,6 @@ public class RecordAccumulatorTest {
             int numSplit = 0;
             int numBatches = 0;
             CompressionRatioEstimator.resetEstimation(topic);
-            System.out.println("High compression ratio percentage: " + goodCompRatioPercentage);
             for (int i = 0; i < numMessages; i++) {
                 int dice = random.nextInt(100);
                 byte[] value = (dice < goodCompRatioPercentage) ?

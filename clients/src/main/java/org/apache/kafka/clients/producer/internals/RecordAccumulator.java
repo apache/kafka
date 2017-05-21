@@ -81,7 +81,6 @@ public final class RecordAccumulator {
     private final ApiVersions apiVersions;
     private final ConcurrentMap<TopicPartition, Deque<ProducerBatch>> batches;
     private final IncompleteBatches incomplete;
-    private final Set<ProducerBatch> splitBatches;
     // The following variables are only accessed by the sender thread, so we don't need to protect them.
     private final Set<TopicPartition> muted;
     private int drainIndex;
@@ -125,7 +124,6 @@ public final class RecordAccumulator {
         String metricGrpName = "producer-metrics";
         this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
         this.incomplete = new IncompleteBatches();
-        this.splitBatches = new HashSet<>();
         this.muted = new HashSet<>();
         this.time = time;
         this.apiVersions = apiVersions;
@@ -343,7 +341,6 @@ public final class RecordAccumulator {
         while (!dq.isEmpty()) {
             ProducerBatch batch = dq.pollLast();
             incomplete.add(batch);
-            splitBatches.add(batch);
             // We treat the newly split batches as if they are not even tried.
             synchronized (partitionDequeue) {
                 partitionDequeue.addFirst(batch);
@@ -536,7 +533,7 @@ public final class RecordAccumulator {
         incomplete.remove(batch);
         // Only deallocate the batch if it is not a split batch because split batch are allocated aside the
         // buffer pool.
-        if (!splitBatches.remove(batch))
+        if (!batch.isSplitBatch())
             free.deallocate(batch.buffer(), batch.initialCapacity());
     }
 

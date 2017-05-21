@@ -65,6 +65,7 @@ public final class ProducerBatch {
     private final MemoryRecordsBuilder recordsBuilder;
 
     private final AtomicInteger attempts = new AtomicInteger(0);
+    private final boolean isSplitBatch;
     int recordCount;
     int maxRecordSize;
     private long lastAttemptMs;
@@ -75,6 +76,10 @@ public final class ProducerBatch {
     private boolean retry;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now) {
+        this(tp, recordsBuilder, now, false);
+    }
+
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long now, boolean isSplitBatch) {
         this.createdMs = now;
         this.lastAttemptMs = now;
         this.recordsBuilder = recordsBuilder;
@@ -83,6 +88,7 @@ public final class ProducerBatch {
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.completed = new AtomicBoolean();
         this.retry = false;
+        this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
@@ -234,7 +240,7 @@ public final class ProducerBatch {
                                                              compressionType,
                                                              TimestampType.CREATE_TIME,
                                                              batchSize);
-        return new ProducerBatch(tp, builder, createdMs);
+        return new ProducerBatch(tp, builder, createdMs, true);
     }
 
     /**
@@ -315,6 +321,10 @@ public final class ProducerBatch {
 
     void drained(long nowMs) {
         this.drainedMs = Math.max(drainedMs, nowMs);
+    }
+
+    boolean isSplitBatch() {
+        return isSplitBatch;
     }
 
     /**
