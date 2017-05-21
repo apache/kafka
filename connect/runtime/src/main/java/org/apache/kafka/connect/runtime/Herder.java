@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -168,6 +169,12 @@ public interface Herder {
      */
     void resumeConnector(String connector);
 
+    /**
+     * Returns a handle to the plugin factory used by this herder and its worker.
+     *
+     * @return a reference to the plugin factory.
+     */
+    Plugins plugins();
 
     class Created<T> {
         private final boolean created;

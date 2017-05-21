@@ -131,6 +131,9 @@ public class MemoryRecords extends AbstractRecords {
         for (MutableRecordBatch batch : batches) {
             bytesRead += batch.sizeInBytes();
 
+            if (filter.shouldDiscard(batch))
+                continue;
+
             // We use the absolute offset to decide whether to retain the message or not. Due to KAFKA-4298, we have to
             // allow for the possibility that a previous version corrupted the log by writing a compressed record batch
             // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
@@ -251,8 +254,21 @@ public class MemoryRecords extends AbstractRecords {
         return buffer.hashCode();
     }
 
-    public interface RecordFilter {
-        boolean shouldRetain(RecordBatch recordBatch, Record record);
+    public static abstract class RecordFilter {
+        /**
+         * Check whether the full batch can be discarded (i.e. whether we even need to
+         * check the records individually).
+         */
+        protected boolean shouldDiscard(RecordBatch batch) {
+            return false;
+        }
+
+        /**
+         * Check whether a record should be retained in the log. Only records from
+         * batches which were not discarded with {@link #shouldDiscard(RecordBatch)}
+         * will be considered.
+         */
+        protected abstract boolean shouldRetain(RecordBatch recordBatch, Record record);
     }
 
     public static class FilterResult {
@@ -382,8 +398,24 @@ public class MemoryRecords extends AbstractRecords {
                                                int baseSequence,
                                                boolean isTransactional,
                                                int partitionLeaderEpoch) {
+        return builder(buffer, magic, compressionType, timestampType, baseOffset,
+                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false, partitionLeaderEpoch);
+    }
+
+    public static MemoryRecordsBuilder builder(ByteBuffer buffer,
+                                               byte magic,
+                                               CompressionType compressionType,
+                                               TimestampType timestampType,
+                                               long baseOffset,
+                                               long logAppendTime,
+                                               long producerId,
+                                               short producerEpoch,
+                                               int baseSequence,
+                                               boolean isTransactional,
+                                               boolean isControlBatch,
+                                               int partitionLeaderEpoch) {
         return new MemoryRecordsBuilder(buffer, magic, compressionType, timestampType, baseOffset,
-                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false, partitionLeaderEpoch,
+                logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, isControlBatch, partitionLeaderEpoch,
                 buffer.remaining());
     }
 
@@ -432,9 +464,10 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withTransactionalRecords(long initialOffset, CompressionType compressionType, long producerId,
-                                                         short producerEpoch, int baseSequence, SimpleRecord... records) {
+                                                         short producerEpoch, int baseSequence, int partitionLeaderEpoch,
+                                                         SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compressionType, TimestampType.CREATE_TIME,
-                producerId, producerEpoch, baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, true, records);
+                producerId, producerEpoch, baseSequence, partitionLeaderEpoch, true, records);
     }
 
     public static MemoryRecords withRecords(byte magic, long initialOffset, CompressionType compressionType,
@@ -464,28 +497,38 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static MemoryRecords withEndTransactionMarker(long producerId, short producerEpoch, EndTransactionMarker marker) {
-        return withEndTransactionMarker(0L, producerId, producerEpoch, marker);
+        return withEndTransactionMarker(0L, System.currentTimeMillis(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                producerId, producerEpoch, marker);
     }
 
-    public static MemoryRecords withEndTransactionMarker(long initialOffset, long producerId, short producerEpoch,
+    public static MemoryRecords withEndTransactionMarker(long timestamp, long producerId, short producerEpoch,
+                                                         EndTransactionMarker marker) {
+        return withEndTransactionMarker(0L, timestamp, RecordBatch.NO_PARTITION_LEADER_EPOCH, producerId,
+                producerEpoch, marker);
+    }
+
+    public static MemoryRecords withEndTransactionMarker(long initialOffset, long timestamp, int partitionLeaderEpoch,
+                                                         long producerId, short producerEpoch,
                                                          EndTransactionMarker marker) {
         int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD +
                 EndTransactionMarker.CURRENT_END_TXN_SCHEMA_RECORD_SIZE;
         ByteBuffer buffer = ByteBuffer.allocate(endTxnMarkerBatchSize);
-        writeEndTransactionalMarker(buffer, initialOffset, producerId, producerEpoch, marker);
+        writeEndTransactionalMarker(buffer, initialOffset, timestamp, partitionLeaderEpoch, producerId,
+                producerEpoch, marker);
         buffer.flip();
         return MemoryRecords.readableRecords(buffer);
     }
 
-    public static void writeEndTransactionalMarker(ByteBuffer buffer, long initialOffset, long producerId,
-                                                   short producerEpoch, EndTransactionMarker marker) {
+    public static void writeEndTransactionalMarker(ByteBuffer buffer, long initialOffset, long timestamp,
+                                                   int partitionLeaderEpoch, long producerId, short producerEpoch,
+                                                   EndTransactionMarker marker) {
         boolean isTransactional = true;
         boolean isControlBatch = true;
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, initialOffset, RecordBatch.NO_TIMESTAMP, producerId, producerEpoch,
-                RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, RecordBatch.NO_PARTITION_LEADER_EPOCH,
+                TimestampType.CREATE_TIME, initialOffset, timestamp, producerId, producerEpoch,
+                RecordBatch.NO_SEQUENCE, isTransactional, isControlBatch, partitionLeaderEpoch,
                 buffer.capacity());
-        builder.appendEndTxnMarker(System.currentTimeMillis(), marker);
+        builder.appendEndTxnMarker(timestamp, marker);
         builder.close();
     }
 

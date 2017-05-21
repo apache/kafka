@@ -23,14 +23,14 @@ import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 
 import kafka.api.SaslSetup
-import kafka.common.Topic
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.junit.Assert.assertEquals
 import org.junit.{After, Before, Test}
@@ -103,7 +103,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
         Internal, config.interBrokerListenerName.value)
     }
 
-    TestUtils.createTopic(zkUtils, Topic.GroupMetadataTopicName, OffsetConfig.DefaultOffsetsTopicNumPartitions,
+    TestUtils.createTopic(zkUtils, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
       replicationFactor = 2, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
 
     servers.head.config.listeners.foreach { endPoint =>
@@ -133,10 +133,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
   override def tearDown() {
     producers.values.foreach(_.close())
     consumers.values.foreach(_.close())
-    servers.foreach { s =>
-      s.shutdown()
-      CoreUtils.delete(s.config.logDirs)
-    }
+    TestUtils.shutdownServers(servers)
     super.tearDown()
     closeSasl()
   }

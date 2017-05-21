@@ -112,6 +112,7 @@ class ReplicaFetcherThread(name: String,
         trace(s"Follower ${replica.brokerId} set replica high watermark for partition $topicPartition to $followerHighWatermark")
       if (quota.isThrottled(topicPartition))
         quota.record(records.sizeInBytes)
+      replicaMgr.brokerTopicStats.updateReplicationBytesIn(records.sizeInBytes)
     } catch {
       case e: KafkaStorageException =>
         fatal(s"Disk error while replicating data for $topicPartition", e)

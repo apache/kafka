@@ -25,10 +25,12 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
+import org.apache.kafka.test.MockTimestampExtractor;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -44,6 +46,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 public class KStreamBuilderTest {
 
@@ -395,5 +399,55 @@ public class KStreamBuilderTest {
 
         assertTrue(builder.latestResetTopicsPattern().matcher(topicTwo).matches());
         assertFalse(builder.earliestResetTopicsPattern().matcher(topicTwo).matches());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void kStreamTimestampExtractorShouldBeNull() throws Exception {
+        builder.stream("topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertNull(processorTopology.source("topic").getTimestampExtractor());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorToStreamWithKeyValSerdePerSource() throws Exception {
+        builder.stream(new MockTimestampExtractor(), null, null, "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        for (final SourceNode sourceNode: processorTopology.sources()) {
+            assertThat(sourceNode.getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorToStreamWithOffsetResetPerSource() throws Exception {
+        builder.stream(null, new MockTimestampExtractor(), null, null, "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorToTablePerSource() throws Exception {
+        builder.table("topic", "store");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertNull(processorTopology.source("topic").getTimestampExtractor());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void kTableTimestampExtractorShouldBeNull() throws Exception {
+        builder.table("topic", "store");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertNull(processorTopology.source("topic").getTimestampExtractor());
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorToTableWithKeyValSerdePerSource() throws Exception {
+        builder.table(null, new MockTimestampExtractor(), null, null, "topic", "store");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 }

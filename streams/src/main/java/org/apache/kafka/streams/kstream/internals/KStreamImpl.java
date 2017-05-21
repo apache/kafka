@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.TopologyBuilderException;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.PrintForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -193,7 +194,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void print(Serde<K> keySerde, Serde<V> valSerde, String streamName) {
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
-        topology.addProcessor(name, new KeyValuePrinter<>(keySerde, valSerde, streamName), this.name);
+        topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, streamName), keySerde, valSerde), this.name);
     }
 
 
@@ -227,7 +228,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         try {
             PrintWriter printWriter = null;
             printWriter = new PrintWriter(filePath, StandardCharsets.UTF_8.name());
-            topology.addProcessor(name, new KeyValuePrinter<>(printWriter, keySerde, valSerde, streamName), this.name);
+            topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(printWriter, streamName), keySerde, valSerde), this.name);
         } catch (FileNotFoundException | UnsupportedEncodingException e) {
             String message = "Unable to write stream to file at [" + filePath + "] " + e.getMessage();
             throw new TopologyBuilderException(message);
@@ -315,7 +316,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(action, "action can't be null");
         String name = topology.newName(FOREACH_NAME);
 
-        topology.addProcessor(name, new KStreamForeach<>(action), this.name);
+        topology.addProcessor(name, new KStreamPeek<>(action, false), this.name);
     }
 
     @Override
@@ -323,7 +324,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
         Objects.requireNonNull(action, "action can't be null");
         final String name = topology.newName(PEEK_NAME);
 
-        topology.addProcessor(name, new KStreamPeek<>(action), this.name);
+        topology.addProcessor(name, new KStreamPeek<>(action, true), this.name);
 
         return new KStreamImpl<>(topology, name, sourceNodes, repartitionRequired);
     }

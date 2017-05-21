@@ -231,8 +231,8 @@ public final class ProducerBatch {
         return recordsBuilder.isFull();
     }
 
-    public void setProducerState(PidAndEpoch pidAndEpoch, int baseSequence) {
-        recordsBuilder.setProducerState(pidAndEpoch.producerId, pidAndEpoch.epoch, baseSequence);
+    public void setProducerState(ProducerIdAndEpoch producerIdAndEpoch, int baseSequence) {
+        recordsBuilder.setProducerState(producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, baseSequence);
     }
 
     /**
@@ -245,6 +245,10 @@ public final class ProducerBatch {
 
     public void close() {
         recordsBuilder.close();
+    }
+
+    public void abort() {
+        recordsBuilder.abort();
     }
 
     public boolean isClosed() {

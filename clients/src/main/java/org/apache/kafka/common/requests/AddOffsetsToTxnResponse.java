@@ -65,6 +65,6 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     }
 
     public static AddOffsetsToTxnResponse parse(ByteBuffer buffer, short version) {
-        return new AddOffsetsToTxnResponse(ApiKeys.ADD_PARTITIONS_TO_TXN.parseResponse(version, buffer));
+        return new AddOffsetsToTxnResponse(ApiKeys.ADD_OFFSETS_TO_TXN.parseResponse(version, buffer));
     }
 }

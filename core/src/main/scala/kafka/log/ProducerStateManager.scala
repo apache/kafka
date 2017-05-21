@@ -26,6 +26,7 @@ import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
@@ -62,8 +63,24 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
  * It is initialized with the producer's state after the last successful append, and transitively validates the
  * sequence numbers and epochs of each new record. Additionally, this class accumulates transaction metadata
  * as the incoming records are validated.
+ *
+ * @param producerId The id of the producer appending to the log
+ * @param initialEntry The last entry associated with the producer id. Validation of the first append will be
+ *                     based off of this entry initially
+ * @param validateSequenceNumbers Whether or not sequence numbers should be validated. The only current use
+ *                                of this is the consumer offsets topic which uses producer ids from incoming
+ *                                TxnOffsetCommit, but has no sequence number to validate and does not depend
+ *                                on the deduplication which sequence numbers provide.
+ * @param loadingFromLog This parameter indicates whether the new append is being loaded directly from the log.
+ *                       This is used to repopulate producer state when the broker is initialized. The only
+ *                       difference in behavior is that we do not validate the sequence number of the first append
+ *                       since we may have lost previous sequence numbers when segments were removed due to log
+ *                       retention enforcement.
  */
-private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: ProducerIdEntry, loadingFromLog: Boolean = false) {
+private[log] class ProducerAppendInfo(val producerId: Long,
+                                      initialEntry: ProducerIdEntry,
+                                      validateSequenceNumbers: Boolean,
+                                      loadingFromLog: Boolean) {
   private var producerEpoch = initialEntry.producerEpoch
   private var firstSeq = initialEntry.firstSeq
   private var lastSeq = initialEntry.lastSeq
@@ -73,28 +90,27 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
   private var coordinatorEpoch = initialEntry.coordinatorEpoch
   private val transactions = ListBuffer.empty[TxnMetadata]
 
-  def this(pid: Long, initialEntry: Option[ProducerIdEntry], loadingFromLog: Boolean) =
-    this(pid, initialEntry.getOrElse(ProducerIdEntry.Empty), loadingFromLog)
-
-  private def validateAppend(epoch: Short, firstSeq: Int, lastSeq: Int) = {
-    if (this.producerEpoch > epoch) {
+  private def validateAppend(producerEpoch: Short, firstSeq: Int, lastSeq: Int) = {
+    if (this.producerEpoch > producerEpoch) {
       throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
-        s"with a newer epoch. $epoch (request epoch), ${this.producerEpoch} (server epoch)")
-    } else if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < epoch) {
-      if (firstSeq != 0)
-        throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $epoch " +
-          s"(request epoch), $firstSeq (seq. number)")
-    } else if (this.firstSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
-      // the epoch was bumped by a control record, so we expect the sequence number to be reset
-      throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), found $firstSeq " +
-        s"(incoming seq. number), but expected 0")
-    } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
-      throw new DuplicateSequenceNumberException(s"Duplicate sequence number: pid: $producerId, (incomingBatch.firstSeq, " +
-        s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
-        s"(${this.firstSeq}, ${this.lastSeq}).")
-    } else if (firstSeq != this.lastSeq + 1L) {
-      throw new OutOfOrderSequenceException(s"Out of order sequence number: $producerId (pid), $firstSeq " +
-        s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
+        s"with a newer epoch. $producerEpoch (request epoch), ${this.producerEpoch} (server epoch)")
+    } else if (validateSequenceNumbers) {
+      if (this.producerEpoch == RecordBatch.NO_PRODUCER_EPOCH || this.producerEpoch < producerEpoch) {
+        if (firstSeq != 0)
+          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
+            s"(request epoch), $firstSeq (seq. number)")
+      } else if (this.firstSeq == RecordBatch.NO_SEQUENCE && firstSeq != 0) {
+        // the epoch was bumped by a control record, so we expect the sequence number to be reset
+        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $firstSeq " +
+          s"(incoming seq. number), but expected 0")
+      } else if (firstSeq == this.firstSeq && lastSeq == this.lastSeq) {
+        throw new DuplicateSequenceNumberException(s"Duplicate sequence number for producerId $producerId: (incomingBatch.firstSeq, " +
+          s"incomingBatch.lastSeq): ($firstSeq, $lastSeq), (lastEntry.firstSeq, lastEntry.lastSeq): " +
+          s"(${this.firstSeq}, ${this.lastSeq}).")
+      } else if (firstSeq != this.lastSeq + 1L) {
+        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $firstSeq " +
+          s"(incoming seq. number), ${this.lastSeq} (current end sequence number)")
+      }
     }
   }
 
@@ -119,7 +135,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
              isTransactional: Boolean): Unit = {
     if (epoch != RecordBatch.NO_PRODUCER_EPOCH && !loadingFromLog)
       // skip validation if this is the first entry when loading from the log. Log retention
-      // will generally have removed the beginning entries from each PID
+      // will generally have removed the beginning entries from each producer id
       validateAppend(epoch, firstSeq, lastSeq)
 
     this.producerEpoch = epoch
@@ -165,7 +181,7 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
     }
 
     val firstOffset = currentTxnFirstOffset match {
-      case Some(firstOffset) => firstOffset
+      case Some(txnFirstOffset) => txnFirstOffset
       case None =>
         transactions += new TxnMetadata(producerId, offset)
         offset
@@ -199,25 +215,25 @@ private[log] class ProducerAppendInfo(val producerId: Long, initialEntry: Produc
 }
 
 object ProducerStateManager {
-  private val PidSnapshotVersion: Short = 1
+  private val ProducerSnapshotVersion: Short = 1
   private val VersionField = "version"
   private val CrcField = "crc"
-  private val PidField = "pid"
+  private val ProducerIdField = "producer_id"
   private val LastSequenceField = "last_sequence"
   private val ProducerEpochField = "epoch"
   private val LastOffsetField = "last_offset"
   private val OffsetDeltaField = "offset_delta"
   private val TimestampField = "timestamp"
-  private val PidEntriesField = "pid_entries"
+  private val ProducerEntriesField = "producer_entries"
   private val CoordinatorEpochField = "coordinator_epoch"
   private val CurrentTxnFirstOffsetField = "current_txn_first_offset"
 
   private val VersionOffset = 0
   private val CrcOffset = VersionOffset + 2
-  private val PidEntriesOffset = CrcOffset + 4
+  private val ProducerEntriesOffset = CrcOffset + 4
 
-  val PidSnapshotEntrySchema = new Schema(
-    new Field(PidField, Type.INT64, "The producer ID"),
+  val ProducerSnapshotEntrySchema = new Schema(
+    new Field(ProducerIdField, Type.INT64, "The producer ID"),
     new Field(ProducerEpochField, Type.INT16, "Current epoch of the producer"),
     new Field(LastSequenceField, Type.INT32, "Last written sequence of the producer"),
     new Field(LastOffsetField, Type.INT64, "Last written offset of the producer"),
@@ -228,33 +244,33 @@ object ProducerStateManager {
   val PidSnapshotMapSchema = new Schema(
     new Field(VersionField, Type.INT16, "Version of the snapshot file"),
     new Field(CrcField, Type.UNSIGNED_INT32, "CRC of the snapshot data"),
-    new Field(PidEntriesField, new ArrayOf(PidSnapshotEntrySchema), "The entries in the PID table"))
+    new Field(ProducerEntriesField, new ArrayOf(ProducerSnapshotEntrySchema), "The entries in the producer table"))
 
   def readSnapshot(file: File): Iterable[ProducerIdEntry] = {
     val buffer = Files.readAllBytes(file.toPath)
     val struct = PidSnapshotMapSchema.read(ByteBuffer.wrap(buffer))
 
     val version = struct.getShort(VersionField)
-    if (version != PidSnapshotVersion)
+    if (version != ProducerSnapshotVersion)
       throw new IllegalArgumentException(s"Unhandled snapshot file version $version")
 
     val crc = struct.getUnsignedInt(CrcField)
-    val computedCrc =  Crc32C.compute(buffer, PidEntriesOffset, buffer.length - PidEntriesOffset)
+    val computedCrc =  Crc32C.compute(buffer, ProducerEntriesOffset, buffer.length - ProducerEntriesOffset)
     if (crc != computedCrc)
       throw new CorruptSnapshotException(s"Snapshot file '$file' is corrupted (CRC is no longer valid). " +
         s"Stored crc: $crc. Computed crc: $computedCrc")
 
-    struct.getArray(PidEntriesField).map { pidEntryObj =>
-      val pidEntryStruct = pidEntryObj.asInstanceOf[Struct]
-      val pid: Long = pidEntryStruct.getLong(PidField)
-      val epoch = pidEntryStruct.getShort(ProducerEpochField)
-      val seq = pidEntryStruct.getInt(LastSequenceField)
-      val offset = pidEntryStruct.getLong(LastOffsetField)
-      val timestamp = pidEntryStruct.getLong(TimestampField)
-      val offsetDelta = pidEntryStruct.getInt(OffsetDeltaField)
-      val coordinatorEpoch = pidEntryStruct.getInt(CoordinatorEpochField)
-      val currentTxnFirstOffset = pidEntryStruct.getLong(CurrentTxnFirstOffsetField)
-      val newEntry = ProducerIdEntry(pid, epoch, seq, offset, offsetDelta, timestamp,
+    struct.getArray(ProducerEntriesField).map { producerEntryObj =>
+      val producerEntryStruct = producerEntryObj.asInstanceOf[Struct]
+      val producerId: Long = producerEntryStruct.getLong(ProducerIdField)
+      val producerEpoch = producerEntryStruct.getShort(ProducerEpochField)
+      val seq = producerEntryStruct.getInt(LastSequenceField)
+      val offset = producerEntryStruct.getLong(LastOffsetField)
+      val timestamp = producerEntryStruct.getLong(TimestampField)
+      val offsetDelta = producerEntryStruct.getInt(OffsetDeltaField)
+      val coordinatorEpoch = producerEntryStruct.getInt(CoordinatorEpochField)
+      val currentTxnFirstOffset = producerEntryStruct.getLong(CurrentTxnFirstOffsetField)
+      val newEntry = ProducerIdEntry(producerId, producerEpoch, seq, offset, offsetDelta, timestamp,
         coordinatorEpoch, if (currentTxnFirstOffset >= 0) Some(currentTxnFirstOffset) else None)
       newEntry
     }
@@ -262,12 +278,12 @@ object ProducerStateManager {
 
   private def writeSnapshot(file: File, entries: mutable.Map[Long, ProducerIdEntry]) {
     val struct = new Struct(PidSnapshotMapSchema)
-    struct.set(VersionField, PidSnapshotVersion)
+    struct.set(VersionField, ProducerSnapshotVersion)
     struct.set(CrcField, 0L) // we'll fill this after writing the entries
     val entriesArray = entries.map {
-      case (pid, entry) =>
-        val pidEntryStruct = struct.instance(PidEntriesField)
-        pidEntryStruct.set(PidField, pid)
+      case (producerId, entry) =>
+        val producerEntryStruct = struct.instance(ProducerEntriesField)
+        producerEntryStruct.set(ProducerIdField, producerId)
           .set(ProducerEpochField, entry.producerEpoch)
           .set(LastSequenceField, entry.lastSeq)
           .set(LastOffsetField, entry.lastOffset)
@@ -275,16 +291,16 @@ object ProducerStateManager {
           .set(TimestampField, entry.timestamp)
           .set(CoordinatorEpochField, entry.coordinatorEpoch)
           .set(CurrentTxnFirstOffsetField, entry.currentTxnFirstOffset.getOrElse(-1L))
-        pidEntryStruct
+        producerEntryStruct
     }.toArray
-    struct.set(PidEntriesField, entriesArray)
+    struct.set(ProducerEntriesField, entriesArray)
 
     val buffer = ByteBuffer.allocate(struct.sizeOf)
     struct.writeTo(buffer)
     buffer.flip()
 
     // now fill in the CRC
-    val crc = Crc32C.compute(buffer, PidEntriesOffset, buffer.limit - PidEntriesOffset)
+    val crc = Crc32C.compute(buffer, ProducerEntriesOffset, buffer.limit - ProducerEntriesOffset)
     ByteUtils.writeUnsignedInt(buffer, CrcOffset, crc)
 
     val fos = new FileOutputStream(file)
@@ -300,18 +316,18 @@ object ProducerStateManager {
 }
 
 /**
- * Maintains a mapping from ProducerIds (PIDs) to metadata about the last appended entries (e.g.
+ * Maintains a mapping from ProducerIds to metadata about the last appended entries (e.g.
  * epoch, sequence number, last offset, etc.)
  *
  * The sequence number is the last number successfully appended to the partition for the given identifier.
  * The epoch is used for fencing against zombie writers. The offset is the one of the last successful message
  * appended to the partition.
  *
- * As long as a PID is contained in the map, the corresponding producer can continue to write data.
- * However, PIDs can be expired due to lack of recent use or if the last written entry has been deleted from
+ * As long as a producer id is contained in the map, the corresponding producer can continue to write data.
+ * However, producer ids can be expired due to lack of recent use or if the last written entry has been deleted from
  * the log (e.g. if the retention policy is "delete"). For compacted topics, the log cleaner will ensure
- * that the most recent entry from a given PID is retained in the log provided it hasn't expired due to
- * age. This ensures that PIDs will not be expired until either the max expiration time has been reached,
+ * that the most recent entry from a given producer id is retained in the log provided it hasn't expired due to
+ * age. This ensures that producer ids will not be expired until either the max expiration time has been reached,
  * or if the topic also is configured for deletion, the segment containing the last written offset has
  * been deleted.
  */
@@ -322,6 +338,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   import ProducerStateManager._
   import java.util
 
+  private val validateSequenceNumbers = topicPartition.topic != Topic.GROUP_METADATA_TOPIC_NAME
   private val producers = mutable.Map.empty[Long, ProducerIdEntry]
   private var lastMapOffset = 0L
   private var lastSnapOffset = 0L
@@ -401,10 +418,10 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   // visible for testing
   private[log] def loadProducerEntry(entry: ProducerIdEntry): Unit = {
-    val pid = entry.producerId
-    producers.put(pid, entry)
+    val producerId = entry.producerId
+    producers.put(producerId, entry)
     entry.currentTxnFirstOffset.foreach { offset =>
-      ongoingTxns.put(offset, new TxnMetadata(pid, offset))
+      ongoingTxns.put(offset, new TxnMetadata(producerId, offset))
     }
   }
 
@@ -412,20 +429,26 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     producerIdEntry.currentTxnFirstOffset.isEmpty && currentTimeMs - producerIdEntry.timestamp >= maxPidExpirationMs
 
   /**
-   * Expire any PIDs which have been idle longer than the configured maximum expiration timeout.
+   * Expire any producer ids which have been idle longer than the configured maximum expiration timeout.
    */
   def removeExpiredProducers(currentTimeMs: Long) {
-    producers.retain { case (pid, lastEntry) =>
+    producers.retain { case (producerId, lastEntry) =>
       !isExpired(currentTimeMs, lastEntry)
     }
   }
 
   /**
-   * Truncate the PID mapping to the given offset range and reload the entries from the most recent
+   * Truncate the producer id mapping to the given offset range and reload the entries from the most recent
    * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
    * or equal to the high watermark.
    */
   def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
+    // remove all out of range snapshots
+    deleteSnapshotFiles { file =>
+      val offset = offsetFromFilename(file.getName)
+      offset > logEndOffset || offset <= logStartOffset
+    }
+
     if (logEndOffset != mapEndOffset) {
       producers.clear()
       ongoingTxns.clear()
@@ -433,22 +456,22 @@ class ProducerStateManager(val topicPartition: TopicPartition,
       // since we assume that the offset is less than or equal to the high watermark, it is
       // safe to clear the unreplicated transactions
       unreplicatedTxns.clear()
-      deleteSnapshotFiles { file =>
-        val offset = offsetFromFilename(file.getName)
-        offset > logEndOffset || offset <= logStartOffset
-      }
       loadFromSnapshot(logStartOffset, currentTimeMs)
     } else {
       evictUnretainedProducers(logStartOffset)
     }
   }
 
+  def prepareUpdate(producerId: Long, loadingFromLog: Boolean): ProducerAppendInfo =
+    new ProducerAppendInfo(producerId, lastEntry(producerId).getOrElse(ProducerIdEntry.Empty), validateSequenceNumbers,
+      loadingFromLog)
+
   /**
    * Update the mapping with the given append information
    */
   def update(appendInfo: ProducerAppendInfo): Unit = {
     if (appendInfo.producerId == RecordBatch.NO_PRODUCER_ID)
-      throw new IllegalArgumentException("Invalid PID passed to update")
+      throw new IllegalArgumentException(s"Invalid producer id ${appendInfo.producerId} passed to update")
 
     val entry = appendInfo.lastEntry
     producers.put(appendInfo.producerId, entry)
@@ -462,7 +485,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Get the last written entry for the given PID.
+   * Get the last written entry for the given producer id.
    */
   def lastEntry(producerId: Long): Option[ProducerIdEntry] = producers.get(producerId)
 
@@ -493,7 +516,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
   /**
    * When we remove the head of the log due to retention, we need to clean up the id map. This method takes
-   * the new start offset and removes all pids which have a smaller last written offset.
+   * the new start offset and removes all producerIds which have a smaller last written offset.
    */
   def evictUnretainedProducers(logStartOffset: Long) {
     val evictedProducerEntries = producers.filter(_._2.lastOffset < logStartOffset)
@@ -529,7 +552,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
   }
 
   /**
-   * Truncate the PID mapping and remove all snapshots. This resets the state of the mapping.
+   * Truncate the producer id mapping and remove all snapshots. This resets the state of the mapping.
    */
   def truncate() {
     producers.clear()

@@ -37,6 +37,7 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -65,6 +66,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private boolean transactionCommitted;
     private boolean transactionAborted;
     private boolean producerFenced;
+    private boolean sentOffsets;
+    private long commitCount = 0L;
 
     /**
      * Create a mock producer
@@ -148,6 +151,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = true;
         this.transactionCommitted = false;
         this.transactionAborted = false;
+        this.sentOffsets = false;
     }
 
     @Override
@@ -156,12 +160,17 @@ public class MockProducer<K, V> implements Producer<K, V> {
         verifyProducerState();
         verifyTransactionsInitialized();
         verifyNoTransactionInFlight();
+        Objects.requireNonNull(consumerGroupId);
+        if (offsets.size() == 0) {
+            return;
+        }
         Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets = this.uncommittedConsumerGroupOffsets.get(consumerGroupId);
         if (uncommittedOffsets == null) {
             uncommittedOffsets = new HashMap<>();
             this.uncommittedConsumerGroupOffsets.put(consumerGroupId, uncommittedOffsets);
         }
         uncommittedOffsets.putAll(offsets);
+        this.sentOffsets = true;
     }
 
     @Override
@@ -182,6 +191,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionAborted = false;
         this.transactionInFlight = false;
 
+        ++this.commitCount;
     }
 
     @Override
@@ -276,6 +286,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void flush() {
+        verifyProducerState();
         while (!this.completions.isEmpty())
             completeNext();
     }
@@ -327,6 +338,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     public boolean transactionAborted() {
         return this.transactionAborted;
+    }
+
+    public boolean flushed() {
+        return this.completions.isEmpty();
+    }
+
+    public boolean sentOffsets() {
+        return this.sentOffsets;
+    }
+
+    public long commitCount() {
+        return this.commitCount;
     }
 
     /**

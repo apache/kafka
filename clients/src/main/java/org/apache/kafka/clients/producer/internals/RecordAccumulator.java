@@ -444,26 +444,26 @@ public final class RecordAccumulator {
                                         // request
                                         break;
                                     } else {
-                                        PidAndEpoch pidAndEpoch = null;
+                                        ProducerIdAndEpoch producerIdAndEpoch = null;
                                         if (transactionManager != null) {
-                                            pidAndEpoch = transactionManager.pidAndEpoch();
-                                            if (!pidAndEpoch.isValid())
-                                                // we cannot send the batch until we have refreshed the PID
+                                            producerIdAndEpoch = transactionManager.producerIdAndEpoch();
+                                            if (!producerIdAndEpoch.isValid())
+                                                // we cannot send the batch until we have refreshed the producer id
                                                 break;
                                         }
 
                                         ProducerBatch batch = deque.pollFirst();
-                                        if (pidAndEpoch != null && !batch.inRetry()) {
-                                            // If the batch is in retry, then we should not change the pid and
+                                        if (producerIdAndEpoch != null && !batch.inRetry()) {
+                                            // If the batch is in retry, then we should not change the producer id and
                                             // sequence number, since this may introduce duplicates. In particular,
                                             // the previous attempt may actually have been accepted, and if we change
-                                            // the pid and sequence here, this attempt will also be accepted, causing
-                                            // a duplicate.
+                                            // the producer id and sequence here, this attempt will also be accepted,
+                                            // causing a duplicate.
                                             int sequenceNumber = transactionManager.sequenceNumber(batch.topicPartition);
                                             log.debug("Dest: {} : producerId: {}, epoch: {}, Assigning sequence for {}: {}",
-                                                    node, pidAndEpoch.producerId, pidAndEpoch.epoch,
+                                                    node, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch,
                                                     batch.topicPartition, sequenceNumber);
-                                            batch.setProducerState(pidAndEpoch, sequenceNumber);
+                                            batch.setProducerState(producerIdAndEpoch, sequenceNumber);
                                         }
                                         batch.close();
                                         size += batch.sizeInBytes();
@@ -580,14 +580,18 @@ public final class RecordAccumulator {
      * Go through incomplete batches and abort them.
      */
     private void abortBatches() {
+        abortBatches(new IllegalStateException("Producer is closed forcefully."));
+    }
+
+    void abortBatches(final RuntimeException reason) {
         for (ProducerBatch batch : incomplete.all()) {
             Deque<ProducerBatch> dq = getDeque(batch.topicPartition);
             // Close the batch before aborting
             synchronized (dq) {
-                batch.close();
+                batch.abort();
                 dq.remove(batch);
             }
-            batch.done(-1L, RecordBatch.NO_TIMESTAMP, new IllegalStateException("Producer is closed forcefully."));
+            batch.done(-1L, RecordBatch.NO_TIMESTAMP, reason);
             deallocate(batch);
         }
     }

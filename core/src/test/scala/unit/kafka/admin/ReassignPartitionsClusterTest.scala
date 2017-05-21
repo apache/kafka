@@ -17,7 +17,7 @@ import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
-import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
+import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
@@ -44,8 +44,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
 
   @After
   override def tearDown() {
-    servers.par.foreach(_.shutdown())
-    servers.par.foreach(server => CoreUtils.delete(server.config.logDirs))
+    TestUtils.shutdownServers(servers)
     super.tearDown()
   }
 

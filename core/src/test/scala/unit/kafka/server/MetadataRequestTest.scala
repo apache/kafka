@@ -17,15 +17,16 @@
 
 package kafka.server
 
-import java.util.{Properties}
+import java.util.Properties
 
-import kafka.common.Topic
 import kafka.utils.TestUtils
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.Assert._
 import org.junit.Test
 import org.apache.kafka.test.TestUtils.isValidClusterId
+
 import scala.collection.JavaConverters._
 
 class MetadataRequestTest extends BaseRequestTest {
@@ -80,7 +81,7 @@ class MetadataRequestTest extends BaseRequestTest {
 
   @Test
   def testIsInternal() {
-    val internalTopic = Topic.GroupMetadataTopicName
+    val internalTopic = Topic.GROUP_METADATA_TOPIC_NAME
     val notInternalTopic = "notInternal"
     // create the topics
     TestUtils.createTopic(zkUtils, internalTopic, 3, 2, servers)

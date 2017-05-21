@@ -50,7 +50,7 @@ import org.apache.directory.server.kerberos.shared.keytab.{Keytab, KeytabEntry}
 import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpTransport}
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Java, Utils}
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone
@@ -256,7 +256,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
   private def refreshJvmKerberosConfig(): Unit = {
     val klass =
-      if (System.getProperty("java.vendor").contains("IBM"))
+      if (Java.isIBMJdk)
         Class.forName("com.ibm.security.krb5.internal.Config")
       else
         Class.forName("sun.security.krb5.Config")

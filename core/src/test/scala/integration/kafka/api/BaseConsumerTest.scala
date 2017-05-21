@@ -20,7 +20,6 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{Logging, ShutdownableThread, TestUtils}
-import kafka.common.Topic
 import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -29,6 +28,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.internals.Topic
 
 /**
  * Integration tests for the new consumer that cover basic usage as well as server failures
@@ -103,7 +103,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     // get metadata for the topic
     var parts: Seq[PartitionInfo] = null
     while (parts == null)
-      parts = consumer0.partitionsFor(Topic.GroupMetadataTopicName).asScala
+      parts = consumer0.partitionsFor(Topic.GROUP_METADATA_TOPIC_NAME).asScala
     assertEquals(1, parts.size)
     assertNotNull(parts.head.leader())
 

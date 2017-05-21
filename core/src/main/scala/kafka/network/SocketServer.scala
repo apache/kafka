@@ -21,7 +21,6 @@ import java.io.IOException
 import java.net._
 import java.nio.channels._
 import java.nio.channels.{Selector => NSelector}
-import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 
@@ -34,7 +33,7 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.metrics._
-import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Mode, Selectable, Selector => KSelector}
+import org.apache.kafka.common.network.{ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
@@ -67,12 +66,6 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private[network] val acceptors = mutable.Map[EndPoint, Acceptor]()
   private var connectionQuotas: ConnectionQuotas = _
-
-  private val allMetricNames = (0 until totalProcessorThreads).map { i =>
-    val tags = new util.HashMap[String, String]()
-    tags.put("networkProcessor", i.toString)
-    metrics.metricName("io-wait-ratio", "socket-server-metrics", tags)
-  }
 
   /**
    * Start the socket server
@@ -107,7 +100,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
     newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
-        def value = allMetricNames.map { metricName =>
+        private val ioWaitRatioMetricNames = processors.map { p =>
+          metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+        }
+
+        def value = ioWaitRatioMetricNames.map { metricName =>
           Option(metrics.metric(metricName)).fold(0.0)(_.value)
         }.sum / totalProcessorThreads
       }
@@ -400,7 +397,10 @@ private[kafka] class Processor(val id: Int,
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-  private val metricTags = Map("networkProcessor" -> id.toString).asJava
+  private[kafka] val metricTags = mutable.LinkedHashMap(
+    "listener" -> listenerName.value,
+    "networkProcessor" -> id.toString
+  ).asJava
 
   newGauge("IdlePercent",
     new Gauge[Double] {
@@ -408,7 +408,9 @@ private[kafka] class Processor(val id: Int,
         Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
       }
     },
-    metricTags.asScala
+    // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
+    // also includes the listener name)
+    Map("networkProcessor" -> id.toString)
   )
 
   private val selector = new KSelector(
@@ -464,7 +466,9 @@ private[kafka] class Processor(val id: Int,
             if (selector.channel(channelId) != null || selector.closingChannel(channelId) != null)
                 selector.unmute(channelId)
           case RequestChannel.SendAction =>
-            sendResponse(curr)
+            val responseSend = curr.responseSend.getOrElse(
+              throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
+            sendResponse(curr, responseSend)
           case RequestChannel.CloseConnectionAction =>
             updateRequestMetrics(curr.request)
             trace("Closing socket connection actively according to the response code.")
@@ -477,16 +481,16 @@ private[kafka] class Processor(val id: Int,
   }
 
   /* `protected` for test usage */
-  protected[network] def sendResponse(response: RequestChannel.Response) {
+  protected[network] def sendResponse(response: RequestChannel.Response, responseSend: Send) {
     trace(s"Socket server received response to send, registering for write and sending data: $response")
-    val channel = selector.channel(response.responseSend.destination)
+    val channel = selector.channel(responseSend.destination)
     // `channel` can be null if the selector closed the connection because it was idle for too long
     if (channel == null) {
       warn(s"Attempting to send response via channel for which there is no open connection, connection id $id")
       response.request.updateRequestMetrics(0L)
     }
     else {
-      selector.send(response.responseSend)
+      selector.send(responseSend)
       inflightResponses += (response.request.connectionId -> response)
     }
   }
@@ -542,7 +546,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def processDisconnected() {
-    selector.disconnected.asScala.foreach { connectionId =>
+    selector.disconnected.keySet.asScala.foreach { connectionId =>
       val remoteHost = ConnectionId.fromString(connectionId).getOrElse {
         throw new IllegalStateException(s"connectionId has unexpected format: $connectionId")
       }.remoteHost

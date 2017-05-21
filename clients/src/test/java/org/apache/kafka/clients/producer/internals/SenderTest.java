@@ -37,9 +37,9 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
-import org.apache.kafka.common.requests.InitPidRequest;
-import org.apache.kafka.common.requests.InitPidResponse;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -382,20 +382,20 @@ public class SenderTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                return body instanceof InitPidRequest;
+                return body instanceof InitProducerIdRequest;
             }
-        }, new InitPidResponse(0, Errors.NONE, producerId, (short) 0));
+        }, new InitProducerIdResponse(0, Errors.NONE, producerId, (short) 0));
         sender.run(time.milliseconds());
-        assertTrue(transactionManager.hasPid());
-        assertEquals(producerId, transactionManager.pidAndEpoch().producerId);
-        assertEquals((short) 0, transactionManager.pidAndEpoch().epoch);
+        assertTrue(transactionManager.hasProducerId());
+        assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
+        assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
     }
 
     @Test
     public void testSequenceNumberIncrement() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId, (short) 0));
+        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
@@ -448,7 +448,7 @@ public class SenderTest {
     public void testAbortRetryWhenPidChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId, (short) 0));
+        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
@@ -480,7 +480,7 @@ public class SenderTest {
         assertEquals(0, client.inFlightRequestCount());
         assertFalse("Client ready status should be false", client.isReady(node, 0L));
 
-        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId + 1, (short) 0));
+        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId + 1, (short) 0));
         sender.run(time.milliseconds()); // receive error
         sender.run(time.milliseconds()); // reconnect
         sender.run(time.milliseconds()); // nothing to do, since the pid has changed. We should check the metrics for errors.
@@ -497,7 +497,7 @@ public class SenderTest {
     public void testResetWhenOutOfOrderSequenceReceived() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
-        transactionManager.setPidAndEpoch(new PidAndEpoch(producerId, (short) 0));
+        transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
 
@@ -528,7 +528,7 @@ public class SenderTest {
 
         sender.run(time.milliseconds());
         assertTrue(responseFuture.isDone());
-        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasPid());
+        assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
     }
 
     private void completedWithError(Future<RecordMetadata> future, Errors error) throws Exception {

@@ -137,8 +137,8 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, COMMIT_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("qs-test").getPath());
-        streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         // override this to make the rebalances happen quickly
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
@@ -329,19 +329,17 @@ public class QueryableStateIntegrationTest {
         final int numThreads = STREAM_TWO_PARTITIONS;
         final StreamRunnable[] streamRunnables = new StreamRunnable[numThreads];
         final Thread[] streamThreads = new Thread[numThreads];
-        final int numIterations = 500000;
 
-        // create concurrent producer
-        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, numIterations);
-        final Thread producerThread = new Thread(producerRunnable);
+        final ProducerRunnable producerRunnable = new ProducerRunnable(streamThree, inputValues, 1);
+        producerRunnable.run();
 
-        // create three stream threads
+
+        // create stream threads
         for (int i = 0; i < numThreads; i++) {
             streamRunnables[i] = new StreamRunnable(streamThree, outputTopicThree, i);
             streamThreads[i] = new Thread(streamRunnables[i]);
             streamThreads[i].start();
         }
-        producerThread.start();
 
         try {
             waitUntilAtLeastNumRecordProcessed(outputTopicThree, 1);
@@ -375,9 +373,6 @@ public class QueryableStateIntegrationTest {
                     streamThreads[i].join();
                 }
             }
-            producerRunnable.shutdown();
-            producerThread.interrupt();
-            producerThread.join();
         }
     }
 
@@ -913,15 +908,15 @@ public class QueryableStateIntegrationTest {
             producerConfig.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
             producerConfig.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
 
-            final KafkaProducer<String, String>
-                producer =
-                new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer());
+            try (final KafkaProducer<String, String> producer =
+                         new KafkaProducer<>(producerConfig, new StringSerializer(), new StringSerializer())) {
 
-            while (getCurrIteration() < numIterations && !shutdown) {
-                for (int i = 0; i < inputValues.size(); i++) {
-                    producer.send(new ProducerRecord<String, String>(topic, inputValues.get(i)));
+                while (getCurrIteration() < numIterations && !shutdown) {
+                    for (int i = 0; i < inputValues.size(); i++) {
+                        producer.send(new ProducerRecord<String, String>(topic, inputValues.get(i)));
+                    }
+                    incrementInteration();
                 }
-                incrementInteration();
             }
         }
     }

@@ -60,8 +60,7 @@ class LogOffsetTest extends ZooKeeperTestHarness {
   @After
   override def tearDown() {
     simpleConsumer.close
-    server.shutdown
-    Utils.delete(logDir)
+    TestUtils.shutdownServers(Seq(server))
     super.tearDown()
   }
 

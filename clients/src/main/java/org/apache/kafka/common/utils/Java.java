@@ -41,4 +41,8 @@ public final class Java {
     public static final boolean IS_JAVA9_COMPATIBLE = JVM_MAJOR_VERSION > 1 ||
             (JVM_MAJOR_VERSION == 1 && JVM_MINOR_VERSION >= 9);
 
+    public static boolean isIBMJdk() {
+        return System.getProperty("java.vendor").contains("IBM");
+    }
+
 }

@@ -278,7 +278,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 subscriptions.seek(tp, committed);
             }
         }
-        
+
         if (!needsOffsetReset.isEmpty()) {
             resetOffsets(needsOffsetReset);
         }
@@ -559,6 +559,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+            // To be thrown in the next call of this method
             nextInLineExceptionMetadata = new ExceptionMetadata(fetchedPartition, fetchedOffset, e);
         }
         return fetched;
@@ -790,7 +791,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 long position = this.subscriptions.position(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize));
-                log.trace("Added fetch request for partition {} at offset {} to node {}", partition, position, node);
+                log.debug("Added fetch request for partition {} at offset {} to node {}", partition, position, node);
             } else {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             }
@@ -944,6 +945,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private CloseableIterator<Record> records;
         private long nextFetchOffset;
         private boolean isFetched = false;
+        private KafkaException nextInlineException;
 
         private PartitionRecords(TopicPartition partition,
                                  CompletedFetch completedFetch,
@@ -954,12 +956,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.nextFetchOffset = completedFetch.fetchedOffset;
             this.abortedProducerIds = new HashSet<>();
             this.abortedTransactions = abortedTransactions(completedFetch.partitionData);
+            this.nextInlineException = null;
         }
 
         private void drain() {
             if (!isFetched) {
                 maybeCloseRecordStream();
-
+                nextInlineException = null;
                 this.isFetched = true;
                 this.completedFetch.metricAggregator.record(partition, bytesRead, recordsRead);
 
@@ -1012,6 +1015,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     maybeEnsureValid(currentBatch);
 
                     if (isolationLevel == IsolationLevel.READ_COMMITTED && currentBatch.hasProducerId()) {
+                        // remove from the aborted transaction queue all aborted transactions which have begun
+                        // before the current batch's last offset and add the associated producerIds to the
+                        // aborted producer set
+                        consumeAbortedTransactionsUpTo(currentBatch.lastOffset());
+
                         long producerId = currentBatch.producerId();
                         if (containsAbortMarker(currentBatch)) {
                             abortedProducerIds.remove(producerId);
@@ -1043,43 +1051,44 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private List<ConsumerRecord<K, V>> fetchRecords(int maxRecords) {
             if (isFetched)
                 return Collections.emptyList();
+            if (nextInlineException != null) {
+                KafkaException e = nextInlineException;
+                nextInlineException = null;
+                throw e;
+            }
 
             List<ConsumerRecord<K, V>> records = new ArrayList<>();
-            for (int i = 0; i < maxRecords; i++) {
-                Record record = nextFetchedRecord();
-                if (record == null)
-                    break;
+            try {
+                for (int i = 0; i < maxRecords; i++) {
+                    Record record = nextFetchedRecord();
+                    if (record == null)
+                        break;
 
-                recordsRead++;
-                bytesRead += record.sizeInBytes();
-                records.add(parseRecord(partition, currentBatch, record));
+                    recordsRead++;
+                    bytesRead += record.sizeInBytes();
+                    records.add(parseRecord(partition, currentBatch, record));
+                }
+            } catch (KafkaException e) {
+                if (records.isEmpty())
+                    throw e;
+                // To be thrown in the next call of this method
+                nextInlineException = e;
             }
             return records;
         }
 
-        private boolean isBatchAborted(RecordBatch batch) {
-            /* When in READ_COMMITTED mode, we need to do the following for each incoming entry:
-            *   0. Check whether the pid is in the 'abortedProducerIds' set && the entry does not include an abort marker.
-            *      If so, skip the entry.
-            *   1. If the pid is in aborted pids and the entry contains an abort marker, remove the pid from
-            *      aborted pids and skip the entry.
-            *   2. Check lowest offset entry in the abort index. If the PID of the current entry matches the
-            *      pid of the abort index entry, and the incoming offset is no smaller than the abort index offset,
-            *      this means that the entry has been aborted. Add the pid to the aborted pids set, and remove
-            *      the entry from the abort index.
-            */
-            long producerId = batch.producerId();
-            if (abortedProducerIds.contains(producerId)) {
-                return true;
-            } else if (abortedTransactions != null && !abortedTransactions.isEmpty()) {
-                FetchResponse.AbortedTransaction nextAbortedTransaction = abortedTransactions.peek();
-                if (nextAbortedTransaction.producerId == producerId && nextAbortedTransaction.firstOffset <= batch.baseOffset()) {
-                    abortedProducerIds.add(producerId);
-                    abortedTransactions.poll();
-                    return true;
-                }
+        private void consumeAbortedTransactionsUpTo(long offset) {
+            if (abortedTransactions == null)
+                return;
+
+            while (!abortedTransactions.isEmpty() && abortedTransactions.peek().firstOffset <= offset) {
+                FetchResponse.AbortedTransaction abortedTransaction = abortedTransactions.poll();
+                abortedProducerIds.add(abortedTransaction.producerId);
             }
-            return false;
+        }
+
+        private boolean isBatchAborted(RecordBatch batch) {
+            return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
         }
 
         private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {

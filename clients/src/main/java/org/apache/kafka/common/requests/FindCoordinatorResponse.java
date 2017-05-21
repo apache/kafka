@@ -106,4 +106,14 @@ public class FindCoordinatorResponse extends AbstractResponse {
     public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
         return new FindCoordinatorResponse(ApiKeys.FIND_COORDINATOR.responseSchema(version).read(buffer));
     }
+
+    @Override
+    public String toString() {
+        return "FindCoordinatorResponse{" +
+                "throttleTimeMs=" + throttleTimeMs +
+                ", errorMessage='" + errorMessage + '\'' +
+                ", error=" + error +
+                ", node=" + node +
+                '}';
+    }
 }

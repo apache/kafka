@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -53,6 +54,11 @@ public class NoOpWindowStore implements ReadOnlyWindowStore, StateStore {
 
     @Override
     public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
+        return null;
+    }
+
+    @Override
+    public WindowStoreIterator<KeyValue> fetch(Object from, Object to, long timeFrom, long timeTo) {
         return null;
     }
 }

@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.network.ChannelState;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
@@ -108,14 +109,17 @@ public class NetworkClient implements KafkaClient {
                          String clientId,
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
+                         long reconnectBackoffMax,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions) {
-        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
+        this(null, metadata, selector, clientId, maxInFlightRequestsPerConnection,
+             reconnectBackoffMs, reconnectBackoffMax,
+             socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
+             discoverBrokerVersions, apiVersions);
     }
 
     public NetworkClient(Selectable selector,
@@ -123,14 +127,17 @@ public class NetworkClient implements KafkaClient {
                          String clientId,
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
+                         long reconnectBackoffMax,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int requestTimeoutMs,
                          Time time,
                          boolean discoverBrokerVersions,
                          ApiVersions apiVersions) {
-        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection, reconnectBackoffMs,
-                socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time, discoverBrokerVersions, apiVersions);
+        this(metadataUpdater, null, selector, clientId, maxInFlightRequestsPerConnection,
+             reconnectBackoffMs, reconnectBackoffMax,
+             socketSendBuffer, socketReceiveBuffer, requestTimeoutMs, time,
+             discoverBrokerVersions, apiVersions);
     }
 
     private NetworkClient(MetadataUpdater metadataUpdater,
@@ -139,6 +146,7 @@ public class NetworkClient implements KafkaClient {
                           String clientId,
                           int maxInFlightRequestsPerConnection,
                           long reconnectBackoffMs,
+                          long reconnectBackoffMax,
                           int socketSendBuffer,
                           int socketReceiveBuffer,
                           int requestTimeoutMs,
@@ -159,7 +167,7 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs);
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -482,10 +490,21 @@ public class NetworkClient implements KafkaClient {
      * @param nodeId Id of the node to be disconnected
      * @param now The current time
      */
-    private void processDisconnection(List<ClientResponse> responses, String nodeId, long now) {
+    private void processDisconnection(List<ClientResponse> responses, String nodeId, long now, ChannelState disconnectState) {
         connectionStates.disconnected(nodeId, now);
         apiVersions.remove(nodeId);
         nodesNeedingApiVersionsFetch.remove(nodeId);
+        switch (disconnectState) {
+            case AUTHENTICATE:
+                log.warn("Connection to node {} terminated during authentication. This may indicate " +
+                        "that authentication failed due to invalid credentials.", nodeId);
+                break;
+            case NOT_CONNECTED:
+                log.warn("Connection to node {} could not be established. Broker may not be available.", nodeId);
+                break;
+            default:
+                break; // Disconnections in other states are logged at debug level in Selector
+        }
         for (InFlightRequest request : this.inFlightRequests.clearAll(nodeId)) {
             log.trace("Cancelled request {} due to node {} being disconnected", request.request, nodeId);
             if (request.isInternalRequest && request.header.apiKey() == ApiKeys.METADATA.id)
@@ -508,7 +527,7 @@ public class NetworkClient implements KafkaClient {
             // close connection to the node
             this.selector.close(nodeId);
             log.debug("Disconnecting from node {} due to request timeout.", nodeId);
-            processDisconnection(responses, nodeId, now);
+            processDisconnection(responses, nodeId, now, ChannelState.LOCAL_CLOSE);
         }
 
         // we disconnected, so we should probably refresh our metadata
@@ -567,7 +586,7 @@ public class NetworkClient implements KafkaClient {
                 log.warn("Node {} got error {} when making an ApiVersionsRequest.  Disconnecting.",
                         node, apiVersionsResponse.error());
                 this.selector.close(node);
-                processDisconnection(responses, node, now);
+                processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
             } else {
                 nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder((short) 0));
             }
@@ -588,9 +607,10 @@ public class NetworkClient implements KafkaClient {
      * @param now The current time
      */
     private void handleDisconnections(List<ClientResponse> responses, long now) {
-        for (String node : this.selector.disconnected()) {
+        for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
+            String node = entry.getKey();
             log.debug("Node {} disconnected.", node);
-            processDisconnection(responses, node, now);
+            processDisconnection(responses, node, now, entry.getValue());
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected().size() > 0)
@@ -710,6 +730,10 @@ public class NetworkClient implements KafkaClient {
         @Override
         public void handleDisconnection(String destination) {
             Cluster cluster = metadata.fetch();
+            // 'processDisconnection' generates warnings for misconfigured bootstrap server configuration
+            // resulting in 'Connection Refused' and misconfigured security resulting in authentication failures.
+            // The warning below handles the case where connection to a broker was established, but was disconnected
+            // before metadata could be obtained.
             if (cluster.isBootstrapConfigured()) {
                 int nodeId = Integer.parseInt(destination);
                 Node node = cluster.nodeById(nodeId);

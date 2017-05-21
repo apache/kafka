@@ -37,7 +37,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.Logger
 
-import scala.reflect.{ClassTag, classTag}
+import scala.reflect.ClassTag
 
 object RequestChannel extends Logging {
   val AllDone = Request(processor = 1, connectionId = "2", Session(KafkaPrincipal.ANONYMOUS, InetAddress.getLocalHost),
@@ -195,15 +195,27 @@ object RequestChannel extends Logging {
     }
   }
 
-  case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
+  object Response {
+
+    def apply(request: Request, responseSend: Send): Response = {
+      require(request != null, "request should be non null")
+      require(responseSend != null, "responseSend should be non null")
+      new Response(request, Some(responseSend), SendAction)
+    }
+
+    def apply(request: Request, response: AbstractResponse): Response = {
+      require(request != null, "request should be non null")
+      require(response != null, "response should be non null")
+      apply(request, response.toSend(request.connectionId, request.header))
+    }
+
+  }
+
+  case class Response(request: Request, responseSend: Option[Send], responseAction: ResponseAction) {
     request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
     if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
 
-    def this(request: Request, responseSend: Send) =
-      this(request.processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
-
-    def this(request: Request, response: AbstractResponse) =
-      this(request, response.toSend(request.connectionId, request.header))
+    def processor: Int = request.processor
   }
 
   trait ResponseAction
@@ -249,20 +261,6 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     responseQueues(response.processor).put(response)
     for(onResponse <- responseListeners)
       onResponse(response.processor)
-  }
-
-  /** No operation to take for the request, need to read more over the network */
-  def noOperation(processor: Int, request: RequestChannel.Request) {
-    responseQueues(processor).put(RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
-    for(onResponse <- responseListeners)
-      onResponse(processor)
-  }
-
-  /** Close the connection for the request */
-  def closeConnection(processor: Int, request: RequestChannel.Request) {
-    responseQueues(processor).put(RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
-    for(onResponse <- responseListeners)
-      onResponse(processor)
   }
 
   /** Get the next request or block until specified time has elapsed */

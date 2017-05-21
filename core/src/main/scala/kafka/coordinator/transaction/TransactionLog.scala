@@ -30,12 +30,12 @@ import org.apache.kafka.common.record.CompressionType
 import scala.collection.mutable
 
 /*
- * Messages stored for the transaction topic represent the pid and transactional status of the corresponding
+ * Messages stored for the transaction topic represent the producer id and transactional status of the corresponding
  * transactional id, which have versions for both the key and value fields. Key and value
  * versions are used to evolve the message formats:
  *
  * key version 0:               [transactionalId]
- *    -> value version 0:       [pid, epoch, expire_timestamp, status, [topic [partition], timestamp ]
+ *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic [partition], timestamp]
  */
 object TransactionLog {
 
@@ -55,69 +55,73 @@ object TransactionLog {
   val EnforcedRequiredAcks: Short = (-1).toShort
 
   // log message formats
-  private val TXN_ID_KEY = "transactional_id"
 
-  private val PID_KEY = "pid"
-  private val EPOCH_KEY = "epoch"
-  private val TXN_TIMEOUT_KEY = "transaction_timeout"
-  private val TXN_STATUS_KEY = "transaction_status"
-  private val TXN_PARTITIONS_KEY = "transaction_partitions"
-  private val TXN_ENTRY_TIMESTAMP_FIELD = "transaction_entry_timestamp"
-  private val TXN_START_TIMESTAMP_FIELD = "transaction_start_timestamp"
-  private val TOPIC_KEY = "topic"
-  private val PARTITION_IDS_KEY = "partition_ids"
+  private object KeySchema {
+    private val TXN_ID_KEY = "transactional_id"
 
-  private val KEY_SCHEMA_V0 = new Schema(new Field(TXN_ID_KEY, STRING))
-  private val KEY_SCHEMA_TXN_ID_FIELD = KEY_SCHEMA_V0.get(TXN_ID_KEY)
+    private val V0 = new Schema(new Field(TXN_ID_KEY, STRING))
+    private val SCHEMAS = Map(0 -> V0)
 
-  private val VALUE_PARTITIONS_SCHEMA = new Schema(new Field(TOPIC_KEY, STRING),
-                                                   new Field(PARTITION_IDS_KEY, new ArrayOf(INT32)))
-  private val PARTITIONS_SCHEMA_TOPIC_FIELD = VALUE_PARTITIONS_SCHEMA.get(TOPIC_KEY)
-  private val PARTITIONS_SCHEMA_PARTITION_IDS_FIELD = VALUE_PARTITIONS_SCHEMA.get(PARTITION_IDS_KEY)
+    val CURRENT_VERSION = 0.toShort
+    val CURRENT = schemaForKey(CURRENT_VERSION)
 
-  private val VALUE_SCHEMA_V0 = new Schema(new Field(PID_KEY, INT64, "Producer id in use by the transactional id."),
-                                           new Field(EPOCH_KEY, INT16, "Epoch associated with the producer id"),
-                                           new Field(TXN_TIMEOUT_KEY, INT32, "Transaction timeout in milliseconds"),
-                                           new Field(TXN_STATUS_KEY, INT8,
-                                             "TransactionState the transaction is in"),
-                                           new Field(TXN_PARTITIONS_KEY, ArrayOf.nullable(VALUE_PARTITIONS_SCHEMA),
-                                            "Set of partitions involved in the transaction"),
-                                           new Field(TXN_ENTRY_TIMESTAMP_FIELD, INT64, "Time the transaction was last updated"),
-                                           new Field(TXN_START_TIMESTAMP_FIELD, INT64, "Time the transaction was started"))
-  private val VALUE_SCHEMA_PID_FIELD = VALUE_SCHEMA_V0.get(PID_KEY)
-  private val VALUE_SCHEMA_EPOCH_FIELD = VALUE_SCHEMA_V0.get(EPOCH_KEY)
-  private val VALUE_SCHEMA_TXN_TIMEOUT_FIELD = VALUE_SCHEMA_V0.get(TXN_TIMEOUT_KEY)
-  private val VALUE_SCHEMA_TXN_STATUS_FIELD = VALUE_SCHEMA_V0.get(TXN_STATUS_KEY)
-  private val VALUE_SCHEMA_TXN_PARTITIONS_FIELD = VALUE_SCHEMA_V0.get(TXN_PARTITIONS_KEY)
-  private val VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD = VALUE_SCHEMA_V0.get(TXN_ENTRY_TIMESTAMP_FIELD)
-  private val VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD = VALUE_SCHEMA_V0.get(TXN_START_TIMESTAMP_FIELD)
+    val TXN_ID_FIELD = V0.get(TXN_ID_KEY)
 
-  private val KEY_SCHEMAS = Map(
-    0 -> KEY_SCHEMA_V0)
+    def ofVersion(version: Int): Option[Schema] = SCHEMAS.get(version)
+  }
 
-  private val VALUE_SCHEMAS = Map(
-    0 -> VALUE_SCHEMA_V0)
+  private object ValueSchema {
+    private val ProducerIdKey = "producer_id"
+    private val ProducerEpochKey = "producer_epoch"
+    private val TxnTimeoutKey = "transaction_timeout"
+    private val TxnStatusKey = "transaction_status"
+    private val TxnPartitionsKey = "transaction_partitions"
+    private val TxnEntryTimestampKey = "transaction_entry_timestamp"
+    private val TxnStartTimestampKey = "transaction_start_timestamp"
 
-  private val CURRENT_KEY_SCHEMA_VERSION = 0.toShort
-  private val CURRENT_VALUE_SCHEMA_VERSION = 0.toShort
+    private val PartitionIdsKey = "partition_ids"
+    private val TopicKey = "topic"
+    private val PartitionsSchema = new Schema(new Field(TopicKey, STRING),
+      new Field(PartitionIdsKey, new ArrayOf(INT32)))
 
-  private val CURRENT_KEY_SCHEMA = schemaForKey(CURRENT_KEY_SCHEMA_VERSION)
+    private val V0 = new Schema(new Field(ProducerIdKey, INT64, "Producer id in use by the transactional id."),
+      new Field(ProducerEpochKey, INT16, "Epoch associated with the producer id"),
+      new Field(TxnTimeoutKey, INT32, "Transaction timeout in milliseconds"),
+      new Field(TxnStatusKey, INT8,
+        "TransactionState the transaction is in"),
+      new Field(TxnPartitionsKey, ArrayOf.nullable(PartitionsSchema),
+        "Set of partitions involved in the transaction"),
+      new Field(TxnEntryTimestampKey, INT64, "Time the transaction was last updated"),
+      new Field(TxnStartTimestampKey, INT64, "Time the transaction was started"))
 
-  private val CURRENT_VALUE_SCHEMA = schemaForValue(CURRENT_VALUE_SCHEMA_VERSION)
+    private val Schemas = Map(0 -> V0)
+
+    val CurrentVersion = 0.toShort
+    val Current = schemaForValue(CurrentVersion)
+
+    val ProducerIdField = V0.get(ProducerIdKey)
+    val ProducerEpochField = V0.get(ProducerEpochKey)
+    val TxnTimeoutField = V0.get(TxnTimeoutKey)
+    val TxnStatusField = V0.get(TxnStatusKey)
+    val TxnPartitionsField = V0.get(TxnPartitionsKey)
+    val TxnEntryTimestampField = V0.get(TxnEntryTimestampKey)
+    val TxnStartTimestampField = V0.get(TxnStartTimestampKey)
+
+    val PartitionsTopicField = PartitionsSchema.get(TopicKey)
+    val PartitionIdsField = PartitionsSchema.get(PartitionIdsKey)
+
+    def ofVersion(version: Int): Option[Schema] = Schemas.get(version)
+  }
 
   private def schemaForKey(version: Int) = {
-    val schemaOpt = KEY_SCHEMAS.get(version)
-    schemaOpt match {
-      case Some(schema) => schema
-      case _ => throw new KafkaException(s"Unknown transaction log message key schema version $version")
+    KeySchema.ofVersion(version).getOrElse {
+      throw new KafkaException(s"Unknown transaction log message key schema version $version")
     }
   }
 
   private def schemaForValue(version: Int) = {
-    val schemaOpt = VALUE_SCHEMAS.get(version)
-    schemaOpt match {
-      case Some(schema) => schema
-      case _ => throw new KafkaException(s"Unknown transaction log message value schema version $version")
+    ValueSchema.ofVersion(version).getOrElse {
+      throw new KafkaException(s"Unknown transaction log message value schema version $version")
     }
   }
 
@@ -127,11 +131,12 @@ object TransactionLog {
     * @return key bytes
     */
   private[coordinator] def keyToBytes(transactionalId: String): Array[Byte] = {
-    val key = new Struct(CURRENT_KEY_SCHEMA)
-    key.set(KEY_SCHEMA_TXN_ID_FIELD, transactionalId)
+    import KeySchema._
+    val key = new Struct(CURRENT)
+    key.set(TXN_ID_FIELD, transactionalId)
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + key.sizeOf)
-    byteBuffer.putShort(CURRENT_KEY_SCHEMA_VERSION)
+    byteBuffer.putShort(CURRENT_VERSION)
     key.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -141,38 +146,39 @@ object TransactionLog {
     *
     * @return value payload bytes
     */
-  private[coordinator] def valueToBytes(txnMetadata: TransactionMetadata): Array[Byte] = {
-    val value = new Struct(CURRENT_VALUE_SCHEMA)
-    value.set(VALUE_SCHEMA_PID_FIELD, txnMetadata.pid)
-    value.set(VALUE_SCHEMA_EPOCH_FIELD, txnMetadata.producerEpoch)
-    value.set(VALUE_SCHEMA_TXN_TIMEOUT_FIELD, txnMetadata.txnTimeoutMs)
-    value.set(VALUE_SCHEMA_TXN_STATUS_FIELD, txnMetadata.state.byte)
-    value.set(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD, txnMetadata.lastUpdateTimestamp)
-    value.set(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD, txnMetadata.transactionStartTime)
+  private[coordinator] def valueToBytes(txnMetadata: TransactionMetadataTransition): Array[Byte] = {
+    import ValueSchema._
+    val value = new Struct(Current)
+    value.set(ProducerIdField, txnMetadata.producerId)
+    value.set(ProducerEpochField, txnMetadata.producerEpoch)
+    value.set(TxnTimeoutField, txnMetadata.txnTimeoutMs)
+    value.set(TxnStatusField, txnMetadata.txnState.byte)
+    value.set(TxnEntryTimestampField, txnMetadata.txnLastUpdateTimestamp)
+    value.set(TxnStartTimestampField, txnMetadata.txnStartTimestamp)
 
-    if (txnMetadata.state == Empty) {
+    if (txnMetadata.txnState == Empty) {
       if (txnMetadata.topicPartitions.nonEmpty)
-        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.state}: $txnMetadata")
+        throw new IllegalStateException(s"Transaction is not expected to have any partitions since its state is ${txnMetadata.txnState}: $txnMetadata")
 
-      value.set(VALUE_SCHEMA_TXN_PARTITIONS_FIELD, null)
+      value.set(TxnPartitionsField, null)
     } else {
       // first group the topic partitions by their topic names
       val topicAndPartitions = txnMetadata.topicPartitions.groupBy(_.topic())
 
       val partitionArray = topicAndPartitions.map { case(topic, partitions) =>
-        val topicPartitionsStruct = value.instance(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)
+        val topicPartitionsStruct = value.instance(TxnPartitionsField)
         val partitionIds: Array[Integer] = partitions.map(topicPartition => Integer.valueOf(topicPartition.partition())).toArray
 
-        topicPartitionsStruct.set(PARTITIONS_SCHEMA_TOPIC_FIELD, topic)
-        topicPartitionsStruct.set(PARTITIONS_SCHEMA_PARTITION_IDS_FIELD, partitionIds)
+        topicPartitionsStruct.set(PartitionsTopicField, topic)
+        topicPartitionsStruct.set(PartitionIdsField, partitionIds)
 
         topicPartitionsStruct
       }
-      value.set(VALUE_SCHEMA_TXN_PARTITIONS_FIELD, partitionArray.toArray)
+      value.set(TxnPartitionsField, partitionArray.toArray)
     }
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(CURRENT_VALUE_SCHEMA_VERSION)
+    byteBuffer.putShort(CurrentVersion)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -187,8 +193,8 @@ object TransactionLog {
     val keySchema = schemaForKey(version)
     val key = keySchema.read(buffer)
 
-    if (version == CURRENT_KEY_SCHEMA_VERSION) {
-      val transactionalId = key.getString(KEY_SCHEMA_TXN_ID_FIELD)
+    if (version == KeySchema.CURRENT_VERSION) {
+      val transactionalId = key.getString(KeySchema.TXN_ID_FIELD)
 
       TxnKey(version, transactionalId)
     } else {
@@ -197,37 +203,38 @@ object TransactionLog {
   }
 
   /**
-    * Decodes the transaction log messages' payload and retrieves pid metadata from it
+    * Decodes the transaction log messages' payload and retrieves the transaction metadata from it
     *
-    * @return a pid metadata object from the message
+    * @return a transaction metadata object from the message
     */
   def readMessageValue(buffer: ByteBuffer): TransactionMetadata = {
     if (buffer == null) { // tombstone
       null
     } else {
+      import ValueSchema._
       val version = buffer.getShort
       val valueSchema = schemaForValue(version)
       val value = valueSchema.read(buffer)
 
-      if (version == CURRENT_VALUE_SCHEMA_VERSION) {
-        val pid = value.get(VALUE_SCHEMA_PID_FIELD).asInstanceOf[Long]
-        val epoch = value.get(VALUE_SCHEMA_EPOCH_FIELD).asInstanceOf[Short]
-        val timeout = value.get(VALUE_SCHEMA_TXN_TIMEOUT_FIELD).asInstanceOf[Int]
+      if (version == CurrentVersion) {
+        val producerId = value.getLong(ProducerIdField)
+        val epoch = value.getShort(ProducerEpochField)
+        val timeout = value.getInt(TxnTimeoutField)
 
-        val stateByte = value.getByte(VALUE_SCHEMA_TXN_STATUS_FIELD)
+        val stateByte = value.getByte(TxnStatusField)
         val state = TransactionMetadata.byteToState(stateByte)
-        val entryTimestamp = value.get(VALUE_SCHEMA_TXN_ENTRY_TIMESTAMP_FIELD).asInstanceOf[Long]
-        val startTimestamp = value.get(VALUE_SCHEMA_TXN_START_TIMESTAMP_FIELD).asInstanceOf[Long]
+        val entryTimestamp = value.getLong(TxnEntryTimestampField)
+        val startTimestamp = value.getLong(TxnStartTimestampField)
 
-        val transactionMetadata = new TransactionMetadata(pid, epoch, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
+        val transactionMetadata = new TransactionMetadata(producerId, epoch, timeout, state, mutable.Set.empty[TopicPartition],startTimestamp, entryTimestamp)
 
         if (!state.equals(Empty)) {
-          val topicPartitionArray = value.getArray(VALUE_SCHEMA_TXN_PARTITIONS_FIELD)
+          val topicPartitionArray = value.getArray(TxnPartitionsField)
 
           topicPartitionArray.foreach { memberMetadataObj =>
             val memberMetadata = memberMetadataObj.asInstanceOf[Struct]
-            val topic = memberMetadata.get(PARTITIONS_SCHEMA_TOPIC_FIELD).asInstanceOf[String]
-            val partitionIdArray = memberMetadata.getArray(PARTITIONS_SCHEMA_PARTITION_IDS_FIELD)
+            val topic = memberMetadata.getString(PartitionsTopicField)
+            val partitionIdArray = memberMetadata.getArray(PartitionIdsField)
 
             val topicPartitions = partitionIdArray.map { partitionIdObj =>
               val partitionId = partitionIdObj.asInstanceOf[Integer]
@@ -252,12 +259,12 @@ object TransactionLog {
         case txnKey: TxnKey =>
           val transactionalId = txnKey.transactionalId
           val value = consumerRecord.value
-          val pidMetadata =
+          val producerIdMetadata =
             if (value == null) "NULL"
             else readMessageValue(ByteBuffer.wrap(value))
           output.write(transactionalId.getBytes(StandardCharsets.UTF_8))
           output.write("::".getBytes(StandardCharsets.UTF_8))
-          output.write(pidMetadata.toString.getBytes(StandardCharsets.UTF_8))
+          output.write(producerIdMetadata.toString.getBytes(StandardCharsets.UTF_8))
           output.write("\n".getBytes(StandardCharsets.UTF_8))
         case _ => // no-op
       }
@@ -265,7 +272,7 @@ object TransactionLog {
   }
 }
 
-trait BaseKey{
+sealed trait BaseKey {
   def version: Short
   def transactionalId: Any
 }

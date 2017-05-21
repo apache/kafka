@@ -21,8 +21,7 @@ import java.io.File
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils.checkEquals
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.MemoryRecords.withEndTransactionMarker
-import org.apache.kafka.common.record.{RecordBatch, _}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -273,7 +272,8 @@ class LogSegmentTest {
   @Test
   def testRecoverTransactionIndex(): Unit = {
     val segment = createSegment(100)
-    val epoch = 0.toShort
+    val producerEpoch = 0.toShort
+    val partitionLeaderEpoch = 15
     val sequence = 0
 
     val pid1 = 5L
@@ -282,27 +282,30 @@ class LogSegmentTest {
     // append transactional records from pid1
     segment.append(firstOffset = 100L, largestOffset = 101L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 100L, MemoryRecords.withTransactionalRecords(100L, CompressionType.NONE,
-        pid1, epoch, sequence, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+        pid1, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append transactional records from pid2
     segment.append(firstOffset = 102L, largestOffset = 103L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 102L, MemoryRecords.withTransactionalRecords(102L, CompressionType.NONE,
-        pid2, epoch, sequence, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+        pid2, producerEpoch, sequence, partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // append non-transactional records
     segment.append(firstOffset = 104L, largestOffset = 105L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
       shallowOffsetOfMaxTimestamp = 104L, MemoryRecords.withRecords(104L, CompressionType.NONE,
-        new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
+        partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
 
     // abort the transaction from pid2 (note LSO should be 100L since the txn from pid1 has not completed)
     segment.append(firstOffset = 106L, largestOffset = 106L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 106L,  endTxnRecords(ControlRecordType.ABORT, pid2, epoch, offset = 106L))
+      shallowOffsetOfMaxTimestamp = 106L, endTxnRecords(ControlRecordType.ABORT, pid2, producerEpoch, offset = 106L))
 
     // commit the transaction from pid1
     segment.append(firstOffset = 107L, largestOffset = 107L, largestTimestamp = RecordBatch.NO_TIMESTAMP,
-      shallowOffsetOfMaxTimestamp = 107L, endTxnRecords(ControlRecordType.COMMIT, pid1, epoch, offset = 107L))
+      shallowOffsetOfMaxTimestamp = 107L, endTxnRecords(ControlRecordType.COMMIT, pid1, producerEpoch, offset = 107L))
 
-    segment.recover(64 * 1024, new ProducerStateManager(topicPartition, logDir))
+    var stateManager = new ProducerStateManager(topicPartition, logDir)
+    segment.recover(64 * 1024, stateManager)
+    assertEquals(108L, stateManager.mapEndOffset)
+
 
     var abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
@@ -313,9 +316,10 @@ class LogSegmentTest {
     assertEquals(100L, abortedTxn.lastStableOffset)
 
     // recover again, but this time assuming the transaction from pid2 began on a previous segment
-    val stateManager = new ProducerStateManager(topicPartition, logDir)
-    stateManager.loadProducerEntry(ProducerIdEntry(pid2, epoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L)))
+    stateManager = new ProducerStateManager(topicPartition, logDir)
+    stateManager.loadProducerEntry(ProducerIdEntry(pid2, producerEpoch, 10, 90L, 5, RecordBatch.NO_TIMESTAMP, 0, Some(75L)))
     segment.recover(64 * 1024, stateManager)
+    assertEquals(108L, stateManager.mapEndOffset)
 
     abortedTxns = segment.txnIndex.allAbortedTxns
     assertEquals(1, abortedTxns.size)
@@ -328,11 +332,13 @@ class LogSegmentTest {
 
   private def endTxnRecords(controlRecordType: ControlRecordType,
                             producerId: Long,
-                            epoch: Short,
+                            producerEpoch: Short,
                             offset: Long = 0L,
-                            coordinatorEpoch: Int = 0): MemoryRecords = {
+                            partitionLeaderEpoch: Int = 0,
+                            coordinatorEpoch: Int = 0,
+                            timestamp: Long = RecordBatch.NO_TIMESTAMP): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    withEndTransactionMarker(offset, producerId, epoch, marker)
+    MemoryRecords.withEndTransactionMarker(offset, timestamp, partitionLeaderEpoch, producerId, producerEpoch, marker)
   }
 
   /**

@@ -95,7 +95,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DELETE_RECORDS:
                 return new DeleteRecordsResponse(struct);
             case INIT_PRODUCER_ID:
-                return new InitPidResponse(struct);
+                return new InitProducerIdResponse(struct);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
@@ -108,6 +108,16 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new WriteTxnMarkersResponse(struct);
             case TXN_OFFSET_COMMIT:
                 return new TxnOffsetCommitResponse(struct);
+            case DESCRIBE_ACLS:
+                return new DescribeAclsResponse(struct);
+            case CREATE_ACLS:
+                return new CreateAclsResponse(struct);
+            case DELETE_ACLS:
+                return new DeleteAclsResponse(struct);
+            case DESCRIBE_CONFIGS:
+                return new DescribeConfigsResponse(struct);
+            case ALTER_CONFIGS:
+                return new AlterConfigsResponse(struct);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getResponse`, the " +
                         "code should be updated to do so.", apiKey));

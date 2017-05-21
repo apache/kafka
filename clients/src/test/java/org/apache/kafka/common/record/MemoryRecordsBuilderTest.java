@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
@@ -31,6 +32,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsBuilderTest {
@@ -400,7 +402,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(10L, "1".getBytes(), "a".getBytes());
         builder.close();
 
-        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, 15L, (short) 0,
+        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, System.currentTimeMillis(), 0, 15L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
 
         builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, compressionType,
@@ -409,7 +411,7 @@ public class MemoryRecordsBuilderTest {
         builder.append(13L, "3".getBytes(), "c".getBytes());
         builder.close();
 
-        MemoryRecords.writeEndTransactionalMarker(buffer, 14L, 1L, (short) 0,
+        MemoryRecords.writeEndTransactionalMarker(buffer, 14L, System.currentTimeMillis(), 0, 1L, (short) 0,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
 
         buffer.flip();
@@ -469,6 +471,70 @@ public class MemoryRecordsBuilderTest {
         assertEquals(ByteBuffer.wrap("1".getBytes()), logRecords.get(0).key());
         assertEquals(ByteBuffer.wrap("2".getBytes()), logRecords.get(1).key());
         assertEquals(ByteBuffer.wrap("3".getBytes()), logRecords.get(2).key());
+    }
+
+    @Test
+    public void shouldThrowKafkaExceptionOnBuildWhenAborted() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.abort();
+        try {
+            builder.build();
+            fail("Should have thrown KafkaException");
+        } catch (KafkaException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldResetBufferToInitialPositionOnAbort() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.append(0L, "a".getBytes(), "1".getBytes());
+        builder.abort();
+        assertEquals(bufferOffset, builder.buffer().position());
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionOnCloseWhenAborted() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.abort();
+        try {
+            builder.close();
+            fail("Should have thrown IllegalStateException");
+        } catch (IllegalStateException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionOnAppendWhenAborted() throws Exception {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        buffer.position(bufferOffset);
+
+        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V0, compressionType,
+                                                                TimestampType.CREATE_TIME, 0L, 0L, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
+                                                                false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.abort();
+        try {
+            builder.append(0L, "a".getBytes(), "1".getBytes());
+            fail("Should have thrown IllegalStateException");
+        } catch (IllegalStateException e) {
+            // ok
+        }
     }
 
     @Parameterized.Parameters

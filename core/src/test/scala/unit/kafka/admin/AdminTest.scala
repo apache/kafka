@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, Invali
 import org.apache.kafka.common.metrics.Quota
 import org.easymock.EasyMock
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{After, Test}
 import java.util.Properties
 
 import kafka.utils._
@@ -46,6 +46,14 @@ import scala.collection.JavaConverters._
 import scala.util.Try
 
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
+
+  var servers: Seq[KafkaServer] = Seq()
+
+  @After
+  override def tearDown() {
+    TestUtils.shutdownServers(servers)
+    super.tearDown()
+  }
 
   @Test
   def testReplicaAssignment() {
@@ -188,7 +196,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
-    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
     // reassign partition 0
@@ -211,7 +219,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     ensureNoUnderReplicatedPartitions(zkUtils, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
-    servers.foreach(_.shutdown())
   }
 
   @Test
@@ -219,7 +226,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
-    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
     // reassign partition 0
@@ -241,8 +248,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     ensureNoUnderReplicatedPartitions(zkUtils, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
-
-    servers.foreach(_.shutdown())
   }
 
   @Test
@@ -250,7 +255,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
     // create brokers
-    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
     // reassign partition 0
@@ -272,14 +277,13 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     ensureNoUnderReplicatedPartitions(zkUtils, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
-    servers.foreach(_.shutdown())
   }
 
   @Test
   def testReassigningNonExistingPartition() {
     val topic = "test"
     // create brokers
-    val servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
@@ -288,7 +292,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     assertFalse("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     val reassignedPartitions = zkUtils.getPartitionsBeingReassigned()
     assertFalse("Partition should not be reassigned", reassignedPartitions.contains(topicAndPartition))
-    servers.foreach(_.shutdown())
   }
 
   @Test
@@ -305,7 +308,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkUtils, Map(topicAndPartition -> newReplicas))
     reassignPartitionsCommand.reassignPartitions()
     // create brokers
-    val servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
 
     // wait until reassignment completes
     TestUtils.waitUntilTrue(() => !checkIfReassignPartitionPathExists(zkUtils),
@@ -317,7 +320,6 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     ensureNoUnderReplicatedPartitions(zkUtils, topic, partitionToBeReassigned, assignedReplicas, servers)
     TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet,
                             "New replicas should exist on brokers")
-    servers.foreach(_.shutdown())
   }
 
   @Test
@@ -344,15 +346,14 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, rackInfo = brokerRack).map(KafkaConfig.fromProps)
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, expectedReplicaAssignment)
-    val servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
     // broker 2 should be the leader since it was started first
-    val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partition, oldLeaderOpt = None).get
+    val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partition, oldLeaderOpt = None)
     // trigger preferred replica election
     val preferredReplicaElection = new PreferredReplicaLeaderElectionCommand(zkUtils, Set(TopicAndPartition(topic, partition)))
     preferredReplicaElection.moveLeaderToPreferredReplica()
-    val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partition, oldLeaderOpt = Some(currentLeader)).get
+    val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, topic, partition, oldLeaderOpt = Some(currentLeader))
     assertEquals("Preferred replica election failed", preferredReplica, newLeader)
-    servers.foreach(_.shutdown())
   }
 
   @Test
@@ -362,7 +363,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val partition = 1
     // create brokers
     val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
-    val servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
     // create the topic
     TestUtils.createTopic(zkUtils, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
 
@@ -373,36 +374,31 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     controller.shutdownBroker(2, controlledShutdownCallback)
     var partitionsRemaining = resultQueue.take().get
     var activeServers = servers.filter(s => s.config.brokerId != 2)
-    try {
-      // wait for the update metadata request to trickle to the brokers
-      TestUtils.waitUntilTrue(() =>
-        activeServers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size != 3),
-        "Topic test not created after timeout")
-      assertEquals(0, partitionsRemaining.size)
-      var partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
-      var leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-      assertEquals(0, leaderAfterShutdown)
-      assertEquals(2, partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
-      assertEquals(List(0,1), partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr)
+    // wait for the update metadata request to trickle to the brokers
+    TestUtils.waitUntilTrue(() =>
+      activeServers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size != 3),
+      "Topic test not created after timeout")
+    assertEquals(0, partitionsRemaining.size)
+    var partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    var leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+    assertEquals(0, leaderAfterShutdown)
+    assertEquals(2, partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
+    assertEquals(List(0,1), partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr)
 
-      controller.shutdownBroker(1, controlledShutdownCallback)
-      partitionsRemaining = resultQueue.take().get
-      assertEquals(0, partitionsRemaining.size)
-      activeServers = servers.filter(s => s.config.brokerId == 0)
-      partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
-      leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-      assertEquals(0, leaderAfterShutdown)
+    controller.shutdownBroker(1, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take().get
+    assertEquals(0, partitionsRemaining.size)
+    activeServers = servers.filter(s => s.config.brokerId == 0)
+    partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+    assertEquals(0, leaderAfterShutdown)
 
-      assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
-      controller.shutdownBroker(0, controlledShutdownCallback)
-      partitionsRemaining = resultQueue.take().get
-      assertEquals(1, partitionsRemaining.size)
-      // leader doesn't change since all the replicas are shut down
-      assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
-    }
-    finally {
-      servers.foreach(_.shutdown())
-    }
+    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
+    controller.shutdownBroker(0, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take().get
+    assertEquals(1, partitionsRemaining.size)
+    // leader doesn't change since all the replicas are shut down
+    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
   }
 
   /**
@@ -414,6 +410,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val partitions = 3
     val topic = "my-topic"
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+    servers = Seq(server)
 
     def makeConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String) = {
       val props = new Properties()
@@ -446,51 +443,45 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       }
     }
 
-    try {
-      // create a topic with a few config overrides and check that they are applied
-      val maxMessageSize = 1024
-      val retentionMs = 1000 * 1000
-      AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    // create a topic with a few config overrides and check that they are applied
+    val maxMessageSize = 1024
+    val retentionMs = 1000 * 1000
+    AdminUtils.createTopic(server.zkUtils, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
-      //Standard topic configs will be propagated at topic creation time, but the quota manager will not have been updated.
-      checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", false)
+    //Standard topic configs will be propagated at topic creation time, but the quota manager will not have been updated.
+    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", false)
 
-      //Update dynamically and all properties should be applied
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    //Update dynamically and all properties should be applied
+    AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
 
-      checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", true)
+    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", true)
 
-      // now double the config values for the topic and check that it is applied
-      val newConfig = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*")
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*"))
-      checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*", quotaManagerIsThrottled = true)
+    // now double the config values for the topic and check that it is applied
+    val newConfig = makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*")
+    AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*"))
+    checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*", quotaManagerIsThrottled = true)
 
-      // Verify that the same config can be read from ZK
-      val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
-      assertEquals(newConfig, configInZk)
+    // Verify that the same config can be read from ZK
+    val configInZk = AdminUtils.fetchEntityConfig(server.zkUtils, ConfigType.Topic, topic)
+    assertEquals(newConfig, configInZk)
 
-      //Now delete the config
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
-      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
+    //Now delete the config
+    AdminUtils.changeTopicConfig(server.zkUtils, topic, new Properties)
+    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "", quotaManagerIsThrottled = false)
 
-      //Add config back
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
-      checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
+    //Add config back
+    AdminUtils.changeTopicConfig(server.zkUtils, topic, makeConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1"))
+    checkConfig(maxMessageSize, retentionMs, "0:0,1:0,2:0", "0:1,1:1,2:1", quotaManagerIsThrottled = true)
 
-      //Now ensure updating to "" removes the throttled replica list also
-      AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
-      checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
-
-    } finally {
-      server.shutdown()
-      CoreUtils.delete(server.config.logDirs)
-    }
+    //Now ensure updating to "" removes the throttled replica list also
+    AdminUtils.changeTopicConfig(server.zkUtils, topic, propsWith((LogConfig.FollowerReplicationThrottledReplicasProp, ""), (LogConfig.LeaderReplicationThrottledReplicasProp, "")))
+    checkConfig(Defaults.MaxMessageSize, Defaults.RetentionMs, "", "",  quotaManagerIsThrottled = false)
   }
 
   @Test
   def shouldPropagateDynamicBrokerConfigs() {
     val brokerIds = Seq(0, 1, 2)
-    val servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
+    servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
 
     def checkConfig(limit: Long) {
       retry(10000) {
@@ -501,37 +492,31 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
       }
     }
 
-    try {
-      val limit: Long = 1000000
+    val limit: Long = 1000000
 
-      // Set the limit & check it is applied to the log
-      changeBrokerConfig(zkUtils, brokerIds, propsWith(
-        (LeaderReplicationThrottledRateProp, limit.toString),
-        (FollowerReplicationThrottledRateProp, limit.toString)))
-      checkConfig(limit)
+    // Set the limit & check it is applied to the log
+    changeBrokerConfig(zkUtils, brokerIds, propsWith(
+      (LeaderReplicationThrottledRateProp, limit.toString),
+      (FollowerReplicationThrottledRateProp, limit.toString)))
+    checkConfig(limit)
 
-      // Now double the config values for the topic and check that it is applied
-      val newLimit = 2 * limit
-      changeBrokerConfig(zkUtils, brokerIds,  propsWith(
-        (LeaderReplicationThrottledRateProp, newLimit.toString),
-        (FollowerReplicationThrottledRateProp, newLimit.toString)))
-      checkConfig(newLimit)
+    // Now double the config values for the topic and check that it is applied
+    val newLimit = 2 * limit
+    changeBrokerConfig(zkUtils, brokerIds,  propsWith(
+      (LeaderReplicationThrottledRateProp, newLimit.toString),
+      (FollowerReplicationThrottledRateProp, newLimit.toString)))
+    checkConfig(newLimit)
 
-      // Verify that the same config can be read from ZK
-      for (brokerId <- brokerIds) {
-        val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
-        assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
-        assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
-      }
-
-      //Now delete the config
-      changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
-      checkConfig(DefaultReplicationThrottledRate)
-
-    } finally {
-      servers.foreach(_.shutdown())
-      servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    // Verify that the same config can be read from ZK
+    for (brokerId <- brokerIds) {
+      val configInZk = AdminUtils.fetchEntityConfig(servers(brokerId).zkUtils, ConfigType.Broker, brokerId.toString)
+      assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
+      assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
     }
+
+    //Now delete the config
+    changeBrokerConfig(servers(0).zkUtils, brokerIds, new Properties)
+    checkConfig(DefaultReplicationThrottledRate)
   }
 
   /**
@@ -556,13 +541,9 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
-    try {
-      assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota("ANONYMOUS", clientId))
-      assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota("ANONYMOUS", clientId))
-    } finally {
-      server.shutdown()
-      CoreUtils.delete(server.config.logDirs)
-    }
+    servers = Seq(server)
+    assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota("ANONYMOUS", clientId))
+    assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota("ANONYMOUS", clientId))
   }
 
   @Test

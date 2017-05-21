@@ -84,6 +84,7 @@ public class MemoryRecordsBuilder {
     private Long baseTimestamp = null;
 
     private MemoryRecords builtRecords;
+    private boolean aborted = false;
 
     /**
      * Construct a new builder.
@@ -95,7 +96,7 @@ public class MemoryRecordsBuilder {
      * @param timestampType The desired timestamp type. For magic > 0, this cannot be {@link TimestampType#NO_TIMESTAMP_TYPE}.
      * @param baseOffset The initial offset to use for
      * @param logAppendTime The log append time of this record set. Can be set to NO_TIMESTAMP if CREATE_TIME is used.
-     * @param producerId The producer ID (PID) associated with the producer writing this record set
+     * @param producerId The producer ID associated with the producer writing this record set
      * @param producerEpoch The epoch of the producer
      * @param baseSequence The sequence number of the first record in this set
      * @param isTransactional Whether or not the records are part of a transaction
@@ -175,6 +176,9 @@ public class MemoryRecordsBuilder {
      * @return The built log buffer
      */
     public MemoryRecords build() {
+        if (aborted) {
+            throw new KafkaException("Attempting to build an aborted record batch");
+        }
         close();
         return builtRecords;
     }
@@ -212,15 +216,15 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    public void setProducerState(long pid, short epoch, int baseSequence) {
+    public void setProducerState(long producerId, short epoch, int baseSequence) {
         if (isClosed()) {
             // Sequence numbers are assigned when the batch is closed while the accumulator is being drained.
             // If the resulting ProduceRequest to the partition leader failed for a retriable error, the batch will
-            // be re queued. In this case, we should not attempt to set the state again, since changing the pid and sequence
+            // be re queued. In this case, we should not attempt to set the state again, since changing the producerId and sequence
             // once a batch has been sent to the broker risks introducing duplicates.
             throw new IllegalStateException("Trying to set producer state of an already closed batch. This indicates a bug on the client.");
         }
-        this.producerId = pid;
+        this.producerId = producerId;
         this.producerEpoch = epoch;
         this.baseSequence = baseSequence;
     }
@@ -246,7 +250,16 @@ public class MemoryRecordsBuilder {
         }
     }
 
+    public void abort() {
+        closeForRecordAppends();
+        buffer().position(initPos);
+        aborted = true;
+    }
+
     public void close() {
+        if (aborted)
+            throw new IllegalStateException("Cannot close MemoryRecordsBuilder as it has already been aborted");
+
         if (builtRecords != null)
             return;
 
@@ -605,13 +618,13 @@ public class MemoryRecordsBuilder {
     private void ensureOpenForRecordAppend() {
         if (appendStreamIsClosed)
             throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed for record appends");
-        if (isClosed())
-            throw new IllegalStateException("Tried to append a record, but MemoryRecordsBuilder is closed");
     }
 
     private void ensureOpenForRecordBatchWrite() {
         if (isClosed())
             throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is closed");
+        if (aborted)
+            throw new IllegalStateException("Tried to write record batch header, but MemoryRecordsBuilder is aborted");
     }
 
     /**
@@ -691,7 +704,7 @@ public class MemoryRecordsBuilder {
     }
 
     /**
-     * Return the ProducerId (PID) of the RecordBatches created by this builder.
+     * Return the producer id of the RecordBatches created by this builder.
      */
     public long producerId() {
         return this.producerId;
