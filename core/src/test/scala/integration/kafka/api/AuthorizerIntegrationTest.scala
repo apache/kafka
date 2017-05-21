@@ -918,7 +918,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: ClusterAuthorizationException =>
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
@@ -928,7 +927,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: ClusterAuthorizationException =>
+      case e: KafkaException =>
+        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
   }
 
@@ -951,7 +951,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes)).get()
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: ClusterAuthorizationException =>
       case e: ExecutionException =>
         assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
@@ -961,7 +960,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
       fail("Should have raised ClusterAuthorizationException")
     } catch {
-      case e: ClusterAuthorizationException =>
+      case e: KafkaException =>
+        assertTrue(e.getCause.isInstanceOf[ClusterAuthorizationException])
     }
   }
 
