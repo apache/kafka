@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.utils.ZkUtils;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.requests.IsolationLevel;
-import org.apache.kafka.common.security.JaasUtils;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -35,20 +34,22 @@ import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -60,6 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @Category({IntegrationTest.class})
@@ -76,8 +78,9 @@ public class EosIntegrationTest {
     private final static int NUM_TOPIC_PARTITIONS = 2;
     private final static String SINGLE_PARTITION_OUTPUT_TOPIC = "outputTopic";
     private final static String MULTI_PARTITION_OUTPUT_TOPIC = "multiPartitionOutputTopic";
+    private final String storeName = "store";
 
-    private final Map<Integer, Integer> maxPartitionNumberSeen = new HashMap<>();
+    private final Map<Integer, Integer> maxPartitionNumberSeen = Collections.synchronizedMap(new HashMap<Integer, Integer>());
     private boolean injectError = false;
     private AtomicInteger commitRequested;
     private Throwable uncaughtException;
@@ -310,13 +313,13 @@ public class EosIntegrationTest {
 
     @Test
     public void shouldNotViolateEosIfOneTaskFails() throws Exception {
-        // this test updates a store with 10 + 5 records per partition
-        // the app is supposed to emit all 15 update records into the output topic
-        // the app commits after each 10 records, and thus will have 5 uncommitted write
+        // this test writes 10 + 5 + 5 records per partition (running with 2 parttions)
+        // the app is supposed to copy all 40 records into the output topic
+        // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
         //
         // the failure gets inject after 20 committed and 30 uncommitted records got received
         // -> the failure only kills one thread
-        // after fail over, we should read 30 committed records
+        // after fail over, we should read 40 committed records (even if 50 record got written)
 
         final KafkaStreams streams = getKafkaStreams(false);
         try {
@@ -387,7 +390,7 @@ public class EosIntegrationTest {
                 public boolean conditionMet() {
                     return commitRequested.get() == 2;
                 }
-            }, "SteamsTasks did not request commit.");
+            }, 60000, "SteamsTasks did not request commit.");
 
             writeInputData(uncommittedDataBeforeFailure);
 
@@ -405,7 +408,7 @@ public class EosIntegrationTest {
                 public boolean conditionMet() {
                     return uncaughtException != null;
                 }
-            }, "Should receive uncaught exception from one StreamThread.");
+            }, 60000, "Should receive uncaught exception from one StreamThread.");
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
                 committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
@@ -435,7 +438,6 @@ public class EosIntegrationTest {
         commitRequested = new AtomicInteger(0);
         final KStreamBuilder builder = new KStreamBuilder();
 
-        final String storeName = "store";
         String[] storeNames = null;
         if (withState) {
             storeNames = new String[] {storeName};
@@ -459,14 +461,15 @@ public class EosIntegrationTest {
 
                     @Override
                     public void init(final ProcessorContext context) {
-                        if (!maxPartitionNumberSeen.containsKey(hashCode())) {
-                            if (maxPartitionNumberSeen.size() != 2) {
+                        final Integer hashCode = hashCode();
+                        if (!maxPartitionNumberSeen.containsKey(hashCode)) {
+                            if (maxPartitionNumberSeen.size() < 2) {
                                 // initial startup case
-                                maxPartitionNumberSeen.put(hashCode(), -1);
+                                maxPartitionNumberSeen.put(hashCode, -1);
                             } else {
                                 // recovery case -- we need to "protect" the new instance of Transformer
                                 // to throw the injected exception again
-                                maxPartitionNumberSeen.put(hashCode(), 2);
+                                maxPartitionNumberSeen.put(hashCode, Integer.MAX_VALUE);
                             }
                         }
                         this.context = context;
@@ -478,10 +481,11 @@ public class EosIntegrationTest {
 
                     @Override
                     public KeyValue<Long, Long> transform(final Long key, final Long value) {
-                        int maxPartitionNumber = maxPartitionNumberSeen.get(hashCode());
+                        final Integer hashCode = hashCode();
+                        int maxPartitionNumber = maxPartitionNumberSeen.get(hashCode);
                         maxPartitionNumber = Math.max(maxPartitionNumber, context.partition());
-                        maxPartitionNumberSeen.put(hashCode(), maxPartitionNumber);
-                        if (maxPartitionNumber == 1 && injectError) {
+                        maxPartitionNumberSeen.put(hashCode, maxPartitionNumber);
+                        if (maxPartitionNumber == 0 && injectError) {
                             throw new RuntimeException("Injected test exception.");
                         }
 
@@ -529,6 +533,7 @@ public class EosIntegrationTest {
                         put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, -1);
                         put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
                         put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
+                        put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
                     }
                 }));
 
@@ -582,23 +587,34 @@ public class EosIntegrationTest {
         );
     }
 
-    @Ignore
     @Test
     public void shouldNotViolateEosIfOneTaskFailsWithState() throws Exception {
-        // this test writes 10 + 5 records per partition
-        // the app is supposed to copy all 15 records into the output topic
-        // the app commits after each 10 records, and thus will have 5 uncommitted write
+        // this test updates a store with 10 + 5 + 5 records per partition (running with 2 partitions)
+        // the app is supposed to emit all 40 update records into the output topic
+        // the app commits after each 10 records per partition, and thus will have 2*5 uncommitted writes
+        // and store updates (ie, another 5 uncommitted writes to a changelog topic per partition)
         //
         // the failure gets inject after 20 committed and 30 uncommitted records got received
         // -> the failure only kills one thread
-        // after fail over, we should read 30 committed records
+        // after fail over, we should read 40 committed records and the state stores should contain the correct sums
+        // per key (even if some recrods got processed twice)
 
         final KafkaStreams streams = getKafkaStreams(true);
         try {
             streams.start();
 
-            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
+            final List<KeyValue<Long, Long>> committedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
                 {
+                    add(new KeyValue<>(0L, 0L));
+                    add(new KeyValue<>(0L, 1L));
+                    add(new KeyValue<>(0L, 2L));
+                    add(new KeyValue<>(0L, 3L));
+                    add(new KeyValue<>(0L, 4L));
+                    add(new KeyValue<>(0L, 5L));
+                    add(new KeyValue<>(0L, 6L));
+                    add(new KeyValue<>(0L, 7L));
+                    add(new KeyValue<>(0L, 8L));
+                    add(new KeyValue<>(0L, 9L));
                     add(new KeyValue<>(1L, 0L));
                     add(new KeyValue<>(1L, 1L));
                     add(new KeyValue<>(1L, 2L));
@@ -609,125 +625,97 @@ public class EosIntegrationTest {
                     add(new KeyValue<>(1L, 7L));
                     add(new KeyValue<>(1L, 8L));
                     add(new KeyValue<>(1L, 9L));
-                    add(new KeyValue<>(2L, 0L));
-                    add(new KeyValue<>(2L, 1L));
-                    add(new KeyValue<>(2L, 2L));
-                    add(new KeyValue<>(2L, 3L));
-                    add(new KeyValue<>(2L, 4L));
-                    add(new KeyValue<>(2L, 5L));
-                    add(new KeyValue<>(2L, 6L));
-                    add(new KeyValue<>(2L, 7L));
-                    add(new KeyValue<>(2L, 8L));
-                    add(new KeyValue<>(2L, 9L));
-
+                }
+            };
+            final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = new ArrayList<KeyValue<Long, Long>>() {
+                {
+                    add(new KeyValue<>(0L, 10L));
+                    add(new KeyValue<>(0L, 11L));
+                    add(new KeyValue<>(0L, 12L));
+                    add(new KeyValue<>(0L, 13L));
+                    add(new KeyValue<>(0L, 14L));
                     add(new KeyValue<>(1L, 10L));
                     add(new KeyValue<>(1L, 11L));
                     add(new KeyValue<>(1L, 12L));
                     add(new KeyValue<>(1L, 13L));
                     add(new KeyValue<>(1L, 14L));
-                    add(new KeyValue<>(2L, 10L));
-                    add(new KeyValue<>(2L, 11L));
-                    add(new KeyValue<>(2L, 12L));
-                    add(new KeyValue<>(2L, 13L));
-                    add(new KeyValue<>(2L, 14L));
                 }
             };
+
+            final List<KeyValue<Long, Long>> dataBeforeFailure = new ArrayList<>();
+            dataBeforeFailure.addAll(committedDataBeforeFailure);
+            dataBeforeFailure.addAll(uncommittedDataBeforeFailure);
+
             final List<KeyValue<Long, Long>> dataAfterFailure = new ArrayList<KeyValue<Long, Long>>() {
                 {
+                    add(new KeyValue<>(0L, 15L));
+                    add(new KeyValue<>(0L, 16L));
+                    add(new KeyValue<>(0L, 17L));
+                    add(new KeyValue<>(0L, 18L));
+                    add(new KeyValue<>(0L, 19L));
                     add(new KeyValue<>(1L, 15L));
                     add(new KeyValue<>(1L, 16L));
                     add(new KeyValue<>(1L, 17L));
                     add(new KeyValue<>(1L, 18L));
                     add(new KeyValue<>(1L, 19L));
-                    add(new KeyValue<>(2L, 15L));
-                    add(new KeyValue<>(2L, 16L));
-                    add(new KeyValue<>(2L, 17L));
-                    add(new KeyValue<>(2L, 18L));
-                    add(new KeyValue<>(2L, 19L));
                 }
             };
 
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                MULTI_PARTITION_INPUT_TOPIC,
-                dataBeforeFailure,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
-            );
+            writeInputData(committedDataBeforeFailure);
 
-            final Set<KeyValue<Long, Long>> expectedCommittedRecords = getExpectedResult(dataBeforeFailure.subList(0, 20));
-            final Set<KeyValue<Long, Long>> expectedUncommittedRecords = getExpectedResult(dataBeforeFailure);
+            TestUtils.waitForCondition(new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    return commitRequested.get() == 2;
+                }
+            }, 60000, "SteamsTasks did not request commit.");
 
-            final Set<KeyValue<Long, Long>> committedRecords
-                = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                20
-            ));
+            writeInputData(uncommittedDataBeforeFailure);
 
-            final Set<KeyValue<Long, Long>> uncommittedRecords
-                = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                dataBeforeFailure.size()
-            ));
+            final List<KeyValue<Long, Long>> uncommittedRecords = readResult(dataBeforeFailure.size(), null);
+            final List<KeyValue<Long, Long>> committedRecords = readResult(committedDataBeforeFailure.size(), CONSUMER_GROUP_ID);
 
-            assertThat(committedRecords, equalTo(expectedCommittedRecords));
-            assertThat(uncommittedRecords, equalTo(expectedUncommittedRecords));
+            final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
+            checkResultPerKey(committedRecords, computeExpectedResult(committedDataBeforeFailure));
+            checkResultPerKey(uncommittedRecords, expectedResultBeforeFailure);
+            verifyStateStore(streams, getMaxPerKey(expectedResultBeforeFailure));
 
             injectError = true;
-
-            IntegrationTestUtils.produceKeyValuesSynchronously(
-                MULTI_PARTITION_INPUT_TOPIC,
-                dataAfterFailure,
-                TestUtils.producerConfig(CLUSTER.bootstrapServers(), LongSerializer.class, LongSerializer.class),
-                CLUSTER.time
-            );
+            writeInputData(dataAfterFailure);
 
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
                     return uncaughtException != null;
                 }
-            }, "Should receive uncaught exception from one StreamThread.");
+            }, 60000, "Should receive uncaught exception from one StreamThread.");
 
-            dataBeforeFailure.removeAll(expectedCommittedRecords);
-            expectedCommittedRecords.clear();
-            expectedCommittedRecords.addAll(dataBeforeFailure);
-            expectedCommittedRecords.addAll(dataAfterFailure);
-            final Set<KeyValue<Long, Long>> committedRecordsAfterFailure
-                = new HashSet<>(IntegrationTestUtils.<Long, Long>waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            //put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase());
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                //expectedCommittedRecords.size()
-                10
-            ));
+            final List<KeyValue<Long, Long>> allCommittedRecords = readResult(
+                committedDataBeforeFailure.size() + uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
+                CONSUMER_GROUP_ID + "_ALL");
 
-            assertThat(committedRecordsAfterFailure, equalTo(expectedCommittedRecords));
+            final List<KeyValue<Long, Long>> committedRecordsAfterFailure = readResult(
+                uncommittedDataBeforeFailure.size() + dataAfterFailure.size(),
+                CONSUMER_GROUP_ID);
+
+            final List<KeyValue<Long, Long>> allExpectedCommittedRecordsAfterRecovery = new ArrayList<>();
+            allExpectedCommittedRecordsAfterRecovery.addAll(committedDataBeforeFailure);
+            allExpectedCommittedRecordsAfterRecovery.addAll(uncommittedDataBeforeFailure);
+            allExpectedCommittedRecordsAfterRecovery.addAll(dataAfterFailure);
+
+            final List<KeyValue<Long, Long>> expectedResult = computeExpectedResult(allExpectedCommittedRecordsAfterRecovery);
+
+            checkResultPerKey(allCommittedRecords, expectedResult);
+            checkResultPerKey(committedRecordsAfterFailure, expectedResult.subList(committedDataBeforeFailure.size(), expectedResult.size()));
+
+            verifyStateStore(streams, getMaxPerKey(expectedResult));
         } finally {
             streams.close();
         }
     }
 
-    private Set<KeyValue<Long, Long>> getExpectedResult(final List<KeyValue<Long, Long>> input) {
-        final HashSet<KeyValue<Long, Long>> expectedResult = new HashSet<>();
+    private List<KeyValue<Long, Long>> computeExpectedResult(final List<KeyValue<Long, Long>> input) {
+        final List<KeyValue<Long, Long>> expectedResult = new ArrayList<>(input.size());
 
         final HashMap<Long, Long> sums = new HashMap<>();
 
@@ -744,4 +732,48 @@ public class EosIntegrationTest {
 
         return expectedResult;
     }
+
+    private Set<KeyValue<Long, Long>> getMaxPerKey(final List<KeyValue<Long, Long>> input) {
+        final Set<KeyValue<Long, Long>> expectedResult = new HashSet<>(input.size());
+
+        final HashMap<Long, Long> maxPerKey = new HashMap<>();
+
+        for (final KeyValue<Long, Long> record : input) {
+            final Long max = maxPerKey.get(record.key);
+            if (max == null || record.value > max) {
+                maxPerKey.put(record.key, record.value);
+            }
+
+        }
+
+        for (final Map.Entry<Long, Long> max : maxPerKey.entrySet()) {
+            expectedResult.add(new KeyValue<>(max.getKey(), max.getValue()));
+        }
+
+        return expectedResult;
+    }
+
+    private void verifyStateStore(final KafkaStreams streams, final Set<KeyValue<Long, Long>> expectedStoreContent) {
+        ReadOnlyKeyValueStore<Long, Long> store = null;
+
+        final long maxWaitingTime = System.currentTimeMillis() + 300000L;
+        while (System.currentTimeMillis() < maxWaitingTime) {
+            try {
+                store = streams.store(storeName, QueryableStoreTypes.<Long, Long>keyValueStore());
+                break;
+            } catch (final InvalidStateStoreException okJustRetry) {
+                try {
+                    Thread.sleep(5000L);
+                } catch (final Exception ignore) { }
+            }
+        }
+
+        final KeyValueIterator<Long, Long> it = store.all();
+        while (it.hasNext()) {
+            assertTrue(expectedStoreContent.remove(it.next()));
+        }
+
+        assertTrue(expectedStoreContent.isEmpty());
+    }
+
 }
