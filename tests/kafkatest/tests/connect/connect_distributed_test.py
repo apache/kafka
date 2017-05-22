@@ -67,7 +67,7 @@ class ConnectDistributedTest(Test):
         self.num_zk = 1
         self.num_brokers = 1
         self.topics = {
-            'test' : { 'partitions': 1, 'replication-factor': 1 }
+            self.TOPIC: {'partitions': 1, 'replication-factor': 1}
         }
 
         self.zk = ZookeeperService(test_context, self.num_zk)
@@ -75,7 +75,7 @@ class ConnectDistributedTest(Test):
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
-        self.broker_config_overrides = [["auto.create.topics.enable","false"]]
+        self.broker_config_overrides = [["auto.create.topics.enable", "false"]]
 
     def setup_services(self, security_protocol=SecurityConfig.PLAINTEXT, timestamp_type=None):
         self.kafka = KafkaService(self.test_context, self.num_brokers, self.zk,
@@ -205,7 +205,7 @@ class ConnectDistributedTest(Test):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.source = VerifiableSource(self.cc)
+        self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
         wait_until(lambda: self.is_running(self.source), timeout_sec=30,
@@ -245,13 +245,13 @@ class ConnectDistributedTest(Test):
         self.cc.start()
 
         # use the verifiable source to produce a steady stream of messages
-        self.source = VerifiableSource(self.cc)
+        self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
         wait_until(lambda: len(self.source.committed_messages()) > 0, timeout_sec=30,
                    err_msg="Timeout expired waiting for source task to produce a message")
 
-        self.sink = VerifiableSink(self.cc)
+        self.sink = VerifiableSink(self.cc, topics=[self.TOPIC])
         self.sink.start()
 
         wait_until(lambda: self.is_running(self.sink), timeout_sec=30,
@@ -289,7 +289,7 @@ class ConnectDistributedTest(Test):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.source = VerifiableSource(self.cc)
+        self.source = VerifiableSource(self.cc, topic=self.TOPIC)
         self.source.start()
 
         wait_until(lambda: self.is_running(self.source), timeout_sec=30,
@@ -351,9 +351,9 @@ class ConnectDistributedTest(Test):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.start()
 
-        self.source = VerifiableSource(self.cc, tasks=num_tasks, throughput=100)
+        self.source = VerifiableSource(self.cc, topic=self.TOPIC, tasks=num_tasks, throughput=100)
         self.source.start()
-        self.sink = VerifiableSink(self.cc, tasks=num_tasks)
+        self.sink = VerifiableSink(self.cc, tasks=num_tasks, topics=[self.TOPIC])
         self.sink.start()
 
         for _ in range(3):
