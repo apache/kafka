@@ -431,7 +431,7 @@ class Log(@volatile var dir: File,
       // truncation.
       val nextLatestSegmentBaseOffset = Option(segments.lowerEntry(activeSegment.baseOffset)).map(_.getValue.baseOffset)
       val offsetsToSnapshot = Seq(nextLatestSegmentBaseOffset, Some(activeSegment.baseOffset), Some(lastOffset))
-      offsetsToSnapshot.flatten.distinct.foreach { offset =>
+      offsetsToSnapshot.flatten.foreach { offset =>
         producerStateManager.updateMapEndOffset(offset)
         producerStateManager.takeSnapshot()
       }
