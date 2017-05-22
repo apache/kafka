@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.requests.OffsetFetchResponse;
+
 import java.io.Serializable;
 
 /**
@@ -62,8 +64,14 @@ public class OffsetAndMetadata implements Serializable {
         OffsetAndMetadata that = (OffsetAndMetadata) o;
 
         if (offset != that.offset) return false;
-        return metadata == null ? that.metadata == null : metadata.equals(that.metadata);
 
+        // An empty metadata gets serialized  and stored as an empty string. Depending on where this call is made, we
+        // may be comparing a purely client side object -- where the value is actually null -- with a version fetched
+        // from the server, where the empty value will be an empty string. So we need to account for both.
+        if (metadata == null || metadata.equals(OffsetFetchResponse.NO_METADATA))
+            return that.metadata == null || that.metadata.equals(OffsetFetchResponse.NO_METADATA);
+
+        return metadata.equals(that.metadata);
     }
 
     @Override
