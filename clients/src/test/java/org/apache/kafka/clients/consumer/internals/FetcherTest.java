@@ -329,16 +329,27 @@ public class FetcherTest {
         assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
         assertEquals(1, subscriptions.position(tp1).longValue());
 
-        // the second fetchedRecords() should throw exception due to the second invalid message
-        try {
-            fetcher.fetchedRecords();
-            fail("fetchedRecords should have raised KafkaException");
-        } catch (KafkaException e) {
-            assertEquals(1, subscriptions.position(tp1).longValue());
+        // the fetchedRecords() should always throw exception due to the second invalid message
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcher.fetchedRecords();
+                fail("fetchedRecords should have raised KafkaException");
+            } catch (KafkaException e) {
+                assertEquals(1, subscriptions.position(tp1).longValue());
+            }
         }
+        
+        // Seek to skip the bad record and fetch again.
+        subscriptions.seek(tp1, 2);
+        // Should not throw exception after the seek.
+        fetcher.fetchedRecords();
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fetchResponse(MemoryRecords.readableRecords(buffer), Errors.NONE, 100L, 0));
+        consumerClient.poll(0);
 
-        // the third fetchedRecords() should return the third valid message
-        assertEquals(1, fetcher.fetchedRecords().get(tp1).size());
+        List<ConsumerRecord<byte[], byte[]>> records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(1, records.size());
+        assertEquals(2L, records.get(0).offset());
         assertEquals(3, subscriptions.position(tp1).longValue());
     }
 
@@ -704,19 +715,20 @@ public class FetcherTest {
         consumerClient.poll(0);
 
         assertFalse(subscriptionsNoAutoReset.isOffsetResetNeeded(tp1));
-        try {
-            fetcherNoAutoReset.fetchedRecords();
-            fail("Should have thrown OffsetOutOfRangeException");
-        } catch (OffsetOutOfRangeException e) {
-            assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
-            assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcherNoAutoReset.fetchedRecords();
+                fail("Should have thrown OffsetOutOfRangeException");
+            } catch (OffsetOutOfRangeException e) {
+                assertTrue(e.offsetOutOfRangePartitions().containsKey(tp1));
+                assertEquals(e.offsetOutOfRangePartitions().size(), 1);
+            }
         }
-        assertEquals(0, fetcherNoAutoReset.fetchedRecords().size());
     }
 
     @Test
     public void testFetchPositionAfterException() {
-        // verify the advancement in the next fetch offset equals the number of fetched records when
+        // verify the advancement in the next fetch offset equals to the number of fetched records when
         // some fetched partitions cause Exception. This ensures that consumer won't lose record upon exception
         subscriptionsNoAutoReset.assignFromUser(Utils.mkSet(tp1, tp2));
         subscriptionsNoAutoReset.seek(tp1, 1);
