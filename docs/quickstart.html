@@ -384,6 +384,7 @@ We can now inspect the output of the WordCount demo application by reading from 
 &gt; <b>bin/kafka-console-consumer.sh --bootstrap-server localhost:9092 \</b>
             <b>--topic streams-wordcount-output \</b>
             <b>--from-beginning \</b>
+            <b>--new-consumer \</b>
             <b>--formatter kafka.tools.DefaultMessageFormatter \</b>
             <b>--property print.key=true \</b>
             <b>--property print.value=true \</b>
