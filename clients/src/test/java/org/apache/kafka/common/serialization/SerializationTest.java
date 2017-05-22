@@ -21,7 +21,10 @@ import org.apache.kafka.common.utils.Bytes;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -31,18 +34,19 @@ import static org.junit.Assert.assertEquals;
 public class SerializationTest {
 
     final private String topic = "testTopic";
-    final private Map<Class<Object>, List<Object>> testData = new HashMap() {{
-        put(String.class, Arrays.asList("my string"));
-        put(Short.class, Arrays.asList((short) 32767, (short) -32768));
-        put(Integer.class, Arrays.asList((int) 423412424, (int) -41243432));
-        put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
-        put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
-        put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
-        put(byte[].class, Arrays.asList("my string".getBytes()));
-        put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
-        put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
-
-    }};
+    final private Map<Class<Object>, List<Object>> testData = new HashMap() {
+        {
+            put(String.class, Arrays.asList("my string"));
+            put(Short.class, Arrays.asList((short) 32767, (short) -32768));
+            put(Integer.class, Arrays.asList((int) 423412424, (int) -41243432));
+            put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
+            put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
+            put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
+            put(byte[].class, Arrays.asList("my string".getBytes()));
+            put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
+            put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
+        }
+    };
 
     private class DummyClass {
     }
@@ -52,7 +56,7 @@ public class SerializationTest {
         for (Map.Entry<Class<Object>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom(test.getKey())) {
                 for (Object value : test.getValue()) {
-                    assertEquals("Should get the original " + test.getKey().getSimpleName().toLowerCase() +
+                    assertEquals("Should get the original " + test.getKey().getSimpleName() +
                                     " after serialization and deserialization", value,
                             serde.deserializer().deserialize(topic, serde.serializer().serialize(topic, value)));
                 }
@@ -64,9 +68,9 @@ public class SerializationTest {
     public void serdeShouldSupportNull() {
         for (Class<?> cls : testData.keySet()) {
             try (Serde<?> serde = Serdes.serdeFrom(cls)) {
-                assertThat("Should support null in " + cls.getSimpleName().toLowerCase() + " serialization",
+                assertThat("Should support null in " + cls.getSimpleName() + " serialization",
                         serde.serializer().serialize(topic, null), nullValue());
-                assertThat("Should support null in " + cls.getSimpleName().toLowerCase() + " deserialization",
+                assertThat("Should support null in " + cls.getSimpleName() + " deserialization",
                         serde.deserializer().deserialize(topic, null), nullValue());
             }
         }
@@ -85,9 +89,7 @@ public class SerializationTest {
     @Test
     public void testStringWithEncodingSerde() {
         String str = "my string";
-        List<String> encodings = new ArrayList<String>();
-        encodings.add("UTF8");
-        encodings.add("UTF-16");
+        List<String> encodings = Arrays.asList("UTF8", "UTF-16");
 
         for (String encoding : encodings) {
             try (Serde<String> serDeser = getStringSerde(encoding)) {
