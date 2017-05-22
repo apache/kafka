@@ -72,7 +72,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
       .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
-  @Ignore  // need to fix KAFKA-5268 and KAFKA-5269 before re-enabling
+  @Ignore  // Disabling this as it is flaky on Jenkins.
   @Test
   def testBrokerFailure() {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
@@ -99,7 +99,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead)
         trace(s"received ${records.size} messages. sending them transactionally to $outputTopic")
         producer.beginTransaction()
-        val shouldAbort = iteration % 10 == 0
+        val shouldAbort = iteration % 2 == 0
         records.zipWithIndex.foreach { case (record, i) =>
           producer.send(
             TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value, !shouldAbort),

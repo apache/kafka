@@ -165,6 +165,10 @@ public abstract class AbstractRecords implements Records {
     }
 
     public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value, Header[] headers) {
+        return sizeInBytesUpperBound(magic, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    }
+
+    public static int sizeInBytesUpperBound(byte magic, ByteBuffer key, ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
             return DefaultRecordBatch.batchSizeUpperBound(key, value, headers);
         else

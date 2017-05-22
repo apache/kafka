@@ -68,6 +68,7 @@ object TransactionMarkerChannelManager {
       s"broker-${config.brokerId}-txn-marker-sender",
       1,
       50,
+      50,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       config.requestTimeoutMs,

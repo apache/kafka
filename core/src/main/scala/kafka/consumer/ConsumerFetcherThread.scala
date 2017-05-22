@@ -128,6 +128,7 @@ object ConsumerFetcherThread {
     }.toMap
     def isEmpty: Boolean = underlying.requestInfo.isEmpty
     def offset(topicPartition: TopicPartition): Long = tpToOffset(topicPartition)
+    override def toString = underlying.toString
   }
 
   class PartitionData(val underlying: FetchResponsePartitionData) extends AbstractFetcherThread.PartitionData {
@@ -136,6 +137,6 @@ object ConsumerFetcherThread {
     def highWatermark: Long = underlying.hw
     def exception: Option[Throwable] =
       if (error == Errors.NONE) None else Some(ErrorMapping.exceptionFor(error.code))
-
+    override def toString = underlying.toString
   }
 }
