@@ -30,8 +30,7 @@ public class ShortDeserializer implements Deserializer<Short> {
         if (data == null)
             return null;
         if (data.length != 2) {
-            throw new SerializationException("Size of data received by ShortDeserializer is " +
-                    "not 2");
+            throw new SerializationException("Size of data received by ShortDeserializer is not 2");
         }
 
         short value = 0;
