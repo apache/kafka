@@ -332,7 +332,7 @@ public class TransactionManager {
         sequenceNumbers.put(topicPartition, currentSequenceNumber);
     }
 
-    TxnRequestHandler nextRequestHandler() {
+    synchronized TxnRequestHandler nextRequestHandler() {
         if (!newPartitionsToBeAddedToTransaction.isEmpty())
             pendingRequests.add(addPartitionsToTransactionHandler());
 
@@ -346,12 +346,12 @@ public class TransactionManager {
         return nextRequestHandler;
     }
 
-    void retry(TxnRequestHandler request) {
+    synchronized void retry(TxnRequestHandler request) {
         request.setRetry();
         pendingRequests.add(request);
     }
 
-    void reenqueue(TxnRequestHandler request) {
+    synchronized void reenqueue(TxnRequestHandler request) {
         pendingRequests.add(request);
     }
 

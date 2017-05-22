@@ -30,8 +30,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Measurable;
@@ -561,22 +563,23 @@ public class Sender implements Runnable {
 
     private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception) {
         if (transactionManager != null) {
-            if (exception instanceof OutOfOrderSequenceException && transactionManager.hasProducerId(batch.producerId())) {
+            if (exception instanceof OutOfOrderSequenceException
+                    && !transactionManager.isTransactional()
+                    && transactionManager.hasProducerId(batch.producerId())) {
                 log.error("The broker received an out of order sequence number for topic-partition " +
                                 "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
                         batch.topicPartition, response.baseOffset);
 
-                if (transactionManager.isTransactional())
-                    transactionManager.transitionToAbortableError(exception);
-                else
-                    // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
-                    // about the previously committed message. Note that this will discard the producer id and sequence
-                    // numbers for all existing partitions.
-                    transactionManager.resetProducerId();
-            } else if (transactionManager.isTransactional() || exception instanceof ClusterAuthorizationException) {
-                // any batch failure is treated as fatal for transactional producers. Cluster authorization
-                // errors (which imply no IdempotentWrite permission) are also fatal for the idempotent producer.
+                // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
+                // about the previously committed message. Note that this will discard the producer id and sequence
+                // numbers for all existing partitions.
+                transactionManager.resetProducerId();
+            } else if (exception instanceof ClusterAuthorizationException
+                    || exception instanceof TransactionalIdAuthorizationException
+                    || exception instanceof ProducerFencedException) {
                 transactionManager.transitionToFatalError(exception);
+            } else if (transactionManager.isTransactional()) {
+                transactionManager.transitionToAbortableError(exception);
             }
         }
 
