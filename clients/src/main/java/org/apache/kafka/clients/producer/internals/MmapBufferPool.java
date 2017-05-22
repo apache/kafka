@@ -86,7 +86,7 @@ public class MmapBufferPool implements BufferPool {
             if (this.availableMemory + freeListSize >= size) {
                 // we have enough unallocated or pooled memory to immediately
                 // satisfy the request
-//                freeUp(size);
+                freeUp(size);
                 ByteBuffer allocatedBuffer = allocateByteBuffer(size);
                 this.availableMemory -= size;
                 return allocatedBuffer;
@@ -128,7 +128,7 @@ public class MmapBufferPool implements BufferPool {
                         } else {
                             // we'll need to allocate memory, but we may only get
                             // part of what we need on this iteration
-//                            freeUp(size - accumulated);
+                            freeUp(size - accumulated);
                             int got = (int) Math.min(size - accumulated, this.availableMemory);
                             this.availableMemory -= got;
                             accumulated += got;
@@ -169,6 +169,19 @@ public class MmapBufferPool implements BufferPool {
         return newBuffer;
     }
 
+    /**
+     * Attempt to ensure we have at least the requested number of bytes of memory for allocation by deallocating pooled
+     * buffers (if needed)
+     */
+    private void freeUp(int size) {
+        while (!this.free.isEmpty() && this.availableMemory < size) {
+            ByteBuffer freeBuffer = this.free.pollLast();
+            int capacity = freeBuffer.limit() - freeBuffer.position();
+            this.availableMemory += capacity;
+            this.fileBuffer.position(this.fileBuffer.position() - capacity);
+        }
+    }
+
     @Override
     public void deallocate(ByteBuffer buffer, int size) {
         lock.lock();
@@ -177,7 +190,8 @@ public class MmapBufferPool implements BufferPool {
             if (size == this.poolableSize && size == sliceSize) {
                 this.free.add(buffer);
             } else {
-                this.availableMemory += size;
+                this.availableMemory += sliceSize;
+                this.fileBuffer.position(this.fileBuffer.position() - sliceSize);
             }
         } finally {
             lock.unlock();
