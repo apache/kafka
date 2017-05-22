@@ -46,7 +46,7 @@ object TransactionStateManager {
   val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
   val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
   val DefaultAbortTimedOutTransactionsIntervalMs: Int = TimeUnit.MINUTES.toMillis(1).toInt
-  val DefaultRemoveExpiredTransactionsIntervalMs: Int = TimeUnit.HOURS.toMillis(1).toInt
+  val DefaultRemoveExpiredTransactionalIdsIntervalMs: Int = TimeUnit.HOURS.toMillis(1).toInt
 }
 
 /**
@@ -110,12 +110,12 @@ class TransactionStateManager(brokerId: Int,
 
   def enableTransactionalIdExpiration() {
     scheduler.schedule("transactionalId-expiration", () => {
-      inLock(stateLock) {
-        val now = time.milliseconds()
-
+      val now = time.milliseconds()
+      val(transactionalIdByPartition, recordsPerPartition) = inLock(stateLock) {
         val transactionalIdByPartition: Map[Int, mutable.Iterable[String]] = transactionMetadataCache.flatMap { case (_, entry) =>
           entry.metadataPerTransactionalId.filter { case (_, txnMetadata) =>
             txnMetadata.txnLastUpdateTimestamp <= now - config.transactionalIdExpirationMs
+
           }.map { case (transactionalId, _) =>
             transactionalId
           }
@@ -133,34 +133,38 @@ class TransactionStateManager(brokerId: Int,
             (topicPartition, records)
           }
 
-        def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit ={
-          responses.foreach { case (topicPartition, response) =>
-            response.error match {
-              case Errors.NONE =>
-                inLock(stateLock) {
-                  val idsToRemove = transactionalIdByPartition(topicPartition.partition())
-                  transactionMetadataCache.get(topicPartition.partition)
-                  .foreach{ txnMetadataEntry =>
+        (transactionalIdByPartition, recordsPerPartition)
+      }
+
+      def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
+        responses.foreach { case (topicPartition, response) =>
+          response.error match {
+            case Errors.NONE =>
+              inLock(stateLock) {
+                val idsToRemove = transactionalIdByPartition(topicPartition.partition())
+                transactionMetadataCache.get(topicPartition.partition)
+                  .foreach { txnMetadataEntry =>
                     idsToRemove.foreach { transactionalId =>
-                      txnMetadataEntry.metadataPerTransactionalId.remove(transactionalId)}
+                      txnMetadataEntry.metadataPerTransactionalId.remove(transactionalId)
+                    }
                   }
-                }
-              case _ =>
-                debug(s"writing transactionalId tombstones for partition: ${topicPartition.partition} failed with error: ${response.error.message()}")
-            }
+              }
+            case _ =>
+              debug(s"writing transactionalId tombstones for partition: ${topicPartition.partition} failed with error: ${response.error.message()}")
           }
         }
-
-        replicaManager.appendRecords(
-          30000, // TODO: what is a reasonable timeout?
-          TransactionLog.EnforcedRequiredAcks,
-          internalTopicsAllowed = true,
-          isFromClient = false,
-          recordsPerPartition,
-          removeFromCacheCallback
-          )
       }
-    }, period=config.transactionalIdExpirationMs)
+
+      replicaManager.appendRecords(
+        30000, // TODO: what is a reasonable timeout?
+        TransactionLog.EnforcedRequiredAcks,
+        internalTopicsAllowed = true,
+        isFromClient = false,
+        recordsPerPartition,
+        removeFromCacheCallback
+      )
+
+    }, delay = config.removeExpiredTransactionalIdsIntervalMs, period = config.removeExpiredTransactionalIdsIntervalMs)
   }
 
   /**
@@ -566,7 +570,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
                                                   transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
                                                   abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
-                                                  removeExpiredTransactionsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs)
+                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short)
 

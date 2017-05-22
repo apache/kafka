@@ -338,20 +338,20 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def shouldRemoveExpiredTransactions(): Unit = {
-    setupAndRunTransactionExpiration(Errors.NONE)
+  def shouldRemoveExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE)
     assertEquals(None, transactionManager.getTransactionState(txnId1))
     assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
   }
 
   @Test
-  def shouldNotRemoveExpiredTransactionsIfLogAppendFails(): Unit = {
-    setupAndRunTransactionExpiration(Errors.NOT_ENOUGH_REPLICAS)
+  def shouldNotRemoveExpiredTransactionalIdsIfLogAppendFails(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS)
     assertTrue(transactionManager.getTransactionState(txnId1).isDefined)
     assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
   }
 
-  private def setupAndRunTransactionExpiration(error: Errors) = {
+  private def setupAndRunTransactionalIdExpiration(error: Errors) = {
     for (partitionId <- 0 until numPartitions) {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }
@@ -360,7 +360,7 @@ class TransactionStateManagerTest {
 
     val partition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, transactionManager.partitionFor(txnId1))
     val recordsByPartition = Map(partition -> MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType,
-      new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionsIntervalMs, TransactionLog.keyToBytes(txnId1), null)))
+      new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs, TransactionLog.keyToBytes(txnId1), null)))
     EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
       EasyMock.eq((-1).toShort),
       EasyMock.eq(true),
@@ -385,8 +385,8 @@ class TransactionStateManagerTest {
     txnMetadata2.txnLastUpdateTimestamp = time.milliseconds()
     transactionManager.addTransaction(txnId2, txnMetadata2)
 
-    time.sleep(txnConfig.removeExpiredTransactionsIntervalMs)
     transactionManager.enableTransactionalIdExpiration()
+    time.sleep(txnConfig.removeExpiredTransactionalIdsIntervalMs)
 
     scheduler.tick()
 

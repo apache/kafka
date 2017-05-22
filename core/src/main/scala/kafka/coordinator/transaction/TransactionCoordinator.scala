@@ -46,7 +46,7 @@ object TransactionCoordinator {
       config.transactionsLoadBufferSize,
       config.transactionTopicMinISR,
       config.transactionAbortTimedOutTransactionCleanupIntervalMs,
-      config.transactionRemoveExpiredTransactionCleanupIntervalMs)
+      config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
@@ -423,7 +423,7 @@ class TransactionCoordinator(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = txnManager.partitionFor(transactionalId)
 
-  private def expireTransactions(): Unit = {
+  private def abortTimedOutTransactions(): Unit = {
     txnManager.timedOutTransactions().foreach { txnIdAndPidEpoch =>
       handleEndTransaction(txnIdAndPidEpoch.transactionalId,
         txnIdAndPidEpoch.producerId,
@@ -442,8 +442,8 @@ class TransactionCoordinator(brokerId: Int,
   def startup(enablePidExpiration: Boolean = true) {
     info("Starting up.")
     scheduler.startup()
-    scheduler.schedule("transaction-expiration",
-      expireTransactions,
+    scheduler.schedule("transaction-abort",
+      abortTimedOutTransactions,
       TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
       TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs
     )
