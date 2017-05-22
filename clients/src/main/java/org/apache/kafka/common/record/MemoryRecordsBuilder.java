@@ -37,21 +37,8 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
 public class MemoryRecordsBuilder {
-    private static final float COMPRESSION_RATE_DAMPING_FACTOR = 0.9f;
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     private static final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
-
-    private static final float[] TYPE_TO_RATE;
-
-    static {
-        int maxTypeId = -1;
-        for (CompressionType type : CompressionType.values())
-            maxTypeId = Math.max(maxTypeId, type.id);
-        TYPE_TO_RATE = new float[maxTypeId + 1];
-        for (CompressionType type : CompressionType.values()) {
-            TYPE_TO_RATE[type.id] = type.rate;
-        }
-    }
 
     private final TimestampType timestampType;
     private final CompressionType compressionType;
@@ -71,13 +58,15 @@ public class MemoryRecordsBuilder {
     private final int writeLimit;
     private final int initialCapacity;
 
+    private volatile float estimatedCompressionRatio;
+
     private boolean appendStreamIsClosed = false;
     private long producerId;
     private short producerEpoch;
     private int baseSequence;
     private long writtenUncompressed = 0;
     private int numRecords = 0;
-    private float compressionRate = 1;
+    private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
@@ -134,7 +123,7 @@ public class MemoryRecordsBuilder {
         this.initPos = buffer.position();
         this.numRecords = 0;
         this.writtenUncompressed = 0;
-        this.compressionRate = 1;
+        this.actualCompressionRatio = 1;
         this.maxTimestamp = RecordBatch.NO_TIMESTAMP;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -167,8 +156,16 @@ public class MemoryRecordsBuilder {
         return initialCapacity;
     }
 
-    public double compressionRate() {
-        return compressionRate;
+    public double compressionRatio() {
+        return actualCompressionRatio;
+    }
+
+    public CompressionType compressionType() {
+        return compressionType;
+    }
+
+    public boolean isControlBatch() {
+        return isControlBatch;
     }
 
     /**
@@ -284,9 +281,9 @@ public class MemoryRecordsBuilder {
             builtRecords = MemoryRecords.EMPTY;
         } else {
             if (magic > RecordBatch.MAGIC_VALUE_V1)
-                writeDefaultBatchHeader();
+                this.actualCompressionRatio = (float) writeDefaultBatchHeader() / this.writtenUncompressed;
             else if (compressionType != CompressionType.NONE)
-                writeLegacyCompressedWrapperHeader();
+                this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.writtenUncompressed;
 
             ByteBuffer buffer = buffer().duplicate();
             buffer.flip();
@@ -295,12 +292,17 @@ public class MemoryRecordsBuilder {
         }
     }
 
-    private void writeDefaultBatchHeader() {
+    /**
+     * Write the header to the default batch.
+     * @return the written compressed bytes.
+     */
+    private int writeDefaultBatchHeader() {
         ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
         buffer.position(initPos);
         int size = pos - initPos;
+        int writtenCompressed = size - DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
         int offsetDelta = (int) (lastOffset - baseOffset);
 
         final long baseTimestamp;
@@ -318,9 +320,14 @@ public class MemoryRecordsBuilder {
                 partitionLeaderEpoch, numRecords);
 
         buffer.position(pos);
+        return writtenCompressed;
     }
 
-    private void writeLegacyCompressedWrapperHeader() {
+    /**
+     * Write the header to the legacy batch.
+     * @return the written compressed bytes.
+     */
+    private int writeLegacyCompressedWrapperHeader() {
         ensureOpenForRecordBatchWrite();
         ByteBuffer buffer = bufferStream.buffer();
         int pos = buffer.position();
@@ -334,11 +341,7 @@ public class MemoryRecordsBuilder {
         LegacyRecord.writeCompressedRecordHeader(buffer, magic, wrapperSize, timestamp, compressionType, timestampType);
 
         buffer.position(pos);
-
-        // update the compression ratio
-        this.compressionRate = (float) writtenCompressed / this.writtenUncompressed;
-        TYPE_TO_RATE[compressionType.id] = TYPE_TO_RATE[compressionType.id] * COMPRESSION_RATE_DAMPING_FACTOR +
-            compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
+        return writtenCompressed;
     }
 
     private long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
@@ -440,7 +443,7 @@ public class MemoryRecordsBuilder {
     public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
         return append(timestamp, key, value, Record.EMPTY_HEADERS);
     }
-    
+
     /**
      * Append a new record at the next sequential offset.
      * @param timestamp The record timestamp
@@ -636,8 +639,22 @@ public class MemoryRecordsBuilder {
             return buffer().position();
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return (int) (writtenUncompressed * TYPE_TO_RATE[compressionType.id] * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return (int) (writtenUncompressed * estimatedCompressionRatio * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
+    }
+
+    /**
+     * Set the estimated compression ratio for the memory records builder.
+     */
+    public void setEstimatedCompressionRatio(float estimatedCompressionRatio) {
+        this.estimatedCompressionRatio = estimatedCompressionRatio;
+    }
+
+    /**
+     * Check if we have room for a new record containing the given key/value pair
+     */
+    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value) {
+        return hasRoomFor(timestamp, wrapNullable(key), wrapNullable(value));
     }
 
     /**
@@ -652,7 +669,7 @@ public class MemoryRecordsBuilder {
      * the checking should be based on the capacity of the initialized buffer rather than the write limit in order
      * to accept this single record.
      */
-    public boolean hasRoomFor(long timestamp, byte[] key, byte[] value) {
+    public boolean hasRoomFor(long timestamp, ByteBuffer key, ByteBuffer value) {
         if (isFull())
             return false;
 
@@ -662,9 +679,10 @@ public class MemoryRecordsBuilder {
         } else {
             int nextOffsetDelta = lastOffset == null ? 0 : (int) (lastOffset - baseOffset + 1);
             long timestampDelta = baseTimestamp == null ? 0 : timestamp - baseTimestamp;
-            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value);
+            recordSize = DefaultRecord.sizeInBytes(nextOffsetDelta, timestampDelta, key, value, Record.EMPTY_HEADERS);
         }
 
+        // Be conservative and not take compression of the new record into consideration.
         return numRecords == 0 ?
                 this.initialCapacity >= recordSize :
                 this.writeLimit >= estimatedBytesWritten() + recordSize;

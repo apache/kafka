@@ -223,11 +223,11 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecords built = builder.build();
         if (compressionType == CompressionType.NONE) {
-            assertEquals(1.0, builder.compressionRate(), 0.00001);
+            assertEquals(1.0, builder.compressionRatio(), 0.00001);
         } else {
             int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V0;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
-            assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
+            assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
     }
 
@@ -254,11 +254,11 @@ public class MemoryRecordsBuilderTest {
 
         MemoryRecords built = builder.build();
         if (compressionType == CompressionType.NONE) {
-            assertEquals(1.0, builder.compressionRate(), 0.00001);
+            assertEquals(1.0, builder.compressionRatio(), 0.00001);
         } else {
             int compressedSize = built.sizeInBytes() - Records.LOG_OVERHEAD - LegacyRecord.RECORD_OVERHEAD_V1;
             double computedCompressionRate = (double) compressedSize / uncompressedSize;
-            assertEquals(computedCompressionRate, builder.compressionRate(), 0.00001);
+            assertEquals(computedCompressionRate, builder.compressionRatio(), 0.00001);
         }
     }
 
@@ -359,6 +359,7 @@ public class MemoryRecordsBuilderTest {
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, RecordBatch.MAGIC_VALUE_V1, compressionType,
                 TimestampType.CREATE_TIME, 0L, logAppendTime, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE,
                 false, false, RecordBatch.NO_PARTITION_LEADER_EPOCH, buffer.capacity());
+        builder.setEstimatedCompressionRatio(0.5f);
         builder.append(0L, "a".getBytes(), "1".getBytes());
         builder.append(1L, "b".getBytes(), "2".getBytes());
 
