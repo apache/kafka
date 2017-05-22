@@ -239,4 +239,27 @@ public class MmapBufferPoolTest {
         // both the allocate() called by threads t1 and t2 should have been interrupted and the waiters queue should be empty
         assertEquals(pool.queued(), 0);
     }
+
+    /**
+     * This test creates lots of threads that hammer on the pool
+     */
+    @Test
+    public void testStressfulSituation() throws Exception {
+        int numThreads = 1;
+        final int iterations = 50000;
+        final int poolableSize = 1024;
+        final long totalMemory = poolableSize * 5;
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        final BufferPool pool = new MmapBufferPool(totalMemory, poolableSize, time, storefile);
+        List<BufferPoolTest.StressTestThread> threads = new ArrayList<BufferPoolTest.StressTestThread>();
+        for (int i = 0; i < numThreads; i++)
+            threads.add(new BufferPoolTest.StressTestThread(pool, iterations));
+        for (BufferPoolTest.StressTestThread thread : threads)
+            thread.start();
+        for (BufferPoolTest.StressTestThread thread : threads)
+            thread.join();
+        for (BufferPoolTest.StressTestThread thread : threads)
+            assertTrue(thread.getName() + " should have completed all iterations successfully.", thread.success.get());
+        assertEquals(totalMemory, pool.availableMemory());
+    }
 }
