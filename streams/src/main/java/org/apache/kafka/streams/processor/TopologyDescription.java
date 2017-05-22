@@ -257,7 +257,7 @@ final class TopologyDescription {
 
         @Override
         public int hashCode() {
-            // omit successor to avoid infinite loops
+            // omit successor as it might change and alter the hash code
             return Objects.hash(name, topics);
         }
     }
@@ -325,8 +325,8 @@ final class TopologyDescription {
 
         @Override
         public int hashCode() {
-            // omit successor to avoid infinite loops
-            return Objects.hash(name, stores, predecessors);
+            // omit successor as it might change and alter the hash code
+            return Objects.hash(name, stores);
         }
     }
 
@@ -390,7 +390,8 @@ final class TopologyDescription {
 
         @Override
         public int hashCode() {
-            return Objects.hash(name, topic, predecessors);
+            // omit predecessors as it might change and alter the hash code
+            return Objects.hash(name, topic);
         }
     }
 

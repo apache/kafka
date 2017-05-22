@@ -385,7 +385,7 @@ public class TopologyTest {
                                                                 final String globalTopicName,
                                                                 final String processorName) {
         topology.addGlobalStore(
-            new MockStateStoreSupplier.MockStateStore(globalStoreName, false),
+            new MockStateStoreSupplier(globalStoreName, false, false),
             sourceName,
             null,
             null,
