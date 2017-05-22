@@ -18,7 +18,10 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Collection;
 import java.util.Map;
@@ -83,7 +86,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param newTopics         The new topics to create.
      * @return                  The CreateTopicsResults.
      */
-    public CreateTopicResults createTopics(Collection<NewTopic> newTopics) {
+    public CreateTopicsResults createTopics(Collection<NewTopic> newTopics) {
         return createTopics(newTopics, new CreateTopicsOptions());
     }
 
@@ -99,7 +102,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when creating the new topics.
      * @return                  The CreateTopicsResults.
      */
-    public abstract CreateTopicResults createTopics(Collection<NewTopic> newTopics,
+    public abstract CreateTopicsResults createTopics(Collection<NewTopic> newTopics,
                                                     CreateTopicsOptions options);
 
     /**
@@ -109,7 +112,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param topics            The topic names to delete.
      * @return                  The DeleteTopicsResults.
      */
-    public DeleteTopicResults deleteTopics(Collection<String> topics) {
+    public DeleteTopicsResults deleteTopics(Collection<String> topics) {
         return deleteTopics(topics, new DeleteTopicsOptions());
     }
 
@@ -129,7 +132,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options           The options to use when deleting the topics.
      * @return                  The DeleteTopicsResults.
      */
-    public abstract DeleteTopicResults deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
+    public abstract DeleteTopicsResults deleteTopics(Collection<String> topics, DeleteTopicsOptions options);
 
     /**
      * List the topics available in the cluster with the default options.
@@ -216,7 +219,6 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract ApiVersionsResults apiVersions(Collection<Node> nodes, ApiVersionsOptions options);
 
     /**
-<<<<<<< HEAD
      * Similar to #{@link AdminClient#describeAcls(AclBindingFilter, DescribeAclsOptions),
      * but uses the default options.
      *

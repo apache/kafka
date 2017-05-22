@@ -26,10 +26,10 @@ import java.util.Map;
  * The result of the deleteTopics call.
  */
 @InterfaceStability.Unstable
-public class DeleteTopicResults {
+public class DeleteTopicsResults {
     final Map<String, KafkaFuture<Void>> futures;
 
-    DeleteTopicResults(Map<String, KafkaFuture<Void>> futures) {
+    DeleteTopicsResults(Map<String, KafkaFuture<Void>> futures) {
         this.futures = futures;
     }
 

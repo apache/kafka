@@ -32,7 +32,11 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartitionInfo;
+import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.BrokerNotAvailableException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -995,7 +999,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public CreateTopicResults createTopics(final Collection<NewTopic> newTopics,
+    public CreateTopicsResults createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
         final Map<String, CreateTopicsRequest.TopicDetails> topicsMap = new HashMap<>(newTopics.size());
@@ -1046,11 +1050,11 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         }, now);
-        return new CreateTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
+        return new CreateTopicsResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override
-    public DeleteTopicResults deleteTopics(final Collection<String> topicNames,
+    public DeleteTopicsResults deleteTopics(final Collection<String> topicNames,
                                            DeleteTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(topicNames.size());
         for (String topicName : topicNames) {
@@ -1099,7 +1103,7 @@ public class KafkaAdminClient extends AdminClient {
                 completeAllExceptionally(topicFutures.values(), throwable);
             }
         }, now);
-        return new DeleteTopicResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
+        return new DeleteTopicsResults(new HashMap<String, KafkaFuture<Void>>(topicFutures));
     }
 
     @Override

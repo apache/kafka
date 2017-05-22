@@ -14,7 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.admin;
+
+package org.apache.kafka.common.acl;
+
+import org.apache.kafka.common.resource.Resource;
 
 import java.util.Objects;
 
