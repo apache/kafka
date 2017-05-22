@@ -169,6 +169,33 @@ class LogTest {
   }
 
   @Test
+  def testInitializationOfProducerSnapshotsUpgradePath(): Unit = {
+    // simulate the upgrade path by creating a new log with several segments, deleting the
+    // snapshot files, and then reloading the log
+
+    val log = createLog(64, messagesPerSegment = 10)
+    assertEquals(None, log.oldestProducerSnapshotOffset)
+
+    for (i <- 0 to 100) {
+      val record = new SimpleRecord(time.milliseconds, i.toString.getBytes)
+      log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
+    }
+
+    assertTrue(log.logSegments.size >= 2)
+    log.close()
+
+    logDir.listFiles.filter(f => f.isFile && f.getName.endsWith(Log.PidSnapshotFileSuffix)).foreach { file =>
+      Files.delete(file.toPath)
+    }
+
+    val reloadedLog = createLog(64, messagesPerSegment = 10)
+    val expectedSnapshotsOffsets = log.logSegments.toSeq.reverse.take(2).map(_.baseOffset) ++ Seq(reloadedLog.logEndOffset)
+    expectedSnapshotsOffsets.foreach { offset =>
+      assertTrue(Log.producerSnapshotFile(logDir, offset).exists)
+    }
+  }
+
+  @Test
   def testPidMapOffsetUpdatedForNonIdempotentData() {
     val log = createLog(2048)
     val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)))
