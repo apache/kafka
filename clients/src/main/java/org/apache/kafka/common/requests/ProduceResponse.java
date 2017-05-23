@@ -60,6 +60,7 @@ public class ProduceResponse extends AbstractResponse {
      * NOT_ENOUGH_REPLICAS_AFTER_APPEND (20)
      * INVALID_REQUIRED_ACKS (21)
      * TOPIC_AUTHORIZATION_FAILED (29)
+     * UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
