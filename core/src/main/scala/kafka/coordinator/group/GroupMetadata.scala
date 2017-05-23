@@ -421,6 +421,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       None
   }
 
+  // visible for testing
+  private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
+
   def numOffsets = offsets.size
 
   def hasOffsets = offsets.nonEmpty || pendingOffsetCommits.nonEmpty || pendingTransactionalOffsetCommits.nonEmpty

@@ -278,6 +278,7 @@ class GroupMetadataManagerTest {
 
     val buffer = ByteBuffer.allocate(1024)
     var nextOffset = 0
+    val commitOffsetsLogPosition = nextOffset
     nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, committedOffsets)
     nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
     nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, abortedOffsets)
@@ -301,6 +302,7 @@ class GroupMetadataManagerTest {
     assertEquals(committedOffsets.size, group.allOffsets.size)
     committedOffsets.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+      assertEquals(Some(commitOffsetsLogPosition), group.offsetWithRecordMetadata(topicPartition).head.appendedBatchOffset)
     }
 
     // We should have pending commits.
@@ -335,9 +337,13 @@ class GroupMetadataManagerTest {
     )
 
     val buffer = ByteBuffer.allocate(1024)
-    var nextOffset = 0
+    var nextOffset = 0L
+
+    val firstProduceRecordOffset = nextOffset
     nextOffset += appendTransactionalOffsetCommits(buffer, firstProducerId, firstProducerEpoch, nextOffset, committedOffsetsFirstProducer)
     nextOffset += completeTransactionalOffsetCommit(buffer, firstProducerId, firstProducerEpoch, nextOffset, isCommit = true)
+
+    val secondProducerRecordOffset = nextOffset
     nextOffset += appendTransactionalOffsetCommits(buffer, secondProducerId, secondProducerEpoch, nextOffset, committedOffsetsSecondProducer)
     nextOffset += completeTransactionalOffsetCommit(buffer, secondProducerId, secondProducerEpoch, nextOffset, isCommit = true)
     buffer.flip()
@@ -358,9 +364,11 @@ class GroupMetadataManagerTest {
     assertEquals(committedOffsetsFirstProducer.size + committedOffsetsSecondProducer.size, group.allOffsets.size)
     committedOffsetsFirstProducer.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+      assertEquals(Some(firstProduceRecordOffset), group.offsetWithRecordMetadata(topicPartition).head.appendedBatchOffset)
     }
     committedOffsetsSecondProducer.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+      assertEquals(Some(secondProducerRecordOffset), group.offsetWithRecordMetadata(topicPartition).head.appendedBatchOffset)
     }
   }
 
