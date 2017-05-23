@@ -389,6 +389,7 @@ class GroupMetadataManagerTest {
     val buffer = ByteBuffer.allocate(1024)
     var nextOffset = 0
     nextOffset += appendTransactionalOffsetCommits(buffer, producerId, producerEpoch, nextOffset, transactionalOffsetCommits)
+    val consumerRecordOffset = nextOffset
     nextOffset += appendConsumerOffsetCommit(buffer, nextOffset, consumerOffsetCommits)
     nextOffset += completeTransactionalOffsetCommit(buffer, producerId, producerEpoch, nextOffset, isCommit = true)
     buffer.flip()
@@ -410,6 +411,7 @@ class GroupMetadataManagerTest {
     assertEquals(consumerOffsetCommits.size, group.allOffsets.size)
     consumerOffsetCommits.foreach { case (topicPartition, offset) =>
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
+      assertEquals(Some(consumerRecordOffset), group.offsetWithRecordMetadata(topicPartition).head.appendedBatchOffset)
     }
   }
 
