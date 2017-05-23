@@ -231,7 +231,7 @@ public class StreamsResetter {
 
         final Properties config = new Properties();
         config.putAll(consumerConfig);
-        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,options.valueOf(bootstrapServerOption));
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
