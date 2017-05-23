@@ -80,9 +80,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testBasicTransactions() = {
-    val producer = transactionalProducers.head
-    val consumer = transactionalConsumers.head
-    val unCommittedConsumer = nonTransactionalConsumers.head
+    val producer = transactionalProducers.get(0)
+    val consumer = transactionalConsumers.get(0)
+    val unCommittedConsumer = nonTransactionalConsumers.get(0)
 
     producer.initTransactions()
 
@@ -128,7 +128,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     TestUtils.seedTopicWithNumberedRecords(topic1, numSeedMessages, servers)
 
-    val producer = transactionalProducers.head
+    val producer = transactionalProducers.get(0)
 
     var consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1))
@@ -168,7 +168,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     // In spite of random aborts, we should still have exactly 1000 messages in topic2. I.e. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
-    val verifyingConsumer = transactionalConsumers.head
+    val verifyingConsumer = transactionalConsumers.get(0)
     verifyingConsumer.subscribe(List(topic2))
     val valueSeq = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numSeedMessages).map { record =>
       TestUtils.assertCommittedAndGetValue(record).toInt
@@ -180,9 +180,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testFencingOnCommit() = {
-    val producer1 = transactionalProducers.head
+    val producer1 = transactionalProducers.get(0)
     val producer2 = transactionalProducers.get(1)
-    val consumer = transactionalConsumers.head
+    val consumer = transactionalConsumers.get(0)
 
     consumer.subscribe(List(topic1, topic2))
 
@@ -217,9 +217,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testFencingOnSendOffsets() = {
-    val producer1 = transactionalProducers.head
+    val producer1 = transactionalProducers.get(0)
     val producer2 = transactionalProducers.get(1)
-    val consumer = transactionalConsumers.head
+    val consumer = transactionalConsumers.get(0)
 
     consumer.subscribe(List(topic1, topic2))
 
@@ -254,9 +254,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testFencingOnSend() {
-    val producer1 = transactionalProducers.head
+    val producer1 = transactionalProducers.get(0)
     val producer2 = transactionalProducers.get(1)
-    val consumer = transactionalConsumers.head
+    val consumer = transactionalConsumers.get(0)
 
     consumer.subscribe(List(topic1, topic2))
 
@@ -298,9 +298,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
   @Test
   def testFencingOnAddPartitions(): Unit = {
-    val producer1 = transactionalProducers.head
+    val producer1 = transactionalProducers.get(0)
     val producer2 = transactionalProducers.get(1)
-    val consumer = transactionalConsumers.head
+    val consumer = transactionalConsumers.get(0)
 
     consumer.subscribe(List(topic1, topic2))
 
