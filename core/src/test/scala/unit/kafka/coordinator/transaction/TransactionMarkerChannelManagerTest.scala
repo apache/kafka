@@ -41,7 +41,6 @@ class TransactionMarkerChannelManagerTest {
 
   private val transactionalId1 = "txnId1"
   private val transactionalId2 = "txnId2"
-  private val transactionalId3 = "txnId3"
   private val producerId1 = 0.asInstanceOf[Long]
   private val producerId2 = 1.asInstanceOf[Long]
   private val producerId3 = 1.asInstanceOf[Long]
@@ -106,7 +105,7 @@ class TransactionMarkerChannelManagerTest {
       PrepareCommit, mutable.Set[TopicPartition](partition1, partition2), 0L, 0L)
     channelManager.addTxnMarkersToSend(transactionalId1, coordinatorEpoch, txnResult, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
 
-    assertEquals(1 * 2, txnMarkerPurgatory.watched)
+    assertEquals(1, txnMarkerPurgatory.watched)
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker2.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
@@ -145,7 +144,7 @@ class TransactionMarkerChannelManagerTest {
     channelManager.addTxnMarkersToSend(transactionalId1, coordinatorEpoch, txnResult, txnMetadata1, txnMetadata1.prepareComplete(time.milliseconds()))
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
-    assertEquals(2 * 2, txnMarkerPurgatory.watched)
+    assertEquals(2, txnMarkerPurgatory.watched)
     assertEquals(2, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition2))
@@ -202,14 +201,14 @@ class TransactionMarkerChannelManagerTest {
       PrepareCommit, mutable.Set[TopicPartition](partition1), 0L, 0L)
     channelManager.addTxnMarkersToSend(transactionalId2, coordinatorEpoch, txnResult, txnMetadata2, txnMetadata2.prepareComplete(time.milliseconds()))
 
-    assertEquals(2 * 2, txnMarkerPurgatory.watched)
+    assertEquals(2, txnMarkerPurgatory.watched)
     assertEquals(2, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition2))
 
     channelManager.removeMarkersForTxnTopicPartition(txnTopicPartition1)
 
-    assertEquals(1 * 2, txnMarkerPurgatory.watched)
+    assertEquals(1, txnMarkerPurgatory.watched)
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers())
     assertEquals(0, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition1))
     assertEquals(1, channelManager.queueForBroker(broker1.id).get.totalNumMarkers(txnTopicPartition2))
