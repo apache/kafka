@@ -301,6 +301,12 @@ public class Sender implements Runnable {
         }
 
         TransactionManager.TxnRequestHandler nextRequestHandler = transactionManager.nextRequestHandler();
+        // This could happen if there was a pending abort transaction that we aren't sending due to there not being any transactions
+        // that have started. This would happen if we have never seen a successfull AddPartitionsToTxnRequest or AddOffsetsToTxnRequest
+        if (nextRequestHandler == null) {
+            log.trace("TransactionalId: {} -- There are no pending transactional requests to send", transactionManager.transactionalId());
+            return false;
+        }
 
         if (nextRequestHandler.isEndTxn() && transactionManager.isCompletingTransaction() && accumulator.hasUnflushedBatches()) {
             if (!accumulator.flushInProgress())
