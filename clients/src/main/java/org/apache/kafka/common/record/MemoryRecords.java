@@ -443,6 +443,12 @@ public class MemoryRecords extends AbstractRecords {
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch, false, records);
     }
 
+    public static MemoryRecords withIdempotentRecords(CompressionType compressionType, long producerId,
+                                                      short producerEpoch, int baseSequence, SimpleRecord... records) {
+        return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, 0L, compressionType, TimestampType.CREATE_TIME, producerId, producerEpoch,
+                baseSequence, RecordBatch.NO_PARTITION_LEADER_EPOCH, false, records);
+    }
+
     public static MemoryRecords withIdempotentRecords(byte magic, long initialOffset, CompressionType compressionType,
                                                       long producerId, short producerEpoch, int baseSequence,
                                                       int partitionLeaderEpoch, SimpleRecord... records) {
