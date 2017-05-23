@@ -87,7 +87,7 @@ class TransactionStateManager(brokerId: Int,
 
   // this is best-effort expiration of an ongoing transaction which has been open for more than its
   // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
-  // since the timestamp is volitile and we will get the lock when actually trying to transit the transaction
+  // since the timestamp is volatile and we will get the lock when actually trying to transit the transaction
   // metadata to abort later.
   def transactionsToExpire(): Iterable[TransactionalIdAndProducerIdEpoch] = {
     val now = time.milliseconds()
