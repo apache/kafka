@@ -51,7 +51,6 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
     public PrintForeachAction(final PrintWriter printWriter, KeyValueMapper<? super K, ? super V, String> mapper, final String streamName) {
         this.printWriter = printWriter;
         this.mapper = mapper;
-        this.printWriter = printWriter;
         this.streamName = streamName;
     }
 
