@@ -19,9 +19,11 @@ package kafka.controller
 import java.net.SocketTimeoutException
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue}
 
+import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common.{KafkaException, TopicAndPartition}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients._
@@ -38,10 +40,25 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.{Set, mutable}
 
-class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics, threadNamePrefix: Option[String] = None) extends Logging {
+object ControllerChannelManager {
+  val QueueSizeMetricName = "QueueSize"
+}
+
+class ControllerChannelManager(controllerContext: ControllerContext, config: KafkaConfig, time: Time, metrics: Metrics,
+                               threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+  import ControllerChannelManager._
   protected val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
+
+  newGauge(
+    "TotalQueueSize",
+    new Gauge[Int] {
+      def value: Int = brokerLock synchronized {
+        brokerStateInfo.values.iterator.map(_.messageQueue.size).sum
+      }
+    }
+  )
 
   controllerContext.liveBrokers.foreach(addNewBroker)
 
@@ -133,8 +150,20 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     val requestThread = new RequestSendThread(config.brokerId, controllerContext, messageQueue, networkClient,
       brokerNode, config, time, threadName)
     requestThread.setDaemon(false)
-    brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue, requestThread))
+
+    val queueSizeGauge = newGauge(
+      QueueSizeMetricName,
+      new Gauge[Int] {
+        def value: Int = messageQueue.size
+      },
+      queueSizeTags(broker.id)
+    )
+
+    brokerStateInfo.put(broker.id, new ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
+      requestThread, queueSizeGauge))
   }
+
+  private def queueSizeTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
 
   private def removeExistingBroker(brokerState: ControllerBrokerStateInfo) {
     try {
@@ -145,6 +174,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
+      removeMetric(QueueSizeMetricName, queueSizeTags(brokerState.brokerNode.id))
       brokerStateInfo.remove(brokerState.brokerNode.id)
     } catch {
       case e: Throwable => error("Error while removing broker by the controller", e)
@@ -465,7 +495,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
 case class ControllerBrokerStateInfo(networkClient: NetworkClient,
                                      brokerNode: Node,
                                      messageQueue: BlockingQueue[QueueItem],
-                                     requestSendThread: RequestSendThread)
+                                     requestSendThread: RequestSendThread,
+                                     queueSizeGauge: Gauge[Int])
 
 case class StopReplicaRequestInfo(replica: PartitionAndReplica, deletePartition: Boolean, callback: AbstractResponse => Unit = null)
 
