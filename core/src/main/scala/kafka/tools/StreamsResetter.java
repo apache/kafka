@@ -106,6 +106,7 @@ public class StreamsResetter {
                 props.putAll(Utils.loadProps(options.valueOf(commandConfigOption)));
             }
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+
             consumerConfig.putAll(props);
 
             adminClient = AdminClient.create(props);
