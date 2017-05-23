@@ -17,6 +17,7 @@
 
 package kafka.controller
 
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.Metrics
@@ -62,12 +63,11 @@ class ControllerEventManagerTest {
     val eventMock = EasyMock.createMock(classOf[ControllerEvent])
     EasyMock.expect(eventMock.state).andReturn(controllerState)
 
-    // Continue processing until we have checked the controller state
-    @volatile var processing = true
+    // Only return from `process()` once we have checked `controllerEventManager.state`
+    val latch = new CountDownLatch(1)
     EasyMock.expect(eventMock.process()).andAnswer(new IAnswer[Unit]() {
       def answer(): Unit = {
-        while (processing)
-          Thread.`yield`()
+        latch.await()
         process()
       }
     })
@@ -77,7 +77,7 @@ class ControllerEventManagerTest {
     controllerEventManager.put(eventMock)
     TestUtils.waitUntilTrue(() => controllerEventManager.state == controllerState,
       s"Controller state is not $controllerState")
-    processing = false
+    latch.countDown()
 
     TestUtils.waitUntilTrue(() => controllerEventManager.state == ControllerState.Idle,
       "Controller state has not changed back to Idle")
