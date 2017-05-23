@@ -85,8 +85,10 @@ class TransactionStateManager(brokerId: Int,
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
-  // this is best-effort expiration and hence not grabbing the lock on the metadata object upon checking its state
-  // we will get the lock when actually trying to transit the transaction metadata to abort later.
+  // this is best-effort expiration of an ongoing transaction which has been open for more than its
+  // txn timeout value, we do not need to grab the lock on the metadata object upon checking its state
+  // since the timestamp is volitile and we will get the lock when actually trying to transit the transaction
+  // metadata to abort later.
   def transactionsToExpire(): Iterable[TransactionalIdAndProducerIdEpoch] = {
     val now = time.milliseconds()
     inReadLock(stateLock) {

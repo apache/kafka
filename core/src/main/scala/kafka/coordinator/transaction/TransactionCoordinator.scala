@@ -272,8 +272,7 @@ class TransactionCoordinator(brokerId: Int,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
-                           responseCallback: EndTxnCallback,
-                           checkTxnTimeout: Boolean = false): Unit = {
+                           responseCallback: EndTxnCallback): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
@@ -296,9 +295,6 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress)
               Left(Errors.CONCURRENT_TRANSACTIONS)
-            else if (checkTxnTimeout && txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs >= now)
-              // skip ending this txn
-              Left(Errors.NONE)
             else txnMetadata.state match {
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
@@ -414,11 +410,16 @@ class TransactionCoordinator(brokerId: Int,
         txnIdAndPidEpoch.producerId,
         txnIdAndPidEpoch.producerEpoch,
         TransactionResult.ABORT,
-        (error: Errors) => {
-          if (error != Errors.NONE)
-            warn(s"Rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} aborted due to ${error.exceptionName()}")
-        },
-        checkTxnTimeout = true)
+        (error: Errors) => error match {
+          case Errors.NONE =>
+            debug(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+          case Errors.INVALID_PRODUCER_ID_MAPPING |
+               Errors.INVALID_PRODUCER_EPOCH |
+               Errors.CONCURRENT_TRANSACTIONS =>
+            debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${error.exceptionName()}")
+          case e =>
+            warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${error.exceptionName()}")
+        })
     }
   }
 
