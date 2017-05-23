@@ -441,19 +441,17 @@ class KafkaApis(val requestChannel: RequestChannel,
           produceResponseCallback)
       }
 
-      if (authorizedRequestInfo.isEmpty)
-        sendResponseCallback(Map.empty)
-      else {
-        val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
-
-        // call the replica manager to append messages to the replicas
-        replicaManager.appendRecords(
-          produceRequest.timeout.toLong,
-          produceRequest.acks,
-          internalTopicsAllowed,
-          isFromClient = true,
-          authorizedRequestInfo,
-          sendResponseCallback)
+    if (authorizedRequestInfo.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      // call the replica manager to append messages to the replicas
+      replicaManager.appendRecords(
+        produceRequest.timeout.toLong,
+        produceRequest.acks,
+        internalTopicsAllowed= false,
+        isFromClient = true,
+        authorizedRequestInfo,
+        sendResponseCallback)
 
         // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
         // hence we clear its data here inorder to let GC re-claim its memory since it is already appended to log
