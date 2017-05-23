@@ -24,9 +24,6 @@ import scala.collection._
 import kafka.metrics.KafkaTimer
 import kafka.utils.ShutdownableThread
 
-/**
-  * `eventProcessedListener` should not throw exceptions.
-  */
 class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
                              eventProcessedListener: ControllerEvent => Unit) {
 
@@ -56,7 +53,11 @@ class ControllerEventManager(rateAndTimeMetrics: Map[ControllerState, KafkaTimer
         case e: Throwable => error(s"Error processing event $controllerEvent", e)
       }
 
-      eventProcessedListener(controllerEvent)
+      try eventProcessedListener(controllerEvent)
+      catch {
+        case e: Throwable => error(s"Error while invoking listener for processed event $controllerEvent", e)
+      }
+
       _state = ControllerState.Idle
     }
   }
