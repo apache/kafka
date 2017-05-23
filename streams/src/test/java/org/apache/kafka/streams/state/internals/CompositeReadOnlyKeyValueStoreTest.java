@@ -69,6 +69,21 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertNull(theStore.get("whatever"));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+        theStore.get(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        theStore.range(null, "to");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        theStore.range("from", null);
+    }
+
     @Test
     public void shouldReturnValueIfExists() throws Exception {
         stubOneUnderlying.put("key", "value");

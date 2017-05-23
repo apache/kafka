@@ -47,8 +47,15 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         this.storeName = storeName;
     }
 
+    private void validateKeyNotNull(K key) {
+        if (key == null) {
+            throw new NullPointerException("Key is null.");
+        }
+    }
+
     @Override
     public V get(final K key) {
+        validateKeyNotNull(key);
         final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
         for (ReadOnlyKeyValueStore<K, V> store : stores) {
             try {
@@ -66,6 +73,8 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
 
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
+        validateKeyNotNull(from);
+        validateKeyNotNull(to);
         final NextIteratorFunction<K, V> nextIteratorFunction = new NextIteratorFunction<K, V>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
