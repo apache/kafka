@@ -69,8 +69,7 @@ public class OffsetAndMetadata implements Serializable {
         OffsetAndMetadata that = (OffsetAndMetadata) o;
 
         if (offset != that.offset) return false;
-
-        return metadata.equals(that.metadata);
+        return metadata == null ? that.metadata == null : metadata.equals(that.metadata);
     }
 
     @Override
