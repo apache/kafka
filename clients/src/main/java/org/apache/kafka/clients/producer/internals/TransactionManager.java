@@ -179,7 +179,7 @@ public class TransactionManager {
     public synchronized TransactionalRequestResult beginAbortingTransaction() {
         ensureTransactional();
         if (isFenced())
-            throw new ProducerFencedException("There is a newer producer using the same transactional.id.");
+            throw Errors.INVALID_PRODUCER_EPOCH.exception();
         transitionTo(State.ABORTING_TRANSACTION);
         return beginCompletingTransaction(false);
     }
@@ -407,10 +407,10 @@ public class TransactionManager {
     }
 
     private synchronized void transitionTo(State target, Exception error) {
-        if (target == State.ERROR && error != null)
-            lastError = error;
         if (currentState.isTransitionValid(currentState, target)) {
             currentState = target;
+            if (target == State.ERROR && error != null)
+                lastError = error;
         } else {
             throw new KafkaException("Invalid transition attempted from state " + currentState.name() +
                     " to state " + target.name());
@@ -424,7 +424,7 @@ public class TransactionManager {
 
     private void maybeFailWithError() {
         if (isFenced())
-            throw new ProducerFencedException("There is a newer producer instance using the same transactional id.");
+            throw Errors.INVALID_PRODUCER_EPOCH.exception();
         if (isInErrorState()) {
             String errorMessage = "Cannot execute transactional method because we are in an error state.";
             if (lastError != null)
@@ -631,12 +631,12 @@ public class TransactionManager {
                 if (error == Errors.NONE || error == null) {
                     continue;
                 }
-
                 if (error == Errors.COORDINATOR_NOT_AVAILABLE || error == Errors.NOT_COORDINATOR) {
                     lookupCoordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
                     reenqueue();
                     return;
-                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS) {
+                } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.CONCURRENT_TRANSACTIONS
+                        || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                     reenqueue();
                     return;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
@@ -848,6 +848,8 @@ public class TransactionManager {
                         coordinatorReloaded = true;
                         lookupCoordinator(FindCoordinatorRequest.CoordinatorType.GROUP, builder.consumerGroupId());
                     }
+                } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    hadFailure = true;
                 } else if (error == Errors.INVALID_PRODUCER_EPOCH) {
                     fenced();
                     return;

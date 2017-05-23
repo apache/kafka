@@ -329,14 +329,16 @@ class ReplicaManager(val config: KafkaConfig,
 
   /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
-   * the callback function will be triggered either when timeout or the required acks are satisfied
+   * the callback function will be triggered either when timeout or the required acks are satisfied;
+   * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
                     internalTopicsAllowed: Boolean,
                     isFromClient: Boolean,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit) {
+                    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                    delayedProduceSyncObject: Option[Object] = None) {
 
     if (isValidRequiredAcks(requiredAcks)) {
       val sTime = time.milliseconds
@@ -354,7 +356,13 @@ class ReplicaManager(val config: KafkaConfig,
       if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, localProduceResults)) {
         // create delayed produce operation
         val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
+        val delayedProduce = delayedProduceSyncObject match {
+          case Some(syncObject) =>
+            new SafeDelayedProduce(timeout, syncObject, produceMetadata, this, responseCallback)
+
+          case None =>
+            new DelayedProduce(timeout, produceMetadata, this, responseCallback)
+        }
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
         val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
