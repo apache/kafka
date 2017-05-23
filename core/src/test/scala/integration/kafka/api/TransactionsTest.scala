@@ -181,7 +181,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testFencingOnCommit() = {
     val producer1 = transactionalProducers.head
-    val producer2 = transactionalProducers.tail.head
+    val producer2 = transactionalProducers.get(1)
     val consumer = transactionalConsumers.head
 
     consumer.subscribe(List(topic1, topic2))
@@ -218,7 +218,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testFencingOnSendOffsets() = {
     val producer1 = transactionalProducers.head
-    val producer2 = transactionalProducers.tail.head
+    val producer2 = transactionalProducers.get(1)
     val consumer = transactionalConsumers.head
 
     consumer.subscribe(List(topic1, topic2))
@@ -255,7 +255,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testFencingOnSend() {
     val producer1 = transactionalProducers.head
-    val producer2 = transactionalProducers.tail.head
+    val producer2 = transactionalProducers.get(1)
     val consumer = transactionalConsumers.head
 
     consumer.subscribe(List(topic1, topic2))
@@ -299,7 +299,7 @@ class TransactionsTest extends KafkaServerTestHarness {
   @Test
   def testFencingOnAddPartitions(): Unit = {
     val producer1 = transactionalProducers.head
-    val producer2 = transactionalProducers.tail.head
+    val producer2 = transactionalProducers.get(1)
     val consumer = transactionalConsumers.head
 
     consumer.subscribe(List(topic1, topic2))
