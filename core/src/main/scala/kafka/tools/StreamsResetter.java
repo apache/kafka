@@ -101,13 +101,14 @@ public class StreamsResetter {
 
             final String groupId = options.valueOf(applicationIdOption);
 
+            final Properties props = new Properties();
             if (options.has(commandConfigOption)) {
-                consumerConfig.putAll(Utils.loadProps(options.valueOf(commandConfigOption)));
+                props.putAll(Utils.loadProps(options.valueOf(commandConfigOption)));
             }
-            consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf(bootstrapServerOption));
+            consumerConfig.putAll(props);
 
-            adminClient = AdminClient.create(consumerConfig);
-
+            adminClient = AdminClient.create(props);
 
             zkUtils = ZkUtils.apply(options.valueOf(zookeeperOption),
                 30000,
@@ -229,6 +230,7 @@ public class StreamsResetter {
 
         final Properties config = new Properties();
         config.putAll(consumerConfig);
+        config.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,options.valueOf(bootstrapServerOption));
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
