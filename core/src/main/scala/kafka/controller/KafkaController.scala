@@ -1267,7 +1267,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case class PartitionReassignment(partitionReassignment: Map[TopicAndPartition, Seq[Int]]) extends ControllerEvent {
 
-    def state = ControllerState.PartitionReassigning
+    def state = ControllerState.PartitionReassignment
 
     override def process(): Unit = {
       if (!isActive) return
@@ -1288,7 +1288,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case class PartitionReassignmentIsrChange(topicAndPartition: TopicAndPartition, reassignedReplicas: Set[Int]) extends ControllerEvent {
 
-    def state = ControllerState.PartitionReassigning
+    def state = ControllerState.PartitionReassignment
 
     override def process(): Unit = {
       if (!isActive) return
@@ -1380,7 +1380,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case class PreferredReplicaLeaderElection(partitions: Set[TopicAndPartition]) extends ControllerEvent {
 
-    def state = ControllerState.ManualLeaderBalancing
+    def state = ControllerState.ManualLeaderBalance
 
     override def process(): Unit = {
       if (!isActive) return
@@ -1396,7 +1396,7 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   case object AutoPreferredReplicaLeaderElection extends ControllerEvent {
 
-    def state = ControllerState.AutoLeaderBalancing
+    def state = ControllerState.AutoLeaderBalance
 
     override def process(): Unit = {
       if (!isActive) return

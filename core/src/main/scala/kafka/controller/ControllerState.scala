@@ -55,15 +55,15 @@ object ControllerState {
     def value = 4
   }
 
-  case object PartitionReassigning extends ControllerState {
+  case object PartitionReassignment extends ControllerState {
     def value = 5
   }
 
-  case object AutoLeaderBalancing extends ControllerState {
+  case object AutoLeaderBalance extends ControllerState {
     def value = 6
   }
 
-  case object ManualLeaderBalancing extends ControllerState {
+  case object ManualLeaderBalance extends ControllerState {
     def value = 7
   }
 
@@ -76,5 +76,5 @@ object ControllerState {
   }
 
   val values: Seq[ControllerState] = Seq(Idle, ControllerChange, BrokerChange, TopicChange, TopicDeletion,
-    PartitionReassigning, AutoLeaderBalancing, ManualLeaderBalancing, ControlledShutdown, IsrChange)
+    PartitionReassignment, AutoLeaderBalance, ManualLeaderBalance, ControlledShutdown, IsrChange)
 }

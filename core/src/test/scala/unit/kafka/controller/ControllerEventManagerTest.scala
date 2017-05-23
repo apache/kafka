@@ -39,7 +39,7 @@ class ControllerEventManagerTest {
 
   @Test
   def testSuccessfulEvent(): Unit = {
-    check("kafka.controller:type=ControllerStats,name=AutoLeaderBalancingRateAndTimeMs", ControllerState.AutoLeaderBalancing,
+    check("kafka.controller:type=ControllerStats,name=AutoLeaderBalanceRateAndTimeMs", ControllerState.AutoLeaderBalance,
       () => Unit)
   }
 
