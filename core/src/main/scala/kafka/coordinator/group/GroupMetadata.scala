@@ -371,19 +371,21 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def completePendingTxnOffsetCommit(producerId: Long, isCommit: Boolean): Unit = {
     val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
-      val producerOffsets = pendingTransactionalOffsetCommits.getOrElse(producerId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
-      producerOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
-        if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
-          throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
-            s"and groupId $groupId even though the the offset commit record itself hasn't been appended to the log.")
-        val currentOffsetOpt = offsets.get(topicPartition)
-        if (currentOffsetOpt.forall(_.olderThan(commitRecordMetadataAndOffset))) {
-          trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
-            "committed and loaded into the cache.")
-          offsets.put(topicPartition, commitRecordMetadataAndOffset)
-        } else {
-          trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
-            s"committed, but not loaded since its offset is older than current offset $currentOffsetOpt.")
+      pendingOffsetsOpt.foreach { pendingOffsets =>
+        pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
+          if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
+            throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
+              s"and groupId $groupId even though the the offset commit record itself hasn't been appended to the log.")
+
+          val currentOffsetOpt = offsets.get(topicPartition)
+          if (currentOffsetOpt.forall(_.olderThan(commitRecordMetadataAndOffset))) {
+            trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
+              "committed and loaded into the cache.")
+            offsets.put(topicPartition, commitRecordMetadataAndOffset)
+          } else {
+            trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
+              s"committed, but not loaded since its offset is older than current offset $currentOffsetOpt.")
+          }
         }
       }
     } else {
