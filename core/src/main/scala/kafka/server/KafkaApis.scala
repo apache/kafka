@@ -117,28 +117,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_RECORDS => handleDeleteRecordsRequest(request)
         case ApiKeys.INIT_PRODUCER_ID => handleInitProducerIdRequest(request)
         case ApiKeys.OFFSET_FOR_LEADER_EPOCH => handleOffsetForLeaderEpochRequest(request)
-        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          throttleTimeMs =>
-            request.body[AddPartitionsToTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
-        }, handleAddPartitionToTxnRequest)
-        case ApiKeys.ADD_OFFSETS_TO_TXN => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          throttleTimeMs =>
-            request.body[AddOffsetsToTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
-        }, handleAddOffsetsToTxnRequest)
-        case ApiKeys.END_TXN => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          throttleTimeMs =>
-            request.body[EndTxnRequest].getErrorResponse(throttleTimeMs, error.exception())
-        }, handleEndTxnRequest)
-        case ApiKeys.WRITE_TXN_MARKERS => handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          throttleTimeMs =>
-            request.body[WriteTxnMarkersRequest].getErrorResponse(throttleTimeMs, error.exception())
-        }, handleWriteTxnMarkersRequest)
-        case ApiKeys.TXN_OFFSET_COMMIT =>  handleWithInterBrokerVersionAtLeast(KAFKA_0_11_0_IV0, request, (error:Errors) => {
-          def response(throttleTimeMs: Int): AbstractResponse = {
-            request.body[TxnOffsetCommitRequest].getErrorResponse(throttleTimeMs, error.exception())
-          }
-          response
-        }, handleTxnOffsetCommitRequest)
+        case ApiKeys.ADD_PARTITIONS_TO_TXN => handleAddPartitionToTxnRequest(request)
+        case ApiKeys.ADD_OFFSETS_TO_TXN => handleAddOffsetsToTxnRequest(request)
+        case ApiKeys.END_TXN => handleEndTxnRequest(request)
+        case ApiKeys.WRITE_TXN_MARKERS => handleWriteTxnMarkersRequest(request)
+        case ApiKeys.TXN_OFFSET_COMMIT => handleTxnOffsetCommitRequest(request)
         case ApiKeys.DESCRIBE_ACLS => handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => handleDeleteAcls(request)
@@ -1452,6 +1435,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val endTxnRequest = request.body[EndTxnRequest]
     val transactionalId = endTxnRequest.transactionalId
 
@@ -1476,6 +1460,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleWriteTxnMarkersRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     authorizeClusterAction(request)
     val writeTxnMarkersRequest = request.body[WriteTxnMarkersRequest]
     val errors = new ConcurrentHashMap[java.lang.Long, java.util.Map[TopicPartition, Errors]]()
@@ -1536,17 +1521,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleWithInterBrokerVersionAtLeast(version: ApiVersion,
-                                          request: RequestChannel.Request,
-                                          createErrorResponse: Errors => Int => AbstractResponse,
-                                          handler: (RequestChannel.Request) => Unit): Unit = {
-      if (config.interBrokerProtocolVersion < version)
-        sendResponseMaybeThrottle(request, createErrorResponse(Errors.INVALID_REQUEST))
-      else
-        handler(request)
+  def ensureInterBrokerVersion(version: ApiVersion): Unit = {
+    if (config.interBrokerProtocolVersion < version)
+      throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
   }
 
   def handleAddPartitionToTxnRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val addPartitionsToTxnRequest = request.body[AddPartitionsToTxnRequest]
     val transactionalId = addPartitionsToTxnRequest.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
@@ -1617,6 +1598,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val addOffsetsToTxnRequest = request.body[AddOffsetsToTxnRequest]
     val transactionalId = addOffsetsToTxnRequest.transactionalId
     val groupId = addOffsetsToTxnRequest.consumerGroupId
@@ -1649,6 +1631,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
+    ensureInterBrokerVersion(KAFKA_0_11_0_IV0)
     val header = request.header
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
     // reject the request if not authorized to the group
