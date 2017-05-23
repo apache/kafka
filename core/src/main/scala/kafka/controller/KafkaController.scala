@@ -1150,28 +1150,24 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
     override def process(): Unit = {
       if (!isActive) return
-      try {
-        val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
-        val curBrokerIds = curBrokers.map(_.id)
-        val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
-        val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
-        val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
-        val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
-        controllerContext.liveBrokers = curBrokers
-        val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
-        val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
-        val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
-        info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-          .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
-        newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
-        deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-        if (newBrokerIds.nonEmpty)
-          onBrokerStartup(newBrokerIdsSorted)
-        if (deadBrokerIds.nonEmpty)
-          onBrokerFailure(deadBrokerIdsSorted)
-      } catch {
-        case e: Throwable => error("Error while handling broker changes", e)
-      }
+      val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
+      val curBrokerIds = curBrokers.map(_.id)
+      val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+      val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
+      val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+      val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
+      controllerContext.liveBrokers = curBrokers
+      val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
+      val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
+      val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
+      info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
+        .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
+      newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+      deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
+      if (newBrokerIds.nonEmpty)
+        onBrokerStartup(newBrokerIdsSorted)
+      if (deadBrokerIds.nonEmpty)
+        onBrokerFailure(deadBrokerIdsSorted)
     }
   }
 
@@ -1181,22 +1177,18 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
     override def process(): Unit = {
       if (!isActive) return
-      try {
-        val newTopics = topics -- controllerContext.allTopics
-        val deletedTopics = controllerContext.allTopics -- topics
-        controllerContext.allTopics = topics
+      val newTopics = topics -- controllerContext.allTopics
+      val deletedTopics = controllerContext.allTopics -- topics
+      controllerContext.allTopics = topics
 
-        val addedPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(newTopics.toSeq)
-        controllerContext.partitionReplicaAssignment = controllerContext.partitionReplicaAssignment.filter(p =>
-          !deletedTopics.contains(p._1.topic))
-        controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
-        info("New topics: [%s], deleted topics: [%s], new partition replica assignment [%s]".format(newTopics,
-          deletedTopics, addedPartitionReplicaAssignment))
-        if (newTopics.nonEmpty)
-          onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet)
-      } catch {
-        case e: Throwable => error("Error while handling new topic", e)
-      }
+      val addedPartitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(newTopics.toSeq)
+      controllerContext.partitionReplicaAssignment = controllerContext.partitionReplicaAssignment.filter(p =>
+        !deletedTopics.contains(p._1.topic))
+      controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
+      info("New topics: [%s], deleted topics: [%s], new partition replica assignment [%s]".format(newTopics,
+        deletedTopics, addedPartitionReplicaAssignment))
+      if (newTopics.nonEmpty)
+        onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet)
     }
   }
 
@@ -1206,22 +1198,18 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
     override def process(): Unit = {
       if (!isActive) return
-      try {
-        val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
-        val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
-          !controllerContext.partitionReplicaAssignment.contains(p._1))
-        if(topicDeletionManager.isTopicQueuedUpForDeletion(topic))
-          error("Skipping adding partitions %s for topic %s since it is currently being deleted"
-            .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
-        else {
-          if (partitionsToBeAdded.nonEmpty) {
-            info("New partitions to be added %s".format(partitionsToBeAdded))
-            controllerContext.partitionReplicaAssignment.++=(partitionsToBeAdded)
-            onNewPartitionCreation(partitionsToBeAdded.keySet)
-          }
+      val partitionReplicaAssignment = zkUtils.getReplicaAssignmentForTopics(List(topic))
+      val partitionsToBeAdded = partitionReplicaAssignment.filter(p =>
+        !controllerContext.partitionReplicaAssignment.contains(p._1))
+      if(topicDeletionManager.isTopicQueuedUpForDeletion(topic))
+        error("Skipping adding partitions %s for topic %s since it is currently being deleted"
+          .format(partitionsToBeAdded.map(_._1.partition).mkString(","), topic))
+      else {
+        if (partitionsToBeAdded.nonEmpty) {
+          info("New partitions to be added %s".format(partitionsToBeAdded))
+          controllerContext.partitionReplicaAssignment.++=(partitionsToBeAdded)
+          onNewPartitionCreation(partitionsToBeAdded.keySet)
         }
-      } catch {
-        case e: Throwable => error("Error while handling add partitions for topic " + topic, e)
       }
     }
   }
@@ -1289,34 +1277,30 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
     override def process(): Unit = {
       if (!isActive) return
-      try {
         // check if this partition is still being reassigned or not
-        controllerContext.partitionsBeingReassigned.get(topicAndPartition) match {
-          case Some(reassignedPartitionContext) =>
-            // need to re-read leader and isr from zookeeper since the zkclient callback doesn't return the Stat object
-            val newLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topicAndPartition.topic, topicAndPartition.partition)
-            newLeaderAndIsrOpt match {
-              case Some(leaderAndIsr) => // check if new replicas have joined ISR
-                val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
-                if(caughtUpReplicas == reassignedReplicas) {
-                  // resume the partition reassignment process
-                  info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
-                    .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
-                    "Resuming partition reassignment")
-                  onPartitionReassignment(topicAndPartition, reassignedPartitionContext)
-                }
-                else {
-                  info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
-                    .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
-                    "Replica(s) %s still need to catch up".format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")))
-                }
-              case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
-                .format(topicAndPartition, reassignedReplicas.mkString(",")))
-            }
-          case None =>
-        }
-      } catch {
-        case e: Throwable => error("Error while handling partition reassignment", e)
+      controllerContext.partitionsBeingReassigned.get(topicAndPartition) match {
+        case Some(reassignedPartitionContext) =>
+          // need to re-read leader and isr from zookeeper since the zkclient callback doesn't return the Stat object
+          val newLeaderAndIsrOpt = zkUtils.getLeaderAndIsrForPartition(topicAndPartition.topic, topicAndPartition.partition)
+          newLeaderAndIsrOpt match {
+            case Some(leaderAndIsr) => // check if new replicas have joined ISR
+              val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
+              if(caughtUpReplicas == reassignedReplicas) {
+                // resume the partition reassignment process
+                info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
+                  .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
+                  "Resuming partition reassignment")
+                onPartitionReassignment(topicAndPartition, reassignedPartitionContext)
+              }
+              else {
+                info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
+                  .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
+                  "Replica(s) %s still need to catch up".format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")))
+              }
+            case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
+              .format(topicAndPartition, reassignedReplicas.mkString(",")))
+          }
+        case None =>
       }
     }
   }
