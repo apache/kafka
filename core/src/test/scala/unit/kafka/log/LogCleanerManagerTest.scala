@@ -20,6 +20,7 @@ package kafka.log
 import java.io.File
 import java.util.Properties
 
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record._
@@ -166,6 +167,54 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }
 
+  @Test
+  def testUndecidedTransactionalDataNotCleanable(): Unit = {
+    val topicPartition = new TopicPartition("log", 0)
+    val compactionLag = 60 * 60 * 1000
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.MinCompactionLagMsProp, compactionLag: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerId = 15L
+    val producerEpoch = 0.toShort
+    val sequence = 0
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
+      new SimpleRecord(time.milliseconds(), "1".getBytes, "a".getBytes),
+      new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes)), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 2,
+      new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
+    log.roll()
+    log.onHighWatermarkIncremented(3L)
+
+    time.sleep(compactionLag + 1)
+    // although the compaction lag has been exceeded, the undecided data should not be cleaned
+    var cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
+      Map(topicPartition -> 0L), time.milliseconds())
+    assertEquals(0L, cleanableOffsets._1)
+    assertEquals(0L, cleanableOffsets._2)
+
+    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
+      new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0, isFromClient = false)
+    log.roll()
+    log.onHighWatermarkIncremented(4L)
+
+    // the first segment should now become cleanable immediately
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
+      Map(topicPartition -> 0L), time.milliseconds())
+    assertEquals(0L, cleanableOffsets._1)
+    assertEquals(3L, cleanableOffsets._2)
+
+    time.sleep(compactionLag + 1)
+
+    // the second segment becomes cleanable after the compaction lag
+    cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
+      Map(topicPartition -> 0L), time.milliseconds())
+    assertEquals(0L, cleanableOffsets._1)
+    assertEquals(4L, cleanableOffsets._2)
+  }
+
   private def createCleanerManager(log: Log): LogCleanerManager = {
     val logs = new Pool[TopicPartition, Log]()
     logs.put(new TopicPartition("log", 0), log)
@@ -186,12 +235,14 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       logStartOffset = 0L,
       recoveryPoint = 0L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      brokerTopicStats = new BrokerTopicStats)
     log
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
+    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+      time = time, brokerTopicStats = new BrokerTopicStats)
 
   private def records(key: Int, value: Int, timestamp: Long) =
     MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(timestamp, key.toString.getBytes, value.toString.getBytes))

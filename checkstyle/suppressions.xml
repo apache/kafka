@@ -8,7 +8,7 @@
 
     <!-- Clients -->
     <suppress checks="ClassFanOutComplexity"
-              files="(Fetcher|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator|Utils).java"/>
+              files="(Fetcher|ConsumerCoordinator|KafkaConsumer|KafkaProducer|SaslServerAuthenticator|Utils|TransactionManagerTest|KafkaAdminClient|NetworkClient).java"/>
     <suppress checks="ClassFanOutComplexity"
               files=".*/protocol/Errors.java"/>
     <suppress checks="ClassFanOutComplexity"
@@ -19,7 +19,7 @@
               files=".*/requests/AbstractResponse.java"/>
 
     <suppress checks="MethodLength"
-              files="KerberosLogin.java"/>
+              files="KerberosLogin.java|RequestResponseTest.java"/>
 
     <suppress checks="ParameterNumber"
               files="NetworkClient.java"/>
@@ -35,59 +35,28 @@
               files="DefaultRecordBatch.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse).java"/>
+              files="(KafkaConsumer|ConsumerCoordinator|Fetcher|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|KafkaAdminClient).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*/protocol/Errors.java"/>
 
     <suppress checks="BooleanExpressionComplexity"
-              files="(Utils|KafkaLZ4BlockOutputStream).java"/>
+              files="(Utils|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="ConsumerCoordinator.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="Fetcher.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="KafkaProducer.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="BufferPool.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="RecordAccumulator.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="ConfigDef.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="Selector.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="SslTransportLayer.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="KerberosLogin.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="AbstractRequest.java"/>
-    <suppress checks="CyclomaticComplexity"
-              files="AbstractResponse.java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|SsLTransportLayer|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslTransportLayer).java"/>
 
     <suppress checks="JavaNCSS"
-              files="KerberosLogin.java"/>
+              files="AbstractRequest.java|KerberosLogin.java"/>
+
+    <suppress checks="JavaNCSS"
+              files="AbstractRequest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="BufferPool.java"/>
-    <suppress checks="NPathComplexity"
-              files="MetricName.java"/>
-    <suppress checks="NPathComplexity"
-              files="Node.java"/>
-    <suppress checks="NPathComplexity"
-              files="ConfigDef.java"/>
-    <suppress checks="NPathComplexity"
-              files="SslTransportLayer.java"/>
-    <suppress checks="NPathComplexity"
-              files="MetadataResponse.java"/>
-    <suppress checks="NPathComplexity"
-              files="KerberosLogin.java"/>
-    <suppress checks="NPathComplexity"
-              files="SslTransportLayer.java"/>
+              files="(BufferPool|MetricName|Node|ConfigDef|SslTransportLayer|MetadataResponse|KerberosLogin|SslTransportLayer|Sender).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse)Test.java"/>
+              files="(Sender|Fetcher|KafkaConsumer|Metrics|ConsumerCoordinator|RequestResponse|TransactionManager|KafkaAdminClient)Test.java"/>
 
     <suppress checks="ClassFanOutComplexity"
               files="(ConsumerCoordinator|KafkaConsumer|RequestResponse|Fetcher)Test.java"/>
@@ -97,10 +66,10 @@
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
-              files="DistributedHerder.java"/>
+              files="DistributedHerder(|Test).java"/>
 
     <suppress checks="MethodLength"
-              files="KafkaConfigBackingStore.java"/>
+              files="(KafkaConfigBackingStore|RequestResponseTest).java"/>
 
     <suppress checks="ParameterNumber"
               files="WorkerSourceTask.java"/>

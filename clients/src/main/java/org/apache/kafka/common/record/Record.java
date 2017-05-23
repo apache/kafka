@@ -18,6 +18,8 @@ package org.apache.kafka.common.record;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.header.Header;
+
 /**
  * A log record is a tuple consisting of a unique offset in the log, a sequence number assigned by
  * the producer, a timestamp, a key and a value.
@@ -129,15 +131,6 @@ public interface Record {
      * @return true if the version is lower than 2 and the timestamp type matches
      */
     boolean hasTimestampType(TimestampType timestampType);
-
-    /**
-     * Check whether this is a control record (i.e. whether the control bit is set in the record attributes).
-     * For magic versions prior to 2, this is always false.
-     *
-     * @return Whether this is a control record
-     */
-    boolean isControlRecord();
-
 
     /**
      * Get the headers. For magic versions 1 and below, this always returns an empty array.

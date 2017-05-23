@@ -90,7 +90,8 @@ public class JoinGroupRequest extends AbstractRequest {
         @Override
         public JoinGroupRequest build(short version) {
             if (version < 1) {
-                rebalanceTimeout = -1;
+                // v0 had no rebalance timeout but used session timeout implicitly
+                rebalanceTimeout = sessionTimeout;
             }
             return new JoinGroupRequest(version, groupId, sessionTimeout,
                     rebalanceTimeout, memberId, protocolType, groupProtocols);
@@ -149,12 +150,21 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:
             case 1:
                 return new JoinGroupResponse(
+                        Errors.forException(e),
+                        JoinGroupResponse.UNKNOWN_GENERATION_ID,
+                        JoinGroupResponse.UNKNOWN_PROTOCOL,
+                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
+                        Collections.<String, ByteBuffer>emptyMap());
+            case 2:
+                return new JoinGroupResponse(
+                        throttleTimeMs,
                         Errors.forException(e),
                         JoinGroupResponse.UNKNOWN_GENERATION_ID,
                         JoinGroupResponse.UNKNOWN_PROTOCOL,

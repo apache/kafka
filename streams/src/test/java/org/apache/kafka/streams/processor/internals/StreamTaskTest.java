@@ -43,7 +43,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockProcessorNode;
 import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -112,21 +111,24 @@ public class StreamTaskTest {
     private final StreamsMetrics streamsMetrics = new MockStreamsMetrics(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
-    private File baseDir;
+    private File baseDir = TestUtils.tempDirectory();
     private StateDirectory stateDirectory;
-    private RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
-    private ThreadCache testCache =  new ThreadCache("testCache", 0, streamsMetrics);
+    private final RecordCollectorImpl recordCollector = new RecordCollectorImpl(producer, "taskId");
     private StreamsConfig config;
+    private StreamsConfig eosConfig;
     private StreamTask task;
 
-    private StreamsConfig createConfig(final File baseDir) throws Exception {
+    private StreamsConfig createConfig(final boolean enableEoS) throws Exception {
         return new StreamsConfig(new Properties() {
             {
                 setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "stream-task-test");
                 setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171");
                 setProperty(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, "3");
                 setProperty(StreamsConfig.STATE_DIR_CONFIG, baseDir.getCanonicalPath());
-                setProperty(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
+                setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class.getName());
+                if (enableEoS) {
+                    setProperty(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+                }
             }
         });
     }
@@ -139,23 +141,22 @@ public class StreamTaskTest {
         consumer.assign(Arrays.asList(partition1, partition2));
         source1.addChild(processor);
         source2.addChild(processor);
-        baseDir = TestUtils.tempDirectory();
-        config = createConfig(baseDir);
+        config = createConfig(false);
+        eosConfig = createConfig(true);
         stateDirectory = new StateDirectory("applicationId", baseDir.getPath(), new MockTime());
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
-                              changelogReader, config, streamsMetrics, stateDirectory, null, time, recordCollector);
+                              changelogReader, config, streamsMetrics, stateDirectory, null, time, producer);
     }
 
     @After
     public void cleanup() throws IOException {
-        if (task != null) {
-            try {
-                task.close();
-            } catch (Exception e) {
-                // ignore exceptions
+        try {
+            if (task != null) {
+                task.close(true);
             }
+        } finally {
+            Utils.delete(baseDir);
         }
-        Utils.delete(baseDir);
     }
 
     @SuppressWarnings("unchecked")
@@ -206,17 +207,17 @@ public class StreamTaskTest {
 
     @Test
     public void testMetrics() throws Exception {
-        String name = task.id().toString();
-        String[] entities = {"all", name};
-        String operation = "commit";
+        final String name = task.id().toString();
+        final String[] entities = {"all", name};
+        final String operation = "commit";
 
-        String groupName = "stream-task-metrics";
-        Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
+        final String groupName = "stream-task-metrics";
+        final Map<String, String> tags = Collections.singletonMap("streams-task-id", name);
 
         assertNotNull(metrics.getSensor(operation));
         assertNotNull(metrics.getSensor(name + "-" + operation));
 
-        for (String entity : entities) {
+        for (final String entity : entities) {
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-avg", groupName,
                 "The average latency in milliseconds of " + entity + " " + operation + " operation.", tags)));
             assertNotNull(metrics.metrics().get(metrics.metricName(entity + "-" + operation + "-latency-max", groupName,
@@ -340,7 +341,6 @@ public class StreamTaskTest {
         assertFalse(task.maybePunctuate());
 
         processor.supplier.checkAndClearPunctuateResult(20L, 30L, 40L);
-
     }
 
     @SuppressWarnings("unchecked")
@@ -355,8 +355,12 @@ public class StreamTaskTest {
         };
 
         final List<ProcessorNode> processorNodes = Collections.<ProcessorNode>singletonList(processorNode);
-        final Map<String, SourceNode> sourceNodes
-                = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final Map<String, SourceNode> sourceNodes = new HashMap() {
+            {
+                put(topic1[0], processorNode);
+                put(topic2[0], processorNode);
+            }
+        };
         final ProcessorTopology topology = new ProcessorTopology(processorNodes,
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),
@@ -364,10 +368,10 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-        task.close();
+        task.close(true);
 
-        task  = new StreamTask(taskId00, applicationId, partitions,
-                                                     topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
+            streamsMetrics, stateDirectory, null, time, producer);
         final int offset = 20;
         task.addRecords(partition1, Collections.singletonList(
                 new ConsumerRecord<>(partition1.topic(), partition1.partition(), offset, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
@@ -375,14 +379,13 @@ public class StreamTaskTest {
         try {
             task.process();
             fail("Should've thrown StreamsException");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             final String message = e.getMessage();
             assertTrue("message=" + message + " should contain topic", message.contains("topic=" + topic1[0]));
             assertTrue("message=" + message + " should contain partition", message.contains("partition=" + partition1.partition()));
             assertTrue("message=" + message + " should contain offset", message.contains("offset=" + offset));
             assertTrue("message=" + message + " should contain processor", message.contains("processor=" + processorNode.name()));
         }
-
     }
 
     @SuppressWarnings("unchecked")
@@ -395,9 +398,7 @@ public class StreamTaskTest {
             }
 
             @Override
-            public void process(final Object key, final Object value) {
-                //
-            }
+            public void process(final Object key, final Object value) {}
 
             @Override
             public void punctuate(final long timestamp) {
@@ -409,27 +410,30 @@ public class StreamTaskTest {
         try {
             task.punctuate(punctuator, 1);
             fail("Should've thrown StreamsException");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             final String message = e.getMessage();
-            assertTrue("message=" + message + " should contain processor", message.contains("processor=test"));
+            assertTrue("message=" + message + " should contain processor", message.contains("processor 'test'"));
             assertThat(((ProcessorContextImpl) task.processorContext()).currentNode(), nullValue());
         }
-
     }
 
     @Test
     public void shouldFlushRecordCollectorOnFlushState() throws Exception {
         final AtomicBoolean flushed = new AtomicBoolean(false);
-        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
-            @Override
-            public void flush() {
-                flushed.set(true);
-            }
-        };
         final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
         final StreamTask streamTask = new StreamTask(taskId00, "appId", partitions, topology, consumer,
-                                                     changelogReader, createConfig(baseDir), streamsMetrics,
-                                                     stateDirectory, testCache, time, recordCollector);
+            changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
+
+            @Override
+            RecordCollector createRecordCollector() {
+                return new NoOpRecordCollector() {
+                    @Override
+                    public void flush() {
+                        flushed.set(true);
+                    }
+                };
+            }
+        };
         streamTask.flushState();
         assertTrue(flushed.get());
     }
@@ -450,21 +454,19 @@ public class StreamTaskTest {
                 return true;
             }
         };
+        Map<String, SourceNode> sourceByTopics =  new HashMap() { {
+                put(partition1.topic(), source1);
+                put(partition2.topic(), source2);
+            }
+        };
         final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                                                                 Collections.<String, SourceNode>emptyMap(),
+                                                                 sourceByTopics,
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>singletonList(inMemoryStore),
                                                                  Collections.singletonMap(storeName, changelogTopic),
                                                                  Collections.<StateStore>emptyList());
 
         final TopicPartition partition = new TopicPartition(changelogTopic, 0);
-        final NoOpRecordCollector recordCollector = new NoOpRecordCollector() {
-            @Override
-            public Map<TopicPartition, Long> offsets() {
-
-                return Collections.singletonMap(partition, 543L);
-            }
-        };
 
         restoreStateConsumer.updatePartitions(changelogTopic,
                                               Collections.singletonList(
@@ -472,22 +474,29 @@ public class StreamTaskTest {
         restoreStateConsumer.updateEndOffsets(Collections.singletonMap(partition, 0L));
         restoreStateConsumer.updateBeginningOffsets(Collections.singletonMap(partition, 0L));
 
-        final StreamsMetrics streamsMetrics = new MockStreamsMetrics(new Metrics());
-        final TaskId taskId = new TaskId(0, 0);
-        final MockTime time = new MockTime();
-        final StreamsConfig config = createConfig(baseDir);
-        final StreamTask streamTask = new StreamTask(taskId, "appId", partitions, topology, consumer,
-                                                     changelogReader, config, streamsMetrics,
-                                                     stateDirectory, new ThreadCache("testCache", 0, streamsMetrics),
-                                                     time, recordCollector);
+        final long offset = 543L;
+        final StreamTask streamTask = new StreamTask(taskId00, "appId", partitions, topology, consumer,
+            changelogReader, config, streamsMetrics, stateDirectory, null, time, producer) {
+
+            @Override
+            RecordCollector createRecordCollector() {
+                return new NoOpRecordCollector() {
+                    @Override
+                    public Map<TopicPartition, Long> offsets() {
+
+                        return Collections.singletonMap(partition, offset);
+                    }
+                };
+            }
+        };
 
         time.sleep(config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG));
 
         streamTask.commit();
-        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId),
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(stateDirectory.directoryForTask(taskId00),
                                                                           ProcessorStateManager.CHECKPOINT_FILE_NAME));
 
-        assertThat(checkpoint.read(), equalTo(Collections.singletonMap(partition, 544L)));
+        assertThat(checkpoint.read(), equalTo(Collections.singletonMap(partition, offset + 1)));
     }
 
     @Test
@@ -528,51 +537,162 @@ public class StreamTaskTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseTopology() throws Exception {
-        task.close();
+    public void shouldThrowExceptionIfAnyExceptionsRaisedDuringCloseButStillCloseAllProcessorNodesTopology() throws Exception {
+        task.close(true);
         task = createTaskThatThrowsExceptionOnClose();
         try {
-            task.closeTopology();
+            task.close(true);
             fail("should have thrown runtime exception");
-        } catch (RuntimeException e) {
-            // ok
-        }
-    }
-
-    @Test
-    public void shouldCloseAllProcessorNodesWhenExceptionsRaised() throws Exception {
-        task.close();
-        task = createTaskThatThrowsExceptionOnClose();
-        try {
-            task.closeTopology();
-        } catch (RuntimeException e) {
-            // expected
+        } catch (final RuntimeException e) {
+            task = null;
         }
         assertTrue(processor.closed);
         assertTrue(source1.closed);
         assertTrue(source2.closed);
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void shouldThrowWhenClosingProducerForNonEoS() {
-        task.closeProducer();
+    @Test
+    public void shouldInitAndBeginTransactionOnCreateIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        assertTrue(producer.transactionInitialized());
+        assertTrue(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldNotInitOrBeginTransactionOnCreateIfEosDisabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            config, streamsMetrics, stateDirectory, null, time, producer);
+
+        assertFalse(producer.transactionInitialized());
+        assertFalse(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldSendOffsetsAndCommitTransactionButNotStartNewTransactionOnSuspendIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.addRecords(partition1, Collections.singletonList(
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.process();
+
+        task.suspend();
+        assertTrue(producer.sentOffsets());
+        assertTrue(producer.transactionCommitted());
+        assertFalse(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldNotSendOffsetsAndCommitTransactionNorStartNewTransactionOnSuspendIfEosDisabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            config, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.addRecords(partition1, Collections.singletonList(
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.process();
+
+        task.suspend();
+        assertFalse(producer.sentOffsets());
+        assertFalse(producer.transactionCommitted());
+        assertFalse(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldStartNewTransactionOnResumeIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.addRecords(partition1, Collections.singletonList(
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.process();
+        task.suspend();
+
+        task.resume();
+        assertTrue(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldNotStartNewTransactionOnResumeIfEosDisabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            config, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.addRecords(partition1, Collections.singletonList(
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.process();
+        task.suspend();
+
+        task.resume();
+        assertFalse(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldStartNewTransactionOnCommitIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.addRecords(partition1, Collections.singletonList(
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.process();
+
+        task.commit();
+        assertTrue(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldNotStartNewTransactionOnCommitIfEosDisabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            config, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.addRecords(partition1, Collections.singletonList(
+            new ConsumerRecord<>(partition1.topic(), partition1.partition(), 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue)));
+        task.process();
+
+        task.commit();
+        assertFalse(producer.transactionInFlight());
+    }
+
+    @Test
+    public void shouldAbortTransactionOnDirtyClosedIfEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            eosConfig, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.close(false);
+        task = null;
+        assertTrue(producer.transactionAborted());
+    }
+
+    @Test
+    public void shouldNotAbortTransactionOnDirtyClosedIfEosDisabled() throws Exception {
+        final MockProducer producer = new MockProducer();
+        task = new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader,
+            config, streamsMetrics, stateDirectory, null, time, producer);
+
+        task.close(false);
+        assertFalse(producer.transactionAborted());
     }
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldCloseProducerWhenExactlyOneEnabled() {
-        final Map properties = this.config.values();
-        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, "exactly_once");
-        final StreamsConfig config = new StreamsConfig(properties);
-
-        final MockedProducer producer = new MockedProducer(null);
+    public void shouldCloseProducerOnCloseWhenEosEnabled() throws Exception {
+        final MockProducer producer = new MockProducer();
 
         task = new StreamTask(taskId00, applicationId, partitions, topology, consumer,
-            changelogReader, config, streamsMetrics, stateDirectory, null, time, new RecordCollectorImpl(producer, "taskId"));
+            changelogReader, eosConfig, streamsMetrics, stateDirectory, null, time, producer);
 
-        task.closeProducer();
-
-        assertTrue(producer.closed);
+        task.close(true);
+        task = null;
+        assertTrue(producer.closed());
     }
 
     @SuppressWarnings("unchecked")
@@ -584,8 +704,12 @@ public class StreamTaskTest {
             }
         };
         final List<ProcessorNode> processorNodes = Arrays.asList(processorNode, processor, source1, source2);
-        final Map<String, SourceNode> sourceNodes
-                = Collections.<String, SourceNode>singletonMap(topic1[0], processorNode);
+        final Map<String, SourceNode> sourceNodes = new HashMap() {
+            {
+                put(topic1[0], processorNode);
+                put(topic2[0], processorNode);
+            }
+        };
         final ProcessorTopology topology = new ProcessorTopology(processorNodes,
                                                                  sourceNodes,
                                                                  Collections.<String, SinkNode>emptyMap(),
@@ -593,33 +717,12 @@ public class StreamTaskTest {
                                                                  Collections.<String, String>emptyMap(),
                                                                  Collections.<StateStore>emptyList());
 
-
-        return new StreamTask(taskId00, applicationId, partitions,
-                              topology, consumer, changelogReader, config, streamsMetrics, stateDirectory, testCache, time, recordCollector);
+        return new StreamTask(taskId00, applicationId, partitions, topology, consumer, changelogReader, config,
+            streamsMetrics, stateDirectory, null, time, producer);
     }
 
-    private Iterable<ConsumerRecord<byte[], byte[]>> records(ConsumerRecord<byte[], byte[]>... recs) {
+    private Iterable<ConsumerRecord<byte[], byte[]>> records(final ConsumerRecord<byte[], byte[]>... recs) {
         return Arrays.asList(recs);
-    }
-
-    private final static class MockedProducer extends MockProducer {
-        private final AtomicBoolean flushed;
-        boolean closed = false;
-
-        MockedProducer(final AtomicBoolean flushed) {
-            super(false, null, null);
-            this.flushed = flushed;
-        }
-
-        @Override
-        public void flush() {
-            flushed.set(true);
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-        }
     }
 
 }

@@ -18,10 +18,10 @@ package kafka.controller
 
 import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
+import kafka.common.{LeaderElectionNotNeededException, NoReplicaOnlineException, StateChangeFailedException, TopicAndPartition}
 import kafka.log.LogConfig
-import kafka.utils.Logging
-import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.server.{ConfigType, KafkaConfig}
+import kafka.utils.Logging
 
 trait PartitionLeaderSelector {
 
@@ -74,7 +74,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
               throw new NoReplicaOnlineException(s"No replica for partition $topicAndPartition is alive. Live " +
                 s"brokers are: [${controllerContext.liveBrokerIds}]. Assigned replicas are: [$assignedReplicas].")
             } else {
-              ControllerStats.uncleanLeaderElectionRate.mark()
+              controllerContext.controllerStats.uncleanLeaderElectionRate.mark()
               val newLeader = liveAssignedReplicas.head
               warn(s"No broker in ISR is alive for $topicAndPartition. Elect leader $newLeader from live " +
                 s"brokers ${liveAssignedReplicas.mkString(",")}. There's potential data loss.")

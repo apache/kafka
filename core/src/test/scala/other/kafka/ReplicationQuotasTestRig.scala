@@ -27,7 +27,7 @@ import org.apache.kafka.common.TopicPartition
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
 import kafka.utils.ZkUtils._
-import kafka.utils.{CoreUtils, Exit, Logging, TestUtils, ZkUtils}
+import kafka.utils.{Exit, Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.jfree.chart.plot.PlotOrientation
@@ -108,8 +108,7 @@ object ReplicationQuotasTestRig {
     }
 
     override def tearDown() {
-      servers.par.foreach(_.shutdown())
-      servers.par.foreach(server => CoreUtils.delete(server.config.logDirs))
+      TestUtils.shutdownServers(servers)
       super.tearDown()
     }
 

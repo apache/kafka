@@ -64,7 +64,7 @@ object ZkUtils {
   val BrokerSequenceIdPath = s"$BrokersPath/seqid"
   val ConfigChangesPath = s"$ConfigPath/changes"
   val ConfigUsersPath = s"$ConfigPath/users"
-  val PidBlockPath = "/latest_pid_block"
+  val ProducerIdBlockPath = "/latest_producer_id_block"
   // Important: it is necessary to add any new top level Zookeeper path to the Seq
   val SecureZkRootPaths = Seq(AdminPath,
                               BrokersPath,
@@ -75,7 +75,7 @@ object ZkUtils {
                               IsrChangeNotificationPath,
                               KafkaAclPath,
                               KafkaAclChangesPath,
-                              PidBlockPath)
+                              ProducerIdBlockPath)
 
   // Important: it is necessary to add any new top level Zookeeper path that contains
   //            sensitive information that should not be world readable to the Seq
@@ -239,7 +239,7 @@ class ZkUtils(val zkClient: ZkClient,
                               DeleteTopicsPath,
                               BrokerSequenceIdPath,
                               IsrChangeNotificationPath,
-                              PidBlockPath)
+                              ProducerIdBlockPath)
 
   // Visible for testing
   val zkPath = new ZkPath(zkClient)

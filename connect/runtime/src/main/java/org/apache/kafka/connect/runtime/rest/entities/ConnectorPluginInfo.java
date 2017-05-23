@@ -18,21 +18,44 @@ package org.apache.kafka.connect.runtime.rest.entities;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 
 import java.util.Objects;
 
 public class ConnectorPluginInfo {
-
-    private String clazz;
+    private String className;
+    private ConnectorType type;
+    private String version;
 
     @JsonCreator
-    public ConnectorPluginInfo(@JsonProperty("class") String clazz) {
-        this.clazz = clazz;
+    public ConnectorPluginInfo(
+        @JsonProperty("class") String className,
+        @JsonProperty("type") ConnectorType type,
+        @JsonProperty("version") String version
+    ) {
+        this.className = className;
+        this.type = type;
+        this.version = version;
+    }
+
+    public ConnectorPluginInfo(PluginDesc<Connector> plugin) {
+        this(plugin.className(), ConnectorType.from(plugin.pluginClass()), plugin.version());
     }
 
     @JsonProperty("class")
-    public String clazz() {
-        return clazz;
+    public String className() {
+        return className;
+    }
+
+    @JsonProperty("type")
+    public ConnectorType type() {
+        return type;
+    }
+
+    @JsonProperty("version")
+    public String version() {
+        return version;
     }
 
     @Override
@@ -44,16 +67,23 @@ public class ConnectorPluginInfo {
             return false;
         }
         ConnectorPluginInfo that = (ConnectorPluginInfo) o;
-        return Objects.equals(clazz, that.clazz);
+        return Objects.equals(className, that.className) &&
+               type == that.type &&
+               Objects.equals(version, that.version);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(clazz);
+        return Objects.hash(className, type, version);
     }
 
     @Override
     public String toString() {
-        return clazz;
+        final StringBuilder sb = new StringBuilder("ConnectorPluginInfo{");
+        sb.append("className='").append(className).append('\'');
+        sb.append(", type=").append(type);
+        sb.append(", version='").append(version).append('\'');
+        sb.append('}');
+        return sb.toString();
     }
 }

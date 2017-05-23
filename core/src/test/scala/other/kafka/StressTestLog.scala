@@ -21,6 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic._
 
 import kafka.log._
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException
 import org.apache.kafka.common.record.FileRecords
@@ -46,7 +47,8 @@ object StressTestLog {
                       logStartOffset = 0L,
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
-                      time = time)
+                      time = time,
+                      brokerTopicStats = new BrokerTopicStats)
     val writer = new WriterThread(log)
     writer.start()
     val reader = new ReaderThread(log)

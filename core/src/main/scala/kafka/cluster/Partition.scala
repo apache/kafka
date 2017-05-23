@@ -16,27 +16,29 @@
  */
 package kafka.cluster
 
-import kafka.common._
-import kafka.utils._
-import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.admin.AdminUtils
-import kafka.api.LeaderAndIsr
-import kafka.log.LogConfig
-import kafka.server._
-import kafka.metrics.KafkaMetricsGroup
-import kafka.controller.KafkaController
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import org.apache.kafka.common.errors.{PolicyViolationException, NotEnoughReplicasException, NotLeaderForPartitionException}
+import com.yammer.metrics.core.Gauge
+import kafka.admin.AdminUtils
+import kafka.api.LeaderAndIsr
+import kafka.common.NotAssignedReplicaException
+import kafka.controller.KafkaController
+import kafka.log.LogConfig
+import kafka.metrics.KafkaMetricsGroup
+import kafka.server._
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
+import kafka.utils._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.{NotEnoughReplicasException, NotLeaderForPartitionException, PolicyViolationException}
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.requests.EpochEndOffset._
+import org.apache.kafka.common.requests.{EpochEndOffset, PartitionState}
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import com.yammer.metrics.core.Gauge
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.requests.PartitionState
-import org.apache.kafka.common.utils.Time
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -241,9 +243,9 @@ class Partition(val topic: String,
     getReplica(replicaId) match {
       case Some(replica) =>
         // No need to calculate low watermark if there is no delayed DeleteRecordsRequest
-        val oldLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed() > 0) lowWatermarkIfLeader else -1L
+        val oldLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
         replica.updateLogReadResult(logReadResult)
-        val newLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed() > 0) lowWatermarkIfLeader else -1L
+        val newLeaderLW = if (replicaManager.delayedDeleteRecordsPurgatory.delayed > 0) lowWatermarkIfLeader else -1L
         // check if the LW of the partition has incremented
         // since the replica's logStartOffset may have incremented
         val leaderLWIncremented = newLeaderLW > oldLeaderLW
@@ -456,7 +458,7 @@ class Partition(val topic: String,
     laggingReplicas
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, requiredAcks: Int = 0) = {
+  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0) = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
@@ -470,7 +472,7 @@ class Partition(val topic: String,
               .format(topicPartition, inSyncSize, minIsr))
           }
 
-          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch)
+          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient)
           // probably unblock some follower fetch requests since log end offset has been updated
           replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
@@ -506,6 +508,21 @@ class Partition(val topic: String,
         case None =>
           throw new NotLeaderForPartitionException("Leader not local for partition %s on broker %d"
             .format(topicPartition, localBrokerId))
+      }
+    }
+  }
+
+  /**
+    * @param leaderEpoch Requested leader epoch
+    * @return The last offset of messages published under this leader epoch.
+    */
+  def lastOffsetForLeaderEpoch(leaderEpoch: Int): EpochEndOffset = {
+    inReadLock(leaderIsrUpdateLock) {
+      leaderReplicaIfLocal match {
+        case Some(leaderReplica) =>
+          new EpochEndOffset(NONE, leaderReplica.epochs.get.endOffsetFor(leaderEpoch))
+        case None =>
+          new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH_OFFSET)
       }
     }
   }

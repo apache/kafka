@@ -22,6 +22,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.MockProcessorContext;
+import org.junit.After;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -35,39 +36,40 @@ public class StoreChangeLoggerTest {
     private final String topic = "topic";
 
     private final Map<Integer, String> logged = new HashMap<>();
-    private final Map<Integer, String> written = new HashMap<>();
 
     private final MockProcessorContext context = new MockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
             new RecordCollectorImpl(null, "StoreChangeLoggerTest") {
                 @SuppressWarnings("unchecked")
                 @Override
                 public <K1, V1> void send(final String topic,
-                                          K1 key,
-                                          V1 value,
-                                          Integer partition,
-                                          Long timestamp,
-                                          Serializer<K1> keySerializer,
-                                          Serializer<V1> valueSerializer) {
+                                          final K1 key,
+                                          final V1 value,
+                                          final Integer partition,
+                                          final Long timestamp,
+                                          final Serializer<K1> keySerializer,
+                                          final Serializer<V1> valueSerializer) {
                     logged.put((Integer) key, (String) value);
                 }
 
                 @Override
                 public <K1, V1> void send(final String topic,
-                                           K1 key,
-                                           V1 value,
-                                           Integer partition,
-                                           Long timestamp,
-                                           Serializer<K1> keySerializer,
-                                           Serializer<V1> valueSerializer,
-                                           StreamPartitioner<? super K1, ? super V1> partitioner) {
-                    // ignore partitioner
-                    send(topic, key, value, partition, timestamp, keySerializer, valueSerializer);
+                                          final K1 key,
+                                          final V1 value,
+                                          final Long timestamp,
+                                          final Serializer<K1> keySerializer,
+                                          final Serializer<V1> valueSerializer,
+                                          final StreamPartitioner<? super K1, ? super V1> partitioner) {
+                    throw new UnsupportedOperationException();
                 }
             }
     );
 
     private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
 
+    @After
+    public void after() {
+        context.close();
+    }
 
     @SuppressWarnings("unchecked")
     @Test

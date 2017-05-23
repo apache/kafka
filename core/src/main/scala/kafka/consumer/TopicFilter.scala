@@ -18,8 +18,9 @@
 package kafka.consumer
 
 import kafka.utils.Logging
-import java.util.regex.{PatternSyntaxException, Pattern}
-import kafka.common.Topic
+import java.util.regex.{Pattern, PatternSyntaxException}
+
+import org.apache.kafka.common.internals.Topic
 
 sealed abstract class TopicFilter(rawRegex: String) extends Logging {
 

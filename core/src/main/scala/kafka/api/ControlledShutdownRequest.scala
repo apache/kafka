@@ -69,7 +69,7 @@ case class ControlledShutdownRequest(versionId: Short,
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val errorResponse = ControlledShutdownResponse(correlationId, Errors.forException(e), Set.empty[TopicAndPartition])
-    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
+    requestChannel.sendResponse(Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean = false): String = {

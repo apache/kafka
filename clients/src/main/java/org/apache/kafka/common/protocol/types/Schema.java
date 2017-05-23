@@ -56,8 +56,7 @@ public class Schema extends Type {
                 Object value = field.type().validate(r.get(field));
                 field.type.write(buffer, value);
             } catch (Exception e) {
-                throw new SchemaException("Error writing field '" + field.name +
-                                          "': " +
+                throw new SchemaException("Error writing field '" + field.name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
@@ -73,8 +72,7 @@ public class Schema extends Type {
             try {
                 objects[i] = fields[i].type.read(buffer);
             } catch (Exception e) {
-                throw new SchemaException("Error reading field '" + fields[i].name +
-                                          "': " +
+                throw new SchemaException("Error reading field '" + fields[i].name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
             }
         }
@@ -88,8 +86,14 @@ public class Schema extends Type {
     public int sizeOf(Object o) {
         int size = 0;
         Struct r = (Struct) o;
-        for (Field field : fields)
-            size += field.type.sizeOf(r.get(field));
+        for (Field field : fields) {
+            try {
+                size += field.type.sizeOf(r.get(field));
+            } catch (Exception e) {
+                throw new SchemaException("Error computing size for field '" + field.name + "': " +
+                        (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
+            }
+        }
         return size;
     }
 

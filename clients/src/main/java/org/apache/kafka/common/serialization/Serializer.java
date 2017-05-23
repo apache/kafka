@@ -43,7 +43,6 @@ public interface Serializer<T> extends Closeable {
      */
     public byte[] serialize(String topic, T data);
 
-
     /**
      * Close this serializer.
      * This method has to be idempotent if the serializer is used in KafkaProducer because it might be called

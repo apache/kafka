@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
 import org.apache.kafka.common.utils.ByteUtils;
 import org.apache.kafka.common.utils.CloseableIterator;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import org.apache.kafka.common.utils.Utils;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -61,9 +63,9 @@ import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
  *
  * The current attributes are given below:
  *
- *  -----------------------------------------------------------------------------------
- *  | Unused (5-15) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
- *  -----------------------------------------------------------------------------------
+ *  -------------------------------------------------------------------------------------------------
+ *  | Unused (6-15) | Control (5) | Transactional (4) | Timestamp Type (3) | Compression Type (0-2) |
+ *  -------------------------------------------------------------------------------------------------
  */
 public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRecordBatch {
     static final int BASE_OFFSET_OFFSET = 0;
@@ -97,6 +99,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     private static final byte COMPRESSION_CODEC_MASK = 0x07;
     private static final byte TRANSACTIONAL_FLAG_MASK = 0x10;
+    private static final int CONTROL_FLAG_MASK = 0x20;
     private static final byte TIMESTAMP_TYPE_MASK = 0x08;
 
     private final ByteBuffer buffer;
@@ -166,6 +169,9 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
     @Override
     public int lastSequence() {
+        int baseSequence = baseSequence();
+        if (baseSequence == RecordBatch.NO_SEQUENCE)
+            return RecordBatch.NO_SEQUENCE;
         return baseSequence() + lastOffsetDelta();
     }
 
@@ -196,6 +202,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public boolean isTransactional() {
         return (attributes() & TRANSACTIONAL_FLAG_MASK) > 0;
+    }
+
+    @Override
+    public boolean isControlBatch() {
+        return (attributes() & CONTROL_FLAG_MASK) > 0;
     }
 
     @Override
@@ -280,7 +291,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (timestampType() == timestampType && currentMaxTimestamp == maxTimestamp)
             return;
 
-        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional());
+        byte attributes = computeAttributes(compressionType(), timestampType, isTransactional(), isControlBatch());
         buffer.putShort(ATTRIBUTES_OFFSET, attributes);
         buffer.putLong(MAX_TIMESTAMP_OFFSET, maxTimestamp);
         long crc = computeChecksum();
@@ -326,12 +337,15 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer != null ? buffer.hashCode() : 0;
     }
 
-    private static byte computeAttributes(CompressionType type, TimestampType timestampType, boolean isTransactional) {
+    private static byte computeAttributes(CompressionType type, TimestampType timestampType,
+                                          boolean isTransactional, boolean isControl) {
         if (timestampType == TimestampType.NO_TIMESTAMP_TYPE)
             throw new IllegalArgumentException("Timestamp type must be provided to compute attributes for message " +
                     "format v2 and above");
 
         byte attributes = isTransactional ? TRANSACTIONAL_FLAG_MASK : 0;
+        if (isControl)
+            attributes |= CONTROL_FLAG_MASK;
         if (type.id > 0)
             attributes |= COMPRESSION_CODEC_MASK & type.id;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
@@ -348,10 +362,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
                             TimestampType timestampType,
                             long baseTimestamp,
                             long maxTimestamp,
-                            long pid,
+                            long producerId,
                             short epoch,
                             int sequence,
                             boolean isTransactional,
+                            boolean isControlBatch,
                             int partitionLeaderEpoch,
                             int numRecords) {
         if (magic < RecordBatch.CURRENT_MAGIC_VALUE)
@@ -359,7 +374,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (baseTimestamp < 0 && baseTimestamp != NO_TIMESTAMP)
             throw new IllegalArgumentException("Invalid message timestamp " + baseTimestamp);
 
-        short attributes = computeAttributes(compressionType, timestampType, isTransactional);
+        short attributes = computeAttributes(compressionType, timestampType, isTransactional, isControlBatch);
 
         int position = buffer.position();
         buffer.putLong(position + BASE_OFFSET_OFFSET, baseOffset);
@@ -370,7 +385,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         buffer.putLong(position + BASE_TIMESTAMP_OFFSET, baseTimestamp);
         buffer.putLong(position + MAX_TIMESTAMP_OFFSET, maxTimestamp);
         buffer.putInt(position + LAST_OFFSET_DELTA_OFFSET, lastOffsetDelta);
-        buffer.putLong(position + PRODUCER_ID_OFFSET, pid);
+        buffer.putLong(position + PRODUCER_ID_OFFSET, producerId);
         buffer.putShort(position + PRODUCER_EPOCH_OFFSET, epoch);
         buffer.putInt(position + BASE_SEQUENCE_OFFSET, sequence);
         buffer.putInt(position + RECORDS_COUNT_OFFSET, numRecords);
@@ -426,6 +441,13 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      * Get an upper bound on the size of a batch with only a single record using a given key and value.
      */
     static int batchSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
+        return batchSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    }
+
+    /**
+     * Get an upper bound on the size of a batch with only a single record using a given key and value.
+     */
+    static int batchSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 

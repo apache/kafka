@@ -22,7 +22,8 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_10_0_IV1}
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
-import kafka.coordinator.OffsetConfig
+import kafka.coordinator.group.OffsetConfig
+import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
@@ -130,7 +131,7 @@ object Defaults {
   val AutoLeaderRebalanceEnable = true
   val LeaderImbalancePerBrokerPercentage = 10
   val LeaderImbalanceCheckIntervalSeconds = 300
-  val UncleanLeaderElectionEnable = true
+  val UncleanLeaderElectionEnable = false
   val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
   val InterBrokerProtocolVersion = ApiVersion.latestVersion.toString
 
@@ -142,6 +143,7 @@ object Defaults {
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMs = 6000
   val GroupMaxSessionTimeoutMs = 300000
+  val GroupInitialRebalanceDelayMs = 3000
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSize = OffsetConfig.DefaultMaxMetadataSize
@@ -154,6 +156,16 @@ object Defaults {
   val OffsetsRetentionCheckIntervalMs: Long = OffsetConfig.DefaultOffsetsRetentionCheckIntervalMs
   val OffsetCommitTimeoutMs = OffsetConfig.DefaultOffsetCommitTimeoutMs
   val OffsetCommitRequiredAcks = OffsetConfig.DefaultOffsetCommitRequiredAcks
+
+  /** ********* Transaction management configuration ***********/
+  val TransactionalIdExpirationMs = TransactionStateManager.DefaultTransactionalIdExpirationMs
+  val TransactionsMaxTimeoutMs = TransactionStateManager.DefaultTransactionsMaxTimeoutMs
+  val TransactionsTopicMinISR = TransactionLog.DefaultMinInSyncReplicas
+  val TransactionsLoadBufferSize = TransactionLog.DefaultLoadBufferSize
+  val TransactionsTopicReplicationFactor = TransactionLog.DefaultReplicationFactor
+  val TransactionsTopicPartitions = TransactionLog.DefaultNumPartitions
+  val TransactionsTopicSegmentBytes = TransactionLog.DefaultSegmentBytes
+  val TransactionsExpiredTransactionCleanupIntervalMS = TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs
 
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefault = ClientQuotaManagerConfig.QuotaBytesPerSecondDefault
@@ -318,6 +330,7 @@ object KafkaConfig {
   /** ********* Group coordinator configuration ***********/
   val GroupMinSessionTimeoutMsProp = "group.min.session.timeout.ms"
   val GroupMaxSessionTimeoutMsProp = "group.max.session.timeout.ms"
+  val GroupInitialRebalanceDelayMsProp = "group.initial.rebalance.delay.ms"
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
   val OffsetsLoadBufferSizeProp = "offsets.load.buffer.size"
@@ -329,6 +342,16 @@ object KafkaConfig {
   val OffsetsRetentionCheckIntervalMsProp = "offsets.retention.check.interval.ms"
   val OffsetCommitTimeoutMsProp = "offsets.commit.timeout.ms"
   val OffsetCommitRequiredAcksProp = "offsets.commit.required.acks"
+  /** ********* Transaction management configuration ***********/
+  val TransactionalIdExpirationMsProp = "transactional.id.expiration.ms"
+  val TransactionsMaxTimeoutMsProp = "transaction.max.timeout.ms"
+  val TransactionsTopicMinISRProp = "transaction.state.log.min.isr"
+  val TransactionsLoadBufferSizeProp = "transaction.state.log.load.buffer.size"
+  val TransactionsTopicPartitionsProp = "transaction.state.log.num.partitions"
+  val TransactionsTopicSegmentBytesProp = "transaction.state.log.segment.bytes"
+  val TransactionsTopicReplicationFactorProp = "transaction.state.log.replication.factor"
+  val TransactionsExpiredTransactionCleanupIntervalMsProp = "transaction.expired.transaction.cleanup.interval.ms"
+
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultProp = "quota.producer.default"
   val ConsumerQuotaBytesPerSecondDefaultProp = "quota.consumer.default"
@@ -336,8 +359,6 @@ object KafkaConfig {
   val NumReplicationQuotaSamplesProp = "replication.quota.window.num"
   val QuotaWindowSizeSecondsProp = "quota.window.size.seconds"
   val ReplicationQuotaWindowSizeSecondsProp = "replication.quota.window.size.seconds"
-  /** ********* Transaction Configuration **********/
-  val TransactionalIdExpirationMsProp = "transactional.id.expiration.ms"
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
@@ -393,8 +414,8 @@ object KafkaConfig {
   val MessageMaxBytesDoc = "The maximum message size that the server can receive. Note that this limit also applies " +
     "to the total size of a compressed batch of messages (when compression is enabled). Additionally, in versions " +
     "0.11 and later, all messages are written as batches and this setting applies to the total size of the batch."
-  val NumNetworkThreadsDoc = "the number of network threads that the server uses for handling network requests"
-  val NumIoThreadsDoc = "The number of io threads that the server uses for carrying out network requests"
+  val NumNetworkThreadsDoc = "The number of threads that the server uses for receiving requests from the network and sending responses to the network"
+  val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
   val QueuedMaxRequestsDoc = "The number of queued requests allowed before blocking the network threads"
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
@@ -552,6 +573,7 @@ object KafkaConfig {
   /** ********* Consumer coordinator configuration ***********/
   val GroupMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers. Shorter timeouts result in quicker failure detection at the cost of more frequent consumer heartbeating, which can overwhelm broker resources."
   val GroupMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers. Longer timeouts give consumers more time to process messages in between heartbeats at the cost of a longer time to detect failures."
+  val GroupInitialRebalanceDelayMsDoc = "The amount of time the group coordinator will wait for more consumers to join a new group before performing the first rebalance. A longer delay means potentially fewer rebalances, but increases the time until processing begins."
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit"
   val OffsetsLoadBufferSizeDoc = "Batch size for reading from the offsets segments when loading offsets into the cache."
@@ -565,6 +587,18 @@ object KafkaConfig {
   val OffsetCommitTimeoutMsDoc = "Offset commit will be delayed until all replicas for the offsets topic receive the commit " +
   "or this timeout is reached. This is similar to the producer request timeout."
   val OffsetCommitRequiredAcksDoc = "The required acks before the commit can be accepted. In general, the default (-1) should not be overridden"
+  /** ********* Transaction management configuration ***********/
+  val TransactionalIdExpirationMsDoc = "The maximum amount of time in ms that the transaction coordinator will wait before proactively expire a producer's transactional id without receiving any transaction status updates from it."
+  val TransactionsMaxTimeoutMsDoc = "The maximum allowed timeout for transactions. " +
+    "If a client’s requested transaction time exceed this, then the broker will return an error in InitProducerIdRequest. This prevents a client from too large of a timeout, which can stall consumers reading from topics included in the transaction."
+  val TransactionsTopicMinISRDoc = "Overridden " + MinInSyncReplicasProp + " config for the transaction topic."
+  val TransactionsLoadBufferSizeDoc = "Batch size for reading from the transaction log segments when loading producer ids and transactions into the cache."
+  val TransactionsTopicReplicationFactorDoc = "The replication factor for the transaction topic (set higher to ensure availability). " +
+    "Internal topic creation will fail until the cluster size meets this replication factor requirement."
+  val TransactionsTopicPartitionsDoc = "The number of partitions for the transaction topic (should not change after deployment)."
+  val TransactionsTopicSegmentBytesDoc = "The transaction topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads"
+  val TransactionsExpiredTransactionCleanupIntervalMsDoc = "The interval at which to rollback expired transactions"
+
   /** ********* Quota Configuration ***********/
   val ProducerQuotaBytesPerSecondDefaultDoc = "DEPRECATED: Used only when dynamic default quotas are not configured for <user>, <client-id> or <user, client-id> in Zookeeper. " +
   "Any producer distinguished by clientId will get throttled if it produces more bytes than this value per-second"
@@ -576,9 +610,9 @@ object KafkaConfig {
   val ReplicationQuotaWindowSizeSecondsDoc = "The time span of each sample for replication quotas"
   /** ********* Transaction Configuration ***********/
   val TransactionIdExpirationMsDoc = "The maximum time of inactivity before a transactional id is expired by the " +
-    "transaction coordinator. Note that this also influences PID expiration: PIDs are guaranteed to expire " +
-    "after expiration of this timeout from the last write by the PID (they may expire sooner if the last write " +
-    "from the PID is deleted due to the topic's retention settings)."
+    "transaction coordinator. Note that this also influences producer id expiration: Producer ids are guaranteed to expire " +
+    "after expiration of this timeout from the last write by the producer id (they may expire sooner if the last write " +
+    "from the producer id is deleted due to the topic's retention settings)."
 
   val DeleteTopicEnableDoc = "Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off"
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
@@ -745,6 +779,7 @@ object KafkaConfig {
       /** ********* Group coordinator configuration ***********/
       .define(GroupMinSessionTimeoutMsProp, INT, Defaults.GroupMinSessionTimeoutMs, MEDIUM, GroupMinSessionTimeoutMsDoc)
       .define(GroupMaxSessionTimeoutMsProp, INT, Defaults.GroupMaxSessionTimeoutMs, MEDIUM, GroupMaxSessionTimeoutMsDoc)
+      .define(GroupInitialRebalanceDelayMsProp, INT, Defaults.GroupInitialRebalanceDelayMs, MEDIUM, GroupInitialRebalanceDelayMsDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OffsetMetadataMaxSize, HIGH, OffsetMetadataMaxSizeDoc)
@@ -760,6 +795,16 @@ object KafkaConfig {
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
 
+      /** ********* Transaction management configuration ***********/
+      .define(TransactionalIdExpirationMsProp, INT, Defaults.TransactionalIdExpirationMs, atLeast(1), HIGH, TransactionalIdExpirationMsDoc)
+      .define(TransactionsMaxTimeoutMsProp, INT, Defaults.TransactionsMaxTimeoutMs, atLeast(1), HIGH, TransactionsMaxTimeoutMsDoc)
+      .define(TransactionsTopicMinISRProp, INT, Defaults.TransactionsTopicMinISR, atLeast(1), HIGH, TransactionsTopicMinISRDoc)
+      .define(TransactionsLoadBufferSizeProp, INT, Defaults.TransactionsLoadBufferSize, atLeast(1), HIGH, TransactionsLoadBufferSizeDoc)
+      .define(TransactionsTopicReplicationFactorProp, SHORT, Defaults.TransactionsTopicReplicationFactor, atLeast(1), HIGH, TransactionsTopicReplicationFactorDoc)
+      .define(TransactionsTopicPartitionsProp, INT, Defaults.TransactionsTopicPartitions, atLeast(1), HIGH, TransactionsTopicPartitionsDoc)
+      .define(TransactionsTopicSegmentBytesProp, INT, Defaults.TransactionsTopicSegmentBytes, atLeast(1), HIGH, TransactionsTopicSegmentBytesDoc)
+      .define(TransactionsExpiredTransactionCleanupIntervalMsProp, INT, Defaults.TransactionsExpiredTransactionCleanupIntervalMS, atLeast(1), LOW, TransactionsExpiredTransactionCleanupIntervalMsDoc)
+
       /** ********* Kafka Metrics Configuration ***********/
       .define(MetricNumSamplesProp, INT, Defaults.MetricNumSamples, atLeast(1), LOW, MetricNumSamplesDoc)
       .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
@@ -773,9 +818,6 @@ object KafkaConfig {
       .define(NumReplicationQuotaSamplesProp, INT, Defaults.NumReplicationQuotaSamples, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
       .define(QuotaWindowSizeSecondsProp, INT, Defaults.QuotaWindowSizeSeconds, atLeast(1), LOW, QuotaWindowSizeSecondsDoc)
       .define(ReplicationQuotaWindowSizeSecondsProp, INT, Defaults.ReplicationQuotaWindowSizeSeconds, atLeast(1), LOW, ReplicationQuotaWindowSizeSecondsDoc)
-
-      /** ********* Transaction configuration ***********/
-      .define(TransactionalIdExpirationMsProp, INT, Defaults.TransactionalIdExpirationMsDefault, atLeast(1), LOW, TransactionIdExpirationMsDoc)
 
       /** ********* SSL Configuration ****************/
       .define(PrincipalBuilderClassProp, CLASS, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
@@ -951,6 +993,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   /** ********* Group coordinator configuration ***********/
   val groupMinSessionTimeoutMs = getInt(KafkaConfig.GroupMinSessionTimeoutMsProp)
   val groupMaxSessionTimeoutMs = getInt(KafkaConfig.GroupMaxSessionTimeoutMsProp)
+  val groupInitialRebalanceDelay = getInt(KafkaConfig.GroupInitialRebalanceDelayMsProp)
 
   /** ********* Offset management configuration ***********/
   val offsetMetadataMaxSize = getInt(KafkaConfig.OffsetMetadataMaxSizeProp)
@@ -961,6 +1004,16 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val offsetCommitRequiredAcks = getShort(KafkaConfig.OffsetCommitRequiredAcksProp)
   val offsetsTopicSegmentBytes = getInt(KafkaConfig.OffsetsTopicSegmentBytesProp)
   val offsetsTopicCompressionCodec = Option(getInt(KafkaConfig.OffsetsTopicCompressionCodecProp)).map(value => CompressionCodec.getCompressionCodec(value)).orNull
+
+  /** ********* Transaction management configuration ***********/
+  val transactionalIdExpirationMs = getInt(KafkaConfig.TransactionalIdExpirationMsProp)
+  val transactionMaxTimeoutMs = getInt(KafkaConfig.TransactionsMaxTimeoutMsProp)
+  val transactionTopicMinISR = getInt(KafkaConfig.TransactionsTopicMinISRProp)
+  val transactionsLoadBufferSize = getInt(KafkaConfig.TransactionsLoadBufferSizeProp)
+  val transactionTopicReplicationFactor = getShort(KafkaConfig.TransactionsTopicReplicationFactorProp)
+  val transactionTopicPartitions = getInt(KafkaConfig.TransactionsTopicPartitionsProp)
+  val transactionTopicSegmentBytes = getInt(KafkaConfig.TransactionsTopicSegmentBytesProp)
+  val transactionTransactionsExpiredTransactionCleanupIntervalMs = getInt(KafkaConfig.TransactionsExpiredTransactionCleanupIntervalMsProp)
 
   /** ********* Metric Configuration **************/
   val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)
