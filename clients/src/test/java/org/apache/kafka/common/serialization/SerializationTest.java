@@ -52,7 +52,7 @@ public class SerializationTest {
     }
 
     @Test
-    public void testAllSerdes() {
+    public void allSerdesShouldRoundtripInput() {
         for (Map.Entry<Class<Object>, List<Object>> test : testData.entrySet()) {
             try (Serde<Object> serde = Serdes.serdeFrom(test.getKey())) {
                 for (Object value : test.getValue()) {
@@ -65,7 +65,7 @@ public class SerializationTest {
     }
 
     @Test
-    public void serdeShouldSupportNull() {
+    public void allSerdesShouldSupportNull() {
         for (Class<?> cls : testData.keySet()) {
             try (Serde<?> serde = Serdes.serdeFrom(cls)) {
                 assertThat("Should support null in " + cls.getSimpleName() + " serialization",
@@ -83,11 +83,13 @@ public class SerializationTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testSerdeFromNotNull() {
-        Serdes.serdeFrom(null, Serdes.Long().deserializer());
+        try (Serde<Long> serde = Serdes.Long()) {
+            Serdes.serdeFrom(null, serde.deserializer());
+        }
     }
 
     @Test
-    public void testStringWithEncodingSerde() {
+    public void stringSerdeShouldSupportDifferentEncodings() {
         String str = "my string";
         List<String> encodings = Arrays.asList("UTF8", "UTF-16");
 
@@ -104,23 +106,23 @@ public class SerializationTest {
 
     @Test(expected = SerializationException.class)
     public void floatDeserializerShouldThrowSerializationExceptionOnZeroBytes() {
-        try (Deserializer<Float> deserializer = Serdes.Float().deserializer()) {
-            deserializer.deserialize(topic, new byte[0]);
+        try (Serde<Float> serde = Serdes.Float()) {
+            serde.deserializer().deserialize(topic, new byte[0]);
         }
     }
 
     @Test(expected = SerializationException.class)
     public void floatDeserializerShouldThrowSerializationExceptionOnTooFewBytes() {
-        try (Deserializer<Float> deserializer = Serdes.Float().deserializer()) {
-            deserializer.deserialize(topic, new byte[3]);
+        try (Serde<Float> serde = Serdes.Float()) {
+            serde.deserializer().deserialize(topic, new byte[3]);
         }
     }
 
 
     @Test(expected = SerializationException.class)
     public void floatDeserializerShouldThrowSerializationExceptionOnTooManyBytes() {
-        try (Deserializer<Float> deserializer = Serdes.Float().deserializer()) {
-            deserializer.deserialize(topic, new byte[5]);
+        try (Serde<Float> serde = Serdes.Float()) {
+            serde.deserializer().deserialize(topic, new byte[5]);
         }
     }
 
