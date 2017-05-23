@@ -20,7 +20,6 @@ package kafka.api
 import java.util.concurrent.{ExecutionException, TimeoutException}
 import java.util.Properties
 
-import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -28,6 +27,8 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
@@ -120,7 +121,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     TestUtils.createTopic(zkUtils, topic10, servers.size, numServers, servers, topicConfig)
 
     // send a record that is too large for replication, but within the broker max message limit
-    val record = new ProducerRecord(topic10, null, "key".getBytes, new Array[Byte](maxMessageSize - 50))
+    val value = new Array[Byte](maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic10, null, value)
     val recordMetadata = producer3.send(record).get
 
     assertEquals(topic10, recordMetadata.topic)
@@ -224,7 +226,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   def testCannotSendToInternalTopic() {
     TestUtils.createOffsetsTopic(zkUtils, servers)
     val thrown = intercept[ExecutionException] {
-      producer2.send(new ProducerRecord(Topic.GroupMetadataTopicName, "test".getBytes, "test".getBytes)).get
+      producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get
     }
     assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }

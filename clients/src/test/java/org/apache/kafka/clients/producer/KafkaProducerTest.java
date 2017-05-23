@@ -23,9 +23,16 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
@@ -47,6 +54,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 @RunWith(PowerMockRunner.class)
@@ -80,9 +89,9 @@ public class KafkaProducerTest {
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
                     props, new ByteArraySerializer(), new ByteArraySerializer());
         } catch (KafkaException e) {
-            Assert.assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
-            Assert.assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
-            Assert.assertEquals("Failed to construct kafka producer", e.getMessage());
+            assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
+            assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
+            assertEquals("Failed to construct kafka producer", e.getMessage());
             return;
         }
         fail("should have caught an exception and returned");
@@ -100,12 +109,12 @@ public class KafkaProducerTest {
 
         KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(
                 configs, new MockSerializer(), new MockSerializer());
-        Assert.assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
-        Assert.assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
+        assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
+        assertEquals(oldCloseCount, MockSerializer.CLOSE_COUNT.get());
 
         producer.close();
-        Assert.assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
-        Assert.assertEquals(oldCloseCount + 2, MockSerializer.CLOSE_COUNT.get());
+        assertEquals(oldInitCount + 2, MockSerializer.INIT_COUNT.get());
+        assertEquals(oldCloseCount + 2, MockSerializer.CLOSE_COUNT.get());
     }
 
     @Test
@@ -119,15 +128,15 @@ public class KafkaProducerTest {
 
             KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
                     props, new StringSerializer(), new StringSerializer());
-            Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            assertEquals(0, MockProducerInterceptor.CLOSE_COUNT.get());
 
             // Cluster metadata will only be updated on calling onSend.
             Assert.assertNull(MockProducerInterceptor.CLUSTER_META.get());
 
             producer.close();
-            Assert.assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
-            Assert.assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.INIT_COUNT.get());
+            assertEquals(1, MockProducerInterceptor.CLOSE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockProducerInterceptor
             MockProducerInterceptor.resetCounters();
@@ -143,12 +152,12 @@ public class KafkaProducerTest {
 
             KafkaProducer<String, String> producer = new KafkaProducer<String, String>(
                     props, new StringSerializer(), new StringSerializer());
-            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
-            Assert.assertEquals(0, MockPartitioner.CLOSE_COUNT.get());
+            assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            assertEquals(0, MockPartitioner.CLOSE_COUNT.get());
 
             producer.close();
-            Assert.assertEquals(1, MockPartitioner.INIT_COUNT.get());
-            Assert.assertEquals(1, MockPartitioner.CLOSE_COUNT.get());
+            assertEquals(1, MockPartitioner.INIT_COUNT.get());
+            assertEquals(1, MockPartitioner.CLOSE_COUNT.get());
         } finally {
             // cleanup since we are using mutable static variables in MockPartitioner
             MockPartitioner.resetCounters();
@@ -306,6 +315,123 @@ public class KafkaProducerTest {
         PowerMock.replay(metadata);
         producer.send(extendedRecord, null);
         PowerMock.verify(metadata);
+    }
+
+    @Test
+    public void testTopicRefreshInMetadata() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        long refreshBackoffMs = 500L;
+        long metadataExpireMs = 60000L;
+        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, new ClusterResourceListeners());
+        final Time time = new MockTime();
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
+        final String topic = "topic";
+
+        Thread t = new Thread() {
+            @Override
+            public void run() {
+                long startTimeMs = System.currentTimeMillis();
+                for (int i = 0; i < 10; i++) {
+                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
+                        yield();
+                    metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
+                    time.sleep(60 * 1000L);
+                }
+            }
+        };
+        t.start();
+        try {
+            producer.partitionsFor(topic);
+            fail("Expect TimeoutException");
+        } catch (TimeoutException e) {
+            // skip
+        }
+        Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
+    }
+    
+    @PrepareOnlyThisForTest(Metadata.class)
+    @Test
+    public void testHeaders() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        ExtendedSerializer keySerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
+        ExtendedSerializer valueSerializer = PowerMock.createNiceMock(ExtendedSerializer.class);
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, keySerializer, valueSerializer);
+        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+
+        String topic = "topic";
+        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
+
+        final Cluster cluster = new Cluster(
+                "dummy",
+                Collections.singletonList(new Node(0, "host1", 1000)),
+                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet());
+
+
+        EasyMock.expect(metadata.fetch()).andReturn(cluster).anyTimes();
+
+        PowerMock.replay(metadata);
+
+        String value = "value";
+
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, value);
+        EasyMock.expect(keySerializer.serialize(topic, record.headers(), null)).andReturn(null).once();
+        EasyMock.expect(valueSerializer.serialize(topic, record.headers(), value)).andReturn(value.getBytes()).once();
+
+        PowerMock.replay(keySerializer);
+        PowerMock.replay(valueSerializer);
+
+
+        //ensure headers can be mutated pre send.
+        record.headers().add(new RecordHeader("test", "header2".getBytes()));
+        
+        producer.send(record, null);
+        
+        //ensure headers are closed and cannot be mutated post send
+        try {
+            record.headers().add(new RecordHeader("test", "test".getBytes()));
+            fail("Expected IllegalStateException to be raised");
+        } catch (IllegalStateException ise) {
+            //expected
+        }
+        
+        //ensure existing headers are not changed, and last header for key is still original value
+        assertTrue(Arrays.equals(record.headers().lastHeader("test").value(), "header2".getBytes()));
+
+        PowerMock.verify(valueSerializer);
+        PowerMock.verify(keySerializer);
+
+    }
+
+    @Test
+    public void closeShouldBeIdempotent() {
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Producer producer = new KafkaProducer<>(producerProps, new ByteArraySerializer(), new ByteArraySerializer());
+        producer.close();
+        producer.close();
+    }
+
+    @Test
+    public void testMetricConfigRecordingLevel() {
+        Properties props = new Properties();
+        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        try (KafkaProducer producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertEquals(Sensor.RecordingLevel.INFO, producer.metrics.config().recordLevel());
+        }
+
+        props.put(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
+        try (KafkaProducer producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer())) {
+            assertEquals(Sensor.RecordingLevel.DEBUG, producer.metrics.config().recordLevel());
+        }
     }
 
 }

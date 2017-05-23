@@ -16,22 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.RequestCompletionHandler;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.DisconnectException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.requests.AbstractRequest;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.utils.Time;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -43,7 +27,22 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.clients.ClientRequest;
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.RequestCompletionHandler;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.requests.AbstractRequest;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.Time;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Higher level consumer access to the network layer with basic support for request futures. This class
@@ -62,7 +61,7 @@ public class ConsumerNetworkClient implements Closeable {
     private final Time time;
     private final long retryBackoffMs;
     private final long unsentExpiryMs;
-    private int wakeupDisabledCount = 0;
+    private final AtomicBoolean wakeupDisabled = new AtomicBoolean();
 
     // when requests complete, they are transferred to this queue prior to invocation. The purpose
     // is to avoid invoking them while holding this object's monitor which can open the door for deadlocks.
@@ -204,6 +203,16 @@ public class ConsumerNetworkClient implements Closeable {
      * @param now current time in milliseconds
      */
     public void poll(long timeout, long now, PollCondition pollCondition) {
+        poll(timeout, now, pollCondition, false);
+    }
+
+    /**
+     * Poll for any network IO.
+     * @param timeout timeout in milliseconds
+     * @param now current time in milliseconds
+     * @param disableWakeup If TRUE disable triggering wake-ups
+     */
+    public void poll(long timeout, long now, PollCondition pollCondition, boolean disableWakeup) {
         // there may be handlers which need to be invoked if we woke up the previous call to poll
         firePendingCompletedRequests();
 
@@ -228,11 +237,11 @@ public class ConsumerNetworkClient implements Closeable {
             // be checked immediately following poll since any subsequent call to client.ready()
             // will reset the disconnect status
             checkDisconnects(now);
-
-            // trigger wakeups after checking for disconnects so that the callbacks will be ready
-            // to be fired on the next call to poll()
-            maybeTriggerWakeup();
-            
+            if (!disableWakeup) {
+                // trigger wakeups after checking for disconnects so that the callbacks will be ready
+                // to be fired on the next call to poll()
+                maybeTriggerWakeup();
+            }
             // throw InterruptException if this thread is interrupted
             maybeThrowInterruptException();
 
@@ -256,12 +265,7 @@ public class ConsumerNetworkClient implements Closeable {
      * nor will it execute any delayed tasks.
      */
     public void pollNoWakeup() {
-        disableWakeups();
-        try {
-            poll(0, time.milliseconds(), null);
-        } finally {
-            enableWakeups();
-        }
+        poll(0, time.milliseconds(), null, true);
     }
 
     /**
@@ -409,14 +413,14 @@ public class ConsumerNetworkClient implements Closeable {
         return requestsSent;
     }
 
-    private void maybeTriggerWakeup() {
-        if (wakeupDisabledCount == 0 && wakeup.get()) {
+    public void maybeTriggerWakeup() {
+        if (!wakeupDisabled.get() && wakeup.get()) {
             log.trace("Raising wakeup exception in response to user wakeup");
             wakeup.set(false);
             throw new WakeupException();
         }
     }
-    
+
     private void maybeThrowInterruptException() {
         if (Thread.interrupted()) {
             throw new InterruptException(new InterruptedException());
@@ -424,23 +428,7 @@ public class ConsumerNetworkClient implements Closeable {
     }
 
     public void disableWakeups() {
-        synchronized (this) {
-            wakeupDisabledCount++;
-        }
-    }
-
-    public void enableWakeups() {
-        synchronized (this) {
-            if (wakeupDisabledCount <= 0)
-                throw new IllegalStateException("Cannot enable wakeups since they were never disabled");
-
-            wakeupDisabledCount--;
-
-            // re-wakeup the client if the flag was set since previous wake-up call
-            // could be cleared by poll(0) while wakeups were disabled
-            if (wakeupDisabledCount == 0 && wakeup.get())
-                this.client.wakeup();
-        }
+        wakeupDisabled.set(true);
     }
 
     @Override

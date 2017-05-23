@@ -83,8 +83,9 @@ class WorkerSinkTask extends WorkerTask {
                           Converter keyConverter,
                           Converter valueConverter,
                           TransformationChain<SinkRecord> transformationChain,
+                          ClassLoader loader,
                           Time time) {
-        super(id, statusListener, initialState);
+        super(id, statusListener, initialState, loader);
 
         this.workerConfig = workerConfig;
         this.task = task;

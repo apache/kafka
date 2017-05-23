@@ -27,10 +27,9 @@ import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.log4j.{Level, Logger}
-import org.junit.{After, Before, Test}
+import org.junit.{After, Ignore, Test}
 
 import scala.collection.mutable
-
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
@@ -45,11 +44,6 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   override def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
-  @Before
-  override def setUp() {
-    super.setUp()
-  }
-
   @After
   override def tearDown() {
     super.tearDown()
@@ -60,6 +54,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
    * See @link{https://issues.apache.org/jira/browse/KAFKA-2300}
    * for the background of this test case
    */
+  @Ignore // This needs to be reworked as described here: https://github.com/apache/kafka/pull/2935#discussion_r114374412
   @Test
   def testMetadataUpdate() {
     log.setLevel(Level.INFO)

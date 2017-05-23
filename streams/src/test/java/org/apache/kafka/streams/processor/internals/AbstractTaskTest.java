@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -35,6 +36,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
+import java.util.Properties;
 
 public class AbstractTaskTest {
 
@@ -42,25 +44,29 @@ public class AbstractTaskTest {
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenAuthorizationException() throws Exception {
         final Consumer consumer = mockConsumer(new AuthorizationException("blah"));
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateExceptionOnInitializeOffsetsWhenKafkaException() throws Exception {
         final Consumer consumer = mockConsumer(new KafkaException("blah"));
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     @Test(expected = WakeupException.class)
     public void shouldThrowWakeupExceptionOnInitializeOffsetsWhenWakeupException() throws Exception {
         final Consumer consumer = mockConsumer(new WakeupException());
         final AbstractTask task = createTask(consumer);
-        task.initializeOffsetLimits();
+        task.updateOffsetLimits();
     }
 
     private AbstractTask createTask(final Consumer consumer) {
         final MockTime time = new MockTime();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
+        properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummyhost:9092");
+        final StreamsConfig config = new StreamsConfig(properties);
         return new AbstractTask(new TaskId(0, 0),
                                 "app",
                                 Collections.singletonList(new TopicPartition("t", 0)),
@@ -74,31 +80,19 @@ public class AbstractTaskTest {
                                 new StoreChangelogReader(consumer, Time.SYSTEM, 5000),
                                 false,
                                 new StateDirectory("app", TestUtils.tempDirectory().getPath(), time),
-                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics()))) {
+                                new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())),
+                                config) {
             @Override
-            public void commit() {
-                // do nothing
-            }
-
-            @Override
-            public void close() {
-
-            }
+            public void resume() {}
 
             @Override
-            public void initTopology() {
-
-            }
+            public void commit() {}
 
             @Override
-            public void closeTopology() {
-
-            }
+            public void suspend() {}
 
             @Override
-            public void commitOffsets() {
-                // do nothing
-            }
+            public void close(final boolean clean) {}
         };
     }
 

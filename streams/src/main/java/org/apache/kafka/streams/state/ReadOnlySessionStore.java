@@ -33,8 +33,24 @@ public interface ReadOnlySessionStore<K, AGG> {
 
     /**
      * Retrieve all aggregated sessions for the provided key
+     *
+     * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
+     * available session to the newest/latest session.
+     *
      * @param    key record key to find aggregated session values for
      * @return   KeyValueIterator containing all sessions for the provided key.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
+
+    /**
+     * Retrieve all aggregated sessions for the given range of keys
+     *
+     * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
+     * available session to the newest/latest session.
+     *
+     * @param    from first key in the range to find aggregated session values for
+     * @param    to last key in the range to find aggregated session values for
+     * @return   KeyValueIterator containing all sessions for the provided key.
+     */
+    KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to);
 }

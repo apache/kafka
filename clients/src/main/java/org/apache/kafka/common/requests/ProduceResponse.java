@@ -20,7 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
@@ -46,7 +46,6 @@ public class ProduceResponse extends AbstractResponse {
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     public static final long INVALID_OFFSET = -1L;
-    public static final int DEFAULT_THROTTLE_TIME = 0;
 
     /**
      * Possible error code:
@@ -61,6 +60,7 @@ public class ProduceResponse extends AbstractResponse {
      * NOT_ENOUGH_REPLICAS_AFTER_APPEND (20)
      * INVALID_REQUIRED_ACKS (21)
      * TOPIC_AUTHORIZATION_FAILED (29)
+     * UNSUPPORTED_FOR_MESSAGE_FORMAT (43)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
@@ -152,7 +152,7 @@ public class ProduceResponse extends AbstractResponse {
         public long logAppendTime;
 
         public PartitionResponse(Errors error) {
-            this(error, INVALID_OFFSET, Record.NO_TIMESTAMP);
+            this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP);
         }
 
         public PartitionResponse(Errors error, long baseOffset, long logAppendTime) {
@@ -179,4 +179,5 @@ public class ProduceResponse extends AbstractResponse {
     public static ProduceResponse parse(ByteBuffer buffer, short version) {
         return new ProduceResponse(ApiKeys.PRODUCE.responseSchema(version).read(buffer));
     }
+
 }

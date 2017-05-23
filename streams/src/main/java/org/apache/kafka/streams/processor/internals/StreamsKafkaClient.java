@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.ClientUtils;
@@ -37,6 +38,7 @@ import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
@@ -46,6 +48,7 @@ import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.BrokerNotFoundException;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.IOException;
@@ -57,6 +60,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
 
 public class StreamsKafkaClient {
 
@@ -124,11 +130,13 @@ public class StreamsKafkaClient {
             streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
             MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
             streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
+            streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
             streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
             streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
             streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
             time,
-            true);
+            true,
+            new ApiVersions());
     }
 
     public void close() throws IOException {
@@ -179,7 +187,7 @@ public class StreamsKafkaClient {
         final CreateTopicsResponse createTopicsResponse =  (CreateTopicsResponse) clientResponse.responseBody();
 
         for (InternalTopicConfig internalTopicConfig : topicsMap.keySet()) {
-            CreateTopicsResponse.Error error = createTopicsResponse.errors().get(internalTopicConfig.name());
+            ApiError error = createTopicsResponse.errors().get(internalTopicConfig.name());
             if (!error.is(Errors.NONE) && !error.is(Errors.TOPIC_ALREADY_EXISTS)) {
                 throw new StreamsException("Could not create topic: " + internalTopicConfig.name() + " due to " + error.messageWithFallback());
             }
@@ -203,10 +211,17 @@ public class StreamsKafkaClient {
                     break;
                 }
             }
-            kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            try {
+                kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            } catch (final Exception e) {
+                throw new StreamsException("Could not poll.", e);
+            }
         }
         if (brokerId == null) {
-            throw new StreamsException("Could not find any available broker.");
+            throw new BrokerNotFoundException("Could not find any available broker. " +
+                "Check your StreamsConfig setting '" + StreamsConfig.BOOTSTRAP_SERVERS_CONFIG + "'. " +
+                "This error might also occur, if you try to connect to pre-0.10 brokers. " +
+                "Kafka Streams requires broker version 0.10.1.x or higher.");
         }
         return brokerId;
     }
@@ -235,11 +250,20 @@ public class StreamsKafkaClient {
     }
 
     private ClientResponse sendRequest(final ClientRequest clientRequest) {
-        kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
+        try {
+            kafkaClient.send(clientRequest, Time.SYSTEM.milliseconds());
+        } catch (final Exception e) {
+            throw new StreamsException("Could not send request.", e);
+        }
         final long responseTimeout = Time.SYSTEM.milliseconds() + streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG);
         // Poll for the response.
         while (Time.SYSTEM.milliseconds() < responseTimeout) {
-            List<ClientResponse> responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            final List<ClientResponse> responseList;
+            try {
+                responseList = kafkaClient.poll(streamsConfig.getLong(StreamsConfig.POLL_MS_CONFIG), Time.SYSTEM.milliseconds());
+            } catch (final IllegalStateException e) {
+                throw new StreamsException("Could not poll.", e);
+            }
             if (!responseList.isEmpty()) {
                 if (responseList.size() > 1) {
                     throw new StreamsException("Sent one request but received multiple or no responses.");
@@ -269,6 +293,7 @@ public class StreamsKafkaClient {
             Time.SYSTEM.milliseconds(),
             true);
         final ClientResponse clientResponse = sendRequest(clientRequest);
+
         if (!clientResponse.hasResponse()) {
             throw new StreamsException("Empty response for client request.");
         }
@@ -288,7 +313,7 @@ public class StreamsKafkaClient {
      *
      * @throws StreamsException if brokers have version 0.10.0.x
      */
-    public void checkBrokerCompatibility() throws StreamsException {
+    public void checkBrokerCompatibility(final boolean eosEnabled) throws StreamsException {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
             getAnyReadyBrokerId(),
             new ApiVersionsRequest.Builder(),
@@ -309,5 +334,19 @@ public class StreamsKafkaClient {
         if (apiVersionsResponse.apiVersion(ApiKeys.CREATE_TOPICS.id) == null) {
             throw new StreamsException("Kafka Streams requires broker version 0.10.1.x or higher.");
         }
+
+        if (eosEnabled && !brokerSupportsTransactions(apiVersionsResponse)) {
+            throw new StreamsException("Setting " + PROCESSING_GUARANTEE_CONFIG + "=" + EXACTLY_ONCE + " requires broker version 0.11.0.x or higher.");
+        }
     }
+
+    private boolean brokerSupportsTransactions(final ApiVersionsResponse apiVersionsResponse) {
+        return apiVersionsResponse.apiVersion(ApiKeys.INIT_PRODUCER_ID.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.ADD_PARTITIONS_TO_TXN.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.ADD_OFFSETS_TO_TXN.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.END_TXN.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.WRITE_TXN_MARKERS.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.TXN_OFFSET_COMMIT.id) != null;
+    }
+
 }

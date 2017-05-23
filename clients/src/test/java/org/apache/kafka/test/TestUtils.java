@@ -22,6 +22,8 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.xml.bind.DatatypeConverter;
 import java.io.File;
@@ -31,6 +33,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -50,6 +54,7 @@ import static org.junit.Assert.fail;
  * Helper functions for writing unit tests
  */
 public class TestUtils {
+    private static final Logger log = LoggerFactory.getLogger(TestUtils.class);
 
     public static final File IO_TMP_DIR = new File(System.getProperty("java.io.tmpdir"));
 
@@ -65,12 +70,20 @@ public class TestUtils {
     public static final Random RANDOM = new Random();
     public static final long DEFAULT_MAX_WAIT_MS = 15000;
 
+    public static Cluster singletonCluster() {
+        return clusterWith(1);
+    }
+
     public static Cluster singletonCluster(final Map<String, Integer> topicPartitionCounts) {
         return clusterWith(1, topicPartitionCounts);
     }
 
     public static Cluster singletonCluster(final String topic, final int partitions) {
         return clusterWith(1, topic, partitions);
+    }
+
+    public static Cluster clusterWith(int nodes) {
+        return clusterWith(nodes, new HashMap<String, Integer>());
     }
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
@@ -165,7 +178,11 @@ public class TestUtils {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                Utils.delete(file);
+                try {
+                    Utils.delete(file);
+                } catch (IOException e) {
+                    log.error("Error deleting {}", file.getAbsolutePath(), e);
+                }
             }
         });
 
@@ -293,6 +310,10 @@ public class TestUtils {
      */
     public static <T> void checkEquals(Iterable<T> it1, Iterable<T> it2) {
         assertEquals(toList(it1), toList(it2));
+    }
+
+    public static <T> void checkEquals(Iterator<T> it1, Iterator<T> it2) {
+        assertEquals(Utils.toList(it1), Utils.toList(it2));
     }
 
     public static <T> List<T> toList(Iterable<? extends T> iterable) {

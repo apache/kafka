@@ -17,17 +17,17 @@
 package org.apache.kafka.tools;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
+import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.Random;
+import java.util.Arrays;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -59,6 +59,7 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
+            boolean shouldPrintMetrics = res.getBoolean("printMetrics");
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -128,9 +129,24 @@ public class ProducerPerformance {
                 }
             }
 
-            /* print final results */
-            producer.close();
-            stats.printTotal();
+            if (!shouldPrintMetrics) {
+                producer.close();
+
+                /* print final results */
+                stats.printTotal();
+            } else {
+                // Make sure all messages are sent before printing out the stats and the metrics
+                // We need to do this in a different branch for now since tests/kafkatest/sanity_checks/test_performance_services.py
+                // expects this class to work with older versions of the client jar that don't support flush().
+                producer.flush();
+
+                /* print final results */
+                stats.printTotal();
+
+                /* print out metrics */
+                ToolsUtils.printMetrics(producer.metrics());
+                producer.close();
+            }
         } catch (ArgumentParserException e) {
             if (args.length == 0) {
                 parser.printHelp();
@@ -223,6 +239,13 @@ public class ProducerPerformance {
                 .dest("producerConfigFile")
                 .help("producer config properties file.");
 
+        parser.addArgument("--print-metrics")
+                .action(storeTrue())
+                .type(Boolean.class)
+                .metavar("PRINT-METRICS")
+                .dest("printMetrics")
+                .help("print out metrics at the end of the test.");
+
         return parser;
     }
 
@@ -291,7 +314,7 @@ public class ProducerPerformance {
             long ellapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
-            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.\n",
+            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
                               windowCount,
                               recsPerSec,
                               mbPerSec,
@@ -312,7 +335,7 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.\n",
+            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
                               count,
                               recsPerSec,
                               mbPerSec,

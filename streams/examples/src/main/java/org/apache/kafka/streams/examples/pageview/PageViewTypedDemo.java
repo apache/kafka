@@ -41,12 +41,13 @@ import java.util.Properties;
  * using specific data types (here: JSON POJO; but can also be Avro specific bindings, etc.) for serdes
  * in Kafka Streams.
  *
- * In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
+ * In this example, we join a stream of pageviews (aka clickstreams) that reads from a topic named "streams-pageview-input"
  * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
  * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
  *
- * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
- * and write some data to it (e.g. via bin-kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * Before running this example you must create the input topics and the output topic (e.g. via
+ * bin/kafka-topics.sh --create ...), and write some data to the input topics (e.g. via
+ * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class PageViewTypedDemo {
 
@@ -82,7 +83,7 @@ public class PageViewTypedDemo {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
+        props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

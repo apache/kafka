@@ -524,12 +524,18 @@
 
     <h3><a id="design_quotas" href="#design_quotas">4.9 Quotas</a></h3>
     <p>
-        Starting in 0.9, the Kafka cluster has the ability to enforce quotas on produce and fetch requests. Quotas are basically byte-rate thresholds defined per group of clients sharing a quota.
+    Kafka cluster has the ability to enforce quotas on requests to control the broker resources used by clients. Two types
+    of client quotas can be enforced by Kafka brokers for each group of clients sharing a quota:
+    <ol>
+      <li>Network bandwidth quotas define byte-rate thresholds (since 0.9)</li>
+      <li>Request rate quotas define CPU utilization thresholds as a percentage of network and I/O threads (since 0.11)</li>
+    </ol>
     </p>
 
     <h4><a id="design_quotasnecessary" href="#design_quotasnecessary">Why are quotas necessary?</a></h4>
     <p>
-    It is possible for producers and consumers to produce/consume very high volumes of data and thus monopolize broker resources, cause network saturation and generally DOS other clients and the brokers themselves.
+    It is possible for producers and consumers to produce/consume very high volumes of data or generate requests at a very high
+    rate and thus monopolize broker resources, cause network saturation and generally DOS other clients and the brokers themselves.
     Having quotas protects against these issues and is all the more important in large multi-tenant clusters where a small set of badly behaved clients can degrade user experience for the well behaved ones.
     In fact, when running Kafka as a service this even makes it possible to enforce API limits according to an agreed upon contract.
     </p>
@@ -563,13 +569,30 @@
             <li>/config/clients/&lt;default&gt;</li>
         </ol>
 
-        Broker properties (quota.producer.default, quota.consumer.default) can also be used to set defaults for client-id groups. These properties are being deprecated and will be removed in a later release.
+        Broker properties (quota.producer.default, quota.consumer.default) can also be used to set defaults of network bandwidth quotas for client-id groups. These properties are being deprecated and will be removed in a later release.
         Default quotas for client-id can be set in Zookeeper similar to the other quota overrides and defaults.
+    </p>
+    <h4><a id="design_quotasbandwidth" href="#design_quotasbandwidth">Network Bandwidth Quotas</a></h4>
+    <p>
+        Network bandwidth quotas are defined as the byte rate threshold for each group of clients sharing a quota.
+        By default, each unique client group receives a fixed quota in bytes/sec as configured by the cluster.
+        This quota is defined on a per-broker basis. Each group of clients can publish/fetch a maximum of X bytes/sec
+        per broker before clients are throttled.
+    </p>
+    <h4><a id="design_quotascpu" href="#design_quotascpu">Request Rate Quotas</a></h4>
+    <p>
+        Request rate quotas are defined as the percentage of time a client can utilize on request handler I/O
+        threads and network threads of each broker within a quota window. A quota of <tt>n%</tt> represents
+        <tt>n%</tt> of one thread, so the quota is out of a total capacity of <tt>((num.io.threads + num.network.threads) * 100)%</tt>.
+        Each group of clients may use a total percentage of upto <tt>n%</tt> across all I/O and network threads in a quota
+        window before being throttled. Since the number of threads allocated for I/O and network threads are typically based
+        on the number of cores available on the broker host, request rate quotas represent the total percentage of CPU
+        that may be used by each group of clients sharing the quota.
     </p>
     <h4><a id="design_quotasenforcement" href="#design_quotasenforcement">Enforcement</a></h4>
     <p>
-        By default, each unique client group receives a fixed quota in bytes/sec as configured by the cluster.
-        This quota is defined on a per-broker basis. Each client can publish/fetch a maximum of X bytes/sec per broker before it gets throttled. We decided that defining these quotas per broker is much better than
+        By default, each unique client group receives a fixed quota as configured by the cluster.
+        This quota is defined on a per-broker basis. Each client can utilize this quota per broker before it gets throttled. We decided that defining these quotas per broker is much better than
         having a fixed cluster wide bandwidth per client because that would require a mechanism to share client quota usage among all the brokers. This can be harder to get right than the quota implementation itself!
     </p>
     <p>
@@ -579,7 +602,7 @@
         can exacerbate the very problem quotas are trying to solve.
     </p>
     <p>
-    Client byte rate is measured over multiple small windows (e.g. 30 windows of 1 second each) in order to detect and correct quota violations quickly. Typically, having large measurement windows
+    Byte-rate and thread utilization are measured over multiple small windows (e.g. 30 windows of 1 second each) in order to detect and correct quota violations quickly. Typically, having large measurement windows
     (for e.g. 10 windows of 30 seconds each) leads to large bursts of traffic followed by long delays which is not great in terms of user experience.
     </p>
 </script>

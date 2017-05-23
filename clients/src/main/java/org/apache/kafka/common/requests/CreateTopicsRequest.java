@@ -18,9 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -43,9 +41,9 @@ public class CreateTopicsRequest extends AbstractRequest {
     private static final String REPLICA_ASSIGNMENT_PARTITION_ID_KEY_NAME = "partition_id";
     private static final String REPLICA_ASSIGNMENT_REPLICAS_KEY_NAME = "replicas";
 
-    private static final String CONFIG_KEY_KEY_NAME = "config_key";
+    private static final String CONFIG_KEY_KEY_NAME = "config_name";
     private static final String CONFIG_VALUE_KEY_NAME = "config_value";
-    private static final String CONFIGS_KEY_NAME = "configs";
+    private static final String CONFIGS_KEY_NAME = "config_entries";
 
     public static final class TopicDetails {
         public final int numPartitions;
@@ -88,8 +86,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             StringBuilder bld = new StringBuilder();
             bld.append("(numPartitions=").append(numPartitions).
                     append(", replicationFactor=").append(replicationFactor).
-                    append(", replicasAssignments=").append(Utils.mkString(replicasAssignments)).
-                    append(", configs=").append(Utils.mkString(configs)).
+                    append(", replicasAssignments=").append(replicasAssignments).
+                    append(", configs=").append(configs).
                     append(")");
             return bld.toString();
         }
@@ -123,7 +121,7 @@ public class CreateTopicsRequest extends AbstractRequest {
         public String toString() {
             StringBuilder bld = new StringBuilder();
             bld.append("(type=CreateTopicsRequest").
-                append(", topics=").append(Utils.mkString(topics)).
+                append(", topics=").append(topics).
                 append(", timeout=").append(timeout).
                 append(", validateOnly=").append(validateOnly).
                 append(")");
@@ -210,13 +208,10 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
-        Map<String, CreateTopicsResponse.Error> topicErrors = new HashMap<>();
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        Map<String, ApiError> topicErrors = new HashMap<>();
         for (String topic : topics.keySet()) {
-            Errors error = Errors.forException(e);
-            // Avoid populating the error message if it's a generic one
-            String message = error.message().equals(e.getMessage()) ? null : e.getMessage();
-            topicErrors.put(topic, new CreateTopicsResponse.Error(error, message));
+            topicErrors.put(topic, ApiError.fromThrowable(e));
         }
 
         short versionId = version();
@@ -224,6 +219,8 @@ public class CreateTopicsRequest extends AbstractRequest {
             case 0:
             case 1:
                 return new CreateTopicsResponse(topicErrors);
+            case 2:
+                return new CreateTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                     versionId, this.getClass().getSimpleName(), ApiKeys.CREATE_TOPICS.latestVersion()));

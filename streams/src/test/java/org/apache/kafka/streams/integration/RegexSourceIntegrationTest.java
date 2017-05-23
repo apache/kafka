@@ -32,12 +32,16 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TopologyBuilder;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
+import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -46,6 +50,7 @@ import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -53,6 +58,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -65,6 +71,7 @@ import static org.junit.Assert.fail;
  * End-to-end integration test based on using regex and named topics for creating sources, using
  * an embedded Kafka cluster.
  */
+@Category({IntegrationTest.class})
 public class RegexSourceIntegrationTest {
     private static final int NUM_BROKERS = 1;
     @ClassRule
@@ -106,10 +113,13 @@ public class RegexSourceIntegrationTest {
 
     @Before
     public void setUp() {
-
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(CLUSTER.bootstrapServers(),
-            STRING_SERDE_CLASSNAME,
-            STRING_SERDE_CLASSNAME);
+        final Properties properties = new Properties();
+        properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
+                                                                 CLUSTER.bootstrapServers(),
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 STRING_SERDE_CLASSNAME,
+                                                                 properties);
     }
 
     @After
@@ -225,6 +235,39 @@ public class RegexSourceIntegrationTest {
         TestUtils.waitForCondition(oneTopicRemoved, STREAM_TASKS_NOT_UPDATED);
 
         streams.close();
+    }
+
+    @Test
+    public void shouldAddStateStoreToRegexDefinedSource() throws Exception {
+
+        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final MockStateStoreSupplier stateStoreSupplier = new MockStateStoreSupplier("testStateStore", false);
+        final long thirtySecondTimeout = 30 * 1000;
+
+        final TopologyBuilder builder = new TopologyBuilder()
+                .addSource("ingest", Pattern.compile("topic-\\d+"))
+                .addProcessor("my-processor", processorSupplier, "ingest")
+                .addStateStore(stateStoreSupplier, "my-processor");
+
+
+        final KafkaStreams streams = new KafkaStreams(builder, streamsConfiguration);
+        try {
+            streams.start();
+
+            final TestCondition stateStoreNameBoundToSourceTopic = new TestCondition() {
+                @Override
+                public boolean conditionMet() {
+                    final Map<String, List<String>> stateStoreToSourceTopic = builder.stateStoreNameToSourceTopics();
+                    final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
+                    return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
+                }
+            };
+
+            TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
+
+        } finally {
+            streams.close();
+        }
     }
 
 

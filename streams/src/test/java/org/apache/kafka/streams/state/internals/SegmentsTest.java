@@ -52,6 +52,7 @@ public class SegmentsTest {
 
     @After
     public void close() {
+        context.close();
         segments.close();
     }
 

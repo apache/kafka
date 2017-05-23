@@ -67,8 +67,8 @@ public class UpdateMetadataRequest extends AbstractRequest {
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
-                append(", partitionStates=").append(Utils.mkString(partitionStates)).
-                append(", liveBrokers=").append(Utils.join(liveBrokers, " ,")).
+                append(", partitionStates=").append(partitionStates).
+                append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
             return bld.toString();
         }
@@ -284,7 +284,7 @@ public class UpdateMetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         if (versionId <= 3)
             return new UpdateMetadataResponse(Errors.forException(e));

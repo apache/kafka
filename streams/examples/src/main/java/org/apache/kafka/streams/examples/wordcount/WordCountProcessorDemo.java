@@ -40,8 +40,9 @@ import java.util.Properties;
  * represent lines of text; and the histogram output is written to topic "streams-wordcount-processor-output" where each record
  * is an updated count of a single word.
  *
- * Before running this example you must create the source topic (e.g. via bin/kafka-topics.sh --create ...)
- * and write some data to it (e.g. via bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
+ * Before running this example you must create the input topic and the output topic (e.g. via
+ * bin/kafka-topics.sh --create ...), and write some data to the input topic (e.g. via
+ * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
 public class WordCountProcessorDemo {
 
@@ -94,9 +95,7 @@ public class WordCountProcessorDemo {
                 }
 
                 @Override
-                public void close() {
-                    this.kvStore.close();
-                }
+                public void close() {}
             };
         }
     }
@@ -105,8 +104,8 @@ public class WordCountProcessorDemo {
         Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-wordcount-processor");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
-        props.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        props.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

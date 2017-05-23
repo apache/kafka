@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
+import java.util.Objects;
 
 public class ConnectorStateInfo {
 
@@ -102,6 +103,21 @@ public class ConnectorStateInfo {
         @Override
         public int compareTo(TaskState that) {
             return Integer.compare(this.id, that.id);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (o == this)
+                return true;
+            if (!(o instanceof TaskState))
+                return false;
+            TaskState other = (TaskState) o;
+            return compareTo(other) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id);
         }
     }
 

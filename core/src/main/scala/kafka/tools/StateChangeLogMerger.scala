@@ -25,8 +25,10 @@ import java.util.Date
 import java.text.SimpleDateFormat
 
 import kafka.utils.{CommandLineUtils, CoreUtils, Exit, Logging}
-import kafka.common.Topic
 import java.io.{BufferedOutputStream, OutputStream}
+import java.nio.charset.StandardCharsets
+
+import org.apache.kafka.common.internals.Topic
 
 /**
  * A utility that merges the state change logs (possibly obtained from different brokers and over multiple days).
@@ -46,7 +48,7 @@ import java.io.{BufferedOutputStream, OutputStream}
 object StateChangeLogMerger extends Logging {
 
   val dateFormatString = "yyyy-MM-dd HH:mm:ss,SSS"
-  val topicPartitionRegex = new Regex("\\[(" + Topic.legalChars + "+),( )*([0-9]+)\\]")
+  val topicPartitionRegex = new Regex("\\[(" + Topic.LEGAL_CHARS + "+),( )*([0-9]+)\\]")
   val dateRegex = new Regex("[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2},[0-9]{3}")
   val dateFormat = new SimpleDateFormat(dateFormatString)
   var files: List[String] = List()
@@ -147,7 +149,7 @@ object StateChangeLogMerger extends Logging {
 
     while (pqueue.nonEmpty) {
       val lineItr = pqueue.dequeue()
-      output.write((lineItr.line + "\n").getBytes)
+      output.write((lineItr.line + "\n").getBytes(StandardCharsets.UTF_8))
       val nextLineItr = getNextLine(lineItr.itr)
       if (!nextLineItr.isEmpty)
         pqueue.enqueue(nextLineItr)

@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-set -e
+set -ex
 
 if [ -z `which javac` ]; then
     apt-get -y update
@@ -27,9 +27,23 @@ if [ -z `which javac` ]; then
     if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
         find /tmp/oracle-jdk7-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk7-installer/ \;
     fi
+    if [ ! -e "/var/cache/oracle-jdk7-installer/jdk-7u80-linux-x64.tar.gz" ]; then
+        # Grab a copy of the JDK since it has moved and original downloader won't work
+        curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-7u80-linux-x64.tar.gz" -o /var/cache/oracle-jdk7-installer/jdk-7u80-linux-x64.tar.gz
+    fi
 
     /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
-    apt-get -y install oracle-java7-installer oracle-java7-set-default
+
+    # oracle-javaX-installer runs wget with a dot progress indicator which ends up
+    # as one line per dot in the build logs.
+    # To avoid this noise we redirect all output to a file that we only show if apt-get fails.
+    echo "Installing JDK..."
+    if ! apt-get -y install oracle-java7-installer oracle-java7-set-default >/tmp/jdk_install.log 2>&1 ; then
+        cat /tmp/jdk_install.log
+        echo "ERROR: JDK install failed"
+        exit 1
+    fi
+    echo "JDK installed: $(javac -version 2>&1)"
 
     if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
         cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
@@ -43,11 +57,22 @@ if [ -h /opt/kafka-dev ]; then
 fi
 ln -s /vagrant /opt/kafka-dev
 
+# Verification to catch provisioning errors.
+if [[ ! -x /opt/kafka-dev/bin/kafka-run-class.sh ]]; then
+    echo "ERROR: kafka-run-class.sh not found/executable in /opt/kafka-dev/bin"
+    find /opt/kafka-dev
+    ls -la /opt/kafka-dev/bin/kafka-run-class.sh || true
+    exit 1
+fi
+
+
+
 get_kafka() {
     version=$1
+    scala_version=$2
 
     kafka_dir=/opt/kafka-$version
-    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_2.10-$version.tgz
+    url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_$scala_version-$version.tgz
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url
@@ -61,14 +86,17 @@ get_kafka() {
     fi
 }
 
-get_kafka 0.8.2.2
+# Test multiple Scala versions
+get_kafka 0.8.2.2 2.10
 chmod a+rw /opt/kafka-0.8.2.2
-get_kafka 0.9.0.1
+get_kafka 0.9.0.1 2.11
 chmod a+rw /opt/kafka-0.9.0.1
-get_kafka 0.10.0.1
+get_kafka 0.10.0.1 2.11
 chmod a+rw /opt/kafka-0.10.0.1
-get_kafka 0.10.1.1
+get_kafka 0.10.1.1 2.11
 chmod a+rw /opt/kafka-0.10.1.1
+get_kafka 0.10.2.1 2.11
+chmod a+rw /opt/kafka-0.10.2.1
 
 
 # For EC2 nodes, we want to use /mnt, which should have the local disk. On local

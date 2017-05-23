@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.StreamPartitionAssignor;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStoreSupplier;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.ProcessorTopologyTestDriver;
 import org.junit.Test;
 
@@ -51,7 +52,10 @@ import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 public class TopologyBuilderTest {
 
@@ -117,7 +121,7 @@ public class TopologyBuilderTest {
         final Serde<String> stringSerde = Serdes.String();
 
         try {
-            builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
+            builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), new String[]{});
             fail("Should throw TopologyBuilderException with no topics");
         } catch (TopologyBuilderException tpe) {
             //no-op
@@ -129,9 +133,9 @@ public class TopologyBuilderTest {
         final TopologyBuilder builder = new TopologyBuilder();
         final Serde<String> stringSerde = Serdes.String();
 
-        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
+        builder.addSource(TopologyBuilder.AutoOffsetReset.EARLIEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-1");
         try {
-            builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
+            builder.addSource(TopologyBuilder.AutoOffsetReset.LATEST, "source", null, stringSerde.deserializer(), stringSerde.deserializer(), "topic-2");
             fail("Should throw TopologyBuilderException for duplicate source name");
         } catch (TopologyBuilderException tpe) {
             //no-op
@@ -696,5 +700,105 @@ public class TopologyBuilderTest {
         assertTrue(topicGroups.get(1).sourceTopics.contains("topic-B"));
         assertTrue(topicGroups.get(2).sourceTopics.contains("topic-3"));
 
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorPerSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource(new MockTimestampExtractor(), "source", "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorWithOffsetResetPerSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource(null, new MockTimestampExtractor(), "source", "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorWithPatternPerSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        final Pattern pattern = Pattern.compile("t.*");
+        builder.addSource(new MockTimestampExtractor(), "source", pattern);
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorWithOffsetResetAndPatternPerSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        final Pattern pattern = Pattern.compile("t.*");
+        builder.addSource(null, new MockTimestampExtractor(), "source", pattern);
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesPerSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldAddTimestampExtractorWithOffsetResetAndKeyValSerdesAndPatternPerSource() throws Exception {
+        final TopologyBuilder builder = new TopologyBuilder();
+        final Pattern pattern = Pattern.compile("t.*");
+        builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
+        final ProcessorTopology processorTopology = builder.build(null);
+        assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
+    }
+
+    public void shouldConnectRegexMatchedTopicsToStateStore() throws Exception {
+
+        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+                .addSource("ingest", Pattern.compile("topic-\\d+"))
+                .addProcessor("my-processor", new MockProcessorSupplier(), "ingest")
+                .addStateStore(new MockStateStoreSupplier("testStateStore", false), "my-processor");
+
+        final StreamPartitionAssignor.SubscriptionUpdates subscriptionUpdates = new StreamPartitionAssignor.SubscriptionUpdates();
+        final Field updatedTopicsField  = subscriptionUpdates.getClass().getDeclaredField("updatedTopicSubscriptions");
+        updatedTopicsField.setAccessible(true);
+
+        final Set<String> updatedTopics = (Set<String>) updatedTopicsField.get(subscriptionUpdates);
+
+        updatedTopics.add("topic-2");
+        updatedTopics.add("topic-3");
+        updatedTopics.add("topic-A");
+
+        topologyBuilder.updateSubscriptions(subscriptionUpdates, "test-thread");
+        topologyBuilder.setApplicationId("test-app");
+
+        Map<String, List<String>> stateStoreAndTopics = topologyBuilder.stateStoreNameToSourceTopics();
+        List<String> topics = stateStoreAndTopics.get("testStateStore");
+
+        assertTrue("Expected to contain two topics", topics.size() == 2);
+
+        assertTrue(topics.contains("topic-2"));
+        assertTrue(topics.contains("topic-3"));
+        assertFalse(topics.contains("topic-A"));
+    }
+
+    @Test(expected = TopologyBuilderException.class)
+    public void shouldNotAllowToAddGlobalStoreWithSourceNameEqualsProcessorName() {
+        final String sameNameForSourceAndProcessor = "sameName";
+        final TopologyBuilder topologyBuilder = new TopologyBuilder()
+            .addGlobalStore(new MockStateStoreSupplier("anyName", false, false),
+                sameNameForSourceAndProcessor,
+                null,
+                null,
+                "anyTopicName",
+                sameNameForSourceAndProcessor,
+                new MockProcessorSupplier());
     }
 }

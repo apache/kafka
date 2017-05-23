@@ -48,6 +48,9 @@ public interface StateStore {
      * Close the storage engine.
      * Note that this function needs to be idempotent since it may be called
      * several times on the same state store.
+     * <p>
+     * Users only need to implement this function but should NEVER need to call this api explicitly
+     * as it will be called by the library automatically when necessary
      */
     void close();
 

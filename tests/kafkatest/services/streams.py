@@ -97,7 +97,7 @@ class StreamsTestBaseService(KafkaPathResolverMixin, Service):
             self.logger.info("Restarting Kafka Streams on " + str(node.account))
             self.start_node(node)
 
-    def wait(self, timeout_sec=720):
+    def wait(self, timeout_sec=1440):
         for node in self.nodes:
             self.wait_node(node, timeout_sec)
 
@@ -166,8 +166,8 @@ class StreamsSmokeTestShutdownDeadlockService(StreamsSmokeTestBaseService):
 
 
 class StreamsBrokerCompatibilityService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka):
+    def __init__(self, test_context, kafka, eosEnabled):
         super(StreamsBrokerCompatibilityService, self).__init__(test_context,
                                                                 kafka,
                                                                 "org.apache.kafka.streams.tests.BrokerCompatibilityTest",
-                                                                "dummy")
+                                                                eosEnabled)

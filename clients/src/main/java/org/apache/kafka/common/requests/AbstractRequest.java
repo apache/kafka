@@ -46,6 +46,10 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             return desiredVersion == null ? apiKey.latestVersion() : desiredVersion;
         }
 
+        public Short desiredVersion() {
+            return desiredVersion;
+        }
+
         public T build() {
             return build(desiredOrLatestVersion());
         }
@@ -79,10 +83,26 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     protected abstract Struct toStruct();
 
+    public String toString(boolean verbose) {
+        return toStruct().toString();
+    }
+
+    @Override
+    public final String toString() {
+        return toString(true);
+    }
+
     /**
      * Get an error response for a request
      */
-    public abstract AbstractResponse getErrorResponse(Throwable e);
+    public AbstractResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
+    /**
+     * Get an error response for a request with specified throttle time in the response if applicable
+     */
+    public abstract AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e);
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
@@ -110,8 +130,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
             case OFFSET_FETCH:
                 request = new OffsetFetchRequest(struct, version);
                 break;
-            case GROUP_COORDINATOR:
-                request = new GroupCoordinatorRequest(struct, version);
+            case FIND_COORDINATOR:
+                request = new FindCoordinatorRequest(struct, version);
                 break;
             case JOIN_GROUP:
                 request = new JoinGroupRequest(struct, version);
@@ -154,6 +174,45 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 break;
             case DELETE_TOPICS:
                 request = new DeleteTopicsRequest(struct, version);
+                break;
+            case DELETE_RECORDS:
+                request = new DeleteRecordsRequest(struct, version);
+                break;
+            case INIT_PRODUCER_ID:
+                request = new InitProducerIdRequest(struct, version);
+                break;
+            case OFFSET_FOR_LEADER_EPOCH:
+                request = new OffsetsForLeaderEpochRequest(struct, version);
+                break;
+            case ADD_PARTITIONS_TO_TXN:
+                request = new AddPartitionsToTxnRequest(struct, version);
+                break;
+            case ADD_OFFSETS_TO_TXN:
+                request = new AddOffsetsToTxnRequest(struct, version);
+                break;
+            case END_TXN:
+                request = new EndTxnRequest(struct, version);
+                break;
+            case WRITE_TXN_MARKERS:
+                request = new WriteTxnMarkersRequest(struct, version);
+                break;
+            case TXN_OFFSET_COMMIT:
+                request = new TxnOffsetCommitRequest(struct, version);
+                break;
+            case DESCRIBE_ACLS:
+                request = new DescribeAclsRequest(struct, version);
+                break;
+            case CREATE_ACLS:
+                request = new CreateAclsRequest(struct, version);
+                break;
+            case DELETE_ACLS:
+                request = new DeleteAclsRequest(struct, version);
+                break;
+            case DESCRIBE_CONFIGS:
+                request = new DescribeConfigsRequest(struct, version);
+                break;
+            case ALTER_CONFIGS:
+                request = new AlterConfigsRequest(struct, version);
                 break;
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +

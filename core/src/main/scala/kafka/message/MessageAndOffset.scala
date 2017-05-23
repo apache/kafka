@@ -17,11 +17,11 @@
 
 package kafka.message
 
-import org.apache.kafka.common.record.LogEntry
+import org.apache.kafka.common.record.AbstractLegacyRecordBatch
 
 object MessageAndOffset {
-  def fromLogEntry(logEntry : LogEntry): MessageAndOffset = {
-    MessageAndOffset(Message.fromRecord(logEntry.record), logEntry.offset)
+  def fromRecordBatch(recordBatch: AbstractLegacyRecordBatch): MessageAndOffset = {
+    MessageAndOffset(Message.fromRecord(recordBatch.outerRecord), recordBatch.lastOffset)
   }
 }
 
@@ -32,13 +32,5 @@ case class MessageAndOffset(message: Message, offset: Long) {
    */
   def nextOffset: Long = offset + 1
 
-  /**
-   * We need to decompress the message, if required, to get the offset of the first uncompressed message.
-   */
-  def firstOffset: Long = toLogEntry.firstOffset
-
-  def toLogEntry: LogEntry = {
-    LogEntry.create(offset, message.asRecord)
-  }
 }
 
