@@ -338,20 +338,55 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def shouldRemoveExpiredTransactionalIds(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NONE)
+  def shouldRemoveCompleteCommmitExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteCommit)
+    assertEquals(None, transactionManager.getTransactionState(txnId1))
+    assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
+  }
+
+  @Test
+  def shouldRemoveCompleteAbortExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteAbort)
+    assertEquals(None, transactionManager.getTransactionState(txnId1))
+    assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
+  }
+
+  @Test
+  def shouldRemoveEmptyExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, Empty)
     assertEquals(None, transactionManager.getTransactionState(txnId1))
     assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
   }
 
   @Test
   def shouldNotRemoveExpiredTransactionalIdsIfLogAppendFails(): Unit = {
-    setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS)
+    setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS, CompleteAbort)
     assertTrue(transactionManager.getTransactionState(txnId1).isDefined)
     assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
   }
 
-  private def setupAndRunTransactionalIdExpiration(error: Errors) = {
+  @Test
+  def shouldNotRemoveOngoingTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, Ongoing)
+    assertTrue(transactionManager.getTransactionState(txnId1).isDefined)
+    assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
+  }
+
+  @Test
+  def shouldNotRemovePrepareAbortTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareAbort)
+    assertTrue(transactionManager.getTransactionState(txnId1).isDefined)
+    assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
+  }
+
+  @Test
+  def shouldNotRemovePrepareCommitTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareCommit)
+    assertTrue(transactionManager.getTransactionState(txnId1).isDefined)
+    assertTrue(transactionManager.getTransactionState(txnId2).isDefined)
+  }
+
+  private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState) = {
     for (partitionId <- 0 until numPartitions) {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }
@@ -361,25 +396,32 @@ class TransactionStateManagerTest {
     val partition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, transactionManager.partitionFor(txnId1))
     val recordsByPartition = Map(partition -> MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType,
       new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs, TransactionLog.keyToBytes(txnId1), null)))
-    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
-      EasyMock.eq((-1).toShort),
-      EasyMock.eq(true),
-      EasyMock.eq(false),
-      EasyMock.eq(recordsByPartition),
-      EasyMock.capture(capturedArgument)
-    )).andAnswer(new IAnswer[Unit] {
-      override def answer(): Unit = {
-        capturedArgument.getValue.apply(
-          Map(partition ->
-            new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
-          )
-        )
-      }
-    })
+
+    txnState match {
+      case Empty | CompleteCommit | CompleteAbort =>
+
+        EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+          EasyMock.eq((-1).toShort),
+          EasyMock.eq(true),
+          EasyMock.eq(false),
+          EasyMock.eq(recordsByPartition),
+          EasyMock.capture(capturedArgument)
+        )).andAnswer(new IAnswer[Unit] {
+          override def answer(): Unit = {
+            capturedArgument.getValue.apply(
+              Map(partition ->
+                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+              )
+            )
+          }
+        })
+      case _ => // shouldn't append
+    }
 
     EasyMock.replay(replicaManager)
 
     txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
+    txnMetadata1.state = txnState
     transactionManager.addTransaction(txnId1, txnMetadata1)
 
     txnMetadata2.txnLastUpdateTimestamp = time.milliseconds()

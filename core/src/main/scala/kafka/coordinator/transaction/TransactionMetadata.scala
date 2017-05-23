@@ -69,6 +69,11 @@ private[transaction] case object CompleteCommit extends TransactionState { val b
  */
 private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
+/**
+  * TransactionalId has expired and is about to be removed from the transaction cache
+  */
+private[transaction] case object Dead extends TransactionState { val byte: Byte = 6 }
+
 private[transaction] object TransactionMetadata {
   def apply(producerId: Long, epoch: Short, txnTimeoutMs: Int, timestamp: Long) = new TransactionMetadata(producerId, epoch, txnTimeoutMs, Empty, collection.mutable.Set.empty[TopicPartition], timestamp, timestamp)
 
@@ -82,6 +87,7 @@ private[transaction] object TransactionMetadata {
       case 3 => PrepareAbort
       case 4 => CompleteCommit
       case 5 => CompleteAbort
+      case 6 => Dead
       case unknown => throw new IllegalStateException("Unknown transaction state byte " + unknown + " from the transaction status message")
     }
   }
@@ -94,7 +100,8 @@ private[transaction] object TransactionMetadata {
       PrepareCommit -> Set(Ongoing),
       PrepareAbort -> Set(Ongoing),
       CompleteCommit -> Set(PrepareCommit),
-      CompleteAbort -> Set(PrepareAbort))
+      CompleteAbort -> Set(PrepareAbort),
+      Dead -> Set(Empty, CompleteAbort, CompleteCommit))
 }
 
 // this is a immutable object representing the target transition of the transaction metadata
@@ -166,7 +173,6 @@ private[transaction] class TransactionMetadata(val producerId: Long,
 
     prepareTransitionTo(Empty, producerEpoch, txnTimeoutMs, immutable.Set.empty[TopicPartition], -1, updateTimestamp)
   }
-
   def prepareAddPartitions(addedTopicPartitions: immutable.Set[TopicPartition],
                            updateTimestamp: Long): TransactionMetadataTransition = {
 
@@ -186,6 +192,10 @@ private[transaction] class TransactionMetadata(val producerId: Long,
   def prepareComplete(updateTimestamp: Long): TransactionMetadataTransition = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
     prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition], txnStartTimestamp, updateTimestamp)
+  }
+
+  def prepareDead : TransactionMetadataTransition = {
+    prepareTransitionTo(Dead, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition], txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
   // visible for testing only
@@ -283,9 +293,14 @@ private[transaction] class TransactionMetadata(val producerId: Long,
             txnStartTimestamp = newMetadata.txnStartTimestamp
             topicPartitions.clear()
           }
+        case Dead => // from expire transactionalId
+          if(producerEpoch != newMetadata.producerEpoch)
+            throw new IllegalStateException("Completing transaction state transition failed due to unexpected metadata")
       }
 
-      txnLastUpdateTimestamp = newMetadata.txnLastUpdateTimestamp
+      if (toState != Dead)
+        txnLastUpdateTimestamp = newMetadata.txnLastUpdateTimestamp
+
       pendingState = None
       state = toState
     }

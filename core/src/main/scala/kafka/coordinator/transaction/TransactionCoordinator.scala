@@ -46,7 +46,8 @@ object TransactionCoordinator {
       config.transactionsLoadBufferSize,
       config.transactionTopicMinISR,
       config.transactionAbortTimedOutTransactionCleanupIntervalMs,
-      config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs)
+      config.transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
+      config.requestTimeoutMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
@@ -193,11 +194,11 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
-        case PrepareAbort | PrepareCommit =>
+        case PrepareAbort | PrepareCommit | Dead =>
           // reply to client and let client backoff and retry
           Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
 
-        case CompleteAbort | CompleteCommit | Empty =>
+        case CompleteAbort | CompleteCommit | Empty  =>
           // try to append and then update
           Right(coordinatorEpoch, txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.milliseconds()))
 
@@ -309,7 +310,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress)
               Left(Errors.CONCURRENT_TRANSACTIONS)
-            else txnMetadata.state match {
+            else txnMetadata. state match {
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
                   PrepareCommit
@@ -337,6 +338,8 @@ class TransactionCoordinator(brokerId: Int,
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
+                logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
+              case Dead =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
             }
           }
