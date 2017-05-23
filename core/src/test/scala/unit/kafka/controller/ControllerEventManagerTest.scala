@@ -45,7 +45,7 @@ class ControllerEventManagerTest {
 
   @Test
   def testEventThatThrowsException(): Unit = {
-    check("kafka.controller:type=ControllerStats,name=BrokerChangeRateAndTimeMs", ControllerState.BrokerChange,
+    check("kafka.controller:type=ControllerStats,name=LeaderElectionRateAndTimeMs", ControllerState.BrokerChange,
       () => throw new NullPointerException)
   }
 

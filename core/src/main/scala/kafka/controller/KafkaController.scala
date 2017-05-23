@@ -1151,29 +1151,27 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
     override def process(): Unit = {
       if (!isActive) return
-      controllerContext.stats.leaderElectionTimer.time {
-        try {
-          val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
-          val curBrokerIds = curBrokers.map(_.id)
-          val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
-          val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
-          val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
-          val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
-          controllerContext.liveBrokers = curBrokers
-          val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
-          val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
-          val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
-          info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
-            .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
-          newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
-          deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-          if(newBrokerIds.nonEmpty)
-            onBrokerStartup(newBrokerIdsSorted)
-          if(deadBrokerIds.nonEmpty)
-            onBrokerFailure(deadBrokerIdsSorted)
-        } catch {
-          case e: Throwable => error("Error while handling broker changes", e)
-        }
+      try {
+        val curBrokers = currentBrokerList.map(_.toInt).toSet.flatMap(zkUtils.getBrokerInfo)
+        val curBrokerIds = curBrokers.map(_.id)
+        val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+        val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
+        val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
+        val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
+        controllerContext.liveBrokers = curBrokers
+        val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
+        val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
+        val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
+        info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
+          .format(newBrokerIdsSorted.mkString(","), deadBrokerIdsSorted.mkString(","), liveBrokerIdsSorted.mkString(",")))
+        newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+        deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
+        if (newBrokerIds.nonEmpty)
+          onBrokerStartup(newBrokerIdsSorted)
+        if (deadBrokerIds.nonEmpty)
+          onBrokerFailure(deadBrokerIdsSorted)
+      } catch {
+        case e: Throwable => error("Error while handling broker changes", e)
       }
     }
   }
@@ -1756,8 +1754,6 @@ case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpo
 
 private[controller] class ControllerStats extends KafkaMetricsGroup {
   val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)
-  // This metric was added before `rateAndTimeMetrics and we keep it for backwards compatibility
-  val leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 
   val rateAndTimeMetrics: Map[ControllerState, KafkaTimer] = ControllerState.values.flatMap { state =>
     state.rateAndTimeMetricName.map { metricName =>
