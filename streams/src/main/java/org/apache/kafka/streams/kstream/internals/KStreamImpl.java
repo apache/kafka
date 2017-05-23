@@ -182,7 +182,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
 
     @Override
     public void print(String streamName) {
-        print(null,null, null, streamName);
+        print(null, null, null, streamName);
     }
 
     @Override
