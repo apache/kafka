@@ -65,7 +65,7 @@ class TransactionStateManager(brokerId: Int,
 
   this.logIdent = "[Transaction Log Manager " + brokerId + "]: "
 
-  type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TransactionMetadataTransition) => Unit
+  type SendTxnMarkersCallback = (String, Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
@@ -108,7 +108,7 @@ class TransactionStateManager(brokerId: Int,
     }
   }
 
-  def enablePidExpiration() {
+  def enableProducerIdExpiration() {
     // TODO: add producer id expiration logic
   }
 
@@ -140,12 +140,13 @@ class TransactionStateManager(brokerId: Int,
    * Add a new transaction metadata, or retrieve the metadata if it already exists with the associated transactional id
    * along with the current coordinator epoch for that belonging transaction topic partition
    */
-  def addTransaction(transactionalId: String, txnMetadata: TransactionMetadata): CoordinatorEpochAndTxnMetadata = {
-    val partitionId = partitionFor(transactionalId)
+  def addTransaction(txnMetadata: TransactionMetadata): CoordinatorEpochAndTxnMetadata = {
+    val partitionId = partitionFor(txnMetadata.transactionalId)
 
     transactionMetadataCache.get(partitionId) match {
       case Some(txnMetadataCacheEntry) =>
-        val currentTxnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
+        val currentTxnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.putIfNotExists(
+          txnMetadata.transactionalId, txnMetadata)
         if (currentTxnMetadata != null) {
           CoordinatorEpochAndTxnMetadata(txnMetadataCacheEntry.coordinatorEpoch, currentTxnMetadata)
         } else {
@@ -242,23 +243,15 @@ class TransactionStateManager(brokerId: Int,
             memRecords.batches.asScala.foreach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
-                TransactionLog.readMessageKey(record.key) match {
-
-                  case txnKey: TxnKey =>
-                    // load transaction metadata along with transaction state
-                    val transactionalId: String = txnKey.transactionalId
-                    if (!record.hasValue) {
-                      loadedTransactions.remove(transactionalId)
-                    } else {
-                      val txnMetadata = TransactionLog.readMessageValue(record.value)
-                      loadedTransactions.put(transactionalId, txnMetadata)
-                    }
-
-                  case unknownKey =>
-                    // TODO: Metrics
-                    throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
+                val txnKey = TransactionLog.readTxnRecordKey(record.key)
+                // load transaction metadata along with transaction state
+                val transactionalId = txnKey.transactionalId
+                if (!record.hasValue) {
+                  loadedTransactions.remove(transactionalId)
+                } else {
+                  val txnMetadata = TransactionLog.readTxnRecordValue(transactionalId, record.value)
+                  loadedTransactions.put(transactionalId, txnMetadata)
                 }
-
                 currOffset = batch.nextOffset
               }
             }
@@ -339,7 +332,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(s"load-txns-for-partition-$topicPartition", loadTransactions _)
+    scheduler.schedule(s"load-txns-for-partition-$topicPartition", loadTransactions)
   }
 
   /**
@@ -374,7 +367,7 @@ class TransactionStateManager(brokerId: Int,
       }
     }
 
-    scheduler.schedule(s"remove-txns-for-partition-$topicPartition", removeTransactions _)
+    scheduler.schedule(s"remove-txns-for-partition-$topicPartition", removeTransactions)
   }
 
   private def validateTransactionTopicPartitionCountIsStable(): Unit = {
@@ -386,7 +379,7 @@ class TransactionStateManager(brokerId: Int,
   // TODO: check broker message format and error if < V2
   def appendTransactionToLog(transactionalId: String,
                              coordinatorEpoch: Int,
-                             newMetadata: TransactionMetadataTransition,
+                             newMetadata: TxnTransitMetadata,
                              responseCallback: Errors => Unit): Unit = {
 
     // generate the message for this transaction metadata

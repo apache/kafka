@@ -85,9 +85,6 @@ object TransactionMarkerChannelManager {
       time)
   }
 
-  private[transaction] def requestGenerator(transactionMarkerChannelManager: TransactionMarkerChannelManager): () => Iterable[RequestAndCompletionHandler] = {
-    () => transactionMarkerChannelManager.drainQueuedTransactionMarkers()
-  }
 }
 
 class TxnMarkerQueue(@volatile private var destination: Node) {
@@ -191,7 +188,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
                           coordinatorEpoch: Int,
                           txnResult: TransactionResult,
                           txnMetadata: TransactionMetadata,
-                          newMetadata: TransactionMetadataTransition): Unit = {
+                          newMetadata: TxnTransitMetadata): Unit = {
 
     def appendToLogCallback(error: Errors): Unit = {
       error match {
