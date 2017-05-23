@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.ExtendedDeserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -44,12 +46,20 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
-    K deserializeKey(String topic, byte[] data) {
-        return keyDeserializer.deserialize(topic, data);
+    K deserializeKey(String topic, Headers headers, byte[] data) {
+        if (keyDeserializer instanceof ExtendedDeserializer) {
+            return ((ExtendedDeserializer<K>) keyDeserializer).deserialize(topic, headers, data);
+        } else {
+            return keyDeserializer.deserialize(topic, data);
+        }
     }
 
-    V deserializeValue(String topic, byte[] data) {
-        return valDeserializer.deserialize(topic, data);
+    V deserializeValue(String topic, Headers headers, byte[] data) {
+        if (valDeserializer instanceof ExtendedDeserializer) {
+            return ((ExtendedDeserializer<V>) valDeserializer).deserialize(topic, headers, data);
+        } else {
+            return valDeserializer.deserialize(topic, data);
+        }
     }
 
     @SuppressWarnings("unchecked")
