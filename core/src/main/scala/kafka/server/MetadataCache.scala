@@ -235,6 +235,8 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  def contains(topic: String, partitionId: Int): Boolean = getPartitionInfo(topic, partitionId).isDefined
+
   private def removePartitionInfo(topic: String, partitionId: Int): Boolean = {
     cache.get(topic).map { infos =>
       infos.remove(partitionId)

@@ -257,22 +257,48 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
     val partitionsByDestination: immutable.Map[Node, immutable.Set[TopicPartition]] = topicPartitions.groupBy { topicPartition: TopicPartition =>
       var brokerNode: Option[Node] = None
 
-      // TODO: instead of retry until succeed, we can first put it into an unknown broker queue and let the sender thread to look for its broker and migrate them
-      while (brokerNode.isEmpty) {
-        brokerNode = metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
+      brokerNode = metadataCache.getPartitionLeaderEndpoint(topicPartition.topic, topicPartition.partition, interBrokerListenerName)
 
-        if (brokerNode.isEmpty) {
-          trace(s"Couldn't find leader endpoint for partition: $topicPartition, retrying.")
-          time.sleep(brokerNotAliveBackoffMs)
-        }
+      if (brokerNode.isDefined) {
+        brokerNode.get
+      } else {
+        Node.noNode
       }
-      brokerNode.get
     }
 
     for ((broker: Node, topicPartitions: immutable.Set[TopicPartition]) <- partitionsByDestination) {
-      val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
-      val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
-      addMarkersForBroker(broker, txnTopicPartition, txnIdAndMarker)
+      if (broker.equals(Node.noNode)) {
+        info(s"Couldn't find leader endpoint for partitions $topicPartitions while trying to send transaction markers for " +
+          s"$transactionalId, these partitions are likely deleted already and hence can be skipped")
+
+        txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
+          case Left(error) =>
+            info(s"Encountered $error trying to fetch transaction metadata for $transactionalId with coordinator epoch $coordinatorEpoch; cancel sending markers to its partition leaders")
+            txnMarkerPurgatory.cancelForKey(transactionalId)
+
+          case Right(Some(epochAndMetadata)) =>
+            if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
+              info(s"The cached metadata have been changed to $epochAndMetadata since preparing to send markers; cancel sending markers to its partition leaders")
+              txnMarkerPurgatory.cancelForKey(transactionalId)
+            } else {
+              val txnMetadata = epochAndMetadata.transactionMetadata
+
+              txnMetadata synchronized {
+                topicPartitions.foreach(txnMetadata.removePartition)
+              }
+
+              txnMarkerPurgatory.checkAndComplete(transactionalId)
+            }
+
+          case Right(None) =>
+            throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+              s"no metadata in the cache; this is not expected")
+        }
+      } else {
+        val marker = new TxnMarkerEntry(producerId, producerEpoch, coordinatorEpoch, result, topicPartitions.toList.asJava)
+        val txnIdAndMarker = TxnIdAndMarkerEntry(transactionalId, marker)
+        addMarkersForBroker(broker, txnTopicPartition, txnIdAndMarker)
+      }
     }
 
     networkClient.wakeup()
