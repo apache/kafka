@@ -58,7 +58,6 @@ public class PrintForeachAction<K, V> implements ForeachAction<K, V> {
     @Override
     public void apply(final K key, final V value) {
         final String data = (mapper == null) ? String.format("[%s]: %s, %s", streamName, key, value) : String.format("[%s]: %s", streamName, mapper.apply(key, value));
-        final String data = String.format("[%s]: %s, %s", streamName, key, value);
       
         if (printWriter == null) {
             System.out.println(data);
