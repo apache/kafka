@@ -20,8 +20,6 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
-import org.apache.kafka.common.utils.Checksums;
-import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
@@ -29,7 +27,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
@@ -77,7 +74,6 @@ public class DefaultRecord implements Record {
     private final ByteBuffer key;
     private final ByteBuffer value;
     private final Header[] headers;
-    private Long checksum = null;
 
     private DefaultRecord(int sizeInBytes,
                           byte attributes,
@@ -122,10 +118,8 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public long checksum() {
-        if (checksum == null)
-            checksum = computeChecksum(timestamp, key, value);
-        return checksum;
+    public Long checksumOrNull() {
+        return null;
     }
 
     @Override
@@ -174,9 +168,9 @@ public class DefaultRecord implements Record {
     }
 
     /**
-     * Write the record to `out` and return its crc.
+     * Write the record to `out` and return its size.
      */
-    public static long writeTo(DataOutputStream out,
+    public static int writeTo(DataOutputStream out,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
@@ -230,13 +224,13 @@ public class DefaultRecord implements Record {
             }
         }
 
-        return computeChecksum(timestampDelta, key, value);
+        return ByteUtils.sizeOfVarint(sizeInBytes) + sizeInBytes;
     }
 
     /**
      * Write the record to `out` and return its crc.
      */
-    public static long writeTo(ByteBuffer out,
+    public static int writeTo(ByteBuffer out,
                                int offsetDelta,
                                long timestampDelta,
                                ByteBuffer key,
@@ -249,24 +243,6 @@ public class DefaultRecord implements Record {
             // cannot actually be raised by ByteBufferOutputStream
             throw new IllegalStateException("Unexpected exception raised from ByteBufferOutputStream", e);
         }
-    }
-
-    /**
-     * Compute the checksum of the record from the timestamp, key and value payloads
-     */
-    private static long computeChecksum(long timestamp,
-                                        ByteBuffer key,
-                                        ByteBuffer value) {
-        Checksum crc = Crc32C.create();
-        Checksums.updateLong(crc, timestamp);
-
-        if (key != null)
-            Checksums.update(crc, key, key.remaining());
-
-        if (value != null)
-            Checksums.update(crc, value, value.remaining());
-
-        return crc.getValue();
     }
 
     @Override

@@ -54,9 +54,10 @@ public interface Record {
 
     /**
      * Get a checksum of the record contents.
-     * @return a 4-byte unsigned checksum represented as a long
+     * @return A 4-byte unsigned checksum represented as a long or null if the message format does not
+     *         include a checksum (i.e. for v2 and above)
      */
-    long checksum();
+    Long checksumOrNull();
 
     /**
      * Check whether the record has a valid checksum.

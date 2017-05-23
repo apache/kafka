@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
 
 /**
@@ -36,15 +37,17 @@ public final class RecordMetadata {
     // user provided one. Otherwise, it will be the producer local time when the producer record was handed to the
     // producer.
     private final long timestamp;
-    private final long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
     private final TopicPartition topicPartition;
 
-    private RecordMetadata(TopicPartition topicPartition, long offset, long timestamp, long
-        checksum, int serializedKeySize, int serializedValueSize) {
-        super();
-        this.offset = offset;
+    private volatile Long checksum;
+
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp,
+                          Long checksum, int serializedKeySize, int serializedValueSize) {
+        // ignore the relativeOffset if the base offset is -1,
+        // since this indicates the offset is unknown
+        this.offset = baseOffset == -1 ? baseOffset : baseOffset + relativeOffset;
         this.timestamp = timestamp;
         this.checksum = checksum;
         this.serializedKeySize = serializedKeySize;
@@ -54,15 +57,7 @@ public final class RecordMetadata {
 
     @Deprecated
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
-        this(topicPartition, baseOffset, relativeOffset, RecordBatch.NO_TIMESTAMP, -1, -1, -1);
-    }
-
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset,
-                          long timestamp, long checksum, int serializedKeySize, int serializedValueSize) {
-        // ignore the relativeOffset if the base offset is -1,
-        // since this indicates the offset is unknown
-        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset,
-             timestamp, checksum, serializedKeySize, serializedValueSize);
+        this(topicPartition, baseOffset, relativeOffset, RecordBatch.NO_TIMESTAMP, null, -1, -1);
     }
 
     /**
@@ -81,8 +76,18 @@ public final class RecordMetadata {
 
     /**
      * The checksum (CRC32) of the record.
+     *
+     * @deprecated As of Kafka 0.11.0. Because of the potential for message format conversion on the broker, the
+     *             computed checksum may not match what was stored on the broker, or what will be returned to the consumer.
+     *             It is therefore unsafe to depend on this checksum for end-to-end delivery guarantees. Additionally,
+     *             message format v2 does not support a record-level checksum. To maintain compatibility, a partial
+     *             checksum computed from the record timestamp, serialized key size, and serialized value size is
+     *             returned instead, but obviously this should not be depended on for end-to-end reliability.
      */
+    @Deprecated
     public long checksum() {
+        if (checksum == null)
+            this.checksum = DefaultRecordBatch.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
         return this.checksum;
     }
 
