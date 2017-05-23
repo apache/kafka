@@ -271,7 +271,8 @@ class TransactionCoordinator(brokerId: Int,
                            producerId: Long,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
-                           responseCallback: EndTxnCallback): Unit = {
+                           responseCallback: EndTxnCallback,
+                           checkTxnTimeout: Boolean = false): Unit = {
     if (transactionalId == null || transactionalId.isEmpty)
       responseCallback(Errors.INVALID_REQUEST)
     else {
@@ -285,6 +286,7 @@ class TransactionCoordinator(brokerId: Int,
         case Right(Some(epochAndTxnMetadata)) =>
           val txnMetadata = epochAndTxnMetadata.transactionMetadata
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
+          val now = time.milliseconds()
 
           txnMetadata synchronized {
             if (txnMetadata.producerId != producerId)
@@ -293,6 +295,9 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress)
               Left(Errors.CONCURRENT_TRANSACTIONS)
+            else if (checkTxnTimeout && txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs >= now)
+              // skip ending this txn
+              Left(Errors.NONE)
             else txnMetadata.state match {
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
@@ -411,7 +416,8 @@ class TransactionCoordinator(brokerId: Int,
         (error: Errors) => {
           if (error != Errors.NONE)
             warn(s"Rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} aborted due to ${error.exceptionName()}")
-        })
+        },
+        checkTxnTimeout = true)
     }
   }
 

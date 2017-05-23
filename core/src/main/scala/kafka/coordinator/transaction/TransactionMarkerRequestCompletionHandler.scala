@@ -93,8 +93,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
         if (errors == null)
           throw new IllegalStateException(s"WriteTxnMarkerResponse does not contain expected error map for producer id ${txnMarker.producerId}")
 
-        val dummy = txnStateManager.getAndMaybeAddTransactionState(transactionalId)
-        dummy match {
+        txnStateManager.getAndMaybeAddTransactionState(transactionalId) match {
           case Left(Errors.NOT_COORDINATOR) =>
             info(s"I am no longer the coordinator for $transactionalId; cancel sending transaction markers $txnMarker to the brokers")
 

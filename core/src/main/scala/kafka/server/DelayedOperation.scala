@@ -217,7 +217,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
     if (!operation.isCompleted) {
-      timeoutTimer.add(operation)
+      if (reaperEnabled)
+        timeoutTimer.add(operation)
       if (operation.isCompleted) {
         // cancel the timer task
         operation.cancel()
