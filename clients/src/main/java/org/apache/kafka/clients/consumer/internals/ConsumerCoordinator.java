@@ -278,12 +278,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      *
      * @param now current time in milliseconds
      */
-    public void poll(long now) {
+    public void poll(long now, long remainingMs) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (subscriptions.partitionsAutoAssigned() && coordinatorUnknown()) {
-            ensureCoordinatorReady();
-            now = time.milliseconds();
+        if (subscriptions.partitionsAutoAssigned()) {
+            if (coordinatorUnknown()) {
+                ensureCoordinatorReady();
+                now = time.milliseconds();
+            }
+        } else {
+            // For manually assigned partitions, if there are no ready nodes, await metadata
+            // to avoid tight polling loop with no channels
+            if (metadata.updateRequested() && !client.hasReadyNodes()) {
+                boolean metadataUpdated = client.awaitMetadataUpdate(remainingMs);
+                if (!metadataUpdated && !client.hasReadyNodes())
+                    return;
+                now = time.milliseconds();
+            }
         }
 
         if (needRejoin()) {

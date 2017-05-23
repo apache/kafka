@@ -113,6 +113,12 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
+    public boolean hasReadyNodes() {
+        synchronized (this) {
+            return client.hasReadyNodes();
+        }
+    }
+
     /**
      * Block until the metadata has been refreshed.
      */
