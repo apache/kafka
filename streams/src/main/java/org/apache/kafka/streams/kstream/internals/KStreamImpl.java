@@ -214,6 +214,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K> implements KStream<K, V
     public void print(KeyValueMapper<? super K, ? super V, String> mapper, Serde<K> keySerde, Serde<V> valSerde, String streamName) {
         String name = topology.newName(PRINTING_NAME);
         streamName = (streamName == null) ? this.name : streamName;
+        
         topology.addProcessor(name, new KStreamPrint<>(new PrintForeachAction(null, mapper, streamName), keySerde, valSerde), this.name);
     }
 
