@@ -187,4 +187,48 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
   }
+
+  @Test
+  def testDescribeAndListTopicsMarkedForDeletion() {
+    val brokers = List(0)
+    val topic = "testtopic"
+    val markedForDeletionDescribe = "MarkedForDeletion"
+    val markedForDeletionList = "marked for deletion"
+    TestUtils.createBrokersInZk(zkUtils, brokers)
+
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1",
+      "--replication-factor", "1",
+      "--topic", topic))
+    TopicCommand.createTopic(zkUtils, createOpts)
+
+    // delete the broker first, so when we attempt to delete the topic it gets into
+    // "marked for deletion"
+    TestUtils.deleteBrokersInZk(zkUtils, brokers)
+    val deleteOpts = new TopicCommandOptions(Array("--topic", topic))
+    TopicCommand.deleteTopic(zkUtils, deleteOpts)
+
+    // Test describe topics
+    def describeTopicsWithConfig() {
+      val describeOpts = new TopicCommandOptions(Array("--describe"))
+      TopicCommand.describeTopic(zkUtils, describeOpts)
+    }
+    val outputConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig)
+    assertTrue(outputConfig.contains(topic) && outputConfig.contains(markedForDeletionDescribe))
+
+    def describeTopicsNoConfig() {
+      val describeOpts = new TopicCommandOptions(Array("--describe", "--unavailable-partitions"))
+      TopicCommand.describeTopic(zkUtils, describeOpts)
+    }
+    val outputNoConfig = TestUtils.grabConsoleOutput(describeTopicsNoConfig)
+    assertTrue(outputNoConfig.contains(topic) && outputNoConfig.contains(markedForDeletionDescribe))
+
+    // Test list topics
+    def listTopics() {
+      val listOpts = new TopicCommandOptions(Array("--list"))
+      TopicCommand.listTopics(zkUtils, listOpts)
+    }
+    val output = TestUtils.grabConsoleOutput(listTopics)
+    assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
+  }
+
 }

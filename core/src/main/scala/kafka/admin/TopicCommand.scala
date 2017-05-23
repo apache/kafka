@@ -153,7 +153,7 @@ object TopicCommand extends Logging {
   def listTopics(zkUtils: ZkUtils, opts: TopicCommandOptions) {
     val topics = getTopics(zkUtils, opts)
     for(topic <- topics) {
-      if (zkUtils.pathExists(getDeleteTopicPath(topic))) {
+      if (zkUtils.isTopicMarkedForDeletion(topic)) {
         println("%s - marked for deletion".format(topic))
       } else {
         println(topic)
@@ -200,13 +200,14 @@ object TopicCommand extends Logging {
           val describeConfigs: Boolean = !reportUnavailablePartitions && !reportUnderReplicatedPartitions
           val describePartitions: Boolean = !reportOverriddenConfigs
           val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
+          val markedForDeletion = if (zkUtils.isTopicMarkedForDeletion(topic)) "MarkedForDeletion:true" else ""
           if (describeConfigs) {
             val configs = AdminUtils.fetchEntityConfig(zkUtils, ConfigType.Topic, topic).asScala
             if (!reportOverriddenConfigs || configs.nonEmpty) {
               val numPartitions = topicPartitionAssignment.size
               val replicationFactor = topicPartitionAssignment.head._2.size
-              println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s"
-                .format(topic, numPartitions, replicationFactor, configs.map(kv => kv._1 + "=" + kv._2).mkString(",")))
+              println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s\t%s"
+                .format(topic, numPartitions, replicationFactor, configs.map(kv => kv._1 + "=" + kv._2).mkString(","), markedForDeletion))
             }
           }
           if (describePartitions) {
@@ -220,7 +221,8 @@ object TopicCommand extends Logging {
                 print("\tPartition: " + partitionId)
                 print("\tLeader: " + (if(leader.isDefined) leader.get else "none"))
                 print("\tReplicas: " + assignedReplicas.mkString(","))
-                println("\tIsr: " + inSyncReplicas.mkString(","))
+                print("\tIsr: " + inSyncReplicas.mkString(","))
+                if (!describeConfigs) println("\t" + markedForDeletion) else println()
               }
             }
           }

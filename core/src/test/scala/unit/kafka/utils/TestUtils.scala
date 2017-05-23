@@ -1117,7 +1117,7 @@ object TestUtils extends Logging {
   def verifyTopicDeletion(zkUtils: ZkUtils, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-    TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getDeleteTopicPath(topic)),
+    TestUtils.waitUntilTrue(() => !zkUtils.isTopicMarkedForDeletion(topic),
       "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(getTopicPath(topic)),
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
@@ -1413,6 +1413,18 @@ object TestUtils extends Logging {
     records
   }
 
+  /**
+   * Utility to run a Scala Unit can capture its Console.out
+   */
+  def grabConsoleOutput(f: () => Unit) : String = {
+    val baos = new ByteArrayOutputStream
+    try {
+      scala.Console.withOut(baos)(f())
+    } finally {
+      scala.Console.out.flush
+    }
+    return baos.toString
+  }
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
