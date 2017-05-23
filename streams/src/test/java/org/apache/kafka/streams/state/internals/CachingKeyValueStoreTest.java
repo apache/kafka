@@ -215,11 +215,6 @@ public class CachingKeyValueStoreTest {
         store.delete("key");
     }
 
-    @Test
-    public void shouldReturnNullIfKeyIsNull() throws Exception {
-        assertNull(store.get(null));
-    }
-
     private int addItemsToCache() throws IOException {
         int cachedSize = 0;
         int i = 0;
@@ -229,6 +224,56 @@ public class CachingKeyValueStoreTest {
             cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic);
         }
         return i;
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        store.put(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+        store.put("a", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() throws Exception {
+        store.putIfAbsent(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutIfAbsentNullValue() throws Exception {
+        store.putIfAbsent("a", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
+        store.putAll(Collections.singletonList(new KeyValue<String, String>(null, "anyValue")));
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
+        store.putAll(Collections.singletonList(new KeyValue<String, String>("a", null)));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnDeleteNullKey() throws Exception {
+        store.delete(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+        store.get(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        store.range(null, "a");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        store.range("a", null);
     }
 
     public static class CacheFlushListenerStub<K> implements CacheFlushListener<K, String> {

@@ -43,6 +43,12 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     private StateSerdes<K, V> serdes;
     private Thread streamThread;
 
+    private void validateKeyNotNull(K key) {
+        if (key == null) {
+            throw new NullPointerException("Key is null.");
+        }
+    }
+
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde) {
@@ -128,9 +134,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized V get(final K key) {
         validateStoreOpen();
-        if (key == null) {
-            return null;
-        }
+        validateKeyNotNull(key);
+
         final byte[] rawKey = serdes.rawKey(key);
         return get(rawKey);
     }
@@ -215,6 +220,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     @Override
     public synchronized V delete(final K key) {
         validateStoreOpen();
+        validateKeyNotNull(key);
         final byte[] rawKey = serdes.rawKey(key);
         final Bytes bytesKey = Bytes.wrap(rawKey);
         final V v = get(rawKey);
