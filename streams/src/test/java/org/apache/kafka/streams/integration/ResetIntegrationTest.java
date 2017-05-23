@@ -361,16 +361,6 @@ public class ResetIntegrationTest {
         Assert.assertEquals(0, exitCode);
     }
 
-    private boolean userTopicExists(final Set<String> allTopics) {
-        final Set<String> expectedMissingTopics = new HashSet<>();
-        expectedMissingTopics.add(INPUT_TOPIC);
-        expectedMissingTopics.add(OUTPUT_TOPIC);
-        expectedMissingTopics.add(OUTPUT_TOPIC_2);
-        expectedMissingTopics.add(OUTPUT_TOPIC_2_RERUN);
-
-        return expectedMissingTopics.removeAll(allTopics);
-    }
-
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) {
         final Set<String> expectedRemainingTopicsAfterCleanup = new HashSet<>();
         expectedRemainingTopicsAfterCleanup.add(INPUT_TOPIC);
