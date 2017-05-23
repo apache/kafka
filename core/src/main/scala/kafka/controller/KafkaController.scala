@@ -1103,7 +1103,6 @@ class KafkaController(val config: KafkaConfig, zkUtils: ZkUtils, val brokerState
 
   private def checkAndTriggerAutoLeaderRebalance(): Unit = {
     trace("Checking need to trigger auto leader balancing")
-    // get all the active brokers
     val preferredReplicasForTopicsByBrokers: Map[Int, Map[TopicAndPartition, Seq[Int]]] =
       controllerContext.partitionReplicaAssignment.filterNot { case (tp, _) =>
         topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)
