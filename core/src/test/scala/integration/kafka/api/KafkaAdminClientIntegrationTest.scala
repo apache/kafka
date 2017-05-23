@@ -18,9 +18,9 @@ package kafka.api
 
 import java.util
 import java.util.{Collections, Properties}
-import java.util.concurrent.ExecutionException
+import java.util.concurrent.{ExecutionException, TimeUnit}
 
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{Time, Utils}
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
@@ -28,7 +28,7 @@ import org.apache.kafka.clients.admin._
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.common.KafkaFuture
-import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TopicExistsException}
+import org.apache.kafka.common.errors.{InvalidRequestException, SecurityDisabledException, TimeoutException, TopicExistsException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.{After, Before, Rule, Test}
 import org.apache.kafka.common.requests.MetadataResponse
@@ -378,6 +378,59 @@ class KafkaAdminClientIntegrationTest extends KafkaServerTestHarness with Loggin
         classOf[SecurityDisabledException])
     assertFutureExceptionTypeEquals(client.deleteAcls(Collections.singleton(ACL1.toFilter())).all(),
       classOf[SecurityDisabledException])
+    client.close()
+  }
+
+  /**
+    * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
+    * since they can be done within the timeout.  New calls should receive timeouts.
+    */
+  @Test
+  def testDelayedClose(): Unit = {
+    client = AdminClient.create(createConfig())
+    val topics = Seq("mytopic", "mytopic2")
+    val newTopics = topics.map(new NewTopic(_, 1, 1))
+    val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
+    client.close(TimeUnit.HOURS, 2)
+    client.close(TimeUnit.HOURS, 1)
+    val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
+    assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
+    future.get
+    client.close(TimeUnit.SECONDS, 1)
+    client.close(TimeUnit.DAYS, 1)
+  }
+
+  /**
+    * Test closing the AdminClient with a timeout of 0, when there are calls with extremely long
+    * timeouts in progress.  The calls should be aborted after the hard shutdown timeout elapses.
+    */
+  @Test
+  def testForceClose(): Unit = {
+    val config = createConfig()
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    client = AdminClient.create(config)
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+      new CreateTopicsOptions().timeoutMs(900000)).all()
+    client.close(TimeUnit.MILLISECONDS, 0)
+    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
+  }
+
+  /**
+    * Check that a call with a timeout does not complete before the minimum timeout has elapsed,
+    * even when the default request timeout is shorter.
+    */
+  @Test
+  def testMinimumRequestTimeouts(): Unit = {
+    val config = createConfig()
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
+    client = AdminClient.create(config)
+    val startTimeMs = Time.SYSTEM.milliseconds()
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+      new CreateTopicsOptions().timeoutMs(1)).all()
+    assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
+    val endTimeMs = Time.SYSTEM.milliseconds()
+    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
     client.close()
   }
 

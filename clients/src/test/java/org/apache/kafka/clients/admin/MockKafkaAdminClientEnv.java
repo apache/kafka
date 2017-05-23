@@ -52,7 +52,7 @@ public class MockKafkaAdminClientEnv implements AutoCloseable {
         this.metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
         this.mockClient = new MockClient(Time.SYSTEM, this.metadata);
-        this.client = KafkaAdminClient.create(adminClientConfig, mockClient, metadata);
+        this.client = KafkaAdminClient.createInternal(adminClientConfig, mockClient, metadata);
     }
 
     public Cluster cluster() {
