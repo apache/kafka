@@ -140,7 +140,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                                var txnTimeoutMs: Int,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
-                                               var txnStartTimestamp: Long = -1,
+                                               @volatile var txnStartTimestamp: Long = -1,
                                                var txnLastUpdateTimestamp: Long) extends Logging {
 
   // pending state is used to indicate the state that this transaction is going to
