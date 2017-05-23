@@ -292,10 +292,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     this.pendingTransactionalOffsetCommits ++= pendingTxnOffsets
   }
 
-  def completePendingOffsetWrite(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset) {
+  def onOffsetCommitAppend(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset) {
     if (pendingOffsetCommits.contains(topicPartition)) {
       if (offsetWithCommitRecordMetadata.appendedBatchOffset.isEmpty)
-        throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record" +
+        throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record " +
           "in the log.")
       if (!offsets.contains(topicPartition) || offsets(topicPartition).olderThan(offsetWithCommitRecordMetadata))
         offsets.put(topicPartition, offsetWithCommitRecordMetadata)
@@ -414,12 +414,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
   }.toMap
 
-  def offset(topicPartition: TopicPartition) : Option[OffsetAndMetadata] = offsets.get(topicPartition) match {
-    case Some(commitRecordMetadataAndOffset) =>
-      Option(commitRecordMetadataAndOffset.offsetAndMetadata)
-    case None =>
-      None
-  }
+  def offset(topicPartition: TopicPartition) : Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
 
   // visible for testing
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
