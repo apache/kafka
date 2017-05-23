@@ -302,7 +302,7 @@ class GroupMetadataTest extends JUnitSuite {
     assertTrue(group.hasOffsets)
     assertEquals(None, group.offset(partition))
 
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(commitRecordOffset, offset))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(commitRecordOffset), offset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(offset), group.offset(partition))
   }
@@ -338,7 +338,7 @@ class GroupMetadataTest extends JUnitSuite {
     assertTrue(group.hasOffsets)
     assertEquals(None, group.offset(partition))
 
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(3L, secondOffset))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(3L), secondOffset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(secondOffset), group.offset(partition))
   }
@@ -356,11 +356,11 @@ class GroupMetadataTest extends JUnitSuite {
     group.prepareOffsetCommit(Map(partition -> secondOffset))
     assertTrue(group.hasOffsets)
 
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(4L, firstOffset))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(4L), firstOffset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(firstOffset), group.offset(partition))
 
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(5L, secondOffset))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(5L), secondOffset))
     assertTrue(group.hasOffsets)
     assertEquals(Some(secondOffset), group.offset(partition))
   }
@@ -379,8 +379,8 @@ class GroupMetadataTest extends JUnitSuite {
     group.prepareOffsetCommit(Map(partition -> consumerOffsetCommit))
     assertTrue(group.hasOffsets)
 
-    group.updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId, partition, CommitRecordMetadataAndOffset(3L, txnOffsetCommit))
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(4L, consumerOffsetCommit))
+    group.onTxnOffsetCommitAppend(producerId, partition, CommitRecordMetadataAndOffset(Some(3L), txnOffsetCommit))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(4L), consumerOffsetCommit))
     assertTrue(group.hasOffsets)
     assertEquals(Some(consumerOffsetCommit), group.offset(partition))
 
@@ -404,8 +404,8 @@ class GroupMetadataTest extends JUnitSuite {
     group.prepareOffsetCommit(Map(partition -> consumerOffsetCommit))
     assertTrue(group.hasOffsets)
 
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(3L, consumerOffsetCommit))
-    group.updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId, partition, CommitRecordMetadataAndOffset(4L, txnOffsetCommit))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(3L), consumerOffsetCommit))
+    group.onTxnOffsetCommitAppend(producerId, partition, CommitRecordMetadataAndOffset(Some(4L), txnOffsetCommit))
     assertTrue(group.hasOffsets)
     // The transactional offset commit hasn't been committed yet, so we should materialize the consumer offset commit.
     assertEquals(Some(consumerOffsetCommit), group.offset(partition))
@@ -431,8 +431,8 @@ class GroupMetadataTest extends JUnitSuite {
     group.prepareOffsetCommit(Map(partition -> consumerOffsetCommit))
     assertTrue(group.hasOffsets)
 
-    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(3L, consumerOffsetCommit))
-    group.updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId, partition, CommitRecordMetadataAndOffset(4L, txnOffsetCommit))
+    group.completePendingOffsetWrite(partition, CommitRecordMetadataAndOffset(Some(3L), consumerOffsetCommit))
+    group.onTxnOffsetCommitAppend(producerId, partition, CommitRecordMetadataAndOffset(Some(4L), txnOffsetCommit))
     assertTrue(group.hasOffsets)
     // The transactional offset commit hasn't been committed yet, so we should materialize the consumer offset commit.
     assertEquals(Some(consumerOffsetCommit), group.offset(partition))

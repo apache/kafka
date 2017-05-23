@@ -312,9 +312,9 @@ class GroupMetadataManager(brokerId: Int,
                 if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
                     if (isTxnOffsetCommit)
-                      group.updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId, topicPartition, CommitRecordMetadataAndOffset(status.baseOffset, offsetAndMetadata))
+                      group.onTxnOffsetCommitAppend(producerId, topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                     else
-                      group.completePendingOffsetWrite(topicPartition, CommitRecordMetadataAndOffset(status.baseOffset, offsetAndMetadata))
+                      group.completePendingOffsetWrite(topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                   }
                 }
                 Errors.NONE
@@ -526,9 +526,9 @@ class GroupMetadataManager(brokerId: Int,
                     } else {
                       val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(record.value)
                       if (isTxnOffsetCommit)
-                        pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(batch.baseOffset, offsetAndMetadata))
+                        pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(Some(batch.baseOffset), offsetAndMetadata))
                       else
-                        loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(batch.baseOffset, offsetAndMetadata))
+                        loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(Some(batch.baseOffset), offsetAndMetadata))
                     }
 
                   case groupMetadataKey: GroupMetadataKey =>

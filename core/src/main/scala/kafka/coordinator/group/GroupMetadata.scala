@@ -132,9 +132,8 @@ case class GroupSummary(state: String,
   * information of the commit record offset, compaction of the offsets topic it self may result in the wrong offset commit
   * being materialized.
   */
-case class CommitRecordMetadataAndOffset(commitRecordOffset: Long,
-                                         offsetAndMetadata: OffsetAndMetadata) {
-  def olderThan(that: CommitRecordMetadataAndOffset) = commitRecordOffset < that.commitRecordOffset
+case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
+  def olderThan(that: CommitRecordMetadataAndOffset) : Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
 }
 
 /**
@@ -295,8 +294,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def completePendingOffsetWrite(topicPartition: TopicPartition, offsetWithCommitRecordMetadata: CommitRecordMetadataAndOffset) {
     if (pendingOffsetCommits.contains(topicPartition)) {
-      // TODO(apurva) : Is this check necessary? Is it ever possible that a transactional offset commit would
-      // be written and then committed in the time where a regular offset commit was written but not acknowledged.
+      if (offsetWithCommitRecordMetadata.appendedBatchOffset.isEmpty)
+        throw new IllegalStateException("Cannot complete offset commit write without providing the metadata of the record" +
+          "in the log.")
       if (!offsets.contains(topicPartition) || offsets(topicPartition).olderThan(offsetWithCommitRecordMetadata))
         offsets.put(topicPartition, offsetWithCommitRecordMetadata)
     }
@@ -305,6 +305,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       case Some(stagedOffset) if offsetWithCommitRecordMetadata.offsetAndMetadata == stagedOffset =>
         pendingOffsetCommits.remove(topicPartition)
       case _ =>
+        // The pendingOffsetCommits for this partition could be empty if the topic was deleted, in which case
+        // its entries would be removed from the cache by the `removeOffsets` method.
     }
   }
 
@@ -326,7 +328,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
 
     offsets.foreach { case (topicPartition, offsetAndMetadata) =>
-      producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(-1, offsetAndMetadata))
+      producerOffsets.put(topicPartition, CommitRecordMetadataAndOffset(None, offsetAndMetadata))
     }
   }
 
@@ -348,8 +350,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def updateCommitRecordMetadataForPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition,
-                                                          commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset) {
+  def onTxnOffsetCommitAppend(producerId: Long, topicPartition: TopicPartition,
+                              commitRecordMetadataAndOffset: CommitRecordMetadataAndOffset) {
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffset) =>
         if (pendingOffset.contains(topicPartition)
@@ -368,6 +370,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (isCommit) {
       val producerOffsets = pendingTransactionalOffsetCommits.getOrElse(producerId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
       producerOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
+        if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
+          throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
+            s"and groupId $groupId even though the the offset commit record itself hasn't been appended to the log.")
         if (!offsets.contains(topicPartition) || offsets(topicPartition).olderThan(commitRecordMetadataAndOffset))
           offsets.put(topicPartition, commitRecordMetadataAndOffset)
       }
@@ -391,7 +396,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }.toMap
   }
 
-  def removeExpiredOffsets(startMs: Long) = {
+  def removeExpiredOffsets(startMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
     val expiredOffsets = offsets
       .filter {
         case (topicPartition, commitRecordMetadataAndOffset) =>
