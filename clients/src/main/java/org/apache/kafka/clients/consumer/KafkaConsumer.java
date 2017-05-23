@@ -473,6 +473,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final long retryBackoffMs;
     private long requestTimeoutMs;
     private boolean closed = false;
+    private static final long SLEEP_EMPTY_POLL_MS = 200;
 
     // currentThread holds the threadId of the current thread accessing KafkaConsumer
     // and is used to prevent multi-threaded access
@@ -863,6 +864,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     fetcher.initFetches(metadata.fetch());
                     client.quickPoll();
                     return new ConsumerRecords<>(records);
+                } else {
+                    // Workaround to avoid burning CPU when there are no messages in the partition.
+                    // SEE: https://issues.apache.org/jira/browse/KAFKA-3159
+                    try {
+                        Thread.sleep(SLEEP_EMPTY_POLL_MS);
+                    } catch (InterruptedException e) { /*Nothing to do, ignoring */ }
                 }
 
                 long elapsed = time.milliseconds() - start;
