@@ -48,9 +48,8 @@ object TransactionCoordinator {
       config.transactionTransactionsExpiredTransactionCleanupIntervalMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
-    // we need to enable reaper thread still even with infinite delays for txn marker purgatory, since we
-    // are still relying on the thread to remove already completed tasks as each task is watched on two lists: txn id and partition id
-    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId)
+    // we do not need to turn on reaper thread since no tasks will be expired and there are no completed tasks to be purged
+    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
@@ -118,7 +117,7 @@ class TransactionCoordinator(brokerId: Int,
         txnLastUpdateTimestamp = now)
 
       // only try to get a new producerId and update the cache if the transactional id is unknown
-      val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId, createdMetadata) match {
+      val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId, Some(createdMetadata)) match {
         case Left(err) =>
           Left(initTransactionError(err))
 
@@ -334,9 +333,6 @@ class TransactionCoordinator(brokerId: Int,
         case Right((coordinatorEpoch, newMetadata)) =>
           def sendTxnMarkersCallback(error: Errors): Unit = {
             if (error == Errors.NONE) {
-              // we do NOT need to grab the read lock until we have completed putting into the sender queue,
-              // since even if the coordinator epoch has changed after the check (e.g. a leader emigration followed by an immediate immigration),
-              // the enqueued markers will still be cleared by the sender upon receiving the COORDINATOR_EPOCH_INVALID error code
               val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
                 case Left(err) =>
                   Left(err)

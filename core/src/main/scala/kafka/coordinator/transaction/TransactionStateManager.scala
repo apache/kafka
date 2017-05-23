@@ -70,7 +70,7 @@ class TransactionStateManager(brokerId: Int,
   /** shutting down flag */
   private val shuttingDown = new AtomicBoolean(false)
 
-  /** lock protecting access to the metadata cache, including loading and leaving partition sets */
+  /** lock protecting access to the transactional metadata cache, including loading and leaving partition sets */
   private val stateLock = new ReentrantReadWriteLock()
 
   /** partitions of transaction topic that are being loaded, state lock should be called BEFORE accessing this set */
@@ -85,7 +85,7 @@ class TransactionStateManager(brokerId: Int,
   /** number of partitions for the transaction log topic */
   private val transactionTopicPartitionCount = getTransactionTopicPartitionCount
 
-  // this is best-effort expiration and hence not grabbing the lock on metadata upon checking its state
+  // this is best-effort expiration and hence not grabbing the lock on the metadata object upon checking its state
   // we will get the lock when actually trying to transit the transaction metadata to abort later.
   def transactionsToExpire(): Iterable[TransactionalIdAndProducerIdEpoch] = {
     val now = time.milliseconds()
@@ -122,7 +122,7 @@ class TransactionStateManager(brokerId: Int,
    * This function is covered by the state read lock
    */
   def getAndMaybeAddTransactionState(transactionalId: String,
-                                     txnMetadata: TransactionMetadata = null): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]
+                                     createdTxnMetadata: Option[TransactionMetadata] = None): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]]
   = inReadLock(stateLock) {
     val partitionId = partitionFor(transactionalId)
 
@@ -130,21 +130,23 @@ class TransactionStateManager(brokerId: Int,
       return Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
 
     if (leavingPartitions.exists(_.txnPartitionId == partitionId))
-      Right(None)
+      Right(Errors.NOT_COORDINATOR)
 
     transactionMetadataCache.get(partitionId) match {
       case Some(cacheEntry) =>
         cacheEntry.metadataPerTransactionalId.get(transactionalId) match {
           case null =>
-            if (txnMetadata != null) {
-              val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
-              if (currentTxnMetadata != null) {
-                Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
-              } else {
-                Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
-              }
-            } else {
-              Right(None)
+            createdTxnMetadata match {
+              case None =>
+                Right(None)
+
+              case Some(txnMetadata) =>
+                val currentTxnMetadata = cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, txnMetadata)
+                if (currentTxnMetadata != null) {
+                  Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, currentTxnMetadata)))
+                } else {
+                  Right(Some(CoordinatorEpochAndTxnMetadata(cacheEntry.coordinatorEpoch, txnMetadata)))
+                }
             }
 
           case currentTxnMetadata =>
@@ -466,37 +468,44 @@ class TransactionStateManager(brokerId: Int,
       responseCallback(responseError)
     }
 
-    getAndMaybeAddTransactionState(transactionalId) match {
-      case Left(err) =>
-        responseCallback(err)
+    inReadLock(stateLock) {
+      // we need to hold the read lock on the transaction metadata cache until appending to local log returns;
+      // this is to avoid the case where an emigration followed by an immigration could have completed after the check
+      // returns and before appendRecords() is called, since otherwise entries with a high coordinator epoch could have
+      // been appended to the log in between these two events, and therefore appendRecords() would append entries with
+      // an old coordinator epoch that can still be successfully replicated on followers and make the log in a bad state.
+      getAndMaybeAddTransactionState(transactionalId) match {
+        case Left(err) =>
+          responseCallback(err)
 
-      case Right(None) =>
-        // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
-        responseCallback(Errors.NOT_COORDINATOR)
+        case Right(None) =>
+          // the coordinator metadata has been removed, reply to client immediately with NOT_COORDINATOR
+          responseCallback(Errors.NOT_COORDINATOR)
 
-      case Right(Some(epochAndMetadata)) =>
-        val metadata = epochAndMetadata.transactionMetadata
+        case Right(Some(epochAndMetadata)) =>
+          val metadata = epochAndMetadata.transactionMetadata
 
-        metadata synchronized {
-          if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
-            // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
-            responseCallback(Errors.NOT_COORDINATOR)
-          } else {
-            // do not need to check the metadata object itself since no current thread should be able to modify it
-            // under the same coordinator epoch, so directly append to txn log now
+          metadata synchronized {
+            if (epochAndMetadata.coordinatorEpoch != coordinatorEpoch) {
+              // the coordinator epoch has changed, reply to client immediately with with NOT_COORDINATOR
+              responseCallback(Errors.NOT_COORDINATOR)
+            } else {
+              // do not need to check the metadata object itself since no concurrent thread should be able to modify it
+              // under the same coordinator epoch, so directly append to txn log now
 
-            replicaManager.appendRecords(
-              newMetadata.txnTimeoutMs.toLong,
-              TransactionLog.EnforcedRequiredAcks,
-              internalTopicsAllowed = true,
-              isFromClient = false,
-              recordsPerPartition,
-              updateCacheCallback,
-              delayedProduceSyncObject = newMetadata)
+              replicaManager.appendRecords(
+                newMetadata.txnTimeoutMs.toLong,
+                TransactionLog.EnforcedRequiredAcks,
+                internalTopicsAllowed = true,
+                isFromClient = false,
+                recordsPerPartition,
+                updateCacheCallback,
+                delayedProduceSyncObject = Some(newMetadata))
 
-            trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+              trace(s"Appended new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+            }
           }
-        }
+      }
     }
   }
 

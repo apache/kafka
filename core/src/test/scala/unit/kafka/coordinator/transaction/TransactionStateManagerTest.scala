@@ -100,11 +100,11 @@ class TransactionStateManagerTest {
 
     assertEquals(Right(None), transactionManager.getAndMaybeAddTransactionState(txnId1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
-      transactionManager.getAndMaybeAddTransactionState(txnId1, txnMetadata1))
+      transactionManager.getAndMaybeAddTransactionState(txnId1, Some(txnMetadata1)))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
       transactionManager.getAndMaybeAddTransactionState(txnId1))
     assertEquals(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))),
-      transactionManager.getAndMaybeAddTransactionState(txnId1, txnMetadata2))
+      transactionManager.getAndMaybeAddTransactionState(txnId1, Some(txnMetadata2)))
   }
 
   @Test
@@ -212,7 +212,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
-    transactionManager.getAndMaybeAddTransactionState(txnId1, txnMetadata1)
+    transactionManager.getAndMaybeAddTransactionState(txnId1, Some(txnMetadata1))
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.NONE
@@ -273,7 +273,7 @@ class TransactionStateManagerTest {
     transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
-    transactionManager.getAndMaybeAddTransactionState(txnId1, txnMetadata1)
+    transactionManager.getAndMaybeAddTransactionState(txnId1, Some(txnMetadata1))
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.NOT_COORDINATOR
@@ -292,7 +292,7 @@ class TransactionStateManagerTest {
   def testAppendTransactionToLogWhilePendingStateChanged() = {
     // first insert the initial transaction metadata
     transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
-    transactionManager.getAndMaybeAddTransactionState(txnId1, txnMetadata1)
+    transactionManager.getAndMaybeAddTransactionState(txnId1, Some(txnMetadata1))
 
     prepareForTxnMessageAppend(Errors.NONE)
     expectedError = Errors.INVALID_PRODUCER_EPOCH
@@ -323,28 +323,28 @@ class TransactionStateManagerTest {
 
     txnMetadata1.state = Ongoing
     txnMetadata1.txnStartTimestamp = time.milliseconds()
-    transactionManager.getAndMaybeAddTransactionState(txnId1, txnMetadata1)
-    transactionManager.getAndMaybeAddTransactionState(txnId2, txnMetadata2)
+    transactionManager.getAndMaybeAddTransactionState(txnId1, Some(txnMetadata1))
+    transactionManager.getAndMaybeAddTransactionState(txnId2, Some(txnMetadata2))
 
     val ongoingButNotExpiring = txnMetadata1.copy()
     ongoingButNotExpiring.txnTimeoutMs = 10000
-    transactionManager.getAndMaybeAddTransactionState("not-expiring", ongoingButNotExpiring)
+    transactionManager.getAndMaybeAddTransactionState("not-expiring", Some(ongoingButNotExpiring))
 
     val prepareCommit = txnMetadata1.copy()
     prepareCommit.state = PrepareCommit
-    transactionManager.getAndMaybeAddTransactionState("pc", prepareCommit)
+    transactionManager.getAndMaybeAddTransactionState("pc", Some(prepareCommit))
 
     val prepareAbort = txnMetadata1.copy()
     prepareAbort.state = PrepareAbort
-    transactionManager.getAndMaybeAddTransactionState("pa", prepareAbort)
+    transactionManager.getAndMaybeAddTransactionState("pa", Some(prepareAbort))
 
     val committed = txnMetadata1.copy()
     committed.state = CompleteCommit
-    transactionManager.getAndMaybeAddTransactionState("cc", committed)
+    transactionManager.getAndMaybeAddTransactionState("cc", Some(committed))
 
     val aborted = txnMetadata1.copy()
     aborted.state = CompleteAbort
-    transactionManager.getAndMaybeAddTransactionState("ca", aborted)
+    transactionManager.getAndMaybeAddTransactionState("ca", Some(aborted))
 
     time.sleep(2000)
     val expiring = transactionManager.transactionsToExpire()

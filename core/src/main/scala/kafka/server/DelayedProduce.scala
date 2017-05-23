@@ -124,6 +124,10 @@ class DelayedProduce(delayMs: Long,
   }
 }
 
+/**
+ * If the responseCallback of this delayed produce object is already synchronized with a different object, then users can
+ * apply this extended delayed produce object to avoid calling tryComplete() with synchronization on the operation object to avoid dead-lock
+ */
 class SafeDelayedProduce(delayMs: Long,
                          syncObject: Object,
                          produceMetadata: ProduceMetadata,
@@ -131,7 +135,6 @@ class SafeDelayedProduce(delayMs: Long,
                          responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
   extends DelayedProduce(delayMs, produceMetadata, replicaManager, responseCallback) {
 
-  // overridden since tryComplete already synchronizes on the caller
   override def safeTryComplete(): Boolean = syncObject synchronized {
     tryComplete()
   }

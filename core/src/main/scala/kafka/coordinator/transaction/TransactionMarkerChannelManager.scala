@@ -145,9 +145,10 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
   }
 
   def shutdown(): Unit = {
+    txnMarkerSendThread.initiateShutdown()
     // wake up the thread in case it is blocked inside poll
     networkClient.wakeup()
-    txnMarkerSendThread.shutdown()
+    txnMarkerSendThread.awaitShutdown()
     txnMarkerPurgatory.shutdown()
     markersQueuePerBroker.clear()
   }
