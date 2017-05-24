@@ -83,7 +83,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
 
-    var consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
+    val consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
     val producer = TestUtils.createTransactionalProducer("my-test-producer-t.id", servers)
 
     val scheduler = new BounceScheduler
@@ -110,8 +110,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         if (shouldAbort) {
           trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
           producer.abortTransaction()
-          consumer.close()
-          consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
+          TestUtils.resetToCommittedPositions(consumer)
         } else {
           trace(s"Committed offsets. committing transaction of ${records.size} messages.")
           producer.commitTransaction()
