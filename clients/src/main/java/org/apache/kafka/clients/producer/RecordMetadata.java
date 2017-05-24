@@ -17,7 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.DefaultRecordBatch;
+import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
 
 /**
@@ -55,6 +55,19 @@ public final class RecordMetadata {
         this.topicPartition = topicPartition;
     }
 
+    /**
+     * @deprecated As of 0.11.0. Use @{@link RecordMetadata#RecordMetadata(TopicPartition, long, long, long, Long, int, int)}.
+     */
+    @Deprecated
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp,
+                          long checksum, int serializedKeySize, int serializedValueSize) {
+        this(topicPartition, baseOffset, relativeOffset, timestamp, (Long) checksum, serializedKeySize,
+                serializedValueSize);
+    }
+
+    /**
+     * @deprecated As of 0.10.0. Use @{@link RecordMetadata#RecordMetadata(TopicPartition, long, long, long, Long, int, int)}.
+     */
     @Deprecated
     public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
         this(topicPartition, baseOffset, relativeOffset, RecordBatch.NO_TIMESTAMP, null, -1, -1);
@@ -80,14 +93,16 @@ public final class RecordMetadata {
      * @deprecated As of Kafka 0.11.0. Because of the potential for message format conversion on the broker, the
      *             computed checksum may not match what was stored on the broker, or what will be returned to the consumer.
      *             It is therefore unsafe to depend on this checksum for end-to-end delivery guarantees. Additionally,
-     *             message format v2 does not support a record-level checksum. To maintain compatibility, a partial
-     *             checksum computed from the record timestamp, serialized key size, and serialized value size is
-     *             returned instead, but obviously this should not be depended on for end-to-end reliability.
+     *             message format v2 does not include a record-level checksum (for performance, the record checksum
+     *             was replaced with a batch checksum). To maintain compatibility, a partial checksum computed from
+     *             the record timestamp, serialized key size, and serialized value size is returned instead, but
+     *             this should not be depended on for end-to-end reliability.
      */
     @Deprecated
     public long checksum() {
         if (checksum == null)
-            this.checksum = DefaultRecordBatch.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
+            // The checksum is null only for message format v2 and above, which do not have a record-level checksum.
+            this.checksum = DefaultRecord.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
         return this.checksum;
     }
 

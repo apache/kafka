@@ -20,6 +20,8 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.ByteUtils;
+import org.apache.kafka.common.utils.Checksums;
+import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInputStream;
@@ -27,6 +29,7 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 import static org.apache.kafka.common.utils.Utils.wrapNullable;
@@ -228,7 +231,7 @@ public class DefaultRecord implements Record {
     }
 
     /**
-     * Write the record to `out` and return its crc.
+     * Write the record to `out` and return its size.
      */
     public static int writeTo(ByteBuffer out,
                                int offsetDelta,
@@ -469,14 +472,18 @@ public class DefaultRecord implements Record {
         return size;
     }
 
-    static int recordSizeUpperBound(byte[] key, byte[] value, Header[] headers) {
-        return recordSizeUpperBound(Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
-    }
-
     static int recordSizeUpperBound(ByteBuffer key, ByteBuffer value, Header[] headers) {
         int keySize = key == null ? -1 : key.remaining();
         int valueSize = value == null ? -1 : value.remaining();
         return MAX_RECORD_OVERHEAD + sizeOf(keySize, valueSize, headers);
     }
 
+
+    public static long computePartialChecksum(long timestamp, int serializedKeySize, int serializedValueSize) {
+        Checksum checksum = Crc32C.create();
+        Checksums.updateLong(checksum, timestamp);
+        Checksums.updateInt(checksum, serializedKeySize);
+        Checksums.updateInt(checksum, serializedValueSize);
+        return checksum.getValue();
+    }
 }

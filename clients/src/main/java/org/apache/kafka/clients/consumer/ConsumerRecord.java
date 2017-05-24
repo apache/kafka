@@ -18,7 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.record.DefaultRecordBatch;
+import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
@@ -197,14 +197,15 @@ public class ConsumerRecord<K, V> {
      * @deprecated As of Kafka 0.11.0. Because of the potential for message format conversion on the broker, the
      *             checksum returned by the broker may not match what was computed by the producer.
      *             It is therefore unsafe to depend on this checksum for end-to-end delivery guarantees. Additionally,
-     *             message format v2 does not support a record-level checksum. To maintain compatibility, a partial
-     *             checksum computed from the record timestamp, serialized key size, and serialized value size is
-     *             returned instead, but obviously this should not be depended on for end-to-end reliability.
+     *             message format v2 does not include a record-level checksum (for performance, the record checksum
+     *             was replaced with a batch checksum). To maintain compatibility, a partial checksum computed from
+     *             the record timestamp, serialized key size, and serialized value size is returned instead, but
+     *             this should not be depended on for end-to-end reliability.
      */
     @Deprecated
     public long checksum() {
         if (checksum == null)
-            this.checksum = DefaultRecordBatch.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
+            this.checksum = DefaultRecord.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
         return this.checksum;
     }
 

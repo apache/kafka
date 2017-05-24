@@ -131,7 +131,7 @@ public final class ProducerBatch {
             this.maxRecordSize = Math.max(this.maxRecordSize,
                                           AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp, thunk.future.checksum(),
+                                                                   timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
                                                                    value == null ? -1 : value.remaining());
             // Chain the future to the original thunk.

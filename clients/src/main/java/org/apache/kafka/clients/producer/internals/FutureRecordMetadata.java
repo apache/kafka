@@ -96,7 +96,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
             return value();
     }
 
-    Long checksum() {
+    Long checksumOrNull() {
         return this.checksum;
     }
 

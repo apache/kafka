@@ -344,6 +344,9 @@ public class MemoryRecordsBuilder {
         return writtenCompressed;
     }
 
+    /**
+     * Append a record and return its checksum for message format v0 and v1, or null for for v2 and above.
+     */
     private Long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {
         try {
@@ -433,7 +436,6 @@ public class MemoryRecordsBuilder {
     public Long appendWithOffset(long offset, SimpleRecord record) {
         return appendWithOffset(offset, record.timestamp(), record.key(), record.value(), record.headers());
     }
-
 
     /**
      * Append a new record at the next sequential offset.
