@@ -17,6 +17,8 @@
 
 package kafka.server
 
+import java.util.Properties
+
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.Json
 import kafka.utils.Logging
