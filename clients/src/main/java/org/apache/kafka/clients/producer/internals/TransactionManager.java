@@ -333,7 +333,7 @@ public class TransactionManager {
     }
 
     synchronized TxnRequestHandler nextRequestHandler() {
-        if (!newPartitionsToBeAddedToTransaction.isEmpty())
+       if (!newPartitionsToBeAddedToTransaction.isEmpty())
             pendingRequests.add(addPartitionsToTransactionHandler());
 
         TxnRequestHandler nextRequestHandler = pendingRequests.poll();
@@ -383,7 +383,7 @@ public class TransactionManager {
     }
 
     // visible for testing
-    boolean transactionContainsPartition(TopicPartition topicPartition) {
+    synchronized boolean transactionContainsPartition(TopicPartition topicPartition) {
         return isInTransaction() && partitionsInTransaction.contains(topicPartition);
     }
 
@@ -443,7 +443,7 @@ public class TransactionManager {
         return false;
     }
 
-    private void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
+    private synchronized void lookupCoordinator(FindCoordinatorRequest.CoordinatorType type, String coordinatorKey) {
         switch (type) {
             case GROUP:
                 consumerGroupCoordinator = null;
@@ -459,7 +459,7 @@ public class TransactionManager {
         pendingRequests.add(new FindCoordinatorHandler(builder));
     }
 
-    private void completeTransaction() {
+    private synchronized void completeTransaction() {
         transitionTo(State.READY);
         lastError = null;
         partitionsInTransaction.clear();
@@ -515,7 +515,7 @@ public class TransactionManager {
             result.done();
         }
 
-        void reenqueue() {
+        synchronized void reenqueue() {
             this.isRetry = true;
             pendingRequests.add(this);
         }
@@ -634,7 +634,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public synchronized void handleResponse(AbstractResponse response) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
@@ -817,7 +817,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public synchronized void handleResponse(AbstractResponse response) {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = addOffsetsToTxnResponse.error();
 
