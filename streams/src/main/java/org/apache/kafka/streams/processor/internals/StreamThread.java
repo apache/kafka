@@ -517,7 +517,6 @@ public class StreamThread extends Thread {
         boolean cleanRun = false;
         try {
             runLoop();
-            cleanRun = true;
         } catch (final KafkaException e) {
             // just re-throw the exception as it should be logged already
             throw e;
