@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -30,10 +31,16 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockKeyValueMapper;
+import org.apache.kafka.test.MockProcessorContext;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -41,13 +48,13 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 
-
 import java.io.File;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.fail;
 
 public class KTableAggregateTest {
 
@@ -73,13 +80,63 @@ public class KTableAggregateTest {
     }
 
     @Test
+    public void shouldNotSubtractOldValueOnlyIfStateIsNull() {
+        final Processor<Long, Change<Long>> aggregator = new KTableAggregate<>(
+            "corruptedStore",
+            new Initializer<Long>() {
+                @Override
+                public Long apply() {
+                    throw new RuntimeException("Initializer#apply() should never be called for subtraction case.");
+                }
+            },
+            new Aggregator<Long, Long, Long>() {
+                @Override
+                public Long apply(final Long key, final Long value, final Long aggregate) {
+                    throw new RuntimeException("Adder#apply() should never be called for subtraction case.");
+                }
+            },
+            new Aggregator<Long, Long, Long>() {
+                @Override
+                public Long apply(final Long key, final Long value, final Long aggregate) {
+                    throw new RuntimeException("Subtractor#apply() should never be called with <aggregate> being null.");
+                }
+            }
+        ).get();
+
+
+        aggregator.init(
+            new MockProcessorContext(
+                StateSerdes.withBuiltinTypes("anyName", Long.class, Long.class),
+                new RecordCollectorImpl(
+                    new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer()),
+                 null)) {
+
+                @Override
+                public StateStore getStateStore(final String storeName) {
+                    return new InMemoryKeyValueStore<>(
+                        "corruptedStore",
+                        Serdes.Long(),
+                        Serdes.Long());
+                }
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public void forward(final Object key, final Object value) {
+                    fail("Should not forward anything for subtraction on empty state.");
+                }
+            });
+
+        aggregator.process(21L, new Change<>(null, 42L));
+    }
+
+    @Test
     public void testAggBasic() throws Exception {
         final KStreamBuilder builder = new KStreamBuilder();
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+        final KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        final KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
                 stringSerde,
                 stringSerde
         ).aggregate(MockInitializer.STRING_INIT,
@@ -127,8 +184,8 @@ public class KTableAggregateTest {
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
+        final KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        final KTable<String, String> table2 = table1.groupBy(MockKeyValueMapper.<String, String>NoOpKeyValueMapper(),
             stringSerde,
             stringSerde
         ).aggregate(MockInitializer.STRING_INIT,
@@ -156,10 +213,10 @@ public class KTableAggregateTest {
         final String topic1 = "topic1";
         final MockProcessorSupplier<String, String> proc = new MockProcessorSupplier<>();
 
-        KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
-        KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
+        final KTable<String, String> table1 = builder.table(stringSerde, stringSerde, topic1, "anyStoreName");
+        final KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
             @Override
-                public KeyValue<String, String> apply(String key, String value) {
+            public KeyValue<String, String> apply(final String key, final String value) {
                 switch (key) {
                     case "null":
                         return KeyValue.pair(null, value);
@@ -168,12 +225,8 @@ public class KTableAggregateTest {
                     default:
                         return KeyValue.pair(value, value);
                 }
-                }
-            },
-                stringSerde,
-                stringSerde
-        )
-                .aggregate(MockInitializer.STRING_INIT,
+            } }, stringSerde, stringSerde)
+            .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
                 stringSerde,
@@ -304,9 +357,8 @@ public class KTableAggregateTest {
 
         builder.table(Serdes.String(), Serdes.String(), input, "anyStoreName")
                 .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-
                     @Override
-                    public KeyValue<String, String> apply(String key, String value) {
+                    public KeyValue<String, String> apply(final String key, final String value) {
                         return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
                     }
                 }, stringSerde, stringSerde)
@@ -317,15 +369,15 @@ public class KTableAggregateTest {
                         return "";
                     }
                 }, new Aggregator<String, String, String>() {
-                    
+
                     @Override
-                    public String apply(String aggKey, String value, String aggregate) {
+                    public String apply(final String aggKey, final String value, final String aggregate) {
                         return aggregate + value;
-                    } 
+                    }
                 }, new Aggregator<String, String, String>() {
 
                     @Override
-                    public String apply(String key, String value, String aggregate) {
+                    public String apply(final String key, final String value, final String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
                 }, Serdes.String(), "someStore")
@@ -381,7 +433,7 @@ public class KTableAggregateTest {
                     }
                 }, "reducer-store");
 
-        reduce.foreach(new ForeachAction<String, Long>() {
+        reduce.toStream().foreach(new ForeachAction<String, Long>() {
             @Override
             public void apply(final String key, final Long value) {
                 reduceResults.put(key, value);

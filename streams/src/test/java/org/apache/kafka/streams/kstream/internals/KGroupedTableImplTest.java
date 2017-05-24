@@ -121,7 +121,7 @@ public class KGroupedTableImplTest {
 
     private void doShouldReduce(final KTable<String, Integer> reduced, final String topic) throws Exception {
         final Map<String, Integer> results = new HashMap<>();
-        reduced.foreach(new ForeachAction<String, Integer>() {
+        reduced.toStream().foreach(new ForeachAction<String, Integer>() {
             @Override
             public void apply(final String key, final Integer value) {
                 results.put(key, value);
@@ -172,7 +172,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };

@@ -33,7 +33,10 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     private boolean sendOldValues = false;
 
-    public KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> add, Aggregator<? super K, ? super V, T> remove) {
+    KTableAggregate(final String storeName,
+                    final Initializer<T> initializer,
+                    final Aggregator<? super K, ? super V, T> add,
+                    final Aggregator<? super K, ? super V, T> remove) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.add = add;
@@ -67,26 +70,27 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V> value) {
+        public void process(final K key, final Change<V> value) {
             // the keys should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
-
-            T oldAgg = store.get(key);
-
-            if (oldAgg == null)
-                oldAgg = initializer.apply();
-
-            T newAgg = oldAgg;
-
-            // first try to remove the old value
-            if (value.oldValue != null) {
-                newAgg = remove.apply(key, value.oldValue, newAgg);
             }
 
-            // then try to add the new new value
+            T oldAgg = store.get(key);
+            T newAgg;
+
+            // if Addition
             if (value.newValue != null) {
-                newAgg = add.apply(key, value.newValue, newAgg);
+                if (oldAgg == null) {
+                    oldAgg = initializer.apply();
+                }
+                newAgg = add.apply(key, value.newValue, oldAgg);
+            } else {
+                // if Subtraction
+                if (oldAgg == null) { // cf. KAFKA-5315
+                    return;
+                }
+                newAgg = remove.apply(key, value.oldValue, oldAgg);
             }
 
             // update the store with the new value
@@ -101,6 +105,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
         return new KTableValueGetterSupplier<K, T>() {
 
+            @Override
             public KTableValueGetter<K, T> get() {
                 return new KTableAggregateValueGetter();
             }
@@ -118,12 +123,12 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
         }
 
         @Override
-        public T get(K key) {
+        public T get(final K key) {
             return store.get(key);
         }
 
