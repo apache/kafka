@@ -1240,7 +1240,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.fetchLatency = metrics.sensor("fetch-latency");
             this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyAvg), new Avg());
             this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchLatencyMax), new Max());
-            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchRate), new Rate(new Count()));
+            this.fetchLatency.add(metrics.metricInstance(metricsRegistry.fetchRequestRate), new Rate(new Count()));
 
             this.recordsFetchLag = metrics.sensor("records-lag");
             this.recordsFetchLag.add(metrics.metricInstance(metricsRegistry.recordsLagMax), new Max());

@@ -32,7 +32,7 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate recordsConsumedRate;
     public MetricNameTemplate fetchLatencyAvg;
     public MetricNameTemplate fetchLatencyMax;
-    public MetricNameTemplate fetchRate;
+    public MetricNameTemplate fetchRequestRate;
     public MetricNameTemplate recordsLagMax;
     public MetricNameTemplate fetchThrottleTimeAvg;
     public MetricNameTemplate fetchThrottleTimeMax;
@@ -75,7 +75,7 @@ public class FetcherMetricsRegistry {
                 "The average time taken for a fetch request.", tags);
         this.fetchLatencyMax = new MetricNameTemplate("fetch-latency-max", groupName, 
                 "The max time taken for any fetch request.", tags);
-        this.fetchRate = new MetricNameTemplate("fetch-rate", groupName, 
+        this.fetchRequestRate = new MetricNameTemplate("fetch-rate", groupName, 
                 "The number of fetch requests per second.", tags);
 
         this.recordsLagMax = new MetricNameTemplate("records-lag-max", groupName, 
@@ -122,7 +122,7 @@ public class FetcherMetricsRegistry {
             recordsConsumedRate,
             fetchLatencyAvg,
             fetchLatencyMax,
-            fetchRate,
+            fetchRequestRate,
             recordsLagMax,
             fetchThrottleTimeAvg,
             fetchThrottleTimeMax,
