@@ -115,6 +115,7 @@ object kafkaBalanceCommand extends Logging {
   def executeKafkaBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions): Unit = {
     // 0. get old TPMap
     val orgTPMap = getTopAndPartitionInfo(zkUtils)
+    
     // 1. relplica balance
     val TPMap=getTopAndPartitionInfo(zkUtils)
     executeReplicaBalance(zkUtils, opts, TPMap)
