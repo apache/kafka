@@ -151,7 +151,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private <T> ExtendedDeserializer<T> ensureExtended(Deserializer<T> deserializer) {
         return deserializer instanceof ExtendedDeserializer ? (ExtendedDeserializer<T>) deserializer : new ExtendedDeserializer.Wrapper<>(deserializer);
     }
-    
+
     /**
      * Represents data about an offset returned by a broker.
      */
@@ -518,7 +518,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 if (nextInLineRecords == null || nextInLineRecords.isFetched) {
                     CompletedFetch completedFetch = completedFetches.peek();
                     if (completedFetch == null) break;
-                    
+
                     nextInLineRecords = parseCompletedFetch(completedFetch);
                     completedFetches.poll();
                 } else {
@@ -1004,7 +1004,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         drain();
                         return null;
                     }
-                    
+
                     if (hasExceptionInLastFetch) {
                         currentBatch.ensureValid();
                     } else {
@@ -1033,11 +1033,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
 
                 // If an exception was thrown from the last record. We should throw the same exception here again.
-                // We do not cache the exception thrown last time because the stack trace could be different 
+                // We do not cache the exception thrown last time because the stack trace could be different
                 // from last time.
                 if (hasExceptionInLastFetch) {
                     maybeEnsureValid(lastRecord);
-                    throw new IllegalStateException("The same exception from last fetch should have been thrown.");
+                    return lastRecord;
                 } else {
                     Record record = records.next();
                     lastRecord = record;
@@ -1045,10 +1045,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     if (record.offset() >= nextFetchOffset) {
                         // we only do validation when the message should not be skipped.
                         maybeEnsureValid(record);
-                        nextFetchOffset = record.offset() + 1;
 
                         // control records are not returned to the user
-                        if (!currentBatch.isControlBatch()) return record;
+                        if (!currentBatch.isControlBatch()) {
+                            return record;
+                        } else {
+                            // Increment the next fetch offset when we skip a control batch.
+                            nextFetchOffset = record.offset() + 1;
+                        }
                     }
                 }
             }
@@ -1068,6 +1072,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     recordsRead++;
                     bytesRead += record.sizeInBytes();
                     records.add(parseRecord(partition, currentBatch, record));
+                    nextFetchOffset = record.offset() + 1;
                 }
             } catch (KafkaException e) {
                 hasExceptionInLastFetch = true;

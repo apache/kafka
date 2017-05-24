@@ -261,8 +261,11 @@ public class FetcherTest {
             int i = 0;
             @Override
             public byte[] deserialize(String topic, byte[] data) {
-                if (i++ == 1)
+                if (i++ % 2 == 1) {
+                    // Should be blocked on the value deserialization of the first record.
+                    assertEquals(new String(data, StandardCharsets.UTF_8), "value-1");
                     throw new SerializationException();
+                }
                 return data;
             }
         };
@@ -276,12 +279,15 @@ public class FetcherTest {
 
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(0);
-        try {
-            fetcher.fetchedRecords();
-            fail("fetchedRecords should have raised");
-        } catch (SerializationException e) {
-            // the position should not advance since no data has been returned
-            assertEquals(1, subscriptions.position(tp1).longValue());
+        // The fetcher should block on Deserialization error
+        for (int i = 0; i < 2; i++) {
+            try {
+                fetcher.fetchedRecords();
+                fail("fetchedRecords should have raised");
+            } catch (SerializationException e) {
+                // the position should not advance since no data has been returned
+                assertEquals(1, subscriptions.position(tp1).longValue());
+            }
         }
     }
 
@@ -338,7 +344,7 @@ public class FetcherTest {
                 assertEquals(1, subscriptions.position(tp1).longValue());
             }
         }
-        
+
         // Seek to skip the bad record and fetch again.
         subscriptions.seek(tp1, 2);
         // Should not throw exception after the seek.
@@ -384,7 +390,7 @@ public class FetcherTest {
     @Test
     public void testHeaders() {
         Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time));
-        
+
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 1L);
         builder.append(0L, "key".getBytes(), "value-1".getBytes());
 
@@ -408,14 +414,14 @@ public class FetcherTest {
         assertEquals(1, fetcher.sendFetches());
         consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp1);
-        
+
         assertEquals(3, records.size());
 
         Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
-        
+
         ConsumerRecord<byte[], byte[]> record = recordIterator.next();
         assertNull(record.headers().lastHeader("headerKey"));
-        
+
         record = recordIterator.next();
         assertEquals("headerValue", new String(record.headers().lastHeader("headerKey").value(), StandardCharsets.UTF_8));
         assertEquals("headerKey", record.headers().lastHeader("headerKey").key());
