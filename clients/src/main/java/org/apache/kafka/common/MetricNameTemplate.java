@@ -22,10 +22,10 @@ import java.util.Set;
 import org.apache.kafka.common.utils.Utils;
 
 /**
- *         A template for a MetricName. It contains a name, group, and
- *         description, as well as all the tags that will be used to create the
- *         mBean name. Tag values are omitted from the template, but are filled
- *         in at runtime with their specified values.
+ * A template for a MetricName. It contains a name, group, and description, as
+ * well as all the tags that will be used to create the mBean name. Tag values
+ * are omitted from the template, but are filled in at runtime with their
+ * specified values.
  */
 public class MetricNameTemplate {
     private final String name;
