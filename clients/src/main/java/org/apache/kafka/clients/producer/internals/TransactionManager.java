@@ -874,7 +874,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public synchronized void handleResponse(AbstractResponse response) {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
             boolean hadFailure = false;
