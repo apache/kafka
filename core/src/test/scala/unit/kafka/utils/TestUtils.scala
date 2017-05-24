@@ -1340,21 +1340,19 @@ object TestUtils extends Logging {
   }
 
   // Seeds the given topic with records with keys and values in the range [0..numRecords)
-  def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Int = {
+  def seedTopicWithNumberedRecords(topic: String, numRecords: Int, servers: Seq[KafkaServer]): Unit = {
     val props = new Properties()
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
-    var recordsWritten = 0
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers), retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
+    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(servers),
+      retries = Integer.MAX_VALUE, acks = -1, props = Some(props))
     try {
       for (i <- 0 until numRecords) {
         producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, asBytes(i.toString), asBytes(i.toString)))
-        recordsWritten += 1
       }
       producer.flush()
     } finally {
       producer.close()
     }
-    recordsWritten
   }
 
   private def asString(bytes: Array[Byte]) = new String(bytes, StandardCharsets.UTF_8)
@@ -1404,7 +1402,7 @@ object TestUtils extends Logging {
     offsetsToCommit.toMap
   }
 
-  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int) : Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
+  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
       records ++= consumer.poll(50)

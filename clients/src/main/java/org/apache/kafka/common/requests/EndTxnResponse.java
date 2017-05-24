@@ -31,8 +31,9 @@ public class EndTxnResponse extends AbstractResponse {
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
     //   InvalidTxnState
-    //   InvalidPidMapping
+    //   InvalidProducerIdMapping
     //   InvalidProducerEpoch
+    //   TransactionalIdAuthorizationFailed
 
     private final Errors error;
     private final int throttleTimeMs;

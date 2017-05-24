@@ -115,10 +115,10 @@ public class RequestResponseTest {
         checkErrorResponse(createListOffsetRequest(2), new UnknownServerException());
         checkResponse(createListOffsetResponse(2), 2);
         checkRequest(MetadataRequest.Builder.allTopics().build((short) 2));
-        checkRequest(createMetadataRequest(1, asList("topic1")));
-        checkErrorResponse(createMetadataRequest(1, asList("topic1")), new UnknownServerException());
+        checkRequest(createMetadataRequest(1, singletonList("topic1")));
+        checkErrorResponse(createMetadataRequest(1, singletonList("topic1")), new UnknownServerException());
         checkResponse(createMetadataResponse(), 2);
-        checkErrorResponse(createMetadataRequest(2, asList("topic1")), new UnknownServerException());
+        checkErrorResponse(createMetadataRequest(2, singletonList("topic1")), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(2));
         checkErrorResponse(createOffsetCommitRequest(2), new UnknownServerException());
         checkResponse(createOffsetCommitResponse(), 0);
@@ -183,7 +183,7 @@ public class RequestResponseTest {
         checkOlderFetchVersions();
         checkResponse(createMetadataResponse(), 0);
         checkResponse(createMetadataResponse(), 1);
-        checkErrorResponse(createMetadataRequest(1, asList("topic1")), new UnknownServerException());
+        checkErrorResponse(createMetadataRequest(1, singletonList("topic1")), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(0));
         checkErrorResponse(createOffsetCommitRequest(0), new UnknownServerException());
         checkRequest(createOffsetCommitRequest(1));
@@ -984,7 +984,7 @@ public class RequestResponseTest {
         final Map<TopicPartition, TxnOffsetCommitRequest.CommittedOffset> offsets = new HashMap<>();
         offsets.put(new TopicPartition("topic", 73),
                     new TxnOffsetCommitRequest.CommittedOffset(100, null));
-        return new TxnOffsetCommitRequest.Builder("gid", 21L, (short) 42, offsets).build();
+        return new TxnOffsetCommitRequest.Builder("transactionalId", "groupId", 21L, (short) 42, offsets).build();
     }
 
     private TxnOffsetCommitResponse createTxnOffsetCommitResponse() {

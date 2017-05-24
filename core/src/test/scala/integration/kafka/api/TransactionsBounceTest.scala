@@ -77,17 +77,17 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   def testBrokerFailure() {
     // basic idea is to seed a topic with 10000 records, and copy it transactionally while bouncing brokers
     // constantly through the period.
-    val consumerGroup=  "myGroup"
+    val consumerGroup = "myGroup"
     val numInputRecords = 5000
     createTopics()
 
     TestUtils.seedTopicWithNumberedRecords(inputTopic, numInputRecords, servers)
-
     val consumer = createConsumerAndSubscribeToTopics(consumerGroup, List(inputTopic))
-    val producer = TestUtils.createTransactionalProducer("my-test-producer-t.id", servers)
+    val producer = TestUtils.createTransactionalProducer("test-txn", servers)
+
+    producer.initTransactions()
 
     val scheduler = new BounceScheduler
-    producer.initTransactions()
     scheduler.start()
 
     var numMessagesProcessed = 0
@@ -97,16 +97,17 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         val toRead = Math.min(200, numInputRecords - numMessagesProcessed)
         trace(s"$iteration: About to read $toRead messages, processed $numMessagesProcessed so far..")
         val records = TestUtils.pollUntilAtLeastNumRecords(consumer, toRead)
-        trace(s"received ${records.size} messages. sending them transactionally to $outputTopic")
+        trace(s"Received ${records.size} messages, sending them transactionally to $outputTopic")
+
         producer.beginTransaction()
-        val shouldAbort = iteration % 2 == 0
-        records.zipWithIndex.foreach { case (record, i) =>
-          producer.send(
-            TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value, !shouldAbort),
-            new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
+        val shouldAbort = iteration % 3 == 0
+        records.foreach { record =>
+          producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(outputTopic, record.key, record.value,
+            !shouldAbort), new ErrorLoggingCallback(outputTopic, record.key, record.value, true))
         }
         trace(s"Sent ${records.size} messages. Committing offsets.")
         producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer), consumerGroup)
+
         if (shouldAbort) {
           trace(s"Committed offsets. Aborting transaction of ${records.size} messages.")
           producer.abortTransaction()
@@ -125,8 +126,8 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
 
     scheduler.shutdown()
 
-    val verifyingConsumer = createConsumerAndSubscribeToTopics("randoGroup", List(outputTopic), readCommitted = true)
-    val outputRecords = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).map { case(record) =>
+    val verifyingConsumer = createConsumerAndSubscribeToTopics("randomGroup", List(outputTopic), readCommitted = true)
+    val outputRecords = TestUtils.pollUntilAtLeastNumRecords(verifyingConsumer, numInputRecords).map { record =>
       TestUtils.assertCommittedAndGetValue(record).toInt
     }
     val recordSet = outputRecords.toSet
@@ -142,7 +143,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     val props = new Properties()
     if (readCommitted)
       props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
-    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "200")
+    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "2000")
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "10000")
     props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
@@ -157,8 +158,8 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   private def createTopics() =  {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkUtils, inputTopic, numPartitions, numServers, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, outputTopic, numPartitions, numServers, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, inputTopic, numPartitions, 3, servers, topicConfig)
+    TestUtils.createTopic(zkUtils, outputTopic, numPartitions, 3, servers, topicConfig)
   }
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {

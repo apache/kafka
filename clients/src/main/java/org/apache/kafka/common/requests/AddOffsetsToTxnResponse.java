@@ -30,10 +30,11 @@ public class AddOffsetsToTxnResponse extends AbstractResponse {
     //   NotCoordinator
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
-    //   InvalidPidMapping
+    //   InvalidProducerIdMapping
+    //   InvalidProducerEpoch
     //   InvalidTxnState
     //   GroupAuthorizationFailed
-    //   InvalidProducerEpoch
+    //   TransactionalIdAuthorizationFailed
 
     private final Errors error;
     private final int throttleTimeMs;
