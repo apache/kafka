@@ -66,7 +66,9 @@ public class KafkaFutureTest {
     @Test
     public void testCompletingFutures() throws Exception {
         final KafkaFutureImpl<String> future = new KafkaFutureImpl<>();
-        CompleterThread myThread = new CompleterThread(future, "You must construct additional pylons.");
+        CompleterThread
+            myThread =
+            new CompleterThread(future, "You must construct additional pylons.");
         assertFalse(future.isDone());
         assertFalse(future.isCompletedExceptionally());
         assertFalse(future.isCancelled());
