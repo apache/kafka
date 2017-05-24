@@ -120,15 +120,15 @@ class TransactionsTest extends KafkaServerTestHarness {
     consumer.subscribe(List(topic1))
     producer.initTransactions()
 
-    val random = new Random()
     var shouldCommit = false
     var recordsProcessed = 0
     try {
       while (recordsProcessed < numSeedMessages) {
+        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
+
         producer.beginTransaction()
         shouldCommit = !shouldCommit
 
-        val records = TestUtils.pollUntilAtLeastNumRecords(consumer, Math.min(10, numSeedMessages - recordsProcessed))
         records.zipWithIndex.foreach { case (record, i) =>
           val key = new String(record.key(), "UTF-8")
           val value = new String(record.value(), "UTF-8")
@@ -153,7 +153,7 @@ class TransactionsTest extends KafkaServerTestHarness {
       consumer.close()
     }
 
-    // Inspite of random aborts, we should still have exactly 1000 messages in topic2. Ie. we should not
+    // In spite of random aborts, we should still have exactly 1000 messages in topic2. Ie. we should not
     // re-copy or miss any messages from topic1, since the consumed offsets were committed transactionally.
     val verifyingConsumer = transactionalConsumer("foobargroup")
     verifyingConsumer.subscribe(List(topic2))
@@ -334,7 +334,6 @@ class TransactionsTest extends KafkaServerTestHarness {
         fail("Should not be able to send messages from a fenced producer.")
       } catch {
         case e : ProducerFencedException =>
-          producer1.close()
         case e : ExecutionException =>
           assertTrue(e.getCause.isInstanceOf[ProducerFencedException])
         case e : Exception =>

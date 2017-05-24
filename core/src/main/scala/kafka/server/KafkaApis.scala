@@ -93,7 +93,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace("Handling request:%s from connection %s;securityProtocol:%s,principal:%s".
         format(request.requestDesc(true), request.connectionId, request.securityProtocol, request.session.principal))
       ApiKeys.forId(request.requestId) match {
-        case ApiKeys.PRODUCE => handleProducerRequest(request)
+        case ApiKeys.PRODUCE => handleProduceRequest(request)
         case ApiKeys.FETCH => handleFetchRequest(request)
         case ApiKeys.LIST_OFFSETS => handleListOffsetRequest(request)
         case ApiKeys.METADATA => handleTopicMetadataRequest(request)
@@ -368,97 +368,107 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Handle a produce request
    */
-  def handleProducerRequest(request: RequestChannel.Request) {
+  def handleProduceRequest(request: RequestChannel.Request) {
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.bodyAndSize.size
 
-    if (produceRequest.isTransactional && !authorize(request.session, Write, new Resource(ProducerTransactionalId, produceRequest.transactionalId())))
-      sendResponseMaybeThrottle(request, (throttleMs: Int) => produceRequest.getErrorResponse(throttleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception))
-    else if (produceRequest.isIdempotent && !authorize(request.session, Write, Resource.ProducerIdResource))
-      sendResponseMaybeThrottle(request, (throttleMs: Int) => produceRequest.getErrorResponse(throttleMs, Errors.PRODUCER_ID_AUTHORIZATION_FAILED.exception))
-    else {
-      val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
-        produceRequest.partitionRecordsOrFail.asScala.partition { case (tp, _) =>
-          authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
-        }
+    def sendErrorResponse(error: Errors): Unit = {
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        produceRequest.getErrorResponse(requestThrottleMs, error.exception))
+    }
 
-      val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
-        case (tp, _) => authorize(request.session, Write, new Resource(Topic, tp.topic))
+    if (produceRequest.isTransactional) {
+      if (!authorize(request.session, Write, new Resource(TransactionalId, produceRequest.transactionalId))) {
+        sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
+        return
+      }
+      // Note that authorization to a transactionalId implies ProducerId authorization
+
+    } else if (produceRequest.isIdempotent && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+      sendErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED)
+      return
+    }
+
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
+      produceRequest.partitionRecordsOrFail.asScala.partition { case (tp, _) =>
+        authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
       }
 
-      // the callback for sending a produce response
-      def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
+    val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
+      case (tp, _) => authorize(request.session, Write, new Resource(Topic, tp.topic))
+    }
 
-        val mergedResponseStatus = responseStatus ++
-            unauthorizedForWriteRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
-            nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+    // the callback for sending a produce response
+    def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
 
-        var errorInResponse = false
+      val mergedResponseStatus = responseStatus ++
+        unauthorizedForWriteRequestInfo.mapValues(_ => new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)) ++
+        nonExistingOrUnauthorizedForDescribeTopics.mapValues(_ => new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
 
-        mergedResponseStatus.foreach { case (topicPartition, status) =>
-          if (status.error != Errors.NONE) {
-            errorInResponse = true
-            debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-              request.header.correlationId,
-              request.header.clientId,
-              topicPartition,
-              status.error.exceptionName))
-          }
+      var errorInResponse = false
+
+      mergedResponseStatus.foreach { case (topicPartition, status) =>
+        if (status.error != Errors.NONE) {
+          errorInResponse = true
+          debug("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+            request.header.correlationId,
+            request.header.clientId,
+            topicPartition,
+            status.error.exceptionName))
         }
+      }
 
-        def produceResponseCallback(bandwidthThrottleTimeMs: Int) {
-          if (produceRequest.acks == 0) {
-            // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
-            // the request, since no response is expected by the producer, the server will close socket server so that
-            // the producer client will know that some error has happened and will refresh its metadata
-            val action =
-              if (errorInResponse) {
-                val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
-                  topicPartition -> status.error.exceptionName
-                }.mkString(", ")
-                info(
-                  s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
-                    s"from client id ${request.header.clientId} with ack=0\n" +
-                    s"Topic and partition to exceptions: $exceptionsSummary"
-                )
-                RequestChannel.CloseConnectionAction
-              } else RequestChannel.NoOpAction
-            sendResponseExemptThrottle(new RequestChannel.Response(request, None, action))
-          } else {
-            sendResponseMaybeThrottle(request, requestThrottleMs =>
-              new ProduceResponse(mergedResponseStatus.asJava, bandwidthThrottleTimeMs + requestThrottleMs)
+      def produceResponseCallback(bandwidthThrottleTimeMs: Int) {
+        if (produceRequest.acks == 0) {
+          // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
+          // the request, since no response is expected by the producer, the server will close socket server so that
+          // the producer client will know that some error has happened and will refresh its metadata
+          val action =
+          if (errorInResponse) {
+            val exceptionsSummary = mergedResponseStatus.map { case (topicPartition, status) =>
+              topicPartition -> status.error.exceptionName
+            }.mkString(", ")
+            info(
+              s"Closing connection due to error during produce request with correlation id ${request.header.correlationId} " +
+                s"from client id ${request.header.clientId} with ack=0\n" +
+                s"Topic and partition to exceptions: $exceptionsSummary"
             )
-          }
+            RequestChannel.CloseConnectionAction
+          } else RequestChannel.NoOpAction
+          sendResponseExemptThrottle(new RequestChannel.Response(request, None, action))
+        } else {
+          sendResponseMaybeThrottle(request, requestThrottleMs =>
+            new ProduceResponse(mergedResponseStatus.asJava, bandwidthThrottleTimeMs + requestThrottleMs))
         }
-
-        // When this callback is triggered, the remote API call has completed
-        request.apiRemoteCompleteTimeNanos = time.nanoseconds
-
-        quotas.produce.recordAndMaybeThrottle(
-          request.session.sanitizedUser,
-          request.header.clientId,
-          numBytesAppended,
-          produceResponseCallback)
       }
 
-      if (authorizedRequestInfo.isEmpty)
-        sendResponseCallback(Map.empty)
-      else {
-        val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
+      // When this callback is triggered, the remote API call has completed
+      request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
-        // call the replica manager to append messages to the replicas
-        replicaManager.appendRecords(
-          timeout = produceRequest.timeout.toLong,
-          requiredAcks = produceRequest.acks,
-          internalTopicsAllowed = internalTopicsAllowed,
-          isFromClient = true,
-          entriesPerPartition = authorizedRequestInfo,
-          responseCallback = sendResponseCallback)
+      quotas.produce.recordAndMaybeThrottle(
+        request.session.sanitizedUser,
+        request.header.clientId,
+        numBytesAppended,
+        produceResponseCallback)
+    }
 
-        // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
-        // hence we clear its data here inorder to let GC re-claim its memory since it is already appended to log
-        produceRequest.clearPartitionRecords()
-      }
+    if (authorizedRequestInfo.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      val internalTopicsAllowed = request.header.clientId == AdminUtils.AdminClientId
+
+      // call the replica manager to append messages to the replicas
+      replicaManager.appendRecords(
+        timeout = produceRequest.timeout.toLong,
+        requiredAcks = produceRequest.acks,
+        internalTopicsAllowed = internalTopicsAllowed,
+        isFromClient = true,
+        entriesPerPartition = authorizedRequestInfo,
+        responseCallback = sendResponseCallback)
+
+      // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
+      // hence we clear its data here inorder to let GC re-claim its memory since it is already appended to log
+      produceRequest.clearPartitionRecords()
     }
   }
 
@@ -1052,13 +1062,16 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFindCoordinatorRequest(request: RequestChannel.Request) {
     val findCoordinatorRequest = request.body[FindCoordinatorRequest]
 
-    if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.GROUP &&
-      !authorize(request.session, Describe, new Resource(Group, findCoordinatorRequest.coordinatorKey))) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new FindCoordinatorResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED, Node.noNode))
-    } else {
-      // TODO: Authorize by transactional id if coordinator type is TRANSACTION
+    def sendErrorResponse(error: Errors): Unit =
+      sendResponseMaybeThrottle(request, requestThrottleMs => new FindCoordinatorResponse(error, Node.noNode))
 
+    if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.GROUP &&
+        !authorize(request.session, Describe, new Resource(Group, findCoordinatorRequest.coordinatorKey)))
+      sendErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED)
+    else if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION &&
+        !authorize(request.session, Describe, new Resource(TransactionalId, findCoordinatorRequest.coordinatorKey)))
+      sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
+    else {
       // get metadata (and create the topic if necessary)
       val (partition, topicMetadata) = findCoordinatorRequest.coordinatorType match {
         case FindCoordinatorRequest.CoordinatorType.GROUP =>
@@ -1102,18 +1115,18 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeRequest = request.body[DescribeGroupsRequest]
 
     val groups = describeRequest.groupIds.asScala.map { groupId =>
-        if (!authorize(request.session, Describe, new Resource(Group, groupId))) {
-          groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
-        } else {
-          val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
-          val members = summary.members.map { member =>
-            val metadata = ByteBuffer.wrap(member.metadata)
-            val assignment = ByteBuffer.wrap(member.assignment)
-            new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
-          }
-          groupId -> new DescribeGroupsResponse.GroupMetadata(error, summary.state, summary.protocolType,
-            summary.protocol, members.asJava)
+      if (!authorize(request.session, Describe, new Resource(Group, groupId))) {
+        groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
+      } else {
+        val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
+        val members = summary.members.map { member =>
+          val metadata = ByteBuffer.wrap(member.metadata)
+          val assignment = ByteBuffer.wrap(member.assignment)
+          new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
         }
+        groupId -> new DescribeGroupsResponse.GroupMetadata(error, summary.state, summary.protocolType,
+          summary.protocol, members.asJava)
+      }
     }.toMap
 
     sendResponseMaybeThrottle(request, requestThrottleMs => new DescribeGroupsResponse(requestThrottleMs, groups.asJava))
@@ -1414,31 +1427,36 @@ class KafkaApis(val requestChannel: RequestChannel,
     val initProducerIdRequest = request.body[InitProducerIdRequest]
     val transactionalId = initProducerIdRequest.transactionalId
 
+    def sendErrorResponse(error: Errors): Unit = {
+      sendResponseMaybeThrottle(request, requestThrottleMs => new InitProducerIdResponse(requestThrottleMs, error))
+    }
 
-    if (!authorize(request.session, Write, Resource.ProducerIdResource)) {
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new InitProducerIdResponse(requestThrottleMs, Errors.PRODUCER_ID_AUTHORIZATION_FAILED))
-    } else if (transactionalId == null || authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
-      // Send response callback
-      def sendResponseCallback(result: InitProducerIdResult): Unit = {
-        def createResponse(requestThrottleMs: Int): AbstractResponse = {
-          val responseBody = new InitProducerIdResponse(requestThrottleMs, result.error, result.producerId, result.producerEpoch)
-          trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
-          responseBody
-        }
-        sendResponseMaybeThrottle(request, createResponse)
+    if (transactionalId != null) {
+      if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId))) {
+        sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
+        return
       }
-      txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.transactionTimeoutMs, sendResponseCallback)
-    }else
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new InitProducerIdResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
+    } else if (!authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+      sendErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED)
+      return
+    }
+
+    def sendResponseCallback(result: InitProducerIdResult): Unit = {
+      def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        val responseBody = new InitProducerIdResponse(requestThrottleMs, result.error, result.producerId, result.producerEpoch)
+        trace(s"Completed $transactionalId's InitProducerIdRequest with result $result from client ${request.header.clientId}.")
+        responseBody
+      }
+      sendResponseMaybeThrottle(request, createResponse)
+    }
+    txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.transactionTimeoutMs, sendResponseCallback)
   }
 
   def handleEndTxnRequest(request: RequestChannel.Request): Unit = {
     val endTxnRequest = request.body[EndTxnRequest]
     val transactionalId = endTxnRequest.transactionalId
 
-    if(authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId))) {
+    if (authorize(request.session, Write, new Resource(TransactionalId, transactionalId))) {
       def sendResponseCallback(error: Errors) {
         def createResponse(requestThrottleMs: Int): AbstractResponse = {
           val responseBody = new EndTxnResponse(requestThrottleMs, error)
@@ -1471,6 +1489,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     def sendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
+      trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
       errors.put(producerId, responseStatus.mapValues(_.error).asJava)
 
       val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
@@ -1524,9 +1543,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val transactionalId = addPartitionsToTxnRequest.transactionalId
     val partitionsToAdd = addPartitionsToTxnRequest.partitions
 
-    if(!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
+    if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        addPartitionsToTxnRequest.getErrorResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception()))
+        addPartitionsToTxnRequest.getErrorResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception))
     else {
       val internalTopics = partitionsToAdd.asScala.filter {tp => org.apache.kafka.common.internals.Topic.isInternal(tp.topic())}
 
@@ -1535,24 +1554,24 @@ class KafkaApis(val requestChannel: RequestChannel,
           authorize(request.session, Describe, new Resource(Topic, tp.topic)) && metadataCache.contains(tp.topic)
         }
 
-      val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
-        tp => authorize(request.session, Write, new Resource(Topic, tp.topic))
+      val unauthorizedForWriteRequestInfo = existingAndAuthorizedForDescribeTopics.filterNot { tp =>
+        authorize(request.session, Write, new Resource(Topic, tp.topic))
       }
 
       if (nonExistingOrUnauthorizedForDescribeTopics.nonEmpty
         || unauthorizedForWriteRequestInfo.nonEmpty
         || internalTopics.nonEmpty) {
 
-        // Only send back error responses for the partitions that failed. If there are any partition failures
-        // then the entire request fails
-        val partitionErrors = unauthorizedForWriteRequestInfo.map { tp => (tp, Errors.TOPIC_AUTHORIZATION_FAILED) }.toMap ++
-          nonExistingOrUnauthorizedForDescribeTopics.map { tp => (tp, Errors.UNKNOWN_TOPIC_OR_PARTITION) }.toMap ++
-          internalTopics.map { tp => (tp, Errors.TOPIC_AUTHORIZATION_FAILED) }
+        // Any failed partition check causes the entire request to fail. We only send back error responses
+        // for the partitions that failed to avoid needing to send an ambiguous error code for the partitions
+        // which succeeded.
+        val partitionErrors = (unauthorizedForWriteRequestInfo.map(_ -> Errors.TOPIC_AUTHORIZATION_FAILED) ++
+          nonExistingOrUnauthorizedForDescribeTopics.map(_ -> Errors.UNKNOWN_TOPIC_OR_PARTITION) ++
+          internalTopics.map(_ ->Errors.TOPIC_AUTHORIZATION_FAILED)).toMap
 
         sendResponseMaybeThrottle(request, requestThrottleMs =>
           new AddPartitionsToTxnResponse(requestThrottleMs, partitionErrors.asJava))
       } else {
-        // Send response callback
         def sendResponseCallback(error: Errors): Unit = {
           def createResponse(requestThrottleMs: Int): AbstractResponse = {
             val responseBody: AddPartitionsToTxnResponse = new AddPartitionsToTxnResponse(requestThrottleMs,
@@ -1565,14 +1584,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-          addPartitionsToTxnRequest.producerId(),
-          addPartitionsToTxnRequest.producerEpoch(),
+          addPartitionsToTxnRequest.producerId,
+          addPartitionsToTxnRequest.producerEpoch,
           partitionsToAdd.asScala.toSet,
           sendResponseCallback)
       }
     }
-
-
   }
 
   def handleAddOffsetsToTxnRequest(request: RequestChannel.Request): Unit = {
@@ -1581,44 +1598,47 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupId = addOffsetsToTxnRequest.consumerGroupId
     val offsetTopicPartition = new TopicPartition(GROUP_METADATA_TOPIC_NAME, groupCoordinator.partitionFor(groupId))
 
-    if (!authorize(request.session, Write, new Resource(ProducerTransactionalId, transactionalId)))
+    if (!authorize(request.session, Write, new Resource(TransactionalId, transactionalId)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new AddOffsetsToTxnResponse(requestThrottleMs, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED))
     else if (!authorize(request.session, Read, new Resource(Group, groupId)))
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new AddOffsetsToTxnResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED))
     else {
-        // Send response callback
-        def sendResponseCallback(error: Errors): Unit = {
-          def createResponse(requestThrottleMs: Int): AbstractResponse = {
-            val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(requestThrottleMs, error)
-            trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId as on partition $offsetTopicPartition: errors: $error from client ${request.header.clientId}")
-            responseBody
-          }
-          sendResponseMaybeThrottle(request, createResponse)
+      def sendResponseCallback(error: Errors): Unit = {
+        def createResponse(requestThrottleMs: Int): AbstractResponse = {
+          val responseBody: AddOffsetsToTxnResponse = new AddOffsetsToTxnResponse(requestThrottleMs, error)
+          trace(s"Completed $transactionalId's AddOffsetsToTxnRequest for group $groupId on partition " +
+            s"$offsetTopicPartition: errors: $error from client ${request.header.clientId}")
+          responseBody
         }
-
-        txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
-          addOffsetsToTxnRequest.producerId,
-          addOffsetsToTxnRequest.producerEpoch,
-          Set(offsetTopicPartition),
-          sendResponseCallback)
+        sendResponseMaybeThrottle(request, createResponse)
       }
-    }
 
+      txnCoordinator.handleAddPartitionsToTransaction(transactionalId,
+        addOffsetsToTxnRequest.producerId,
+        addOffsetsToTxnRequest.producerEpoch,
+        Set(offsetTopicPartition),
+        sendResponseCallback)
+    }
+  }
 
   def handleTxnOffsetCommitRequest(request: RequestChannel.Request): Unit = {
     val header = request.header
     val txnOffsetCommitRequest = request.body[TxnOffsetCommitRequest]
-    // reject the request if not authorized to the group
-    if (!authorize(request.session, Read, new Resource(Group, txnOffsetCommitRequest.consumerGroupId))) {
-      val error = Errors.GROUP_AUTHORIZATION_FAILED
-      val results = txnOffsetCommitRequest.offsets.keySet.asScala.map { topicPartition =>
-        (topicPartition, error)
-      }.toMap
+
+    def sendErrorResponse(error: Errors): Unit = {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new TxnOffsetCommitResponse(requestThrottleMs, results.asJava))
-    } else {
+        txnOffsetCommitRequest.getErrorResponse(requestThrottleMs, error.exception))
+    }
+
+    // authorize for the transactionalId and the consumer group. Note that we skip producerId authorization
+    // since it is implied by transactionalId authorization
+    if (!authorize(request.session, Write, new Resource(TransactionalId, txnOffsetCommitRequest.transactionalId)))
+      sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
+    else if (!authorize(request.session, Read, new Resource(Group, txnOffsetCommitRequest.consumerGroupId)))
+      sendErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED)
+    else {
       val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = txnOffsetCommitRequest.offsets.asScala.toMap.partition {
         case (topicPartition, _) =>
           val authorizedForDescribe = authorize(request.session, Describe, new Resource(Topic, topicPartition.topic))

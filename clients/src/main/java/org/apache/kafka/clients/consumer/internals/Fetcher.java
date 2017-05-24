@@ -416,7 +416,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
             // we might lose the assignment while fetching the offset, so check it is still active
             if (subscriptions.isAssigned(partition)) {
-                log.debug("Resetting offset for partition {} to {} offset.", partition, offsetData.offset);
+                log.debug("Resetting offset for partition {} to offset {}.", partition, offsetData.offset);
                 this.subscriptions.seek(partition, offsetData.offset);
             }
         }
