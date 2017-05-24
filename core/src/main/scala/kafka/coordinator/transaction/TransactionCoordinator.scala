@@ -209,10 +209,6 @@ class TransactionCoordinator(brokerId: Int,
     if (transactionalId == null || transactionalId.isEmpty) {
       responseCallback(Errors.INVALID_REQUEST)
     } else {
-      // if there is any partitions unknown in the metadata cache, return immediately to client
-      if (partitions.exists(tp => !metadataCache.contains(tp.topic, tp.partition)))
-        responseCallback(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid producerId mapping error.
       val result: Either[Errors, (Int, TxnTransitMetadata)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
