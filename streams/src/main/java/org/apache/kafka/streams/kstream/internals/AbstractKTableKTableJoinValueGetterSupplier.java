@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 
 public abstract class AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> implements KTableValueGetterSupplier<K, R> {
     final protected KTableValueGetterSupplier<K, V1> valueGetterSupplier1;
@@ -30,16 +31,10 @@ public abstract class AbstractKTableKTableJoinValueGetterSupplier<K, R, V1, V2> 
 
     @Override
     public String[] storeNames() {
-        final String[] storeNames1 = valueGetterSupplier1.storeNames();
-        final String[] storeNames2 = valueGetterSupplier2.storeNames();
-        final ArrayList<String> stores = new ArrayList<>(storeNames1.length + storeNames2.length);
-        for (final String storeName : storeNames1) {
-            stores.add(storeName);
-        }
-        for (final String storeName : storeNames2) {
-            stores.add(storeName);
-        }
-        return stores.toArray(new String[stores.size()]);
+        final ArrayList<String> stores = new ArrayList<>();
+        stores.addAll(Arrays.asList(valueGetterSupplier1.storeNames()));
+        stores.addAll(Arrays.asList(valueGetterSupplier2.storeNames()));
+        return stores.toArray(new String[0]);
     }
 
 }
