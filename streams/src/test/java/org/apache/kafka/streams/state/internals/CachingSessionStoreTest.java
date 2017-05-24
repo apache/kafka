@@ -276,6 +276,46 @@ public class CachingSessionStoreTest {
         cachingStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() throws Exception {
+        cachingStore.findSessions(null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullFromKey() throws Exception {
+        cachingStore.findSessions(null, "anyKeyTo", 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFindSessionsNullToKey() throws Exception {
+        cachingStore.findSessions("anyKeyFrom", null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullFromKey() throws Exception {
+        cachingStore.fetch(null, "anyToKey");
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullToKey() throws Exception {
+        cachingStore.fetch("anyFromKey", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullKey() throws Exception {
+        cachingStore.fetch(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRemoveNullKey() throws Exception {
+        cachingStore.remove(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        cachingStore.put(null, 1L);
+    }
+
     private List<KeyValue<Windowed<String>, Long>> addSessionsUntilOverflow(final String...sessionIds) {
         final Random random = new Random();
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
