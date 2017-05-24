@@ -16,77 +16,48 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
-import org.junit.After;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.modules.junit4.PowerMockRunner;
 
+import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.createNiceMock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.anyLong;
-import static org.easymock.EasyMock.anyDouble;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.anyString;
-
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.junit.Assert.assertEquals;
-
+import static org.junit.Assert.*;
 
 @RunWith(PowerMockRunner.class)
-public class BufferPoolTest {
+public class MmapBufferPoolTest {
     private final MockTime time = new MockTime();
-    private final Metrics metrics = new Metrics(time);
     private final long maxBlockTimeMs = 2000;
-    private final String metricGroup = "TestMetrics";
 
-    @After
-    public void teardown() {
-        this.metrics.close();
-    }
-
-    /**
-     * Test the simple non-blocking allocation paths
-     */
     @Test
     public void testSimple() throws Exception {
         long totalMemory = 64 * 1024;
         int size = 1024;
-        BufferPool pool = new ByteBufferPool(totalMemory, size, metrics, time, metricGroup);
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(totalMemory, size, time, storefile);
         ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
         assertEquals("Available memory should have shrunk", totalMemory - size, pool.availableMemory());
-        buffer.putInt(1);
-        buffer.flip();
+//        buffer.putInt(1);
+//        buffer.flip();
         pool.deallocate(buffer);
         assertEquals("All memory should be available", totalMemory, pool.availableMemory());
         assertEquals("But now some is on the free list", totalMemory - size, pool.unallocatedMemory());
         buffer = pool.allocate(size, maxBlockTimeMs);
-        assertEquals("Recycled buffer should be cleared.", 0, buffer.position());
-        assertEquals("Recycled buffer should be cleared.", buffer.capacity(), buffer.limit());
+//        assertEquals("Recycled buffer should be cleared.", 0, buffer.position());
+//        assertEquals("Recycled buffer should be cleared.", buffer.capacity(), buffer.limit());
         pool.deallocate(buffer);
         assertEquals("All memory should be available", totalMemory, pool.availableMemory());
         assertEquals("Still a single buffer on the free list", totalMemory - size, pool.unallocatedMemory());
@@ -96,12 +67,34 @@ public class BufferPoolTest {
         assertEquals("Non-standard size didn't go to the free list.", totalMemory - size, pool.unallocatedMemory());
     }
 
+    @Test
+    public void testMultipleAllocationsAndDeallocations() throws Exception {
+        long totalMemory = 64 * 1024;
+        int size = 1024;
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        MmapBufferPool pool = new MmapBufferPool(totalMemory, size, time, storefile);
+        List<ByteBuffer> buffers = new ArrayList<>();
+        for (int i = 0; i < 2; i++) {
+            ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
+            buffers.add(buffer);
+
+            int expectedPosition = i * size;
+            assertEquals("buffer " + i + " should have position " + expectedPosition, expectedPosition, buffer.position() );
+        }
+
+        for (int i = 0; i < 2; i++)
+            pool.deallocate(buffers.get(i));
+        assertEquals("All memory should be available", totalMemory, pool.availableMemory());
+        assertEquals("Two buffers on the free list", 2, pool.freeSize());
+    }
+
     /**
      * Test that we cannot try to allocate more memory then we have in the whole pool
      */
     @Test(expected = IllegalArgumentException.class)
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
-        BufferPool pool = new ByteBufferPool(1024, 512, metrics, time, metricGroup);
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(1024, 512, time, storefile);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
@@ -113,7 +106,8 @@ public class BufferPoolTest {
      */
     @Test
     public void testDelayedAllocation() throws Exception {
-        BufferPool pool = new ByteBufferPool(5 * 1024, 1024, metrics, time, metricGroup);
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(5 * 1024, 1024, time, storefile);
         ByteBuffer buffer = pool.allocate(1024, maxBlockTimeMs);
         CountDownLatch doDealloc = asyncDeallocate(pool, buffer);
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
@@ -171,7 +165,8 @@ public class BufferPoolTest {
      */
     @Test
     public void testBlockTimeout() throws Exception {
-        BufferPool pool = new ByteBufferPool(10, 1, metrics, Time.SYSTEM, metricGroup);
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(10, 1, time, storefile);
         ByteBuffer buffer1 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer2 = pool.allocate(1, maxBlockTimeMs);
         ByteBuffer buffer3 = pool.allocate(1, maxBlockTimeMs);
@@ -198,7 +193,8 @@ public class BufferPoolTest {
      */
     @Test
     public void testCleanupMemoryAvailabilityWaiterOnBlockTimeout() throws Exception {
-        BufferPool pool = new ByteBufferPool(2, 1, metrics, time, metricGroup);
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        BufferPool pool = new MmapBufferPool(2, 1, time, storefile);
         pool.allocate(1, maxBlockTimeMs);
         try {
             pool.allocate(2, maxBlockTimeMs);
@@ -214,11 +210,12 @@ public class BufferPoolTest {
      */
     @Test
     public void testCleanupMemoryAvailabilityWaiterOnInterruption() throws Exception {
-        ByteBufferPool pool = new ByteBufferPool(2, 1, metrics, time, metricGroup);
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        MmapBufferPool pool = new MmapBufferPool(2, 1, time, storefile);
         long blockTime = 5000;
         pool.allocate(1, maxBlockTimeMs);
-        Thread t1 = new Thread(new BufferPoolAllocator(pool, blockTime));
-        Thread t2 = new Thread(new BufferPoolAllocator(pool, blockTime));
+        Thread t1 = new Thread(new BufferPoolTest.BufferPoolAllocator(pool, blockTime));
+        Thread t2 = new Thread(new BufferPoolTest.BufferPoolAllocator(pool, blockTime));
         // start thread t1 which will try to allocate more memory on to the Buffer pool
         t1.start();
         // sleep for 500ms. Condition variable c1 associated with pool.allocate() by thread t1 will be inserted in the waiters queue.
@@ -243,137 +240,26 @@ public class BufferPoolTest {
         assertEquals(pool.queued(), 0);
     }
 
-    @PrepareForTest({Sensor.class, MetricName.class})
-    @Test
-    public void testCleanupMemoryAvailabilityOnMetricsException() throws Exception {
-        Metrics mockedMetrics = createNiceMock(Metrics.class);
-        Sensor mockedSensor = createNiceMock(Sensor.class);
-        MetricName metricName = createNiceMock(MetricName.class);
-
-        expect(mockedMetrics.sensor(ByteBufferPool.WAIT_TIME_SENSOR_NAME)).andReturn(mockedSensor);
-
-        mockedSensor.record(anyDouble(), anyLong());
-        expectLastCall().andThrow(new OutOfMemoryError());
-        expect(mockedMetrics.metricName(anyString(), eq(metricGroup), anyString())).andReturn(metricName);
-        mockedSensor.add(metricName, new Rate(TimeUnit.NANOSECONDS));
-
-        replay(mockedMetrics, mockedSensor, metricName);
-
-        BufferPool bufferPool = new ByteBufferPool(2, 1, mockedMetrics, time,  metricGroup);
-        bufferPool.allocate(1, 0);
-        try {
-            bufferPool.allocate(2, 1000);
-            assertTrue("Expected oom.", false);
-        } catch (OutOfMemoryError expected) {
-        }
-        assertEquals(1, bufferPool.availableMemory());
-        assertEquals(0, bufferPool.queued());
-        //This shouldn't timeout
-        bufferPool.allocate(1, 0);
-    }
-
-    protected static class BufferPoolAllocator implements Runnable {
-        BufferPool pool;
-        long maxBlockTimeMs;
-
-        BufferPoolAllocator(BufferPool pool, long maxBlockTimeMs) {
-            this.pool = pool;
-            this.maxBlockTimeMs = maxBlockTimeMs;
-        }
-
-        @Override
-        public void run() {
-            try {
-                pool.allocate(2, maxBlockTimeMs);
-                fail("The buffer allocated more memory than its maximum value 2");
-            } catch (TimeoutException e) {
-                // this is good
-            } catch (InterruptedException e) {
-                // this can be neglected
-            }
-        }
-    }
-
     /**
      * This test creates lots of threads that hammer on the pool
      */
     @Test
     public void testStressfulSituation() throws Exception {
-        int numThreads = 10;
+        int numThreads = 1;
         final int iterations = 50000;
         final int poolableSize = 1024;
-        final long totalMemory = numThreads / 2 * poolableSize;
-        final BufferPool pool = new ByteBufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
-        List<StressTestThread> threads = new ArrayList<StressTestThread>();
+        final long totalMemory = poolableSize * 5;
+        File storefile = new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat");
+        final BufferPool pool = new MmapBufferPool(totalMemory, poolableSize, time, storefile);
+        List<BufferPoolTest.StressTestThread> threads = new ArrayList<BufferPoolTest.StressTestThread>();
         for (int i = 0; i < numThreads; i++)
-            threads.add(new StressTestThread(pool, iterations));
-        for (StressTestThread thread : threads)
+            threads.add(new BufferPoolTest.StressTestThread(pool, iterations));
+        for (BufferPoolTest.StressTestThread thread : threads)
             thread.start();
-        for (StressTestThread thread : threads)
+        for (BufferPoolTest.StressTestThread thread : threads)
             thread.join();
-        for (StressTestThread thread : threads)
-            assertTrue("Thread should have completed all iterations successfully.", thread.success.get());
+        for (BufferPoolTest.StressTestThread thread : threads)
+            assertTrue(thread.getName() + " should have completed all iterations successfully.", thread.success.get());
         assertEquals(totalMemory, pool.availableMemory());
     }
-
-    @Test
-    public void testLargeAvailableMemory() throws Exception {
-        long memory = 20_000_000_000L;
-        int poolableSize = 2_000_000_000;
-        final AtomicInteger freeSize = new AtomicInteger(0);
-        BufferPool pool = new ByteBufferPool(memory, poolableSize, metrics, time, metricGroup) {
-            @Override
-            protected ByteBuffer allocateByteBuffer(int size) {
-                // Ignore size to avoid OOM due to large buffers
-                return ByteBuffer.allocate(0);
-            }
-
-            @Override
-            protected int freeSize() {
-                return freeSize.get();
-            }
-        };
-        pool.allocate(poolableSize, 0);
-        assertEquals(18_000_000_000L, pool.availableMemory());
-        pool.allocate(poolableSize, 0);
-        assertEquals(16_000_000_000L, pool.availableMemory());
-
-        // Emulate `deallocate` by increasing `freeSize`
-        freeSize.incrementAndGet();
-        assertEquals(18_000_000_000L, pool.availableMemory());
-        freeSize.incrementAndGet();
-        assertEquals(20_000_000_000L, pool.availableMemory());
-    }
-
-    public static class StressTestThread extends Thread {
-        private final int iterations;
-        private final BufferPool pool;
-        private final long maxBlockTimeMs =  2000;
-        public final AtomicBoolean success = new AtomicBoolean(false);
-
-        public StressTestThread(BufferPool pool, int iterations) {
-            this.iterations = iterations;
-            this.pool = pool;
-        }
-
-        public void run() {
-            try {
-                for (int i = 0; i < iterations; i++) {
-                    int size;
-                    if (TestUtils.RANDOM.nextBoolean())
-                        // allocate poolable size
-                        size = pool.poolableSize();
-                    else
-                        // allocate a random size
-                        size = TestUtils.RANDOM.nextInt((int) pool.totalMemory());
-                    ByteBuffer buffer = pool.allocate(size, maxBlockTimeMs);
-                    pool.deallocate(buffer);
-                }
-                success.set(true);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
 }

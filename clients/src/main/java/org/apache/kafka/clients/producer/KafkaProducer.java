@@ -63,6 +63,7 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.List;
@@ -271,6 +272,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
 
+            boolean enableBufferBackingFile = config.getBoolean(ProducerConfig.FILE_BACKED_BUFFERS_CONFIG);
+            File backingFile = enableBufferBackingFile ? new File(config.getString(ProducerConfig.FILE_BACKED_BUFFERS_FILE_NAME_CONFIG)) : null;
+
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
             this.requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.transactionManager = configureTransactionState(config);
@@ -284,6 +288,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     this.compressionType,
                     config.getLong(ProducerConfig.LINGER_MS_CONFIG),
                     retryBackoffMs,
+                    backingFile,
                     metrics,
                     time,
                     apiVersions,

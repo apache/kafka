@@ -18,11 +18,7 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
@@ -44,6 +40,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -61,7 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * This class acts as a queue that accumulates records into {@link MemoryRecords}
  * instances to be sent to the server.
- * <p>
+ * <p/>
  * The accumulator uses a bounded amount of memory and append calls will block when that memory is exhausted, unless
  * this behavior is explicitly disabled.
  */
@@ -108,6 +106,7 @@ public final class RecordAccumulator {
                              CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
+                             File backingFile,
                              Metrics metrics,
                              Time time,
                              ApiVersions apiVersions,
@@ -122,7 +121,15 @@ public final class RecordAccumulator {
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<>();
         String metricGrpName = "producer-metrics";
-        this.free = new BufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        if (backingFile == null) {
+            this.free = new ByteBufferPool(totalSize, batchSize, metrics, time, metricGrpName);
+        } else {
+            try {
+                this.free = new MmapBufferPool(totalSize, batchSize, time, backingFile);
+            } catch (IOException e) {
+                throw new KafkaException("Failed to create mmap-based buffer.", e);
+            }
+        }
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
         this.time = time;
@@ -163,9 +170,9 @@ public final class RecordAccumulator {
 
     /**
      * Add a record to the accumulator, return the append result
-     * <p>
+     * <p/>
      * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
-     * <p>
+     * <p/>
      *
      * @param tp The topic/partition to which this record is being sent
      * @param timestamp The timestamp of the record
@@ -431,7 +438,7 @@ public final class RecordAccumulator {
      * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      *
      * @param cluster The current cluster metadata
-     * @param nodes The list of node to drain
+     * @param nodes   The list of node to drain
      * @param maxSize The maximum number of bytes to drain
      * @param now The current unix time in milliseconds
      * @return A list of {@link ProducerBatch} for each node specified with total size less than the requested maxSize.

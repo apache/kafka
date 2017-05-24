@@ -34,6 +34,20 @@ public class MemoryRecords extends AbstractRecords {
 
     public final static MemoryRecords EMPTY = MemoryRecords.readableRecords(ByteBuffer.allocate(0));
 
+//    // Construct a writable memory records
+//    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int sizeLimit) {
+//        this.writable = writable;
+//        this.capacity = buffer.limit();
+//        this.sizeLimit = sizeLimit;
+//        if (this.writable) {
+//            this.buffer = null;
+//            this.compressor = new Compressor(buffer, type);
+//        } else {
+//            this.buffer = buffer;
+//            this.compressor = null;
+//        }
+//    };
+
     private final ByteBuffer buffer;
 
     private final Iterable<MutableRecordBatch> batches = new Iterable<MutableRecordBatch>() {

@@ -25,10 +25,8 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
-import java.util.Set;
+import java.io.File;
+import java.util.*;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -186,6 +184,12 @@ public class ProducerConfig extends AbstractConfig {
     public static final String PARTITIONER_CLASS_CONFIG = "partitioner.class";
     private static final String PARTITIONER_CLASS_DOC = "Partitioner class that implements the <code>Partitioner</code> interface.";
 
+    public static final String FILE_BACKED_BUFFERS_CONFIG = "file.backed.buffers.enable";
+    private static final String FILE_BACKED_BUFFERS_DOC = "write me";
+    
+    public static final String FILE_BACKED_BUFFERS_FILE_NAME_CONFIG = "file.buffer.file.name";
+    private static final String FILE_BACKED_BUFFERS_FILE_NAME_DOC = "write me";
+
     /** <code>request.timeout.ms</code> */
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     private static final String REQUEST_TIMEOUT_MS_DOC = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
@@ -280,6 +284,12 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
+                                .define(FILE_BACKED_BUFFERS_CONFIG, Type.BOOLEAN, false, Importance.LOW, FILE_BACKED_BUFFERS_DOC)
+                                .define(FILE_BACKED_BUFFERS_FILE_NAME_CONFIG, 
+                                        Type.STRING, 
+                                        new File(System.getProperty("java.io.tmpdir"), "kafka-producer-data-" + new Random().nextInt(Integer.MAX_VALUE) + ".dat").getAbsolutePath(),
+                                        Importance.LOW, 
+                                        FILE_BACKED_BUFFERS_FILE_NAME_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
                                         Importance.HIGH,
