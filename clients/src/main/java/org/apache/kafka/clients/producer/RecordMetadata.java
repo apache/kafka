@@ -18,7 +18,6 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.DefaultRecord;
-import org.apache.kafka.common.record.RecordBatch;
 
 /**
  * The metadata for a record that has been acknowledged by the server
@@ -63,14 +62,6 @@ public final class RecordMetadata {
                           long checksum, int serializedKeySize, int serializedValueSize) {
         this(topicPartition, baseOffset, relativeOffset, timestamp, (Long) checksum, serializedKeySize,
                 serializedValueSize);
-    }
-
-    /**
-     * @deprecated As of 0.10.0. Use @{@link RecordMetadata#RecordMetadata(TopicPartition, long, long, long, Long, int, int)}.
-     */
-    @Deprecated
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
-        this(topicPartition, baseOffset, relativeOffset, RecordBatch.NO_TIMESTAMP, null, -1, -1);
     }
 
     /**
