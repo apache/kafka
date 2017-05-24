@@ -227,7 +227,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             }
 
                             sensors.fetchLatency.record(resp.requestLatencyMs());
-                            sensors.fetchThrottleTimeSensor.record(response.throttleTimeMs());
                         }
 
                         @Override
@@ -932,6 +931,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         sensors.updatePartitionLagSensors(assignment);
     }
 
+    public static Sensor throttleTimeSensor(Metrics metrics, String metricGrpPrefix) {
+        String metricGrpName = metricGrpPrefix + FetchManagerMetrics.METRIC_GROUP_SUFFIX;
+        Sensor fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
+        fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
+                                                     metricGrpName,
+                                                     "The average throttle time in ms"), new Avg());
+        fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
+                                                     metricGrpName,
+                                                     "The maximum throttle time in ms"), new Max());
+        return fetchThrottleTimeSensor;
+    }
+
     private class PartitionRecords {
         private final TopicPartition partition;
         private final CompletedFetch completedFetch;
@@ -1214,19 +1225,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     private static class FetchManagerMetrics {
+        private static final String METRIC_GROUP_SUFFIX = "-fetch-manager-metrics";
         private final Metrics metrics;
         private final String metricGrpName;
         private final Sensor bytesFetched;
         private final Sensor recordsFetched;
         private final Sensor fetchLatency;
         private final Sensor recordsFetchLag;
-        private final Sensor fetchThrottleTimeSensor;
 
         private Set<TopicPartition> assignedPartitions;
 
         private FetchManagerMetrics(Metrics metrics, String metricGrpPrefix) {
             this.metrics = metrics;
-            this.metricGrpName = metricGrpPrefix + "-fetch-manager-metrics";
+            this.metricGrpName = metricGrpPrefix + METRIC_GROUP_SUFFIX;
 
             this.bytesFetched = metrics.sensor("bytes-fetched");
             this.bytesFetched.add(metrics.metricName("fetch-size-avg",
@@ -1262,15 +1273,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             this.recordsFetchLag.add(metrics.metricName("records-lag-max",
                 this.metricGrpName,
                 "The maximum lag in terms of number of records for any partition in this window"), new Max());
-
-            this.fetchThrottleTimeSensor = metrics.sensor("fetch-throttle-time");
-            this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-avg",
-                                                         this.metricGrpName,
-                                                         "The average throttle time in ms"), new Avg());
-
-            this.fetchThrottleTimeSensor.add(metrics.metricName("fetch-throttle-time-max",
-                                                         this.metricGrpName,
-                                                         "The maximum throttle time in ms"), new Max());
         }
 
         private void recordTopicFetchMetrics(String topic, int bytes, int records) {
