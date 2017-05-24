@@ -32,7 +32,7 @@ object kafkaBalanceCommand extends Logging {
     var exitCode = 0
     try {
       if(opts.options.has(opts.showClusterState))
-        getKafkaBalanceStat(zkUtils)
+        getClusterBalanceStat(zkUtils)
       else if(opts.options.has(opts.leaderRebalance))
         leaderBalance(zkUtils, opts)
       else if(opts.options.has(opts.kafkaRebalance))
@@ -66,7 +66,7 @@ object kafkaBalanceCommand extends Logging {
     tpmap
   }
 
-  def getKafkaBalanceStat(zkUtils: ZkUtils): Unit = {
+  def getClusterBalanceStat(zkUtils: ZkUtils): Unit = {
     val TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]= getTopAndPartitionInfo(zkUtils)
     val BrokerMap: mutable.Map[Int, mutable.Set[TopicAndPartition]] = mutable.Map.empty
     val aliveBrokerList=zkUtils.getSortedBrokerList()
@@ -130,7 +130,7 @@ object kafkaBalanceCommand extends Logging {
   }
 
   def getBalanceState(zkUtils: ZkUtils, orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],
-                     newTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit = {
+                      newTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit = {
 
     val startTime = System.currentTimeMillis()
 
@@ -182,7 +182,7 @@ object kafkaBalanceCommand extends Logging {
       }
     }
 
-    getKafkaBalanceStat(zkUtils)
+    getClusterBalanceStat(zkUtils)
   }
 
   def executeReassginPartition(zkUtils: ZkUtils, TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
@@ -221,7 +221,7 @@ object kafkaBalanceCommand extends Logging {
             if (BrokerMap.contains(bid)) {
               BrokerMap(bid) += tp._1
             } else {
-              // dead broker
+              //dead broker
             }
           }
         }
@@ -237,23 +237,24 @@ object kafkaBalanceCommand extends Logging {
     val balanceThreshold =  Percentage * replicasAvgForBrokers/100
     // init List by Desc
     val replicasList = BrokerMap.map(btp => balanceItem (btp._1, btp._2.size - replicasAvgForBrokers)).toList.sortWith(_.rn2mv > _.rn2mv)
+
+    // move replicas from an alive broker to an other alive broker
     for(i <- 0 until replicasList.size){
       for(j <- (0 until replicasList.size).toList.reverse){
-        if ((replicasList(i).rn2mv <= 0 || replicasList(j).rn2mv >= 0)
+        if (replicasList(i).rn2mv <= 0 || replicasList(j).rn2mv >= 0
           || finishBalanceForBroker(replicasList(i).rn2mv, replicasList(j).rn2mv, balanceThreshold)) {
+          //pass
         } else {
           for (tp <- BrokerMap(replicasList(i).brokerid)) {
             if (TPMap(tp).contains(replicasList(j).brokerid) ||
               (replicasList(i).rn2mv <= 0 || replicasList(j).rn2mv >= 0)
               || finishBalanceForBroker(replicasList(i).rn2mv, replicasList(j).rn2mv, balanceThreshold)) {
-
+              //pass
             } else {
               TPMap(tp) = TPMap(tp).filterNot(_.equals(replicasList(i).brokerid))
               TPMap(tp).append(replicasList(j).brokerid)
-
               BrokerMap(replicasList(i).brokerid).remove(tp)
               BrokerMap(replicasList(j).brokerid).add(tp)
-
               replicasList(i).rn2mv -= 1
               replicasList(j).rn2mv += 1
             }
@@ -320,10 +321,8 @@ object kafkaBalanceCommand extends Logging {
             } else {
               TPMap(tp) -= leadersList(j).brokerid
               TPMap(tp).insert(0, leadersList(j).brokerid)
-
               BrokerLeaderMap(leadersList(i).brokerid).remove(tp)
               BrokerLeaderMap(leadersList(j).brokerid).add(tp)
-
               leadersList(i).rn2mv -= 1
               leadersList(j).rn2mv += 1
             }
@@ -360,7 +359,7 @@ object kafkaBalanceCommand extends Logging {
       .describedAs("command")
       .ofType(classOf[String])
 
-    val rbNumPercentageOpt = parser.accepts("replica-balance-num-percentage", "replica-balance-num-percentage......")
+    val rbNumPercentageOpt = parser.accepts("replica-balance-num-percentage", "replica balance percentage,default is 10 (means 10%)")
       .withRequiredArg
       .describedAs("integer")
       .ofType(classOf[String])
@@ -374,4 +373,5 @@ object kafkaBalanceCommand extends Logging {
   }
 
 }
+
 
