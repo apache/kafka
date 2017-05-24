@@ -31,8 +31,7 @@ import org.junit.{After, Before, Ignore, Test}
 import org.junit.Assert._
 
 import scala.collection.JavaConversions._
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.mutable.Buffer
+import scala.collection.mutable.{ArrayBuffer, Buffer}
 import scala.concurrent.ExecutionException
 import scala.util.Random
 
@@ -101,13 +100,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     unCommittedConsumer.subscribe(List(topic1, topic2))
 
     val records = pollUntilExactlyNumRecords(consumer, 2)
-    records.zipWithIndex.foreach { case (record, i) =>
+    records.foreach { case record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
 
     val allRecords = pollUntilExactlyNumRecords(unCommittedConsumer, 4)
     val expectedValues = List("1", "2", "3", "4").toSet
-    allRecords.zipWithIndex.foreach { case (record, i) =>
+    allRecords.foreach { case record =>
       assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
     }
   }
@@ -130,7 +129,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     val producer = transactionalProducers.get(0)
 
-    var consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
+    val consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1))
     producer.initTransactions()
 
@@ -143,7 +142,7 @@ class TransactionsTest extends KafkaServerTestHarness {
         producer.beginTransaction()
         shouldCommit = !shouldCommit
 
-        records.zipWithIndex.foreach { case (record, i) =>
+        records.foreach { case record =>
           val key = new String(record.key(), "UTF-8")
           val value = new String(record.value(), "UTF-8")
           producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, key, value, willBeCommitted = shouldCommit))
@@ -210,7 +209,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.commitTransaction()  // ok
 
     val records = pollUntilExactlyNumRecords(consumer, 2)
-    records.zipWithIndex.foreach { case (record, i) =>
+    records.foreach { case record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
   }
@@ -247,7 +246,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.commitTransaction()  // ok
 
     val records = pollUntilExactlyNumRecords(consumer, 2)
-    records.zipWithIndex.foreach { case (record, i) =>
+    records.foreach { case record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
   }
@@ -291,7 +290,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.commitTransaction()  // ok
 
     val records = pollUntilExactlyNumRecords(consumer, 2)
-    records.zipWithIndex.foreach { case (record, i) =>
+    records.foreach { case record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
   }
@@ -336,7 +335,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     producer2.commitTransaction()  // ok
 
     val records = pollUntilExactlyNumRecords(consumer, 2)
-    records.zipWithIndex.foreach { case (record, i) =>
+    records.foreach { case record =>
       TestUtils.assertCommittedAndGetValue(record)
     }
   }
