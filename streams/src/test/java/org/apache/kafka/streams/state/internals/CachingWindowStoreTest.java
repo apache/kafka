@@ -56,7 +56,7 @@ public class CachingWindowStoreTest {
     private MockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
-    private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
+    private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
     private String topic;
     private WindowKeySchema keySchema;

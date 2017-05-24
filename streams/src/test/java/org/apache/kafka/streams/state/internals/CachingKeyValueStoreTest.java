@@ -17,16 +17,20 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorContext;
 import org.junit.After;
 import org.junit.Before;
@@ -45,14 +49,14 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
-public class CachingKeyValueStoreTest {
+public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     private final int maxCacheSizeBytes = 150;
     private MockProcessorContext context;
     private CachingKeyValueStore<String, String> store;
     private InMemoryKeyValueStore<Bytes, byte[]> underlyingStore;
     private ThreadCache cache;
-    private CacheFlushListenerStub<String> cacheFlushListener;
+    private CacheFlushListenerStub<String, String> cacheFlushListener;
     private String topic;
 
     @Before
@@ -72,6 +76,36 @@ public class CachingKeyValueStoreTest {
     @After
     public void after() {
         context.close();
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    protected <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context,
+                                                             final Class<K> keyClass,
+                                                             final Class<V> valueClass,
+                                                             final boolean useContextSerdes) {
+        final String storeName = "cache-store";
+
+        final Stores.PersistentKeyValueFactory<?, ?> factory = Stores
+                .create(storeName)
+                .withKeys(Serdes.Bytes())
+                .withValues(Serdes.ByteArray())
+                .persistent();
+
+
+        final KeyValueStore<Bytes, byte[]> underlyingStore = (KeyValueStore<Bytes, byte[]>) factory.build().get();
+        final CacheFlushListenerStub<K, V> cacheFlushListener = new CacheFlushListenerStub<>();
+        final CachingKeyValueStore<K, V> store;
+        if (useContextSerdes) {
+            store = new CachingKeyValueStore<>(underlyingStore,
+                (Serde<K>) context.keySerde(), (Serde<V>) context.valueSerde());
+        } else {
+            store = new CachingKeyValueStore<>(underlyingStore,
+                Serdes.serdeFrom(keyClass), Serdes.serdeFrom(valueClass));
+        }
+        store.setFlushListener(cacheFlushListener);
+        store.init(context, store);
+        return store;
     }
 
     @Test
@@ -226,61 +260,11 @@ public class CachingKeyValueStoreTest {
         return i;
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
-        store.put(null, "anyValue");
-    }
-
-    @Test
-    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
-        store.put("a", null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutIfAbsentNullKey() throws Exception {
-        store.putIfAbsent(null, "anyValue");
-    }
-
-    @Test
-    public void shouldNotThrowNullPointerExceptionOnPutIfAbsentNullValue() throws Exception {
-        store.putIfAbsent("a", null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
-        store.putAll(Collections.singletonList(new KeyValue<String, String>(null, "anyValue")));
-    }
-
-    @Test
-    public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() throws Exception {
-        store.putAll(Collections.singletonList(new KeyValue<String, String>("a", null)));
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnDeleteNullKey() throws Exception {
-        store.delete(null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
-        store.get(null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
-        store.range(null, "a");
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
-        store.range("a", null);
-    }
-
-    public static class CacheFlushListenerStub<K> implements CacheFlushListener<K, String> {
-        final Map<K, Change<String>> forwarded = new HashMap<>();
+    public static class CacheFlushListenerStub<K, V> implements CacheFlushListener<K, V> {
+        final Map<K, Change<V>> forwarded = new HashMap<>();
 
         @Override
-        public void apply(final K key, final String newValue, final String oldValue) {
+        public void apply(final K key, final V newValue, final V oldValue) {
             forwarded.put(key, new Change<>(newValue, oldValue));
         }
     }

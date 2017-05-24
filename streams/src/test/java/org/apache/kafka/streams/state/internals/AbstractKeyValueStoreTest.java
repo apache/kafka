@@ -277,6 +277,7 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(2, "two");
         store.put(4, "four");
         store.put(5, "five");
+        store.flush();
         assertEquals(5, store.approximateNumEntries());
     }
 }
