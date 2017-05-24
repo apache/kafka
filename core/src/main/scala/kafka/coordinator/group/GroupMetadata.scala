@@ -427,7 +427,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
   }.toMap
 
-  def offset(topicPartition: TopicPartition) : Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
+  def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
 
   // visible for testing
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
