@@ -123,14 +123,17 @@ object kafkaBalanceCommand extends Logging {
     executeLeaderBalance(zkUtils, opts, TPMap)
 
     // 3. assign partition
-    executeReassginPartition(zkUtils, TPMap)
+    executeReassginPartition(zkUtils, TPMap,orgTPMap)
 
     // 4. get balance state
-    getBalanceState(zkUtils , orgTPMap, TPMap)
+    getBalanceState(zkUtils ,TPMap,orgTPMap)
+
+    // 5.do preferred replica leader election command
+    preferredReplicaLeaderElection(zkUtils,TPMap,orgTPMap)
   }
 
-  def getBalanceState(zkUtils: ZkUtils, orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],
-                      newTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit = {
+  def getBalanceState(zkUtils: ZkUtils, newTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],
+                      orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit = {
 
     val startTime = System.currentTimeMillis()
 
@@ -185,8 +188,16 @@ object kafkaBalanceCommand extends Logging {
     getClusterBalanceStat(zkUtils)
   }
 
-  def executeReassginPartition(zkUtils: ZkUtils, TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
-    val partitionsToBeReassigned = TPMap.map {
+
+  /**
+    * use ReassignPartitionsCommand to make balance
+    * with the new distribution of replicas we got
+    * @param zkUtils
+    * @param TPMap new tp map
+    * @param orgTPMap old tp map
+    */
+  def executeReassginPartition(zkUtils: ZkUtils, TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
+    val partitionsToBeReassigned = TPMap.filterNot(tpInfo=>orgTPMap(tpInfo._1).equals(tpInfo._2)).map {
       tpInfo=> {
         (tpInfo._1, tpInfo._2.toSeq)
       }
@@ -200,6 +211,12 @@ object kafkaBalanceCommand extends Logging {
   }
 
 
+  /**
+    * get the new distribution of replicas on every brokers
+    * @param zkUtils
+    * @param opts
+    * @param TPMap
+    */
   def executeReplicaBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions,
                             TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit = {
     // 1. get replica num for per broker
@@ -284,13 +301,18 @@ object kafkaBalanceCommand extends Logging {
     // 1. leader balance
     executeLeaderBalance(zkUtils, opts, TPMap)
     // 2. assign partition
-    executeReassginPartition(zkUtils, TPMap)
+    executeReassginPartition(zkUtils, TPMap,orgTPMap)
     // 3.reassgin partition state
-    getBalanceState(zkUtils,orgTPMap, TPMap)
+    getBalanceState(zkUtils,TPMap,orgTPMap)
     // 4.do preferred replica leader election command
-    preferredReplicaLeaderElection(zkUtils,TPMap)
+    preferredReplicaLeaderElection(zkUtils,TPMap,orgTPMap)
   }
 
+  /**
+    * make the leader numbers on every broker balanced
+    * during doing it we should make sure the target broker
+    * which we want move leader of TP to should in AR of this TP.
+   */
   def executeLeaderBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions,
                            TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]
                           ): Unit = {
@@ -332,8 +354,14 @@ object kafkaBalanceCommand extends Logging {
     }
   }
 
-  def preferredReplicaLeaderElection(zkUtils: ZkUtils,TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
-    val tp=TPMap.keySet
+  /**
+    * do PreferredReplicaLeaderElectionCommand with TP which we want leader balanced
+    * @param zkUtils
+    * @param TPMap
+    * @param orgTPMap
+    */
+  def preferredReplicaLeaderElection(zkUtils: ZkUtils,TPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]],orgTPMap: mutable.Map[TopicAndPartition, mutable.ListBuffer[Int]]): Unit ={
+    val tp=TPMap.filterNot(TP=>orgTPMap(TP._1).equals(TP._2))keySet
     val preferredLeaderElection=new PreferredReplicaLeaderElectionCommand(zkUtils,tp)
     preferredLeaderElection.moveLeaderToPreferredReplica()
   }
@@ -350,14 +378,10 @@ object kafkaBalanceCommand extends Logging {
       .ofType(classOf[String])
 
     val showClusterState = parser.accepts("show-cluster-state", "show how many replicas and leaders on each broker")
-      .withRequiredArg
-      .describedAs("command")
-      .ofType(classOf[String])
+
 
     val  kafkaRebalance= parser.accepts("replica-rebalance", "which make the replica num and leader num on each broker balanced")
-      .withRequiredArg
-      .describedAs("command")
-      .ofType(classOf[String])
+
 
     val rbNumPercentageOpt = parser.accepts("replica-balance-num-percentage", "replica balance percentage,default is 10 (means 10%)")
       .withRequiredArg
@@ -365,9 +389,7 @@ object kafkaBalanceCommand extends Logging {
       .ofType(classOf[String])
 
     val leaderRebalance= parser.accepts("leader-balance", "which make the leader num on each broker balanced")
-      .withRequiredArg
-      .describedAs("command")
-      .ofType(classOf[String])
+
 
     val options = parser.parse(args : _*)
   }
