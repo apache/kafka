@@ -9,7 +9,7 @@ import org.apache.kafka.common.utils.Utils
 /**
   * a command make the number of replicas and leaders on every broker is balance
   */
-object kafkaBalanceCommand extends Logging {
+object ClusterBalanceCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
 
@@ -115,7 +115,7 @@ object kafkaBalanceCommand extends Logging {
   def executeKafkaBalance(zkUtils: ZkUtils, opts: kafkaBalanceCommandOptions): Unit = {
     // 0. get old TPMap
     val orgTPMap = getTopAndPartitionInfo(zkUtils)
-    
+
     // 1. relplica balance
     val TPMap=getTopAndPartitionInfo(zkUtils)
     executeReplicaBalance(zkUtils, opts, TPMap)
