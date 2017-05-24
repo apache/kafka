@@ -190,7 +190,7 @@ class WorkerSourceTask extends WorkerTask {
             final SourceRecord record = transformationChain.apply(preTransformRecord);
 
             if (record == null) {
-                commitTaskRecord(preTransformRecord);
+                commitTaskRecord(preTransformRecord,null);
                 continue;
             }
 
@@ -233,7 +233,7 @@ class WorkerSourceTask extends WorkerTask {
                                     log.trace("Wrote record successfully: topic {} partition {} offset {}",
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
+                                    commitTaskRecord(preTransformRecord,recordMetadata);
                                 }
                                 recordSent(producerRecord);
                             }
@@ -253,9 +253,9 @@ class WorkerSourceTask extends WorkerTask {
         return true;
     }
 
-    private void commitTaskRecord(SourceRecord record) {
+    private void commitTaskRecord(SourceRecord record, RecordMetadata recordMetadata) {
         try {
-            task.commitRecord(record);
+            task.commitRecord(record,recordMetadata);
         } catch (InterruptedException e) {
             log.error("Exception thrown", e);
         } catch (Throwable t) {
