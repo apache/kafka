@@ -90,7 +90,7 @@ public class OffsetStorageWriter {
      * @param partition the partition to store an offset for
      * @param offset the offset
      */
-    public synchronized void offset(Map<String, ?> partition, Map<String, ?> offset) {
+    public void offset(Map<String, ?> partition, Map<String, ?> offset) {
         data.put((Map<String, Object>) partition, (Map<String, Object>) offset);
     }
 
@@ -104,7 +104,7 @@ public class OffsetStorageWriter {
      *
      * @return true if a flush was initiated, false if no data was available
      */
-    public synchronized boolean beginFlush() {
+    public boolean beginFlush() {
         if (flushing()) {
             log.error("Invalid call to OffsetStorageWriter flush() while already flushing, the "
                     + "framework should not allow this");
@@ -176,7 +176,7 @@ public class OffsetStorageWriter {
      * {@link #doFlush} has already been invoked. It should be used if an operation performed
      * between beginFlush and doFlush failed.
      */
-    public synchronized void cancelFlush() {
+    public void cancelFlush() {
         // Verify we're still flushing data to handle a race between cancelFlush() calls from up the
         // call stack and callbacks from the write request to underlying storage
         if (flushing()) {
@@ -192,7 +192,7 @@ public class OffsetStorageWriter {
      * Handle completion of a write. Returns true if this callback is for the current flush
      * operation, false if it's for an old operation that should now be ignored.
      */
-    private synchronized boolean handleFinishWrite(long flushId, Throwable error, Void result) {
+    private boolean handleFinishWrite(long flushId, Throwable error, Void result) {
         // Callbacks need to be handled carefully since the flush operation may have already timed
         // out and been cancelled.
         if (flushId != currentFlushId)
