@@ -261,6 +261,31 @@ public class CachingWindowStoreTest {
         );
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        cachingStore.put(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+        cachingStore.put("a", null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullKey() throws Exception {
+        cachingStore.fetch(null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        cachingStore.fetch(null, "anyTo", 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        cachingStore.fetch("anyFrom", null, 1L, 2L);
+    }
+
     private static <K, V> KeyValue<Windowed<K>, V> windowedPair(K key, V value, long timestamp) {
         return KeyValue.pair(new Windowed<>(key, new TimeWindow(timestamp, timestamp + WINDOW_SIZE)), value);
     }

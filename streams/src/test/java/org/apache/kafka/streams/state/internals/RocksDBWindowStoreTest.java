@@ -714,6 +714,36 @@ public class RocksDBWindowStoreTest {
         )));
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() throws Exception {
+        windowStore = createWindowStore(context, false, true);
+        windowStore.put(null, "anyValue");
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() throws Exception {
+        windowStore = createWindowStore(context, false, true);
+        windowStore.put(1, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnGetNullKey() throws Exception {
+        windowStore = createWindowStore(context, false, true);
+        windowStore.fetch(null, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() throws Exception {
+        windowStore = createWindowStore(context, false, true);
+        windowStore.fetch(null, 2, 1L, 2L);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() throws Exception {
+        windowStore = createWindowStore(context, false, true);
+        windowStore.fetch(1, null, 1L, 2L);
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() throws Exception {
