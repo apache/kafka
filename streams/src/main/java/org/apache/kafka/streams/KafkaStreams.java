@@ -265,7 +265,11 @@ public class KafkaStreams {
         public synchronized void onChange(final StreamThread thread,
                                           final StreamThread.State newState,
                                           final StreamThread.State oldState) {
-            threadState.put(thread.getId(), newState);
+            if (newState != StreamThread.State.DEAD) {
+                threadState.put(thread.getId(), newState);
+            } else {
+                threadState.remove(thread.getId());
+            }
             if (newState == StreamThread.State.PARTITIONS_REVOKED ||
                 newState == StreamThread.State.ASSIGNING_PARTITIONS) {
                 setState(State.REBALANCING);
