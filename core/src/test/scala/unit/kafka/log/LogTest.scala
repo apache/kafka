@@ -557,8 +557,8 @@ class LogTest {
       assertTrue(origIterator.hasNext)
       val origEntry = origIterator.next()
       assertEquals(origEntry.producerId, batch.producerId)
-      assertEquals(origEntry.baseOffset, batch.baseOffset)
-      assertEquals(origEntry.baseSequence, batch.baseSequence)
+      assertEquals(origEntry.firstOffset, batch.firstOffset)
+      assertEquals(origEntry.firstSequence, batch.firstSequence)
     }
   }
 

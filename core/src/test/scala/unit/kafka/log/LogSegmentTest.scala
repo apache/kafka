@@ -457,7 +457,7 @@ class LogSegmentTest {
 
     //Then we should still truncate the record that was present (i.e. offset + 3 is gone)
     val log = seg.read(offset, None, 10000)
-    assertEquals(offset, log.records.batches.iterator.next().baseOffset())
+    assertEquals(offset, log.records.batches.iterator.next().firstOffset())
     assertEquals(1, log.records.batches.asScala.size)
   }
 

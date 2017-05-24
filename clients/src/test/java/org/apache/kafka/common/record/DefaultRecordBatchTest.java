@@ -45,12 +45,12 @@ public class DefaultRecordBatchTest {
         MemoryRecords records = builder.build();
         for (MutableRecordBatch batch : records.batches()) {
             assertTrue(batch.isValid());
-            assertEquals(1234567, batch.baseOffset());
+            assertEquals(1234567, batch.firstOffset());
             assertEquals(1234568, batch.lastOffset());
             assertEquals(2L, batch.maxTimestamp());
             assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
             assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
-            assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
+            assertEquals(RecordBatch.NO_SEQUENCE, batch.firstSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, batch.lastSequence());
 
             for (Record record : batch) {
@@ -75,12 +75,12 @@ public class DefaultRecordBatchTest {
         MemoryRecords records = builder.build();
         for (MutableRecordBatch batch : records.batches()) {
             assertTrue(batch.isValid());
-            assertEquals(1234567, batch.baseOffset());
+            assertEquals(1234567, batch.firstOffset());
             assertEquals(1234568, batch.lastOffset());
             assertEquals(2L, batch.maxTimestamp());
             assertEquals(pid, batch.producerId());
             assertEquals(epoch, batch.producerEpoch());
-            assertEquals(baseSequence, batch.baseSequence());
+            assertEquals(baseSequence, batch.firstSequence());
             assertEquals(baseSequence + 1, batch.lastSequence());
 
             for (Record record : batch) {
@@ -155,7 +155,7 @@ public class DefaultRecordBatchTest {
         DefaultRecordBatch batch = new DefaultRecordBatch(records.buffer());
         batch.setLastOffset(lastOffset);
         assertEquals(lastOffset, batch.lastOffset());
-        assertEquals(firstOffset, batch.baseOffset());
+        assertEquals(firstOffset, batch.firstOffset());
         assertTrue(batch.isValid());
 
         List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());

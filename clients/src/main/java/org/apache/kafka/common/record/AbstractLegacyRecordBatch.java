@@ -130,7 +130,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public long baseOffset() {
+    public long firstOffset() {
         return iterator().next().offset();
     }
 
@@ -181,12 +181,12 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return RecordBatch.NO_SEQUENCE;
     }
 
     @Override
-    public int baseSequence() {
+    public int firstSequence() {
         return RecordBatch.NO_SEQUENCE;
     }
 

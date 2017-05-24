@@ -66,7 +66,7 @@ public abstract class AbstractRecords implements Records {
                 List<Record> records = Utils.toList(batch.iterator());
                 final long baseOffset;
                 if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                    baseOffset = batch.baseOffset();
+                    baseOffset = batch.firstOffset();
                 else
                     baseOffset = records.get(0).offset();
                 totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, batch.compressionType(), records);

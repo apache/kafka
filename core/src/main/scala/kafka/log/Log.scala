@@ -593,7 +593,7 @@ class Log(@volatile var dir: File,
         // update the epoch cache with the epoch stamped onto the message by the leader
         validRecords.batches.asScala.foreach { batch =>
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
+            leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.firstOffset)
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -744,14 +744,14 @@ class Log(@volatile var dir: File,
 
     for (batch <- records.batches.asScala) {
       // we only validate V2 and higher to avoid potential compatibility issues with older clients
-      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.baseOffset != 0)
-        throw new InvalidRecordException(s"The baseOffset of the record batch should be 0, but it is ${batch.baseOffset}")
+      if (batch.magic >= RecordBatch.MAGIC_VALUE_V2 && isFromClient && batch.firstOffset != 0)
+        throw new InvalidRecordException(s"The firstOffset of the record batch should be 0, but it is ${batch.firstOffset}")
 
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
       // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
       // For magic version 2, we can get the first offset directly from the batch header.
       if (firstOffset < 0)
-        firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.baseOffset else batch.lastOffset
+        firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.firstOffset else batch.lastOffset
 
       // check that offsets are monotonically increasing
       if (lastOffset >= batch.lastOffset)

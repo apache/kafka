@@ -103,7 +103,7 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public long sequence() {
+    public int sequence() {
         return sequence;
     }
 

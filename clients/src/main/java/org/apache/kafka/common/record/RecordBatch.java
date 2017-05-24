@@ -107,11 +107,12 @@ public interface RecordBatch extends Iterable<Record> {
      * @return The base offset of this record batch (which may or may not be the offset of the first record
      *         as described above).
      */
-    long baseOffset();
+    long firstOffset();
 
     /**
-     * Get the last offset in this record batch (inclusive). Unlike {@link #baseOffset()}, the last offset
-     * always reflects the offset of the last record in the batch, even after compaction.
+     * Get the last offset in this record batch (inclusive). Unlike {@link #firstOffset()}, the last offset
+     * always reflects the offset of the last record in the original batch written to the log, even if
+     * the record itself is removed by the log cleaner.
      *
      * @return The offset of the last record in this batch
      */
@@ -154,10 +155,11 @@ public interface RecordBatch extends Iterable<Record> {
      * Get the first sequence number of this record batch.
      * @return The first sequence number or -1 if there is none
      */
-    int baseSequence();
+    int firstSequence();
 
     /**
-     * Get the last sequence number of this record batch.
+     * Get the last sequence number of this record batch. Similar to {@link #lastOffset()}, the last
+     * sequence number is not impacted by the log cleaner.
      *
      * @return The last sequence number or -1 if there is none
      */

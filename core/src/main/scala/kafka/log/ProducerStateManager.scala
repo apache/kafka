@@ -53,7 +53,7 @@ private[log] case class ProducerIdEntry(producerId: Long, producerEpoch: Short, 
 
   def isDuplicate(batch: RecordBatch): Boolean = {
     batch.producerEpoch == producerEpoch &&
-      batch.baseSequence == firstSeq &&
+      batch.firstSequence == firstSeq &&
       batch.lastSequence == lastSeq
   }
 }
@@ -118,10 +118,10 @@ private[log] class ProducerAppendInfo(val producerId: Long,
     if (batch.isControlBatch) {
       val record = batch.iterator.next()
       val endTxnMarker = EndTransactionMarker.deserialize(record)
-      val completedTxn = appendEndTxnMarker(endTxnMarker, batch.producerEpoch, batch.baseOffset, record.timestamp)
+      val completedTxn = appendEndTxnMarker(endTxnMarker, batch.producerEpoch, batch.firstOffset, record.timestamp)
       Some(completedTxn)
     } else {
-      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
+      append(batch.producerEpoch, batch.firstSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
         batch.isTransactional)
       None
     }

@@ -378,8 +378,8 @@ object DumpLogSegments {
         }
       } else {
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset +
-            " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
+          print("firstOffset: " + batch.firstOffset + " lastOffset: " + batch.lastOffset +
+            " firstSequence: " + batch.firstSequence + " lastSequence: " + batch.lastSequence +
             " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
             " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional)
         else
