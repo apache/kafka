@@ -124,6 +124,22 @@ class DelayedProduce(delayMs: Long,
   }
 }
 
+/**
+ * If the responseCallback of this delayed produce object is already synchronized with a different object, then users can
+ * apply this extended delayed produce object to avoid calling tryComplete() with synchronization on the operation object to avoid dead-lock
+ */
+class SafeDelayedProduce(delayMs: Long,
+                         syncObject: Object,
+                         produceMetadata: ProduceMetadata,
+                         replicaManager: ReplicaManager,
+                         responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
+  extends DelayedProduce(delayMs, produceMetadata, replicaManager, responseCallback) {
+
+  override def safeTryComplete(): Boolean = syncObject synchronized {
+    tryComplete()
+  }
+}
+
 object DelayedProduceMetrics extends KafkaMetricsGroup {
 
   private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)

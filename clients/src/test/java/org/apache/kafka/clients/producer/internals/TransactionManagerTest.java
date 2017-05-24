@@ -190,17 +190,7 @@ public class TransactionManagerTest {
 
         assertFalse(transactionManager.hasPendingOffsetCommits());
 
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
-                assertEquals(consumerGroupId, addOffsetsToTxnRequest.consumerGroupId());
-                assertEquals(transactionalId, addOffsetsToTxnRequest.transactionalId());
-                assertEquals(pid, addOffsetsToTxnRequest.producerId());
-                assertEquals(epoch, addOffsetsToTxnRequest.producerEpoch());
-                return true;
-            }
-        }, new AddOffsetsToTxnResponse(0, Errors.NONE));
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
 
         sender.run(time.milliseconds());  // Send AddOffsetsRequest
         assertTrue(transactionManager.hasPendingOffsetCommits());  // We should now have created and queued the offset commit request.
@@ -210,17 +200,7 @@ public class TransactionManagerTest {
         txnOffsetCommitResponse.put(tp1, Errors.NONE);
 
         prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
-
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) body;
-                assertEquals(consumerGroupId, txnOffsetCommitRequest.consumerGroupId());
-                assertEquals(pid, txnOffsetCommitRequest.producerId());
-                assertEquals(epoch, txnOffsetCommitRequest.producerEpoch());
-                return true;
-            }
-        }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
 
         assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
         sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
@@ -542,15 +522,106 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.isReadyForTransaction());  // make sure we are ready for a transaction now.
     }
 
+    @Test
+    public void testHandlingOfUnknownTopicPartitionErrorOnAddPartitions() throws InterruptedException {
+        client.setNode(brokerNode);
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+
+        sender.run(time.milliseconds());  // get pid.
+
+        assertTrue(transactionManager.hasProducerId());
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, new MockCallback(transactionManager), MAX_BLOCK_TIMEOUT).future;
+
+        assertFalse(responseFuture.isDone());
+        prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION, tp0, epoch, pid);
+
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest
+        assertFalse(transactionManager.transactionContainsPartition(tp0));  // The partition should not yet be added.
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());  // Send AddPartitionsRequest successfully.
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+
+        sender.run(time.milliseconds());  // Send ProduceRequest.
+        assertTrue(responseFuture.isDone());
+    }
+
+    @Test
+    public void testHandlingOfUnknownTopicPartitionErrorOnTxnOffsetCommit() throws InterruptedException {
+        client.setNode(brokerNode);
+        // This is called from the initTransactions method in the producer as the first order of business.
+        // It finds the coordinator and then gets a PID.
+        final long pid = 13131L;
+        final short epoch = 1;
+        transactionManager.initializeTransactions();
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.TRANSACTION, transactionalId);
+
+        sender.run(time.milliseconds());  // find coordinator
+        sender.run(time.milliseconds());
+        assertEquals(brokerNode, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.TRANSACTION));
+
+        prepareInitPidResponse(Errors.NONE, false, pid, epoch);
+
+        sender.run(time.milliseconds());  // get pid.
+
+        assertTrue(transactionManager.hasProducerId());
+        transactionManager.beginTransaction();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp1, new OffsetAndMetadata(1));
+        final String consumerGroupId = "myconsumergroup";
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
+        prepareAddOffsetsToTxnResponse(Errors.NONE, consumerGroupId, pid, epoch);
+
+        sender.run(time.milliseconds());  // send AddOffsetsToTxnResult
+
+        assertFalse(addOffsetsResult.isCompleted());  // The request should complete only after the TxnOffsetCommit completes.
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp1, Errors.UNKNOWN_TOPIC_OR_PARTITION);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, FindCoordinatorRequest.CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
+
+        assertEquals(null, transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
+        sender.run(time.milliseconds());  // send find coordinator for group request
+        assertNotNull(transactionManager.coordinator(FindCoordinatorRequest.CoordinatorType.GROUP));
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+
+        sender.run(time.milliseconds());  // send TxnOffsetCommitRequest request.
+
+        assertTrue(transactionManager.hasPendingOffsetCommits());  // The TxnOffsetCommit failed.
+        assertFalse(addOffsetsResult.isCompleted());  // We should only be done after both RPCs complete successfully.
+
+        txnOffsetCommitResponse.put(tp1, Errors.NONE);
+        prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
+        sender.run(time.milliseconds());  // Send TxnOffsetCommitRequest again.
+
+        assertTrue(addOffsetsResult.isCompleted());
+        assertTrue(addOffsetsResult.isSuccessful());
+    }
 
     @Test
     public void shouldNotAddPartitionsToTransactionWhenTopicAuthorizationFailed() throws Exception {
         verifyAddPartitionsFailsWithPartitionLevelError(Errors.TOPIC_AUTHORIZATION_FAILED);
-    }
-
-    @Test
-    public void shouldNotAddPartitionsToTransactionWhenUnknownTopicOrPartition() throws Exception {
-        verifyAddPartitionsFailsWithPartitionLevelError(Errors.UNKNOWN_TOPIC_OR_PARTITION);
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
@@ -679,10 +750,41 @@ public class TransactionManagerTest {
         }, new EndTxnResponse(0, error));
     }
 
+    private void prepareAddOffsetsToTxnResponse(Errors error, final String consumerGroupId, final long producerId,
+                                                final short producerEpoch) {
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
+                assertEquals(consumerGroupId, addOffsetsToTxnRequest.consumerGroupId());
+                assertEquals(transactionalId, addOffsetsToTxnRequest.transactionalId());
+                assertEquals(producerId, addOffsetsToTxnRequest.producerId());
+                assertEquals(producerEpoch, addOffsetsToTxnRequest.producerEpoch());
+                return true;
+            }
+        }, new AddOffsetsToTxnResponse(0, error));
+    }
+
+    private void prepareTxnOffsetCommitResponse(final String consumerGroupId, final long producerId,
+                                                final short producerEpoch, Map<TopicPartition, Errors> txnOffsetCommitResponse) {
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                TxnOffsetCommitRequest txnOffsetCommitRequest = (TxnOffsetCommitRequest) body;
+                assertEquals(consumerGroupId, txnOffsetCommitRequest.consumerGroupId());
+                assertEquals(producerId, txnOffsetCommitRequest.producerId());
+                assertEquals(producerEpoch, txnOffsetCommitRequest.producerEpoch());
+                return true;
+            }
+        }, new TxnOffsetCommitResponse(0, txnOffsetCommitResponse));
+
+    }
+
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
+
 
 }

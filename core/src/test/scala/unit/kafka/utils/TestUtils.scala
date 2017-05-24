@@ -1413,6 +1413,16 @@ object TestUtils extends Logging {
     records
   }
 
+  def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
+    consumer.assignment.foreach { case(topicPartition) =>
+      val offset = consumer.committed(topicPartition)
+      if (offset != null)
+        consumer.seek(topicPartition, offset.offset)
+      else
+        consumer.seekToBeginning(Collections.singletonList(topicPartition))
+    }
+  }
+
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

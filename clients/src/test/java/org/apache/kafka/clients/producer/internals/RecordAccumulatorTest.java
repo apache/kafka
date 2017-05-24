@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Random;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
@@ -28,6 +31,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.DefaultRecord;
@@ -55,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -311,7 +316,7 @@ public class RecordAccumulatorTest {
         assertEquals("Node1 should only have one batch drained.", 1, batches.get(0).size());
         assertEquals("Node1 should only have one batch for partition 0.", tp1, batches.get(0).get(0).topicPartition);
     }
-    
+
     @Test
     public void testFlush() throws Exception {
         long lingerMs = Long.MAX_VALUE;
@@ -321,16 +326,16 @@ public class RecordAccumulatorTest {
             accum.append(new TopicPartition(topic, i % 3), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
         RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
         assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
-        
+
         accum.beginFlush();
         result = accum.ready(cluster, time.milliseconds());
-        
+
         // drain and deallocate all batches
         Map<Integer, List<ProducerBatch>> results = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
         for (List<ProducerBatch> batches: results.values())
             for (ProducerBatch batch: batches)
                 accum.deallocate(batch);
-        
+
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
         assertFalse(accum.hasUnsent());
@@ -550,6 +555,196 @@ public class RecordAccumulatorTest {
         RecordAccumulator accum = new RecordAccumulator(batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * batchSize,
                 CompressionType.NONE, 10, 100L, metrics, time, apiVersions, new TransactionManager());
         accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, null, 0);
+    }
+
+    @Test
+    public void testSplitAndReenqueue() throws ExecutionException, InterruptedException {
+        long now = time.milliseconds();
+        RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.GZIP, 10, 100L, metrics, time,
+                                                        new ApiVersions(), null);
+        // Create a big batch
+        ProducerBatch batch = ProducerBatch.createBatchOffAccumulator(tp1, CompressionType.NONE, 4096, now);
+        byte[] value = new byte[1024];
+        final AtomicInteger acked = new AtomicInteger(0);
+        Callback cb = new Callback() {
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                acked.incrementAndGet();
+            }
+        };
+        // Append two messages so the batch is too big.
+        Future<RecordMetadata> future1 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
+        Future<RecordMetadata> future2 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
+        assertNotNull(future1);
+        assertNotNull(future2);
+        batch.close();
+        // Enqueue the batch to the accumulator so that as if the batch was created by the accumulator.
+        accum.reenqueue(batch, now);
+        time.sleep(101L);
+        // Drain the batch.
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        assertTrue("The batch should be ready", result.readyNodes.size() > 0);
+        Map<Integer, List<ProducerBatch>> drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals("Only node1 should be drained", 1, drained.size());
+        assertEquals("Only one batch should be drained", 1, drained.get(node1.id()).size());
+        // Split and reenqueue the batch.
+        accum.splitAndReenqueue(drained.get(node1.id()).get(0));
+        time.sleep(101L);
+
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(drained.isEmpty());
+        assertFalse(drained.get(node1.id()).isEmpty());
+        drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
+        assertEquals("The first message should have been acked.", 1, acked.get());
+        assertTrue(future1.isDone());
+        assertEquals(0, future1.get().offset());
+
+        drained = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertFalse(drained.isEmpty());
+        assertFalse(drained.get(node1.id()).isEmpty());
+        drained.get(node1.id()).get(0).done(acked.get(), 100L, null);
+        assertEquals("Both message should have been acked.", 2, acked.get());
+        assertTrue(future2.isDone());
+        assertEquals(1, future2.get().offset());
+    }
+
+    @Test
+    public void testSplitBatchOffAccumulator() throws InterruptedException {
+        long seed = System.currentTimeMillis();
+        final int batchSize = 1024;
+        final int bufferCapacity = 3 * 1024;
+
+        // First set the compression ratio estimation to be good.
+        CompressionRatioEstimator.setEstimation(tp1.topic(), CompressionType.GZIP, 0.1f);
+        RecordAccumulator accum = new RecordAccumulator(batchSize, bufferCapacity, CompressionType.GZIP, 0L, 100L,
+                                                        metrics, time, new ApiVersions(), null);
+        int numSplitBatches = prepareSplitBatches(accum, seed, 100, 20);
+        assertTrue("There should be some split batches", numSplitBatches > 0);
+        // Drain all the split batches.
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        for (int i = 0; i < numSplitBatches; i++) {
+            Map<Integer, List<ProducerBatch>> drained =
+                accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+            assertFalse(drained.isEmpty());
+            assertFalse(drained.get(node1.id()).isEmpty());
+        }
+        assertTrue("All the batches should have been drained.",
+                   accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty());
+        assertEquals("The split batches should be allocated off the accumulator",
+                     bufferCapacity, accum.bufferPoolAvailableMemory());
+    }
+
+    @Test
+    public void testSplitFrequency() throws InterruptedException {
+        long seed = System.currentTimeMillis();
+        Random random = new Random();
+        random.setSeed(seed);
+        final int batchSize = 1024;
+        final int numMessages = 1000;
+
+        RecordAccumulator accum = new RecordAccumulator(batchSize, 3 * 1024, CompressionType.GZIP, 10, 100L,
+                                                        metrics, time, new ApiVersions(), null);
+        // Adjust the high and low compression ratio message percentage
+        for (int goodCompRatioPercentage = 1; goodCompRatioPercentage < 100; goodCompRatioPercentage++) {
+            int numSplit = 0;
+            int numBatches = 0;
+            CompressionRatioEstimator.resetEstimation(topic);
+            for (int i = 0; i < numMessages; i++) {
+                int dice = random.nextInt(100);
+                byte[] value = (dice < goodCompRatioPercentage) ?
+                        bytesWithGoodCompression(random) : bytesWithPoorCompression(random, 100);
+                accum.append(tp1, 0L, null, value, Record.EMPTY_HEADERS, null, 0);
+                BatchDrainedResult result = completeOrSplitBatches(accum, batchSize);
+                numSplit += result.numSplit;
+                numBatches += result.numBatches;
+            }
+            time.sleep(10);
+            BatchDrainedResult result = completeOrSplitBatches(accum, batchSize);
+            numSplit += result.numSplit;
+            numBatches += result.numBatches;
+            assertTrue(String.format("Total num batches = %d, split batches = %d, more than 10%% of the batch splits. "
+                                         + "Random seed is " + seed,
+                                     numBatches, numSplit), (double) numSplit / numBatches < 0.1f);
+        }
+    }
+
+    private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)
+        throws InterruptedException {
+        Random random = new Random();
+        random.setSeed(seed);
+
+        // First set the compression ratio estimation to be good.
+        CompressionRatioEstimator.setEstimation(tp1.topic(), CompressionType.GZIP, 0.1f);
+        // Append 20 records of 100 bytes size with poor compression ratio should make the batch too big.
+        for (int i = 0; i < numRecords; i++) {
+            accum.append(tp1, 0L, null, bytesWithPoorCompression(random, recordSize), Record.EMPTY_HEADERS, null, 0);
+        }
+
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        assertFalse(result.readyNodes.isEmpty());
+        Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(1, batches.size());
+        assertEquals(1, batches.values().iterator().next().size());
+        ProducerBatch batch = batches.values().iterator().next().get(0);
+        int numSplitBatches = accum.splitAndReenqueue(batch);
+        accum.deallocate(batch);
+
+        return numSplitBatches;
+    }
+
+    private BatchDrainedResult completeOrSplitBatches(RecordAccumulator accum, int batchSize) {
+        int numSplit = 0;
+        int numBatches = 0;
+        boolean batchDrained;
+        do {
+            batchDrained = false;
+            RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+            Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+            for (List<ProducerBatch> batchList : batches.values()) {
+                for (ProducerBatch batch : batchList) {
+                    batchDrained = true;
+                    numBatches++;
+                    if (batch.sizeInBytes() > batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD) {
+                        accum.splitAndReenqueue(batch);
+                        // release the resource of the original big batch.
+                        numSplit++;
+                    } else {
+                        batch.done(0L, 0L, null);
+                    }
+                    accum.deallocate(batch);
+                }
+            }
+        } while (batchDrained);
+        return new BatchDrainedResult(numSplit, numBatches);
+    }
+
+    /**
+     * Generates the compression ratio at about 0.6
+     */
+    private byte[] bytesWithGoodCompression(Random random) {
+        byte[] value = new byte[100];
+        ByteBuffer buffer = ByteBuffer.wrap(value);
+        while (buffer.remaining() > 0)
+            buffer.putInt(random.nextInt(1000));
+        return value;
+    }
+
+    /**
+     * Generates the compression ratio at about 0.9
+     */
+    private byte[] bytesWithPoorCompression(Random random, int size) {
+        byte[] value = new byte[size];
+        random.nextBytes(value);
+        return value;
+    }
+
+    private class BatchDrainedResult {
+        final int numSplit;
+        final int numBatches;
+        BatchDrainedResult(int numSplit, int numBatches) {
+            this.numBatches = numBatches;
+            this.numSplit = numSplit;
+        }
     }
 
     /**

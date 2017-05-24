@@ -31,6 +31,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.record.AbstractRecords;
+import org.apache.kafka.common.record.CompressionRatioEstimator;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
@@ -325,6 +326,30 @@ public final class RecordAccumulator {
     }
 
     /**
+     * Split the big batch that has been rejected and reenqueue the split batches in to the accumulator.
+     * @return the number of split batches.
+     */
+    public int splitAndReenqueue(ProducerBatch bigBatch) {
+        // Reset the estimated compression ratio to the initial value or the big batch compression ratio, whichever
+        // is bigger. There are several different ways to do the reset. We chose the most conservative one to ensure
+        // the split doesn't happen too often.
+        CompressionRatioEstimator.setEstimation(bigBatch.topicPartition.topic(), compression,
+                                                Math.max(1.0f, (float) bigBatch.compressionRatio()));
+        Deque<ProducerBatch> dq = bigBatch.split(this.batchSize);
+        int numSplitBatches = dq.size();
+        Deque<ProducerBatch> partitionDequeue = getOrCreateDeque(bigBatch.topicPartition);
+        while (!dq.isEmpty()) {
+            ProducerBatch batch = dq.pollLast();
+            incomplete.add(batch);
+            // We treat the newly split batches as if they are not even tried.
+            synchronized (partitionDequeue) {
+                partitionDequeue.addFirst(batch);
+            }
+        }
+        return numSplitBatches;
+    }
+
+    /**
      * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
      * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
      * partition batches.
@@ -506,7 +531,17 @@ public final class RecordAccumulator {
      */
     public void deallocate(ProducerBatch batch) {
         incomplete.remove(batch);
-        free.deallocate(batch.buffer(), batch.initialCapacity());
+        // Only deallocate the batch if it is not a split batch because split batch are allocated aside the
+        // buffer pool.
+        if (!batch.isSplitBatch())
+            free.deallocate(batch.buffer(), batch.initialCapacity());
+    }
+
+    /**
+     * Package private for unit test. Get the buffer pool remaining size in bytes.
+     */
+    long bufferPoolAvailableMemory() {
+        return free.availableMemory();
     }
 
     /**

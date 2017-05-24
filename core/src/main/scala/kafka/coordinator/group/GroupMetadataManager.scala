@@ -235,12 +235,12 @@ class GroupMetadataManager(brokerId: Int,
   def store(delayedStore: DelayedStore) {
     // call replica manager to append the group message
     replicaManager.appendRecords(
-      config.offsetCommitTimeoutMs.toLong,
-      config.offsetCommitRequiredAcks,
+      timeout = config.offsetCommitTimeoutMs.toLong,
+      requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
       isFromClient = false,
-      delayedStore.partitionRecords,
-      delayedStore.callback)
+      entriesPerPartition = delayedStore.partitionRecords,
+      responseCallback = delayedStore.callback)
   }
 
   /**
@@ -309,9 +309,12 @@ class GroupMetadataManager(brokerId: Int,
 
             val responseError = group synchronized {
               if (status.error == Errors.NONE) {
-                if (!group.is(Dead) && !isTxnOffsetCommit) {
+                if (!group.is(Dead)) {
                   filteredOffsetMetadata.foreach { case (topicPartition, offsetAndMetadata) =>
-                    group.completePendingOffsetWrite(topicPartition, offsetAndMetadata)
+                    if (isTxnOffsetCommit)
+                      group.onTxnOffsetCommitAppend(producerId, topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
+                    else
+                      group.onOffsetCommitAppend(topicPartition, CommitRecordMetadataAndOffset(Some(status.baseOffset), offsetAndMetadata))
                   }
                 }
                 Errors.NONE
@@ -473,8 +476,8 @@ class GroupMetadataManager(brokerId: Int,
         lazy val buffer = ByteBuffer.allocate(config.loadBufferSize)
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
-        val loadedOffsets = mutable.Map[GroupTopicPartition, OffsetAndMetadata]()
-        val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, OffsetAndMetadata]]()
+        val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
+        val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
@@ -496,10 +499,11 @@ class GroupMetadataManager(brokerId: Int,
               val record = batch.iterator.next()
               val controlRecord = ControlRecordType.parse(record.key)
               if (controlRecord == ControlRecordType.COMMIT) {
-                pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, OffsetAndMetadata]())
+                pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
                   .foreach {
-                    case (groupTopicPartition, offsetAndMetadata) =>
-                      loadedOffsets.put(groupTopicPartition, offsetAndMetadata)
+                    case (groupTopicPartition, commitRecordMetadataAndOffset) =>
+                      if (!loadedOffsets.contains(groupTopicPartition) || loadedOffsets(groupTopicPartition).olderThan(commitRecordMetadataAndOffset))
+                        loadedOffsets.put(groupTopicPartition, commitRecordMetadataAndOffset)
                   }
               }
               pendingOffsets.remove(batch.producerId)
@@ -510,7 +514,7 @@ class GroupMetadataManager(brokerId: Int,
 
                   case offsetKey: OffsetKey =>
                     if (isTxnOffsetCommit && !pendingOffsets.contains(batch.producerId))
-                      pendingOffsets.put(batch.producerId, mutable.Map[GroupTopicPartition, OffsetAndMetadata]())
+                      pendingOffsets.put(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
 
                     // load offset
                     val groupTopicPartition = offsetKey.key
@@ -520,11 +524,11 @@ class GroupMetadataManager(brokerId: Int,
                       else
                         loadedOffsets.remove(groupTopicPartition)
                     } else {
-                      val value = GroupMetadataManager.readOffsetMessageValue(record.value)
+                      val offsetAndMetadata = GroupMetadataManager.readOffsetMessageValue(record.value)
                       if (isTxnOffsetCommit)
-                        pendingOffsets(batch.producerId).put(groupTopicPartition, value)
+                        pendingOffsets(batch.producerId).put(groupTopicPartition, CommitRecordMetadataAndOffset(Some(batch.baseOffset), offsetAndMetadata))
                       else
-                        loadedOffsets.put(groupTopicPartition, value)
+                        loadedOffsets.put(groupTopicPartition, CommitRecordMetadataAndOffset(Some(batch.baseOffset), offsetAndMetadata))
                     }
 
                   case groupMetadataKey: GroupMetadataKey =>
@@ -554,15 +558,15 @@ class GroupMetadataManager(brokerId: Int,
             .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset) })
             .partition { case (group, _) => loadedGroups.contains(group) }
 
-          val pendingOffsetsByGroup = mutable.Map[String, mutable.Map[Long, mutable.Map[TopicPartition, OffsetAndMetadata]]]()
+          val pendingOffsetsByGroup = mutable.Map[String, mutable.Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]]()
           pendingOffsets.foreach { case (producerId, producerOffsets) =>
             producerOffsets.keySet.map(_.group).foreach(addProducerGroup(producerId, _))
             producerOffsets
               .groupBy(_._1.group)
               .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset)})
               .foreach { case (group, offsets) =>
-                val groupPendingOffsets = pendingOffsetsByGroup.getOrElseUpdate(group, mutable.Map.empty[Long, mutable.Map[TopicPartition, OffsetAndMetadata]])
-                val groupProducerOffsets = groupPendingOffsets.getOrElseUpdate(producerId, mutable.Map.empty[TopicPartition, OffsetAndMetadata])
+                val groupPendingOffsets = pendingOffsetsByGroup.getOrElseUpdate(group, mutable.Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
+                val groupProducerOffsets = groupPendingOffsets.getOrElseUpdate(producerId, mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
                 groupProducerOffsets ++= offsets
               }
           }
@@ -571,8 +575,8 @@ class GroupMetadataManager(brokerId: Int,
             .partition { case (group, _) => loadedGroups.contains(group)}
 
           loadedGroups.values.foreach { group =>
-            val offsets = groupOffsets.getOrElse(group.groupId, Map.empty[TopicPartition, OffsetAndMetadata])
-            val pendingOffsets = pendingGroupOffsets.getOrElse(group.groupId, Map.empty[Long, mutable.Map[TopicPartition, OffsetAndMetadata]])
+            val offsets = groupOffsets.getOrElse(group.groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
+            val pendingOffsets = pendingGroupOffsets.getOrElse(group.groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
           }
@@ -581,8 +585,8 @@ class GroupMetadataManager(brokerId: Int,
           // metadata stored in the log
           (emptyGroupOffsets.keySet ++ pendingEmptyGroupOffsets.keySet).foreach { case(groupId) =>
             val group = new GroupMetadata(groupId)
-            val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, OffsetAndMetadata])
-            val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, OffsetAndMetadata]])
+            val offsets = emptyGroupOffsets.getOrElse(groupId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
+            val pendingOffsets = pendingEmptyGroupOffsets.getOrElse(groupId, Map.empty[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]])
             loadGroup(group, offsets, pendingOffsets)
             onGroupLoaded(group)
           }
@@ -603,17 +607,19 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  private def loadGroup(group: GroupMetadata, offsets: Map[TopicPartition, OffsetAndMetadata],
-                        pendingTransactionalOffsets: Map[Long, mutable.Map[TopicPartition, OffsetAndMetadata]]): Unit = {
+  private def loadGroup(group: GroupMetadata, offsets: Map[TopicPartition, CommitRecordMetadataAndOffset],
+                        pendingTransactionalOffsets: Map[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]): Unit = {
     // offsets are initialized prior to loading the group into the cache to ensure that clients see a consistent
     // view of the group's offsets
-    val loadedOffsets = offsets.mapValues { offsetAndMetadata =>
+    val loadedOffsets = offsets.mapValues { case CommitRecordMetadataAndOffset(commitRecordOffset, offsetAndMetadata) =>
       // special handling for version 0:
       // set the expiration time stamp as commit time stamp + server default retention time
-      if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
+      val updatedOffsetAndMetadata =
+        if (offsetAndMetadata.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
         offsetAndMetadata.copy(expireTimestamp = offsetAndMetadata.commitTimestamp + config.offsetsRetentionMs)
       else
         offsetAndMetadata
+      CommitRecordMetadataAndOffset(commitRecordOffset, updatedOffsetAndMetadata)
     }
     trace(s"Initialized offsets $loadedOffsets for group ${group.groupId}")
     group.initializeOffsets(loadedOffsets, pendingTransactionalOffsets.toMap)

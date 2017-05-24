@@ -116,7 +116,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     val producer = TestUtils.createTransactionalProducer(transactionalId, servers)
 
-    var consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
+    val consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
     consumer.subscribe(List(topic1))
     producer.initTransactions()
 
@@ -145,10 +145,8 @@ class TransactionsTest extends KafkaServerTestHarness {
           producer.abortTransaction()
           debug(s"aborted transaction Last committed record: ${new String(records.last.value(), "UTF-8")}. Num " +
             s"records written to $topic2: $recordsProcessed")
-          consumer.close()
-          consumer = transactionalConsumer(consumerGroupId, maxPollRecords = numSeedMessages / 4)
-          consumer.subscribe(List(topic1))
-        }
+          TestUtils.resetToCommittedPositions(consumer)
+       }
       }
     } finally {
       producer.close()
