@@ -48,6 +48,7 @@ public class MemoryRecordsBuilder {
     // the written bytes. ByteBufferOutputStream allocates a new ByteBuffer if the existing one is not large enough,
     // so it's not safe to hold a direct reference to the underlying ByteBuffer.
     private final ByteBufferOutputStream bufferStream;
+    private final ByteBuffer initialBuffer;
     private final byte magic;
     private final int initPos;
     private final long baseOffset;
@@ -143,8 +144,9 @@ public class MemoryRecordsBuilder {
         }
 
         // create the stream
-        bufferStream = new ByteBufferOutputStream(buffer);
-        appendStream = new DataOutputStream(compressionType.wrapForOutput(bufferStream, magic,
+        this.initialBuffer = buffer;
+        this.bufferStream = new ByteBufferOutputStream(buffer);
+        this.appendStream = new DataOutputStream(compressionType.wrapForOutput(bufferStream, magic,
                 COMPRESSION_DEFAULT_BUFFER_SIZE));
     }
 
@@ -285,7 +287,11 @@ public class MemoryRecordsBuilder {
             else if (compressionType != CompressionType.NONE)
                 this.actualCompressionRatio = (float) writeLegacyCompressedWrapperHeader() / this.writtenUncompressed;
 
-            ByteBuffer buffer = buffer().duplicate();
+            ByteBuffer finalBuffer = buffer();
+            if (finalBuffer != initialBuffer)
+                initialBuffer.position(initPos);
+
+            ByteBuffer buffer = finalBuffer.duplicate();
             buffer.flip();
             buffer.position(initPos);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
@@ -544,7 +550,7 @@ public class MemoryRecordsBuilder {
      * @param record the record to add
      */
     public void append(Record record) {
-        appendWithOffset(record.offset(), record.timestamp(), record.key(), record.value(), record.headers());
+        appendWithOffset(record.offset(), isControlBatch, record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     /**
@@ -736,4 +742,12 @@ public class MemoryRecordsBuilder {
     public short producerEpoch() {
         return this.producerEpoch;
     }
+
+    public static int minBufferSize(byte magic) {
+        if (magic > RecordBatch.MAGIC_VALUE_V1)
+            return DefaultRecordBatch.RECORDS_OFFSET;
+        else
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
+    }
+
 }

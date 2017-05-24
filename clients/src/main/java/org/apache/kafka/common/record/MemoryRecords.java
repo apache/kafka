@@ -127,8 +127,15 @@ public class MemoryRecords extends AbstractRecords {
         int bytesRead = 0;
         int messagesRetained = 0;
         int bytesRetained = 0;
+        ByteBuffer outputBuffer = destinationBuffer;
+        int initialOutputPosition = destinationBuffer.position();
 
         for (MutableRecordBatch batch : batches) {
+            // If we don't have enough room to write any more batches, just return; the cleaner will
+            // reset the output buffer and continue from this point
+            if (MemoryRecordsBuilder.minBufferSize(batch.magic()) > outputBuffer.remaining())
+                break;
+
             bytesRead += batch.sizeInBytes();
 
             if (filter.shouldDiscard(batch))
@@ -139,47 +146,28 @@ public class MemoryRecords extends AbstractRecords {
             // with a magic value not matching the magic of the records (magic < 2). This will be fixed as we
             // recopy the messages to the destination buffer.
 
-            byte batchMagic = batch.magic();
-            boolean writeOriginalEntry = true;
+            long firstOffset = -1;
             List<Record> retainedRecords = new ArrayList<>();
 
             for (Record record : batch) {
+                if (firstOffset < 0)
+                    firstOffset = record.offset();
                 messagesRead += 1;
 
                 if (filter.shouldRetain(batch, record)) {
-                    // Check for log corruption due to KAFKA-4298. If we find it, make sure that we overwrite
-                    // the corrupted batch with correct data.
-                    if (!record.hasMagic(batchMagic))
-                        writeOriginalEntry = false;
-
                     if (record.offset() > maxOffset)
                         maxOffset = record.offset();
 
                     retainedRecords.add(record);
-                } else {
-                    writeOriginalEntry = false;
                 }
             }
 
-            if (writeOriginalEntry) {
-                // There are no messages compacted out and no message format conversion, write the original message set back
-                batch.writeTo(destinationBuffer);
-                messagesRetained += retainedRecords.size();
-                bytesRetained += batch.sizeInBytes();
-                if (batch.maxTimestamp() > maxTimestamp) {
-                    maxTimestamp = batch.maxTimestamp();
-                    shallowOffsetOfMaxTimestamp = batch.lastOffset();
-                }
-            } else if (!retainedRecords.isEmpty()) {
-                ByteBuffer slice = destinationBuffer.slice();
+            if (!retainedRecords.isEmpty()) {
                 TimestampType timestampType = batch.timestampType();
                 long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
-                long baseOffset = batchMagic >= RecordBatch.MAGIC_VALUE_V2 ?
-                        batch.baseOffset() : retainedRecords.get(0).offset();
-
-                MemoryRecordsBuilder builder = builder(slice, batch.magic(), batch.compressionType(), timestampType,
-                        baseOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
-                        batch.isTransactional(), batch.partitionLeaderEpoch());
+                MemoryRecordsBuilder builder = builder(outputBuffer, batch.magic(), batch.compressionType(), timestampType,
+                        firstOffset, logAppendTime, batch.producerId(), batch.producerEpoch(), batch.baseSequence(),
+                        batch.isTransactional(), batch.isControlBatch(), batch.partitionLeaderEpoch());
 
                 for (Record record : retainedRecords)
                     builder.append(record);
@@ -191,9 +179,9 @@ public class MemoryRecords extends AbstractRecords {
                     builder.overrideLastOffset(batch.lastOffset());
 
                 MemoryRecords records = builder.build();
-                destinationBuffer.position(destinationBuffer.position() + slice.position());
                 messagesRetained += retainedRecords.size();
                 bytesRetained += records.sizeInBytes();
+                outputBuffer = builder.buffer();
 
                 MemoryRecordsBuilder.RecordsInfo info = builder.info();
                 if (info.maxTimestamp > maxTimestamp) {
@@ -203,7 +191,11 @@ public class MemoryRecords extends AbstractRecords {
             }
         }
 
-        return new FilterResult(messagesRead, bytesRead, messagesRetained, bytesRetained, maxOffset, maxTimestamp, shallowOffsetOfMaxTimestamp);
+        if (outputBuffer != destinationBuffer)
+            destinationBuffer.position(initialOutputPosition);
+
+        return new FilterResult(outputBuffer, messagesRead, bytesRead, messagesRetained, bytesRetained, maxOffset,
+                maxTimestamp, shallowOffsetOfMaxTimestamp);
     }
 
     /**
@@ -271,6 +263,7 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     public static class FilterResult {
+        public final ByteBuffer output;
         public final int messagesRead;
         public final int bytesRead;
         public final int messagesRetained;
@@ -279,13 +272,15 @@ public class MemoryRecords extends AbstractRecords {
         public final long maxTimestamp;
         public final long shallowOffsetOfMaxTimestamp;
 
-        public FilterResult(int messagesRead,
+        public FilterResult(ByteBuffer output,
+                            int messagesRead,
                             int bytesRead,
                             int messagesRetained,
                             int bytesRetained,
                             long maxOffset,
                             long maxTimestamp,
                             long shallowOffsetOfMaxTimestamp) {
+            this.output = output;
             this.messagesRead = messagesRead;
             this.bytesRead = bytesRead;
             this.messagesRetained = messagesRetained;

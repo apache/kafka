@@ -30,6 +30,7 @@ import java.util.List;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
@@ -437,6 +438,55 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence2 + 1, thirdBatchRecords.get(1).sequence());
             assertEquals(new SimpleRecord(17L, "7".getBytes(), "h".getBytes()), new SimpleRecord(thirdBatchRecords.get(1)));
         }
+    }
+
+    @Test
+    public void testFilterToWithUndersizedBuffer() {
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, null, "a".getBytes());
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
+        builder.append(11L, "1".getBytes(), new byte[128]);
+        builder.append(12L, "2".getBytes(), "c".getBytes());
+        builder.append(13L, null, "d".getBytes());
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 4L);
+        builder.append(14L, null, "e".getBytes());
+        builder.append(15L, "5".getBytes(), "f".getBytes());
+        builder.append(16L, "6".getBytes(), "g".getBytes());
+        builder.close();
+
+        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 7L);
+        builder.append(17L, "7".getBytes(), new byte[128]);
+        builder.close();
+
+        buffer.flip();
+
+        ByteBuffer output = ByteBuffer.allocate(64);
+
+        List<Record> records = new ArrayList<>();
+        while (buffer.hasRemaining()) {
+            output.rewind();
+
+            MemoryRecords.FilterResult result = MemoryRecords.readableRecords(buffer)
+                    .filterTo(new RetainNonNullKeysFilter(), output);
+
+            buffer.position(buffer.position() + result.bytesRead);
+            result.output.flip();
+
+            if (output != result.output)
+                assertEquals(0, output.position());
+
+            MemoryRecords filtered = MemoryRecords.readableRecords(result.output);
+            records.addAll(TestUtils.toList(filtered.records()));
+        }
+
+        assertEquals(5, records.size());
+        for (Record record : records)
+            assertNotNull(record.key());
     }
 
     @Test
