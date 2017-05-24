@@ -46,6 +46,16 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Create a new AdminClient with the given configuration.
      *
+     * @param props         The configuration.
+     * @return              The new KafkaAdminClient.
+     */
+    public static AdminClient create(Properties props) {
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props));
+    }
+
+    /**
+     * Create a new AdminClient with the given configuration.
+     *
      * @param conf          The configuration.
      * @return              The new KafkaAdminClient.
      */
