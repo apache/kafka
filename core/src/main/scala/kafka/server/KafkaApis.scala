@@ -1277,7 +1277,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(requestThrottleMs: Int) {
       val responseSend =
         if (Protocol.apiVersionSupported(ApiKeys.API_VERSIONS.id, request.header.apiVersion))
-          ApiVersionsResponse.apiVersionsResponse(requestThrottleMs, config.interBrokerProtocolVersion.messageFormatVersion).toSend(request.connectionId, request.header)
+          ApiVersionsResponse.apiVersionsResponse(request.header.apiVersion, requestThrottleMs, config.interBrokerProtocolVersion.messageFormatVersion).toSend(request.connectionId, request.header)
         else ApiVersionsResponse.unsupportedVersionSend(request.connectionId, request.header)
       requestChannel.sendResponse(RequestChannel.Response(request, responseSend))
     }

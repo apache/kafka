@@ -116,11 +116,14 @@ public class ApiVersionsResponse extends AbstractResponse {
         return struct;
     }
 
-    public static ApiVersionsResponse apiVersionsResponse(int throttleTimeMs, byte maxMagic) {
-        if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && throttleTimeMs == 0) {
+    public static ApiVersionsResponse apiVersionsResponse(short version, int throttleTimeMs, byte maxMagic) {
+        if (maxMagic == RecordBatch.CURRENT_MAGIC_VALUE && (throttleTimeMs == DEFAULT_THROTTLE_TIME || version == 0)) {
             return API_VERSIONS_RESPONSE;
+        } else if (version == 0) {
+            return createApiVersionsResponse(DEFAULT_THROTTLE_TIME, maxMagic);
+        } else {
+            return createApiVersionsResponse(throttleTimeMs, maxMagic);
         }
-        return createApiVersionsResponse(throttleTimeMs, maxMagic);
     }
 
     /**

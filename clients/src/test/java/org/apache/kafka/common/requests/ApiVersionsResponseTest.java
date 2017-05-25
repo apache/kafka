@@ -22,7 +22,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
-import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -34,21 +33,49 @@ public class ApiVersionsResponseTest {
 
     @Test
     public void shouldCreateApiResponseOnlyWithKeysSupportedByMagicValue() throws Exception {
-        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse(0, RecordBatch.MAGIC_VALUE_V1);
-        for (final ApiVersionsResponse.ApiVersion version : response.apiVersions()) {
-            assertTrue(ApiKeys.forId(version.apiKey).minMagic <= RecordBatch.MAGIC_VALUE_V1);
-        }
+        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 1, 10, RecordBatch.MAGIC_VALUE_V1);
+        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
+        assertEquals(response.throttleTimeMs(), 10);
     }
 
     @Test
     public void shouldCreateApiResponseThatHasAllApiKeysSupportedByBroker() throws Exception {
-        final Collection<ApiVersionsResponse.ApiVersion> apiVersions = ApiVersionsResponse.API_VERSIONS_RESPONSE.apiVersions();
+        assertEquals(apiKeysInResponse(ApiVersionsResponse.API_VERSIONS_RESPONSE), Utils.mkSet(ApiKeys.values()));
+    }
+
+    @Test
+    public void shouldReturnAllKeysAndDefaultThrottleMsWhenVersionIs0AndMagicIsCurrentValue() throws Exception {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 0, 1, RecordBatch.CURRENT_MAGIC_VALUE);
+        assertEquals(apiKeysInResponse(response), Utils.mkSet(ApiKeys.values()));
+        assertEquals(response.throttleTimeMs(), AbstractResponse.DEFAULT_THROTTLE_TIME);
+    }
+
+    @Test
+    public void shouldReturnAllKeysWhenMagicIsCurrentValueAnThrottleMsIsDefaultThrottle() throws Exception {
+        ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 0, AbstractResponse.DEFAULT_THROTTLE_TIME, RecordBatch.CURRENT_MAGIC_VALUE);
+        assertEquals(apiKeysInResponse(response), Utils.mkSet(ApiKeys.values()));
+        assertEquals(response.throttleTimeMs(), AbstractResponse.DEFAULT_THROTTLE_TIME);
+    }
+
+    @Test
+    public void shouldReturnOnlyValidKeysForVersionWithDefaultThrottleMsForSupportedMagic() throws Exception {
+        final ApiVersionsResponse response = ApiVersionsResponse.apiVersionsResponse((short) 0, 10, RecordBatch.MAGIC_VALUE_V1);
+        verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
+        assertEquals(response.throttleTimeMs(), AbstractResponse.DEFAULT_THROTTLE_TIME);
+    }
+
+    private void verifyApiKeysForMagic(final ApiVersionsResponse response, final byte maxMagic) {
+        for (final ApiVersionsResponse.ApiVersion version : response.apiVersions()) {
+            assertTrue(ApiKeys.forId(version.apiKey).minMagic <= maxMagic);
+        }
+    }
+
+    private Set<ApiKeys> apiKeysInResponse(final ApiVersionsResponse apiVersions) {
         final Set<ApiKeys> apiKeys = new HashSet<>();
-        for (final ApiVersionsResponse.ApiVersion version : apiVersions) {
+        for (final ApiVersionsResponse.ApiVersion version : apiVersions.apiVersions()) {
             apiKeys.add(ApiKeys.forId(version.apiKey));
         }
-
-        assertEquals(apiKeys, Utils.mkSet(ApiKeys.values()));
+        return apiKeys;
     }
 
 
