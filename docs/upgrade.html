@@ -68,7 +68,7 @@
         individual messages is only reduced by the overhead of the batch format. This similarly affects the
         producer's <code>batch.size</code> configuration.</li>
     <li>GC log rotation is enabled by default, see KAFKA-3754 for details.</li>
-    <li>Deprecated constructors of MetricName and Cluster classes have been removed.</li>
+    <li>Deprecated constructors of RecordMetadata, MetricName and Cluster classes have been removed.</li>
     <li>Added user headers support through a new Headers interface providing user headers read and write access.</li>
     <li>ProducerRecord and ConsumerRecord expose the new Headers API via <code>Headers headers()</code> method call.</li>
     <li>ExtendedSerializer and ExtendedDeserializer interfaces are introduced to support serialization and deserialization for headers. Headers will be ignored if the configured serializer and deserializer are not the above classes.</li>

@@ -455,7 +455,7 @@ class GroupMetadataTest extends JUnitSuite {
     assertTrue(group.hasPendingOffsetCommitsFromProducer(producerId))
     assertTrue(group.hasOffsets)
     assertEquals(None, group.offset(partition))
-    group.failPendingTxnOffsetCommit(producerId, partition, txnOffsetCommit)
+    group.failPendingTxnOffsetCommit(producerId, partition)
     assertFalse(group.hasOffsets)
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
 

@@ -103,7 +103,7 @@ public final class ProducerBatch {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value)) {
             return null;
         } else {
-            long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
+            Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
             this.lastAppendTime = now;
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
@@ -131,7 +131,7 @@ public final class ProducerBatch {
             this.maxRecordSize = Math.max(this.maxRecordSize,
                                           AbstractRecords.sizeInBytesUpperBound(magic(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
-                                                                   timestamp, thunk.future.checksum(),
+                                                                   timestamp, thunk.future.checksumOrNull(),
                                                                    key == null ? -1 : key.remaining(),
                                                                    value == null ? -1 : value.remaining());
             // Chain the future to the original thunk.

@@ -288,7 +288,6 @@ public class KafkaAdminClientTest {
             assertEquals(ACL1, filter1Results.acls().get(0).acl());
             assertEquals(null, filter1Results.acls().get(1).exception());
             assertEquals(ACL2, filter1Results.acls().get(1).acl());
-            assertTrue(filterResults.get(FILTER2).isCompletedExceptionally());
             assertFutureError(filterResults.get(FILTER2), SecurityDisabledException.class);
             assertFutureError(results.all(), SecurityDisabledException.class);
 

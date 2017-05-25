@@ -344,7 +344,10 @@ public class MemoryRecordsBuilder {
         return writtenCompressed;
     }
 
-    private long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
+    /**
+     * Append a record and return its checksum for message format v0 and v1, or null for for v2 and above.
+     */
+    private Long appendWithOffset(long offset, boolean isControlRecord, long timestamp, ByteBuffer key,
                                   ByteBuffer value, Header[] headers) {
         try {
             if (isControlRecord != isControlBatch)
@@ -363,10 +366,12 @@ public class MemoryRecordsBuilder {
             if (baseTimestamp == null)
                 baseTimestamp = timestamp;
 
-            if (magic > RecordBatch.MAGIC_VALUE_V1)
-                return appendDefaultRecord(offset, timestamp, key, value, headers);
-            else
+            if (magic > RecordBatch.MAGIC_VALUE_V1) {
+                appendDefaultRecord(offset, timestamp, key, value, headers);
+                return null;
+            } else {
                 return appendLegacyRecord(offset, timestamp, key, value);
+            }
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
@@ -379,9 +384,9 @@ public class MemoryRecordsBuilder {
      * @param key The record key
      * @param value The record value
      * @param headers The record headers if there are any
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value, Header[] headers) {
+    public Long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value, Header[] headers) {
         return appendWithOffset(offset, false, timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
@@ -392,9 +397,9 @@ public class MemoryRecordsBuilder {
      * @param key The record key
      * @param value The record value
      * @param headers The record headers if there are any
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
+    public Long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         return appendWithOffset(offset, false, timestamp, key, value, headers);
     }
 
@@ -404,9 +409,9 @@ public class MemoryRecordsBuilder {
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
+    public Long appendWithOffset(long offset, long timestamp, byte[] key, byte[] value) {
         return appendWithOffset(offset, timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
     }
 
@@ -416,9 +421,9 @@ public class MemoryRecordsBuilder {
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value) {
+    public Long appendWithOffset(long offset, long timestamp, ByteBuffer key, ByteBuffer value) {
         return appendWithOffset(offset, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
@@ -426,21 +431,20 @@ public class MemoryRecordsBuilder {
      * Append a new record at the given offset.
      * @param offset The absolute offset of the record in the log buffer
      * @param record The record to append
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long appendWithOffset(long offset, SimpleRecord record) {
+    public Long appendWithOffset(long offset, SimpleRecord record) {
         return appendWithOffset(offset, record.timestamp(), record.key(), record.value(), record.headers());
     }
-
 
     /**
      * Append a new record at the next sequential offset.
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long append(long timestamp, ByteBuffer key, ByteBuffer value) {
+    public Long append(long timestamp, ByteBuffer key, ByteBuffer value) {
         return append(timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
@@ -450,9 +454,9 @@ public class MemoryRecordsBuilder {
      * @param key The record key
      * @param value The record value
      * @param headers The record headers if there are any
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
+    public Long append(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers) {
         return appendWithOffset(nextSequentialOffset(), timestamp, key, value, headers);
     }
 
@@ -461,9 +465,9 @@ public class MemoryRecordsBuilder {
      * @param timestamp The record timestamp
      * @param key The record key
      * @param value The record value
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long append(long timestamp, byte[] key, byte[] value) {
+    public Long append(long timestamp, byte[] key, byte[] value) {
         return append(timestamp, wrapNullable(key), wrapNullable(value), Record.EMPTY_HEADERS);
     }
 
@@ -473,18 +477,18 @@ public class MemoryRecordsBuilder {
      * @param key The record key
      * @param value The record value
      * @param headers The record headers if there are any
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long append(long timestamp, byte[] key, byte[] value, Header[] headers) {
+    public Long append(long timestamp, byte[] key, byte[] value, Header[] headers) {
         return append(timestamp, wrapNullable(key), wrapNullable(value), headers);
     }
 
     /**
      * Append a new record at the next sequential offset.
      * @param record The record to append
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    public long append(SimpleRecord record) {
+    public Long append(SimpleRecord record) {
         return appendWithOffset(nextSequentialOffset(), record);
     }
 
@@ -493,9 +497,9 @@ public class MemoryRecordsBuilder {
      * @param timestamp The record timestamp
      * @param type The control record type (cannot be UNKNOWN)
      * @param value The control record value
-     * @return crc of the record
+     * @return CRC of the record or null if record-level CRC is not supported for the message format
      */
-    private long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
+    private Long appendControlRecord(long timestamp, ControlRecordType type, ByteBuffer value) {
         Struct keyStruct = type.recordKey();
         ByteBuffer key = ByteBuffer.allocate(keyStruct.sizeOf());
         keyStruct.writeTo(key);
@@ -503,7 +507,10 @@ public class MemoryRecordsBuilder {
         return appendWithOffset(nextSequentialOffset(), true, timestamp, key, value, Record.EMPTY_HEADERS);
     }
 
-    public long appendEndTxnMarker(long timestamp, EndTransactionMarker marker) {
+    /**
+     * Return CRC of the record or null if record-level CRC is not supported for the message format
+     */
+    public Long appendEndTxnMarker(long timestamp, EndTransactionMarker marker) {
         if (producerId == RecordBatch.NO_PRODUCER_ID)
             throw new IllegalArgumentException("End transaction marker requires a valid producerId");
         if (!isTransactional)
@@ -568,15 +575,13 @@ public class MemoryRecordsBuilder {
         appendWithOffset(nextSequentialOffset(), record);
     }
 
-    private long appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
+    private void appendDefaultRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value,
                                      Header[] headers) throws IOException {
         ensureOpenForRecordAppend();
         int offsetDelta = (int) (offset - baseOffset);
         long timestampDelta = timestamp - baseTimestamp;
-        long crc = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
-        // TODO: The crc is useless for the new message format. Maybe we should let writeTo return the written size?
-        recordWritten(offset, timestamp, DefaultRecord.sizeInBytes(offsetDelta, timestampDelta, key, value, headers));
-        return crc;
+        int sizeInBytes = DefaultRecord.writeTo(appendStream, offsetDelta, timestampDelta, key, value, headers);
+        recordWritten(offset, timestamp, sizeInBytes);
     }
 
     private long appendLegacyRecord(long offset, long timestamp, ByteBuffer key, ByteBuffer value) throws IOException {

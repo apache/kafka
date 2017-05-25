@@ -323,6 +323,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def prepareTxnOffsetCommit(producerId: Long, offsets: Map[TopicPartition, OffsetAndMetadata]) {
+    trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $offsets is pending")
     receivedTransactionalOffsetCommits = true
     val producerOffsets = pendingTransactionalOffsetCommits.getOrElseUpdate(producerId,
       mutable.Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
@@ -339,10 +340,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   /* Remove a pending transactional offset commit if the actual offset commit record was not written to the log.
    * We will return an error and the client will retry the request, potentially to a different coordinator.
    */
-  def failPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition, offsetAndMetadata: OffsetAndMetadata): Unit = {
+  def failPendingTxnOffsetCommit(producerId: Long, topicPartition: TopicPartition): Unit = {
     pendingTransactionalOffsetCommits.get(producerId) match {
       case Some(pendingOffsets) =>
-        pendingOffsets.remove(topicPartition)
+        val pendingOffsetCommit = pendingOffsets.remove(topicPartition)
+        trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $pendingOffsetCommit failed " +
+          s"to be appended to the log")
         if (pendingOffsets.isEmpty)
           pendingTransactionalOffsetCommits.remove(producerId)
       case _ =>
@@ -366,18 +369,28 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
    * to the log.
    */
   def completePendingTxnOffsetCommit(producerId: Long, isCommit: Boolean): Unit = {
-    trace(s"Completing transactional offset commit for producer $producerId and group $groupId. isCommit: $isCommit")
+    val pendingOffsetsOpt = pendingTransactionalOffsetCommits.remove(producerId)
     if (isCommit) {
-      val producerOffsets = pendingTransactionalOffsetCommits.getOrElse(producerId, Map.empty[TopicPartition, CommitRecordMetadataAndOffset])
-      producerOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
-        if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
-          throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
-            s"and groupId $groupId even though the the offset commit record itself hasn't been appended to the log.")
-        if (!offsets.contains(topicPartition) || offsets(topicPartition).olderThan(commitRecordMetadataAndOffset))
-          offsets.put(topicPartition, commitRecordMetadataAndOffset)
+      pendingOffsetsOpt.foreach { pendingOffsets =>
+        pendingOffsets.foreach { case (topicPartition, commitRecordMetadataAndOffset) =>
+          if (commitRecordMetadataAndOffset.appendedBatchOffset.isEmpty)
+            throw new IllegalStateException(s"Trying to complete a transactional offset commit for producerId $producerId " +
+              s"and groupId $groupId even though the the offset commit record itself hasn't been appended to the log.")
+
+          val currentOffsetOpt = offsets.get(topicPartition)
+          if (currentOffsetOpt.forall(_.olderThan(commitRecordMetadataAndOffset))) {
+            trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
+              "committed and loaded into the cache.")
+            offsets.put(topicPartition, commitRecordMetadataAndOffset)
+          } else {
+            trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offset $commitRecordMetadataAndOffset " +
+              s"committed, but not loaded since its offset is older than current offset $currentOffsetOpt.")
+          }
+        }
       }
+    } else {
+      trace(s"TxnOffsetCommit for producer $producerId and group $groupId with offsets $pendingOffsetsOpt aborted")
     }
-    pendingTransactionalOffsetCommits.remove(producerId)
   }
 
   def activeProducers = pendingTransactionalOffsetCommits.keySet
@@ -414,7 +427,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     (topicPartition, commitRecordMetadataAndOffset.offsetAndMetadata)
   }.toMap
 
-  def offset(topicPartition: TopicPartition) : Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
+  def offset(topicPartition: TopicPartition): Option[OffsetAndMetadata] = offsets.get(topicPartition).map(_.offsetAndMetadata)
 
   // visible for testing
   private[group] def offsetWithRecordMetadata(topicPartition: TopicPartition): Option[CommitRecordMetadataAndOffset] = offsets.get(topicPartition)
@@ -430,7 +443,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   override def toString: String = {
-    "[%s,%s,%s,%s]".format(groupId, protocolType, currentState.toString, members)
+    "GroupMetadata(" +
+      s"groupId=$groupId, " +
+      s"generation=$generationId, " +
+      s"protocolType=$protocolType, " +
+      s"currentState=$currentState, " +
+      s"members=$members)"
   }
+
 }
 

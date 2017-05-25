@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
@@ -36,12 +37,13 @@ public class ConsumerRecord<K, V> {
     private final long offset;
     private final long timestamp;
     private final TimestampType timestampType;
-    private final long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
     private final Headers headers;
     private final K key;
     private final V value;
+
+    private volatile Long checksum;
 
     /**
      * Creates a record to be received from a specified topic and partition (provided for
@@ -62,7 +64,6 @@ public class ConsumerRecord<K, V> {
         this(topic, partition, offset, NO_TIMESTAMP, TimestampType.NO_TIMESTAMP_TYPE,
                 NULL_CHECKSUM, NULL_SIZE, NULL_SIZE, key, value);
     }
-
 
     /**
      * Creates a record to be received from a specified topic and partition (provided for
@@ -89,7 +90,8 @@ public class ConsumerRecord<K, V> {
                           int serializedValueSize,
                           K key,
                           V value) {
-        this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize, key, value, new RecordHeaders());
+        this(topic, partition, offset, timestamp, timestampType, checksum, serializedKeySize, serializedValueSize,
+                key, value, new RecordHeaders());
     }
 
     /**
@@ -112,7 +114,7 @@ public class ConsumerRecord<K, V> {
                           long offset,
                           long timestamp,
                           TimestampType timestampType,
-                          long checksum,
+                          Long checksum,
                           int serializedKeySize,
                           int serializedValueSize,
                           K key,
@@ -191,8 +193,19 @@ public class ConsumerRecord<K, V> {
 
     /**
      * The checksum (CRC32) of the record.
+     *
+     * @deprecated As of Kafka 0.11.0. Because of the potential for message format conversion on the broker, the
+     *             checksum returned by the broker may not match what was computed by the producer.
+     *             It is therefore unsafe to depend on this checksum for end-to-end delivery guarantees. Additionally,
+     *             message format v2 does not include a record-level checksum (for performance, the record checksum
+     *             was replaced with a batch checksum). To maintain compatibility, a partial checksum computed from
+     *             the record timestamp, serialized key size, and serialized value size is returned instead, but
+     *             this should not be depended on for end-to-end reliability.
      */
+    @Deprecated
     public long checksum() {
+        if (checksum == null)
+            this.checksum = DefaultRecord.computePartialChecksum(timestamp, serializedKeySize, serializedValueSize);
         return this.checksum;
     }
 
@@ -215,7 +228,7 @@ public class ConsumerRecord<K, V> {
     @Override
     public String toString() {
         return "ConsumerRecord(topic = " + topic() + ", partition = " + partition() + ", offset = " + offset()
-               + ", " + timestampType + " = " + timestamp + ", checksum = " + checksum
+               + ", " + timestampType + " = " + timestamp
                + ", serialized key size = "  + serializedKeySize
                + ", serialized value size = " + serializedValueSize
                + ", headers = " + headers
