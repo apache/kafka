@@ -167,11 +167,6 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Describe some topics in the cluster.
      *
-     * If the Kafka cluster is older than 0.11.0 and the broker config auto.create.topics.enable is true,
-     * describeTopics(topicName, ...) may create a topic named topicName.
-     * There are two workarounds that don't involve upgrading the Kafka cluster: disable auto.create.topics.enable on
-     * every broker or check if the topic is present via AdminClient#listTopics.
-     *
      * @param topicNames        The names of the topics to describe.
      * @param options           The options to use when describing the topic.
      *
