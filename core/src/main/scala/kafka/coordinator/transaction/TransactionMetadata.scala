@@ -69,6 +69,11 @@ private[transaction] case object CompleteCommit extends TransactionState { val b
  */
 private[transaction] case object CompleteAbort extends TransactionState { val byte: Byte = 5 }
 
+/**
+  * TransactionalId has expired and is about to be removed from the transaction cache
+  */
+private[transaction] case object Dead extends TransactionState { val byte: Byte = 6 }
+
 private[transaction] object TransactionMetadata {
   def apply(transactionalId: String, producerId: Long, producerEpoch: Short, txnTimeoutMs: Int, timestamp: Long) =
     new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, Empty,
@@ -87,6 +92,7 @@ private[transaction] object TransactionMetadata {
       case 3 => PrepareAbort
       case 4 => CompleteCommit
       case 5 => CompleteAbort
+      case 6 => Dead
       case unknown => throw new IllegalStateException("Unknown transaction state byte " + unknown + " from the transaction status message")
     }
   }
@@ -100,7 +106,8 @@ private[transaction] object TransactionMetadata {
       PrepareCommit -> Set(Ongoing),
       PrepareAbort -> Set(Ongoing),
       CompleteCommit -> Set(PrepareCommit),
-      CompleteAbort -> Set(PrepareAbort))
+      CompleteAbort -> Set(PrepareAbort),
+      Dead -> Set(Empty, CompleteAbort, CompleteCommit))
 }
 
 // this is a immutable object representing the target transition of the transaction metadata
@@ -141,7 +148,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
                                                var state: TransactionState,
                                                val topicPartitions: mutable.Set[TopicPartition],
                                                @volatile var txnStartTimestamp: Long = -1,
-                                               var txnLastUpdateTimestamp: Long) extends Logging {
+                                               @volatile var txnLastUpdateTimestamp: Long) extends Logging {
 
   // pending state is used to indicate the state that this transaction is going to
   // transit to, and for blocking future attempts to transit it again if it is not legal;
@@ -205,6 +212,11 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
   def prepareComplete(updateTimestamp: Long): TxnTransitMetadata = {
     val newState = if (state == PrepareCommit) CompleteCommit else CompleteAbort
     prepareTransitionTo(newState, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition], txnStartTimestamp, updateTimestamp)
+  }
+
+
+  def prepareDead : TxnTransitMetadata = {
+    prepareTransitionTo(Dead, producerEpoch, txnTimeoutMs, Set.empty[TopicPartition], txnStartTimestamp, txnLastUpdateTimestamp)
   }
 
   private def prepareTransitionTo(newState: TransactionState,

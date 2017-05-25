@@ -316,7 +316,7 @@ class TransactionStateManagerTest {
   }
 
   @Test
-  def shouldOnlyConsiderTransactionsInTheOngoingStateForExpiry(): Unit = {
+  def shouldOnlyConsiderTransactionsInTheOngoingStateToAbort(): Unit = {
     for (partitionId <- 0 until numPartitions) {
       transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
     }
@@ -329,7 +329,7 @@ class TransactionStateManagerTest {
     transactionManager.getAndMaybeAddTransactionState("complete-abort", Some(transactionMetadata("complete-abort", producerId = 5, state = CompleteAbort)))
 
     time.sleep(2000)
-    val expiring = transactionManager.transactionsToExpire()
+    val expiring = transactionManager.timedOutTransactions()
     assertEquals(List(TransactionalIdAndProducerIdEpoch("ongoing", 0, 0)), expiring)
   }
 
@@ -341,6 +341,121 @@ class TransactionStateManagerTest {
   @Test
   def shouldWriteTxnMarkersForTransactionInPreparedAbortState(): Unit = {
     verifyWritesTxnMarkersInPrepareState(PrepareAbort)
+  }
+
+  @Test
+  def shouldRemoveCompleteCommmitExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteCommit)
+    verifyMetadataDoesntExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  @Test
+  def shouldRemoveCompleteAbortExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteAbort)
+    verifyMetadataDoesntExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  @Test
+  def shouldRemoveEmptyExpiredTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, Empty)
+    verifyMetadataDoesntExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  @Test
+  def shouldNotRemoveExpiredTransactionalIdsIfLogAppendFails(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS, CompleteAbort)
+    verifyMetadataDoesExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  @Test
+  def shouldNotRemoveOngoingTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, Ongoing)
+    verifyMetadataDoesExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  @Test
+  def shouldNotRemovePrepareAbortTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareAbort)
+    verifyMetadataDoesExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  @Test
+  def shouldNotRemovePrepareCommitTransactionalIds(): Unit = {
+    setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareCommit)
+    verifyMetadataDoesExist(transactionalId1)
+    verifyMetadataDoesExist(transactionalId2)
+  }
+
+  private def verifyMetadataDoesExist(transactionalId: String) = {
+    transactionManager.getAndMaybeAddTransactionState(transactionalId, None) match {
+      case Left(errors) => fail("shouldn't have been any errors")
+      case Right(None) => fail("metadata should have been removed")
+      case Right(Some(metadata)) => // ok
+    }
+  }
+
+  private def verifyMetadataDoesntExist(transactionalId: String) = {
+    transactionManager.getAndMaybeAddTransactionState(transactionalId, None) match {
+      case Left(errors) => fail("shouldn't have been any errors")
+      case Right(Some(metdata)) => fail("metadata should have been removed")
+      case Right(None) => // ok
+    }
+  }
+
+  private def setupAndRunTransactionalIdExpiration(error: Errors, txnState: TransactionState) = {
+    for (partitionId <- 0 until numPartitions) {
+      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
+    }
+
+    val capturedArgument: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+
+    val partition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, transactionManager.partitionFor(transactionalId1))
+    val recordsByPartition = Map(partition -> MemoryRecords.withRecords(TransactionLog.EnforcedCompressionType,
+      new SimpleRecord(time.milliseconds() + txnConfig.removeExpiredTransactionalIdsIntervalMs, TransactionLog.keyToBytes(transactionalId1), null)))
+
+    txnState match {
+      case Empty | CompleteCommit | CompleteAbort =>
+
+        EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+          EasyMock.eq((-1).toShort),
+          EasyMock.eq(true),
+          EasyMock.eq(false),
+          EasyMock.eq(recordsByPartition),
+          EasyMock.capture(capturedArgument),
+          EasyMock.eq(None)
+        )).andAnswer(new IAnswer[Unit] {
+          override def answer(): Unit = {
+            capturedArgument.getValue.apply(
+              Map(partition ->
+                new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP)
+              )
+            )
+          }
+        })
+      case _ => // shouldn't append
+    }
+
+    EasyMock.replay(replicaManager)
+
+    txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
+    txnMetadata1.state = txnState
+    transactionManager.getAndMaybeAddTransactionState(transactionalId1, Some(txnMetadata1))
+
+    txnMetadata2.txnLastUpdateTimestamp = time.milliseconds()
+    transactionManager.getAndMaybeAddTransactionState(transactionalId2, Some(txnMetadata2))
+
+    transactionManager.enableTransactionalIdExpiration()
+    time.sleep(txnConfig.removeExpiredTransactionalIdsIntervalMs)
+
+    scheduler.tick()
+
+    EasyMock.verify(replicaManager)
   }
 
   private def verifyWritesTxnMarkersInPrepareState(state: TransactionState): Unit = {
