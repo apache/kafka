@@ -500,20 +500,18 @@ public class NetworkClient implements KafkaClient {
     }
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
-        return parseResponseMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null);
+        return parseResponseMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
     }
 
-    private static AbstractResponse parseResponseMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader, Sensor throttleTimeSensor) {
+    private static AbstractResponse parseResponseMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
+            Sensor throttleTimeSensor, long now) {
         ResponseHeader responseHeader = ResponseHeader.parse(responseBuffer);
         // Always expect the response version id to be the same as the request version id
         ApiKeys apiKey = ApiKeys.forId(requestHeader.apiKey());
         Struct responseBody = apiKey.parseResponse(requestHeader.apiVersion(), responseBuffer);
         correlate(requestHeader, responseHeader);
-        if (throttleTimeSensor != null) {
-            String throttleTimeFieldName = "throttle_time_ms";
-            if (responseBody.hasField(throttleTimeFieldName))
-                throttleTimeSensor.record(responseBody.getInt(throttleTimeFieldName));
-        }
+        if (throttleTimeSensor != null && responseBody.hasField(AbstractResponse.THROTTLE_TIME_KEY_NAME))
+            throttleTimeSensor.record(responseBody.getInt(AbstractResponse.THROTTLE_TIME_KEY_NAME), now);
         return AbstractResponse.getResponse(apiKey, responseBody);
     }
 
@@ -601,7 +599,7 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
-            AbstractResponse body = parseResponseMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header, throttleTimeSensor);
+            AbstractResponse body = parseResponseMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header, throttleTimeSensor, now);
             log.trace("Completed receive from node {}, for key {}, received {}", req.destination, req.header.apiKey(), body);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);

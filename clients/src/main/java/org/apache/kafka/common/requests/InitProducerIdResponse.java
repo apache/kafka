@@ -31,7 +31,6 @@ public class InitProducerIdResponse extends AbstractResponse {
     //   TransactionalIdAuthorizationFailed
     //   ClusterAuthorizationFailed
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
