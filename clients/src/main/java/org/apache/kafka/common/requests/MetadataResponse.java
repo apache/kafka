@@ -35,7 +35,6 @@ import java.util.Set;
 
 public class MetadataResponse extends AbstractResponse {
 
-    private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String BROKERS_KEY_NAME = "brokers";
     private static final String TOPIC_METADATA_KEY_NAME = "topic_metadata";
 
