@@ -187,11 +187,11 @@ class TransactionCoordinator(brokerId: Int,
     } else {
       // caller should have synchronized on txnMetadata already
       txnMetadata.state match {
-        case PrepareAbort | PrepareCommit | Dead =>
+        case PrepareAbort | PrepareCommit =>
           // reply to client and let client backoff and retry
           Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
 
-        case CompleteAbort | CompleteCommit | Empty  =>
+        case CompleteAbort | CompleteCommit | Empty =>
           // try to append and then update
           Right(coordinatorEpoch, txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.milliseconds()))
 
@@ -232,7 +232,7 @@ class TransactionCoordinator(brokerId: Int,
             } else if (txnMetadata.pendingTransitionInProgress) {
               // return a retriable exception to let the client backoff and retry
               Left(Errors.CONCURRENT_TRANSACTIONS)
-            } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort || txnMetadata.state == Dead) {
+            } else if (txnMetadata.state == PrepareCommit || txnMetadata.state == PrepareAbort) {
               Left(Errors.CONCURRENT_TRANSACTIONS)
             } else if (txnMetadata.state == Ongoing && partitions.subsetOf(txnMetadata.topicPartitions)) {
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
@@ -297,7 +297,7 @@ class TransactionCoordinator(brokerId: Int,
               Left(Errors.INVALID_PRODUCER_EPOCH)
             else if (txnMetadata.pendingTransitionInProgress)
               Left(Errors.CONCURRENT_TRANSACTIONS)
-            else txnMetadata. state match {
+            else txnMetadata.state match {
               case Ongoing =>
                 val nextState = if (txnMarkerResult == TransactionResult.COMMIT)
                   PrepareCommit
@@ -325,8 +325,6 @@ class TransactionCoordinator(brokerId: Int,
                 else
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
-                logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
-              case Dead =>
                 logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
             }
           }

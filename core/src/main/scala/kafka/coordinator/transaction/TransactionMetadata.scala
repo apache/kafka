@@ -307,15 +307,7 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
             txnStartTimestamp = transitMetadata.txnStartTimestamp
             topicPartitions.clear()
           }
-        case Dead => // from expire transactionalId
-          if(producerEpoch != transitMetadata.producerEpoch)
-            throw new IllegalStateException(s"Completing transaction state transition to state: $toState for transactionalId: " +
-              s"$transactionalId, producerId: $producerId, failed due to producerEpoch: $producerEpoch != expected producerEpoch: ${transitMetadata.producerEpoch}")
       }
-
-      if (toState != Dead)
-        txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp
-
 
       debug(s"TransactionalId $transactionalId complete transition from $state to $transitMetadata")
       txnLastUpdateTimestamp = transitMetadata.txnLastUpdateTimestamp

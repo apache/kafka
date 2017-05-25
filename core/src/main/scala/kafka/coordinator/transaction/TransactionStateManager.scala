@@ -160,19 +160,25 @@ class TransactionStateManager(brokerId: Int,
                       toRemove.foreach { idCoordinatorEpochAndMetadata =>
                         val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(idCoordinatorEpochAndMetadata.transactionalId)
                         txnMetadata synchronized {
-                          if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch)
-                            try {
-                              txnMetadata.completeTransitionTo(idCoordinatorEpochAndMetadata.transitMetadata)
-                              txnMetadataCacheEntry.metadataPerTransactionalId.remove(idCoordinatorEpochAndMetadata.transactionalId)
-                            } catch {
-                              case ise: IllegalStateException => debug(s"failed to remove transactionalId: ${idCoordinatorEpochAndMetadata.transactionalId} from cache", ise)
-                            }
+                          if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
+                            && txnMetadata.pendingState.contains(Dead)
+                            && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
+                          )
+                            txnMetadataCacheEntry.metadataPerTransactionalId.remove(idCoordinatorEpochAndMetadata.transactionalId)
+                          else {
+                             debug(s"failed to remove expired transactionalId: ${idCoordinatorEpochAndMetadata.transactionalId}" +
+                               s" from cache. pendingState: ${txnMetadata.pendingState} producerEpoch: ${txnMetadata.producerEpoch}" +
+                               s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}" +
+                               s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch} expected coordinatorEpoch: " +
+                               s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
+                            txnMetadata.pendingState = None
+                          }
                         }
                       }
                     }
                 }
               case _ =>
-                error(s"writing transactionalId tombstones for partition: ${topicPartition.partition} failed with error: ${response.error.message()}")
+                debug(s"writing transactionalId tombstones for partition: ${topicPartition.partition} failed with error: ${response.error.message()}")
             }
           }
         }
