@@ -433,21 +433,25 @@ object AdminUtils extends Logging with AdminUtilities {
                   replicationFactor: Int,
                   topicConfig: Properties = new Properties,
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
+    if (topicExists(zkUtils, topic)) {
+      throw new TopicExistsException(s"Topic '$topic' already exists.")
+    }
     val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment, topicConfig)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic, replicaAssignment, topicConfig, checkTopicExistence = false)
   }
 
   def validateCreateOrUpdateTopic(zkUtils: ZkUtils,
                                   topic: String,
                                   partitionReplicaAssignment: Map[Int, Seq[Int]],
                                   config: Properties,
-                                  update: Boolean): Unit = {
+                                  update: Boolean,
+                                  checkTopicExistence: Boolean = true): Unit = {
     // validate arguments
     Topic.validate(topic)
 
     if (!update) {
-      if (topicExists(zkUtils, topic))
+      if (checkTopicExistence && topicExists(zkUtils, topic))
         throw new TopicExistsException(s"Topic '$topic' already exists.")
       else if (Topic.hasCollisionChars(topic)) {
         val allTopics = zkUtils.getAllTopics()
@@ -480,8 +484,9 @@ object AdminUtils extends Logging with AdminUtilities {
                                                      topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
                                                      config: Properties = new Properties,
-                                                     update: Boolean = false) {
-    validateCreateOrUpdateTopic(zkUtils, topic, partitionReplicaAssignment, config, update)
+                                                     update: Boolean = false,
+                                                     checkTopicExistence: Boolean = true) {
+    validateCreateOrUpdateTopic(zkUtils, topic, partitionReplicaAssignment, config, update, checkTopicExistence)
 
     // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
     if (!update) {
