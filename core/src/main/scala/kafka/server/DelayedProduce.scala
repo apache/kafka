@@ -53,8 +53,11 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
-                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                     lockOpt: Option[Object] = None)
   extends DelayedOperation(delayMs) {
+
+  val lock = lockOpt.getOrElse(this)
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
@@ -69,6 +72,11 @@ class DelayedProduce(delayMs: Long,
     trace("Initial partition status for %s is %s".format(topicPartition, status))
   }
 
+  override def safeTryComplete(): Boolean = lock synchronized {
+    tryComplete()
+  }
+
+
   /**
    * The delayed produce operation can be completed if every partition
    * it produces to is satisfied by one of the following:
@@ -82,7 +90,7 @@ class DelayedProduce(delayMs: Long,
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
     produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
-      trace(s"Checking produce satisfaction for ${topicPartition}, current status $status")
+      trace(s"Checking produce satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
@@ -121,22 +129,6 @@ class DelayedProduce(delayMs: Long,
   override def onComplete() {
     val responseStatus = produceMetadata.produceStatus.mapValues(status => status.responseStatus)
     responseCallback(responseStatus)
-  }
-}
-
-/**
- * If the responseCallback of this delayed produce object is already synchronized with a different object, then users can
- * apply this extended delayed produce object to avoid calling tryComplete() with synchronization on the operation object to avoid dead-lock
- */
-class SafeDelayedProduce(delayMs: Long,
-                         syncObject: Object,
-                         produceMetadata: ProduceMetadata,
-                         replicaManager: ReplicaManager,
-                         responseCallback: Map[TopicPartition, PartitionResponse] => Unit)
-  extends DelayedProduce(delayMs, produceMetadata, replicaManager, responseCallback) {
-
-  override def safeTryComplete(): Boolean = syncObject synchronized {
-    tryComplete()
   }
 }
 
