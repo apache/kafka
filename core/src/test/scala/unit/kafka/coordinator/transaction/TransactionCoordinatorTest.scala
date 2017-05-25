@@ -33,7 +33,6 @@ class TransactionCoordinatorTest {
   val time = new MockTime()
 
   var nextPid: Long = 0L
-  val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
   val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
   val transactionManager: TransactionStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
   val transactionMarkerChannelManager: TransactionMarkerChannelManager = EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
@@ -51,7 +50,6 @@ class TransactionCoordinatorTest {
 
   val coordinator: TransactionCoordinator = new TransactionCoordinator(brokerId,
     scheduler,
-    metadataCache,
     pidManager,
     transactionManager,
     transactionMarkerChannelManager,
@@ -69,14 +67,6 @@ class TransactionCoordinatorTest {
         }
       })
       .anyTimes()
-  }
-
-  private def mockMetadataManager(): Unit = {
-    EasyMock.expect(metadataCache.contains(EasyMock.anyString(), EasyMock.anyInt()))
-      .andReturn(true)
-      .anyTimes()
-
-    EasyMock.replay(metadataCache)
   }
 
   private def initPidGenericMocks(transactionalId: String): Unit = {
@@ -168,8 +158,6 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithInvalidPidMappingOnAddPartitionsToTransactionWhenTransactionalIdNotPresent(): Unit = {
-    mockMetadataManager()
-
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject()))
       .andReturn(Right(None))
     EasyMock.replay(transactionManager)
@@ -180,24 +168,18 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsEmpty(): Unit = {
-    mockMetadataManager()
-
     coordinator.handleAddPartitionsToTransaction("", 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.INVALID_REQUEST, error)
   }
 
   @Test
   def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsNull(): Unit = {
-    mockMetadataManager()
-
     coordinator.handleAddPartitionsToTransaction(null, 0L, 1, partitions, errorsCallback)
     assertEquals(Errors.INVALID_REQUEST, error)
   }
 
   @Test
   def shouldRespondWithNotCoordinatorOnAddPartitionsWhenNotCoordinator(): Unit = {
-    mockMetadataManager()
-
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
       .andReturn(Left(Errors.NOT_COORDINATOR))
     EasyMock.replay(transactionManager)
@@ -208,8 +190,6 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithCoordinatorLoadInProgressOnAddPartitionsWhenCoordintorLoading(): Unit = {
-    mockMetadataManager()
-
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
       .andReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
 
@@ -230,8 +210,6 @@ class TransactionCoordinatorTest {
   }
 
   def validateConcurrentTransactions(state: TransactionState): Unit = {
-    mockMetadataManager()
-
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, 0, 0, 0, state, mutable.Set.empty, 0, 0)))))
 
@@ -243,8 +221,6 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithInvalidTnxProduceEpochOnAddPartitionsWhenEpochsAreDifferent(): Unit = {
-    mockMetadataManager()
-
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject[Option[TransactionMetadata]]()))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, 0, 10, 0, PrepareCommit, mutable.Set.empty, 0, 0)))))
 
@@ -275,8 +251,6 @@ class TransactionCoordinatorTest {
   }
 
   def validateSuccessfulAddPartitions(previousState: TransactionState): Unit = {
-    mockMetadataManager()
-
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs, previousState,
       mutable.Set.empty, time.milliseconds(), time.milliseconds())
 
@@ -299,8 +273,6 @@ class TransactionCoordinatorTest {
 
   @Test
   def shouldRespondWithErrorsNoneOnAddPartitionWhenNoErrorsAndPartitionsTheSame(): Unit = {
-    mockMetadataManager()
-
     EasyMock.expect(transactionManager.getAndMaybeAddTransactionState(EasyMock.eq(transactionalId), EasyMock.anyObject()))
       .andReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, 0, 0, 0, Empty, partitions, 0, 0)))))
 
