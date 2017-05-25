@@ -125,6 +125,11 @@ public interface KafkaClient extends Closeable {
     boolean hasInFlightRequests(String nodeId);
 
     /**
+     * Return true if there is at least one node with connection in ready state and false otherwise.
+     */
+    boolean hasReadyNodes();
+
+    /**
      * Wake up the client if it is currently blocked waiting for I/O
      */
     void wakeup();

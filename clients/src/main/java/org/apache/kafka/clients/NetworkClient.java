@@ -417,6 +417,11 @@ public class NetworkClient implements KafkaClient {
         return this.inFlightRequests.isEmpty(node);
     }
 
+    @Override
+    public boolean hasReadyNodes() {
+        return connectionStates.hasReadyNodes();
+    }
+
     /**
      * Interrupt the client if it is blocked waiting on I/O.
      */
