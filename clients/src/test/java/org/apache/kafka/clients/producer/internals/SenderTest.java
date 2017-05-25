@@ -25,6 +25,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -231,20 +232,8 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         try {
-            Sender sender = new Sender(client,
-                    metadata,
-                    this.accumulator,
-                    false,
-                    MAX_REQUEST_SIZE,
-                    ACKS_ALL,
-                    maxRetries,
-                    m,
-                    time,
-                    REQUEST_TIMEOUT,
-                    50,
-                    null,
-                    apiVersions
-            );
+            Sender sender = new Sender(client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
+                    maxRetries, m, time, REQUEST_TIMEOUT, 50, null, apiVersions);
             // do a successful retry
             Future<RecordMetadata> future = accumulator.append(tp0, 0L, "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
             sender.run(time.milliseconds()); // connect
@@ -290,20 +279,8 @@ public class SenderTest {
         int maxRetries = 1;
         Metrics m = new Metrics();
         try {
-            Sender sender = new Sender(client,
-                    metadata,
-                    this.accumulator,
-                    true,
-                    MAX_REQUEST_SIZE,
-                    ACKS_ALL,
-                    maxRetries,
-                    m,
-                    time,
-                    REQUEST_TIMEOUT,
-                    50,
-                    null,
-                    apiVersions
-            );
+            Sender sender = new Sender(client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                    m, time, REQUEST_TIMEOUT, 50, null, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             Cluster cluster1 = TestUtils.clusterWith(2, "test", 2);
             metadata.update(cluster1, Collections.<String>emptySet(), time.milliseconds());
@@ -375,21 +352,63 @@ public class SenderTest {
     }
 
     @Test
-    public void testInitPidRequest() throws Exception {
+    public void testInitProducerIdRequest() throws Exception {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
         setupWithTransactionState(transactionManager);
         client.setNode(new Node(1, "localhost", 33343));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                return body instanceof InitProducerIdRequest;
-            }
-        }, new InitProducerIdResponse(0, Errors.NONE, producerId, (short) 0));
-        sender.run(time.milliseconds());
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
         assertTrue(transactionManager.hasProducerId());
         assertEquals(producerId, transactionManager.producerIdAndEpoch().producerId);
         assertEquals((short) 0, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testClusterAuthorizationExceptionInInitProducerIdRequest() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+        client.setNode(new Node(1, "localhost", 33343));
+        prepareAndReceiveInitProducerId(producerId, Errors.CLUSTER_AUTHORIZATION_FAILED);
+        assertFalse(transactionManager.hasProducerId());
+        assertTrue(transactionManager.isInErrorState());
+        assertTrue(transactionManager.lastError() instanceof ClusterAuthorizationException);
+
+        // cluster authorization is a fatal error for the producer
+        assertSendFailure(ClusterAuthorizationException.class);
+    }
+
+    @Test
+    public void testClusterAuthorizationExceptionInProduceRequest() throws Exception {
+        final long producerId = 343434L;
+        TransactionManager transactionManager = new TransactionManager();
+        setupWithTransactionState(transactionManager);
+
+        client.setNode(new Node(1, "localhost", 33343));
+        prepareAndReceiveInitProducerId(producerId, Errors.NONE);
+        assertTrue(transactionManager.hasProducerId());
+
+        // cluster authorization is a fatal error for the producer
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
+                null, null, MAX_BLOCK_TIMEOUT).future;
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return body instanceof ProduceRequest && ((ProduceRequest) body).isIdempotent();
+            }
+        }, produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
+
+        sender.run(time.milliseconds());
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have raised ClusterAuthorizationException");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof ClusterAuthorizationException);
+        }
+
+        // cluster authorization is a fatal error for the producer
+        assertSendFailure(ClusterAuthorizationException.class);
     }
 
     @Test
@@ -402,20 +421,8 @@ public class SenderTest {
 
         int maxRetries = 10;
         Metrics m = new Metrics();
-        Sender sender = new Sender(client,
-                metadata,
-                this.accumulator,
-                true,
-                MAX_REQUEST_SIZE,
-                ACKS_ALL,
-                maxRetries,
-                m,
-                time,
-                REQUEST_TIMEOUT,
-                50,
-                transactionManager,
-                apiVersions
-        );
+        Sender sender = new Sender(client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                m, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -446,7 +453,7 @@ public class SenderTest {
     }
 
     @Test
-    public void testAbortRetryWhenPidChanges() throws InterruptedException {
+    public void testAbortRetryWhenProducerIdChanges() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = new TransactionManager();
         transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId, (short) 0));
@@ -455,20 +462,8 @@ public class SenderTest {
 
         int maxRetries = 10;
         Metrics m = new Metrics();
-        Sender sender = new Sender(client,
-                metadata,
-                this.accumulator,
-                true,
-                MAX_REQUEST_SIZE,
-                ACKS_ALL,
-                maxRetries,
-                m,
-                time,
-                REQUEST_TIMEOUT,
-                50,
-                transactionManager,
-                apiVersions
-        );
+        Sender sender = new Sender(client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                m, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());  // connect.
@@ -504,20 +499,8 @@ public class SenderTest {
 
         int maxRetries = 10;
         Metrics m = new Metrics();
-        Sender sender = new Sender(client,
-                metadata,
-                this.accumulator,
-                true,
-                MAX_REQUEST_SIZE,
-                ACKS_ALL,
-                maxRetries,
-                m,
-                time,
-                REQUEST_TIMEOUT,
-                50,
-                transactionManager,
-                apiVersions
-        );
+        Sender sender = new Sender(client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
+                m, time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
         Future<RecordMetadata> responseFuture = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());  // connect.
@@ -642,20 +625,38 @@ public class SenderTest {
         metricTags.put("client-id", CLIENT_ID);
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         this.metrics = new Metrics(metricConfig, time);
-        this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time, apiVersions, transactionManager);
-        this.sender = new Sender(this.client,
-                this.metadata,
-                this.accumulator,
-                true,
-                MAX_REQUEST_SIZE,
-                ACKS_ALL,
-                MAX_RETRIES,
-                this.metrics,
-                this.time,
-                REQUEST_TIMEOUT,
-                50,
-                transactionManager,
-                apiVersions);
+        this.accumulator = new RecordAccumulator(batchSize, 1024 * 1024, CompressionType.NONE, 0L, 0L, metrics, time,
+                apiVersions, transactionManager);
+        this.sender = new Sender(this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
+                MAX_RETRIES, this.metrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
         this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
     }
+
+    private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
+        Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(),
+                null, null, MAX_BLOCK_TIMEOUT).future;
+        sender.run(time.milliseconds());
+        assertTrue(future.isDone());
+        try {
+            future.get();
+            fail("Future should have raised " + expectedError.getSimpleName());
+        } catch (ExecutionException e) {
+            assertTrue(expectedError.isAssignableFrom(e.getCause().getClass()));
+        }
+    }
+
+    private void prepareAndReceiveInitProducerId(long producerId, Errors error) {
+        short producerEpoch = 0;
+        if (error != Errors.NONE)
+            producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
+
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                return body instanceof InitProducerIdRequest && ((InitProducerIdRequest) body).transactionalId() == null;
+            }
+        }, new InitProducerIdResponse(0, error, producerId, producerEpoch));
+        sender.run(time.milliseconds());
+    }
+
 }

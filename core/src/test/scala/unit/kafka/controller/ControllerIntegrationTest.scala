@@ -17,12 +17,17 @@
 
 package kafka.controller
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.common.TopicAndPartition
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.{After, Before, Test}
+import org.junit.Assert.assertTrue
+
+import scala.collection.JavaConverters._
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -129,6 +134,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   def testPartitionReassignment(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkUtils)
+
+    val metricName = s"kafka.controller:type=ControllerStats,name=${ControllerState.PartitionReassignment.rateAndTimeMetricName.get}"
+    val timerCount = timer(metricName).count
+
     val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
     val tp = TopicAndPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
@@ -141,6 +150,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "failed to get updated partition assignment on topic znode after partition reassignment")
     TestUtils.waitUntilTrue(() => !zkUtils.pathExists(ZkUtils.ReassignPartitionsPath),
       "failed to remove reassign partitions path after completion")
+
+    val updatedTimerCount = timer(metricName).count
+    assertTrue(s"Timer count $updatedTimerCount should be greater than $timerCount", updatedTimerCount > timerCount)
   }
 
   @Test
@@ -312,4 +324,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }
+
+  private def timer(metricName: String): Timer = {
+    Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
+      .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Timer]
+  }
+
 }

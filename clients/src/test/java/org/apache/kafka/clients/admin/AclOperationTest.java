@@ -47,7 +47,8 @@ public class AclOperationTest {
         new AclOperationTestInfo(AclOperation.DESCRIBE, 8, "describe", false),
         new AclOperationTestInfo(AclOperation.CLUSTER_ACTION, 9, "cluster_action", false),
         new AclOperationTestInfo(AclOperation.DESCRIBE_CONFIGS, 10, "describe_configs", false),
-        new AclOperationTestInfo(AclOperation.ALTER_CONFIGS, 11, "alter_configs", false)
+        new AclOperationTestInfo(AclOperation.ALTER_CONFIGS, 11, "alter_configs", false),
+        new AclOperationTestInfo(AclOperation.IDEMPOTENT_WRITE, 12, "idempotent_write", false)
     };
 
     @Test

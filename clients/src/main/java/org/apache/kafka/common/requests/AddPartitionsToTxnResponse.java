@@ -43,11 +43,12 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
     //   CoordinatorNotAvailable
     //   CoordinatorLoadInProgress
     //   InvalidTxnState
-    //   InvalidPidMapping
+    //   InvalidProducerIdMapping
     //   TopicAuthorizationFailed
     //   InvalidProducerEpoch
     //   UnknownTopicOrPartition
     //   TopicAuthorizationFailed
+    //   TransactionalIdAuthorizationFailed
     private final Map<TopicPartition, Errors> errors;
 
     public AddPartitionsToTxnResponse(int throttleTimeMs, Map<TopicPartition, Errors> errors) {

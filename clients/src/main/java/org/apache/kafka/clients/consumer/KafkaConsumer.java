@@ -1292,8 +1292,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * Get the last committed offset for the given partition (whether the commit happened by this process or
      * another). This offset will be used as the position for the consumer in the event of a failure.
      * <p>
-     * This call may block to do a remote call if the partition in question isn't assigned to this consumer or if the
-     * consumer hasn't yet initialized its cache of committed offsets.
+     * This call will block to do a remote call to get the latest committed offsets from the server.
      *
      * @param partition The partition to check
      * @return The last committed offset and metadata or null if there was no prior commit
@@ -1309,19 +1308,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public OffsetAndMetadata committed(TopicPartition partition) {
         acquire();
         try {
-            OffsetAndMetadata committed;
-            if (subscriptions.isAssigned(partition)) {
-                committed = this.subscriptions.committed(partition);
-                if (committed == null) {
-                    coordinator.refreshCommittedOffsetsIfNeeded();
-                    committed = this.subscriptions.committed(partition);
-                }
-            } else {
-                Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
-                committed = offsets.get(partition);
-            }
-
-            return committed;
+            Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(Collections.singleton(partition));
+            return offsets.get(partition);
         } finally {
             release();
         }

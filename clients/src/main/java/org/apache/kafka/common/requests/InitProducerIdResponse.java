@@ -24,11 +24,13 @@ import org.apache.kafka.common.record.RecordBatch;
 import java.nio.ByteBuffer;
 
 public class InitProducerIdResponse extends AbstractResponse {
-    /**
-     * Possible Error codes:
-     * OK
-     *
-     */
+    // Possible error codes:
+    //   NotCoordinator
+    //   CoordinatorNotAvailable
+    //   CoordinatorLoadInProgress
+    //   TransactionalIdAuthorizationFailed
+    //   ClusterAuthorizationFailed
+
     private static final String THROTTLE_TIME_KEY_NAME = "throttle_time_ms";
     private static final String PRODUCER_ID_KEY_NAME = "producer_id";
     private static final String EPOCH_KEY_NAME = "producer_epoch";

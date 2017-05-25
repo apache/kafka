@@ -80,9 +80,7 @@ public class KStreamKTableJoinIntegrationTest {
         userRegionsTopic = "user-regions-" + testNo;
         userRegionsStoreName = "user-regions-store-name-" + testNo;
         outputTopic = "output-topic-" + testNo;
-        CLUSTER.createTopic(userClicksTopic);
-        CLUSTER.createTopic(userRegionsTopic);
-        CLUSTER.createTopic(outputTopic);
+        CLUSTER.createTopics(userClicksTopic, userRegionsTopic, outputTopic);
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "join-integration-test-" + testNo);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());

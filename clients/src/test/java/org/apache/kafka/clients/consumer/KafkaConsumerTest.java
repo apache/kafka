@@ -510,10 +510,12 @@ public class KafkaConsumerTest {
         // fetch offset for two topics
         Map<TopicPartition, Long> offsets = new HashMap<>();
         offsets.put(tp0, offset1);
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
+        assertEquals(offset1, consumer.committed(tp0).offset());
+
+        offsets.remove(tp0);
         offsets.put(tp1, offset2);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
-
-        assertEquals(offset1, consumer.committed(tp0).offset());
         assertEquals(offset2, consumer.committed(tp1).offset());
     }
 
@@ -1149,6 +1151,10 @@ public class KafkaConsumerTest {
 
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
         assertEquals(0, consumer.committed(tp0).offset());
+
+        offsets.remove(tp0);
+        offsets.put(tp1, 0L);
+        client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
         assertEquals(0, consumer.committed(tp1).offset());
 
         // fetch and verify consumer's position in the two partitions

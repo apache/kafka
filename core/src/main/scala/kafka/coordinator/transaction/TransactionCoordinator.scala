@@ -48,18 +48,19 @@ object TransactionCoordinator {
       config.transactionTransactionsExpiredTransactionCleanupIntervalMs)
 
     val producerIdManager = new ProducerIdManager(config.brokerId, zkUtils)
+    // we do not need to turn on reaper thread since no tasks will be expired and there are no completed tasks to be purged
+    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false, timerEnabled = false)
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
-    val txnMarkerPurgatory = DelayedOperationPurgatory[DelayedTxnMarker]("txn-marker-purgatory", config.brokerId, reaperEnabled = false)
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, txnMarkerPurgatory, time)
+    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, time)
   }
 
   private def initTransactionError(error: Errors): InitProducerIdResult = {
     InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, error)
   }
 
-  private def initTransactionMetadata(txnMetadata: TransactionMetadataTransition): InitProducerIdResult = {
+  private def initTransactionMetadata(txnMetadata: TxnTransitMetadata): InitProducerIdResult = {
     InitProducerIdResult(txnMetadata.producerId, txnMetadata.producerEpoch, Errors.NONE)
   }
 }
@@ -77,7 +78,6 @@ class TransactionCoordinator(brokerId: Int,
                              producerIdManager: ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
-                             txnMarkerPurgatory: DelayedOperationPurgatory[DelayedTxnMarker],
                              time: Time) extends Logging {
   this.logIdent = "[Transaction Coordinator " + brokerId + "]: "
 
@@ -100,33 +100,31 @@ class TransactionCoordinator(brokerId: Int,
       val producerId = producerIdManager.generateProducerId()
       responseCallback(InitProducerIdResult(producerId, producerEpoch = 0, Errors.NONE))
     } else if (transactionalId.isEmpty) {
-      //If transactional id is empty then return error as invalid request. This is
+      // if transactional id is empty then return error as invalid request. This is
       // to make TransactionCoordinator's behavior consistent with producer client
       responseCallback(initTransactionError(Errors.INVALID_REQUEST))
-    } else if (!txnManager.isCoordinatorFor(transactionalId)) {
-      // check if it is the assigned coordinator for the transactional id
-      responseCallback(initTransactionError(Errors.NOT_COORDINATOR))
-    } else if (txnManager.isCoordinatorLoadingInProgress(transactionalId)) {
-      responseCallback(initTransactionError(Errors.COORDINATOR_LOAD_IN_PROGRESS))
     } else if (!txnManager.validateTransactionTimeoutMs(transactionTimeoutMs)) {
       // check transactionTimeoutMs is not larger than the broker configured maximum allowed value
       responseCallback(initTransactionError(Errors.INVALID_TRANSACTION_TIMEOUT))
     } else {
-      // only try to get a new producerId and update the cache if the transactional id is unknown
-      val result: Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-        case None =>
-          val producerId = producerIdManager.generateProducerId()
-          val now = time.milliseconds()
-          val createdMetadata = new TransactionMetadata(producerId = producerId,
-            producerEpoch = 0,
-            txnTimeoutMs = transactionTimeoutMs,
-            state = Empty,
-            topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            txnLastUpdateTimestamp = now)
+      val producerId = producerIdManager.generateProducerId()
+      val now = time.milliseconds()
+      val createdMetadata = new TransactionMetadata(transactionalId = transactionalId,
+        producerId = producerId,
+        producerEpoch = 0,
+        txnTimeoutMs = transactionTimeoutMs,
+        state = Empty,
+        topicPartitions = collection.mutable.Set.empty[TopicPartition],
+        txnLastUpdateTimestamp = now)
 
-          val epochAndMetadata = txnManager.addTransaction(transactionalId, createdMetadata)
-          val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
-          val txnMetadata = epochAndMetadata.transactionMetadata
+      // only try to get a new producerId and update the cache if the transactional id is unknown
+      val result: Either[InitProducerIdResult, (Int, TxnTransitMetadata)] = txnManager.getAndMaybeAddTransactionState(transactionalId, Some(createdMetadata)) match {
+        case Left(err) =>
+          Left(initTransactionError(err))
+
+        case Right(Some(existingEpochAndMetadata)) =>
+          val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
+          val txnMetadata = existingEpochAndMetadata.transactionMetadata
 
           // there might be a concurrent thread that has just updated the mapping
           // with the transactional id at the same time (hence reference equality will fail);
@@ -135,17 +133,12 @@ class TransactionCoordinator(brokerId: Int,
             if (!txnMetadata.eq(createdMetadata)) {
               initProducerIdWithExistingMetadata(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
             } else {
-              Right(coordinatorEpoch, txnMetadata.prepareNewPid(time.milliseconds()))
+              Right(coordinatorEpoch, txnMetadata.prepareNewProducerId(time.milliseconds()))
             }
           }
 
-        case Some(existingEpochAndMetadata) =>
-          val coordinatorEpoch = existingEpochAndMetadata.coordinatorEpoch
-          val txnMetadata = existingEpochAndMetadata.transactionMetadata
-
-          txnMetadata synchronized {
-            initProducerIdWithExistingMetadata(transactionalId, transactionTimeoutMs, coordinatorEpoch, txnMetadata)
-          }
+        case Right(None) =>
+          throw new IllegalStateException("Trying to add metadata to the cache still returns NONE; this is not expected")
       }
 
       result match {
@@ -185,7 +178,7 @@ class TransactionCoordinator(brokerId: Int,
   private def initProducerIdWithExistingMetadata(transactionalId: String,
                                                  transactionTimeoutMs: Int,
                                                  coordinatorEpoch: Int,
-                                                 txnMetadata: TransactionMetadata): Either[InitProducerIdResult, (Int, TransactionMetadataTransition)] = {
+                                                 txnMetadata: TransactionMetadata): Either[InitProducerIdResult, (Int, TxnTransitMetadata)] = {
     if (txnMetadata.pendingTransitionInProgress) {
       // return a retriable exception to let the client backoff and retry
       Left(initTransactionError(Errors.CONCURRENT_TRANSACTIONS))
@@ -207,33 +200,24 @@ class TransactionCoordinator(brokerId: Int,
     }
   }
 
-  private def validateTransactionalId(transactionalId: String): Errors =
-    if (transactionalId == null || transactionalId.isEmpty)
-      Errors.INVALID_REQUEST
-    else if (!txnManager.isCoordinatorFor(transactionalId))
-      Errors.NOT_COORDINATOR
-    else if (txnManager.isCoordinatorLoadingInProgress(transactionalId))
-      Errors.COORDINATOR_LOAD_IN_PROGRESS
-    else
-      Errors.NONE
-
-
   def handleAddPartitionsToTransaction(transactionalId: String,
                                        producerId: Long,
                                        producerEpoch: Short,
                                        partitions: collection.Set[TopicPartition],
                                        responseCallback: AddPartitionsCallback): Unit = {
-    val error = validateTransactionalId(transactionalId)
-    if (error != Errors.NONE) {
-      responseCallback(error)
+    if (transactionalId == null || transactionalId.isEmpty) {
+      responseCallback(Errors.INVALID_REQUEST)
     } else {
       // try to update the transaction metadata and append the updated metadata to txn log;
       // if there is no such metadata treat it as invalid producerId mapping error.
-      val result: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-        case None =>
+      val result: Either[Errors, (Int, TxnTransitMetadata)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
+        case Left(err) =>
+          Left(err)
+
+        case Right(None) =>
           Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
-        case Some(epochAndMetadata) =>
+        case Right(Some(epochAndMetadata)) =>
           val coordinatorEpoch = epochAndMetadata.coordinatorEpoch
           val txnMetadata = epochAndMetadata.transactionMetadata
 
@@ -279,8 +263,8 @@ class TransactionCoordinator(brokerId: Int,
   private def logInvalidStateTransitionAndReturnError(transactionalId: String,
                                                       transactionState: TransactionState,
                                                       transactionResult: TransactionResult) = {
-    error(s"transactionalId: $transactionalId -- Current state is $transactionState, but received transaction " +
-      s"marker result: $transactionResult")
+    debug(s"TransactionalId: $transactionalId's state is $transactionState, but received transaction " +
+      s"marker result to send: $transactionResult")
     Left(Errors.INVALID_TXN_STATE)
   }
 
@@ -289,17 +273,20 @@ class TransactionCoordinator(brokerId: Int,
                            producerEpoch: Short,
                            txnMarkerResult: TransactionResult,
                            responseCallback: EndTxnCallback): Unit = {
-    val error = validateTransactionalId(transactionalId)
-    if (error != Errors.NONE)
-      responseCallback(error)
+    if (transactionalId == null || transactionalId.isEmpty)
+      responseCallback(Errors.INVALID_REQUEST)
     else {
-      val preAppendResult: Either[Errors, (Int, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-        case None =>
+      val preAppendResult: Either[Errors, (Int, TxnTransitMetadata)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
+        case Left(err) =>
+          Left(err)
+
+        case Right(None) =>
           Left(Errors.INVALID_PRODUCER_ID_MAPPING)
 
-        case Some(epochAndTxnMetadata) =>
+        case Right(Some(epochAndTxnMetadata)) =>
           val txnMetadata = epochAndTxnMetadata.transactionMetadata
           val coordinatorEpoch = epochAndTxnMetadata.coordinatorEpoch
+          val now = time.milliseconds()
 
           txnMetadata synchronized {
             if (txnMetadata.producerId != producerId)
@@ -348,10 +335,12 @@ class TransactionCoordinator(brokerId: Int,
         case Right((coordinatorEpoch, newMetadata)) =>
           def sendTxnMarkersCallback(error: Errors): Unit = {
             if (error == Errors.NONE) {
-              val preSendResult: Either[Errors, (TransactionMetadata, TransactionMetadataTransition)] = txnManager.getTransactionState(transactionalId) match {
-                case Some(epochAndMetadata) =>
-                  if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
+              val preSendResult: Either[Errors, (TransactionMetadata, TxnTransitMetadata)] = txnManager.getAndMaybeAddTransactionState(transactionalId) match {
+                case Left(err) =>
+                  Left(err)
 
+                case Right(Some(epochAndMetadata)) =>
+                  if (epochAndMetadata.coordinatorEpoch == coordinatorEpoch) {
                     val txnMetadata = epochAndMetadata.transactionMetadata
                     txnMetadata synchronized {
                       if (txnMetadata.producerId != producerId)
@@ -382,16 +371,9 @@ class TransactionCoordinator(brokerId: Int,
                     Left(Errors.NOT_COORDINATOR)
                   }
 
-                case None =>
-                  if (txnManager.isCoordinatorFor(transactionalId)) {
-                    throw new IllegalStateException("Cannot find the metadata in coordinator's cache while it is still the leader of the txn topic partition")
-                  } else {
-                    // this transactional id no longer exists, maybe the corresponding partition has already been migrated out.
-                    info(s"Updating $transactionalId's transaction state (txn topic partition ${partitionFor(transactionalId)}) to $newMetadata with coordinator epoch $coordinatorEpoch for $transactionalId " +
-                      s"failed after the transaction message has been appended to the log since the corresponding metadata does not exist in the cache anymore")
-
-                    Left(Errors.NOT_COORDINATOR)
-                  }
+                case Right(None) =>
+                  throw new IllegalStateException(s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
+                    s"no metadata in the cache; this is not expected")
               }
 
               preSendResult match {
@@ -428,9 +410,15 @@ class TransactionCoordinator(brokerId: Int,
         txnIdAndPidEpoch.producerId,
         txnIdAndPidEpoch.producerEpoch,
         TransactionResult.ABORT,
-        (error: Errors) => {
-          if (error != Errors.NONE)
-            warn(s"Rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} aborted due to ${error.exceptionName()}")
+        (error: Errors) => error match {
+          case Errors.NONE =>
+            debug(s"Completed rollback ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} due to timeout")
+          case Errors.INVALID_PRODUCER_ID_MAPPING |
+               Errors.INVALID_PRODUCER_EPOCH |
+               Errors.CONCURRENT_TRANSACTIONS =>
+            debug(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} has aborted due to ${error.exceptionName()}")
+          case e =>
+            warn(s"Rolling back ongoing transaction of transactionalId: ${txnIdAndPidEpoch.transactionalId} failed due to ${error.exceptionName()}")
         })
     }
   }
@@ -447,7 +435,7 @@ class TransactionCoordinator(brokerId: Int,
       TransactionStateManager.DefaultRemoveExpiredTransactionsIntervalMs
     )
     if (enablePidExpiration)
-      txnManager.enablePidExpiration()
+      txnManager.enableProducerIdExpiration()
     txnMarkerChannelManager.start()
     isActive.set(true)
 
@@ -462,7 +450,6 @@ class TransactionCoordinator(brokerId: Int,
     info("Shutting down.")
     isActive.set(false)
     scheduler.shutdown()
-    txnMarkerPurgatory.shutdown()
     producerIdManager.shutdown()
     txnManager.shutdown()
     txnMarkerChannelManager.shutdown()
