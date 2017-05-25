@@ -728,8 +728,6 @@ public class QueryableStateIntegrationTest {
             .reduce(new Reducer<String>() {
                 @Override
                 public String apply(final String value1, final String value2) {
-                    System.out.print(value1 + "," + value2);
-                    System.out.flush();
                     if (beforeFailure.get() && value1.length() > 1) {
                         beforeFailure.set(false);
                         throw new RuntimeException("Injected test exception");
