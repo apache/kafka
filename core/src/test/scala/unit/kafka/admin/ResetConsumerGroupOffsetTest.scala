@@ -119,6 +119,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand1.close()
     consumerGroupCommand.close()
   }
 
@@ -164,6 +165,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
     printConsumerGroup()
 
     AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommand1.close()
     consumerGroupCommand.close()
   }
 
@@ -536,6 +538,7 @@ class ResetConsumerGroupOffsetTest extends KafkaServerTestHarness {
 
     printConsumerGroup()
     AdminUtils.deleteTopic(zkUtils, topic1)
+    consumerGroupCommandExec.close()
     consumerGroupCommand.close()
   }
 
