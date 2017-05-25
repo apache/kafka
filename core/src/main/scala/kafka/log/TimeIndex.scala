@@ -104,30 +104,32 @@ class TimeIndex(file: File,
    *                      gets rolled or the segment is closed.
    */
   def maybeAppend(timestamp: Long, offset: Long, skipFullCheck: Boolean = false) {
-    inLock(lock) {
-      if (!skipFullCheck)
-        require(!isFull, "Attempt to append to a full time index (size = " + _entries + ").")
-      // We do not throw exception when the offset equals to the offset of last entry. That means we are trying
-      // to insert the same time index entry as the last entry.
-      // If the timestamp index entry to be inserted is the same as the last entry, we simply ignore the insertion
-      // because that could happen in the following two scenarios:
-      // 1. An log segment is closed.
-      // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
-      if (_entries != 0 && offset < lastEntry.offset)
-        throw new InvalidOffsetException("Attempt to append an offset (%d) to slot %d no larger than the last offset appended (%d) to %s."
-          .format(offset, _entries, lastEntry.offset, file.getAbsolutePath))
-      if (_entries != 0 && timestamp < lastEntry.timestamp)
-        throw new IllegalStateException("Attempt to append an timestamp (%d) to slot %d no larger than the last timestamp appended (%d) to %s."
+    if (offset != -1) {
+      inLock(lock) {
+        if (!skipFullCheck)
+          require(!isFull, "Attempt to append to a full time index (size = " + _entries + ").")
+        // We do not throw exception when the offset equals to the offset of last entry. That means we are trying
+        // to insert the same time index entry as the last entry.
+        // If the timestamp index entry to be inserted is the same as the last entry, we simply ignore the insertion
+        // because that could happen in the following two scenarios:
+        // 1. An log segment is closed.
+        // 2. LogSegment.onBecomeInactiveSegment() is called when an active log segment is rolled.
+        if (_entries != 0 && offset < lastEntry.offset)
+          throw new InvalidOffsetException("Attempt to append an offset (%d) to slot %d no larger than the last offset appended (%d) to %s."
+            .format(offset, _entries, lastEntry.offset, file.getAbsolutePath))
+        if (_entries != 0 && timestamp < lastEntry.timestamp)
+          throw new IllegalStateException("Attempt to append an timestamp (%d) to slot %d no larger than the last timestamp appended (%d) to %s."
             .format(timestamp, _entries, lastEntry.timestamp, file.getAbsolutePath))
-      // We only append to the time index when the timestamp is greater than the last inserted timestamp.
-      // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
-      // index will be empty.
-      if (timestamp > lastEntry.timestamp) {
-        debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
-        mmap.putLong(timestamp)
-        mmap.putInt((offset - baseOffset).toInt)
-        _entries += 1
-        require(_entries * entrySize == mmap.position, _entries + " entries but file position in index is " + mmap.position + ".")
+        // We only append to the time index when the timestamp is greater than the last inserted timestamp.
+        // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
+        // index will be empty.
+        if (timestamp > lastEntry.timestamp) {
+          debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
+          mmap.putLong(timestamp)
+          mmap.putInt((offset - baseOffset).toInt)
+          _entries += 1
+          require(_entries * entrySize == mmap.position, _entries + " entries but file position in index is " + mmap.position + ".")
+        }
       }
     }
   }
