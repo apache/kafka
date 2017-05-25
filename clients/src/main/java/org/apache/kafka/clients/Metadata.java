@@ -27,7 +27,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -48,6 +48,18 @@ import java.util.Set;
  * manage topics while producers rely on topic expiry to limit the refresh set.
  */
 public final class Metadata {
+    /**
+     * Synchronization policy: all the fields except {@link #cluster} and {@link #topics} are accessed via synchronized methods.
+     *
+     * KAFKA-3428: To allow high concurrency on {@link #fetch()}, which returns the pointer to {@link #cluster}, 
+     * this method is not synchronized and safety is assured by {@link #cluster} being a volatile field 
+     * and {@link org.apache.kafka.common.Cluster} being safe for concurrent access.
+     *
+     * KAFKA-3428: {@link #topics} is updated only within the synchronized methods. The read queries to topics however
+     * are performed in {@link #containsTopic(String)} which is not synchronized. Safety is assured by
+     * i) {@link #topics} being a final field, and
+     * ii) {@link #topics} using an implementation that is safe for reads being performed concurrent with updates.
+     */
 
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
@@ -59,14 +71,18 @@ public final class Metadata {
     private int version;
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    private Cluster cluster;
     private boolean needUpdate;
-    /* Topics with expiry time */
-    private final Map<String, Long> topics;
     private final List<Listener> listeners;
     private final ClusterResourceListeners clusterResourceListeners;
     private boolean needMetadataForAllTopics;
     private final boolean topicExpiryEnabled;
+
+    /**
+     * KAFKA-3428: these fields are not protected by synchronized methods. Refer to synchronization policy in {@link org.apache.kafka.clients.Metadata}
+     */
+    private volatile Cluster cluster;
+    /* Topics with expiry time */
+    private final Map<String, Long> topics;
 
     /**
      * Create a metadata instance with reasonable defaults
@@ -96,7 +112,7 @@ public final class Metadata {
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
-        this.topics = new HashMap<>();
+        this.topics = new ConcurrentHashMap<String, Long>();
         this.listeners = new ArrayList<>();
         this.clusterResourceListeners = clusterResourceListeners;
         this.needMetadataForAllTopics = false;
@@ -105,7 +121,7 @@ public final class Metadata {
     /**
      * Get the current cluster info without blocking
      */
-    public synchronized Cluster fetch() {
+    public Cluster fetch() {
         return this.cluster;
     }
 
@@ -189,10 +205,11 @@ public final class Metadata {
 
     /**
      * Check if a topic is already in the topic set.
+     *
      * @param topic topic to check
      * @return true if the topic exists, false otherwise
      */
-    public synchronized boolean containsTopic(String topic) {
+    public boolean containsTopic(String topic) {
         return this.topics.containsKey(topic);
     }
 
