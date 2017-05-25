@@ -106,12 +106,12 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public long baseOffset() {
+        public long firstOffset() {
             if (magic() >= RecordBatch.MAGIC_VALUE_V2)
                 return offset;
 
             loadUnderlyingRecordBatch();
-            return underlying.baseOffset();
+            return underlying.firstOffset();
         }
 
         @Override
@@ -188,9 +188,9 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         }
 
         @Override
-        public int baseSequence() {
+        public int firstSequence() {
             loadUnderlyingRecordBatch();
-            return underlying.baseSequence();
+            return underlying.firstSequence();
         }
 
         @Override
@@ -316,7 +316,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
         @Override
         public String toString() {
-            return "FileChannelRecordBatch(magic: " + magic() + ", offsets: [" + baseOffset() + ", " + lastOffset() + "])";
+            return "FileChannelRecordBatch(magic: " + magic() + ", offsets: [" + firstOffset() + ", " + lastOffset() + "])";
         }
     }
 }

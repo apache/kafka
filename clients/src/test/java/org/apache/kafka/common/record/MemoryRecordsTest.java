@@ -43,7 +43,6 @@ public class MemoryRecordsTest {
     private short epoch;
     private int firstSequence;
     private long logAppendTime = System.currentTimeMillis();
-    private int partitionLeaderEpoch = 998;
 
     public MemoryRecordsTest(byte magic, long firstOffset, CompressionType compression) {
         this.magic = magic;
@@ -62,6 +61,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testIterator() {
+        int partitionLeaderEpoch = 998;
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
         MemoryRecordsBuilder builder = new MemoryRecordsBuilder(buffer, magic, compression,
@@ -86,12 +86,12 @@ public class MemoryRecordsTest {
             for (RecordBatch batch : memoryRecords.batches()) {
                 assertTrue(batch.isValid());
                 assertEquals(compression, batch.compressionType());
-                assertEquals(firstOffset + total, batch.baseOffset());
+                assertEquals(firstOffset + total, batch.firstOffset());
 
                 if (magic >= RecordBatch.MAGIC_VALUE_V2) {
                     assertEquals(pid, batch.producerId());
                     assertEquals(epoch, batch.producerEpoch());
-                    assertEquals(firstSequence + total, batch.baseSequence());
+                    assertEquals(firstSequence + total, batch.firstSequence());
                     assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
                     assertEquals(records.length, batch.countOrNull().intValue());
                     assertEquals(TimestampType.CREATE_TIME, batch.timestampType());
@@ -99,7 +99,7 @@ public class MemoryRecordsTest {
                 } else {
                     assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId());
                     assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch());
-                    assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence());
+                    assertEquals(RecordBatch.NO_SEQUENCE, batch.firstSequence());
                     assertEquals(RecordBatch.NO_PARTITION_LEADER_EPOCH, batch.partitionLeaderEpoch());
                     assertNull(batch.countOrNull());
                     if (magic == RecordBatch.MAGIC_VALUE_V0)
@@ -138,7 +138,7 @@ public class MemoryRecordsTest {
                     recordCount++;
                 }
 
-                assertEquals(batch.baseOffset() + recordCount - 1, batch.lastOffset());
+                assertEquals(batch.firstOffset() + recordCount - 1, batch.lastOffset());
             }
         }
     }
@@ -237,7 +237,7 @@ public class MemoryRecordsTest {
             assertTrue(batch.isControlBatch());
             assertEquals(producerId, batch.producerId());
             assertEquals(producerEpoch, batch.producerEpoch());
-            assertEquals(initialOffset, batch.baseOffset());
+            assertEquals(initialOffset, batch.firstOffset());
             assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch());
             assertTrue(batch.isValid());
 
@@ -302,35 +302,85 @@ public class MemoryRecordsTest {
     }
 
     @Test
-    public void testFilterToPreservesProducerInfo() {
+    public void testFilterToPreservesIdempotentProducerInfo() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             ByteBuffer buffer = ByteBuffer.allocate(2048);
 
-            // non-idempotent, non-transactional
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
-            builder.append(10L, null, "a".getBytes());
-            builder.append(11L, "1".getBytes(), "b".getBytes());
-            builder.append(12L, null, "c".getBytes());
-
-            builder.close();
-
-            // idempotent
             long pid1 = 23L;
             short epoch1 = 5;
-            int baseSequence1 = 10;
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
-                    RecordBatch.NO_TIMESTAMP, pid1, epoch1, baseSequence1);
+            int firstSequence1 = 10;
+            long firstOffset1 = 3L;
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                    firstOffset1, RecordBatch.NO_TIMESTAMP, pid1, epoch1, firstSequence1);
             builder.append(13L, null, "d".getBytes());
             builder.append(14L, "4".getBytes(), "e".getBytes());
             builder.append(15L, "5".getBytes(), "f".getBytes());
             builder.close();
 
+            long pid2 = 99384L;
+            short epoch2 = 234;
+            int firstSequence2 = 15;
+            long firstOffset2 = 8L;
+            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                    firstOffset2, RecordBatch.NO_TIMESTAMP, pid2, epoch2, firstSequence2);
+            builder.append(16L, "6".getBytes(), "g".getBytes());
+            builder.append(17L, null, "h".getBytes());
+            builder.close();
+
+            buffer.flip();
+
+            ByteBuffer filtered = ByteBuffer.allocate(2048);
+            MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered);
+
+            filtered.flip();
+            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+            assertEquals(2, batches.size());
+
+            MutableRecordBatch firstBatch = batches.get(0);
+            assertEquals(2, firstBatch.countOrNull().intValue());
+            assertEquals(firstOffset1 + 1, firstBatch.firstOffset());
+            assertEquals(firstOffset1 + 2, firstBatch.lastOffset());
+            assertEquals(pid1, firstBatch.producerId());
+            assertEquals(epoch1, firstBatch.producerEpoch());
+            assertEquals(firstSequence1 + 1, firstBatch.firstSequence());
+            assertEquals(firstSequence1 + 2, firstBatch.lastSequence());
+            assertFalse(firstBatch.isTransactional());
+            List<Record> firstBatchRecords = TestUtils.toList(firstBatch);
+            assertEquals(2, firstBatchRecords.size());
+            assertEquals(firstSequence1 + 1, firstBatchRecords.get(0).sequence());
+            assertEquals(firstOffset1 + 1, firstBatchRecords.get(0).offset());
+            assertEquals(firstSequence1 + 2, firstBatchRecords.get(1).sequence());
+            assertEquals(firstOffset1 + 2, firstBatchRecords.get(1).offset());
+
+            MutableRecordBatch secondBatch = batches.get(1);
+            assertEquals(1, secondBatch.countOrNull().intValue());
+            assertEquals(firstOffset2, secondBatch.firstOffset());
+            assertEquals(firstOffset2 + 1, secondBatch.lastOffset());
+            assertEquals(pid2, secondBatch.producerId());
+            assertEquals(epoch2, secondBatch.producerEpoch());
+            assertEquals(firstSequence2, secondBatch.firstSequence());
+            assertEquals(firstSequence2 + 1, secondBatch.lastSequence());
+            List<Record> secondBatchRecords = TestUtils.toList(secondBatch);
+            assertEquals(1, secondBatchRecords.size());
+            assertEquals(firstSequence2, secondBatchRecords.get(0).sequence());
+            assertEquals(firstOffset2, secondBatchRecords.get(0).offset());
+        }
+    }
+
+    @Test
+    public void testFilterToPreservesTransactionalProducerInfo() {
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            ByteBuffer buffer = ByteBuffer.allocate(2048);
+
             // transactional
             long pid2 = 99384L;
             short epoch2 = 234;
-            int baseSequence2 = 15;
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
-                    RecordBatch.NO_TIMESTAMP, pid2, epoch2, baseSequence2, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+            int firstSequence2 = 15;
+            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME,
+                    3L, RecordBatch.NO_TIMESTAMP, pid2, epoch2, firstSequence2, true,
+                    RecordBatch.NO_PARTITION_LEADER_EPOCH);
             builder.append(16L, "6".getBytes(), "g".getBytes());
             builder.append(17L, null, "h".getBytes());
             builder.append(18L, "8".getBytes(), "i".getBytes());
@@ -345,37 +395,17 @@ public class MemoryRecordsTest {
             MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
             List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-            assertEquals(3, batches.size());
+            assertEquals(1, batches.size());
 
             MutableRecordBatch firstBatch = batches.get(0);
-            assertEquals(1, firstBatch.countOrNull().intValue());
-            assertEquals(0L, firstBatch.baseOffset());
-            assertEquals(2L, firstBatch.lastOffset());
-            assertEquals(RecordBatch.NO_PRODUCER_ID, firstBatch.producerId());
-            assertEquals(RecordBatch.NO_PRODUCER_EPOCH, firstBatch.producerEpoch());
-            assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.baseSequence());
-            assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
-            assertFalse(firstBatch.isTransactional());
-
-            MutableRecordBatch secondBatch = batches.get(1);
-            assertEquals(2, secondBatch.countOrNull().intValue());
-            assertEquals(3L, secondBatch.baseOffset());
-            assertEquals(5L, secondBatch.lastOffset());
-            assertEquals(pid1, secondBatch.producerId());
-            assertEquals(epoch1, secondBatch.producerEpoch());
-            assertEquals(baseSequence1, secondBatch.baseSequence());
-            assertEquals(baseSequence1 + 2, secondBatch.lastSequence());
-            assertFalse(secondBatch.isTransactional());
-
-            MutableRecordBatch thirdBatch = batches.get(2);
-            assertEquals(2, thirdBatch.countOrNull().intValue());
-            assertEquals(3L, thirdBatch.baseOffset());
-            assertEquals(5L, thirdBatch.lastOffset());
-            assertEquals(pid2, thirdBatch.producerId());
-            assertEquals(epoch2, thirdBatch.producerEpoch());
-            assertEquals(baseSequence2, thirdBatch.baseSequence());
-            assertEquals(baseSequence2 + 2, thirdBatch.lastSequence());
-            assertTrue(thirdBatch.isTransactional());
+            assertEquals(2, firstBatch.countOrNull().intValue());
+            assertEquals(3L, firstBatch.firstOffset());
+            assertEquals(5L, firstBatch.lastOffset());
+            assertEquals(pid2, firstBatch.producerId());
+            assertEquals(epoch2, firstBatch.producerEpoch());
+            assertEquals(firstSequence2, firstBatch.firstSequence());
+            assertEquals(firstSequence2 + 2, firstBatch.lastSequence());
+            assertTrue(firstBatch.isTransactional());
         }
     }
 
@@ -437,7 +467,7 @@ public class MemoryRecordsTest {
             expectedMaxTimestamps = asList(11L, 20L, 16L);
         } else {
             expectedEndOffsets = asList(2L, 5L, 6L);
-            expectedStartOffsets = asList(1L, 3L, 6L);
+            expectedStartOffsets = asList(1L, 4L, 6L);
             expectedMaxTimestamps = asList(11L, 20L, 16L);
         }
 
@@ -445,7 +475,7 @@ public class MemoryRecordsTest {
 
         for (int i = 0; i < expectedEndOffsets.size(); i++) {
             RecordBatch batch = batches.get(i);
-            assertEquals(expectedStartOffsets.get(i).longValue(), batch.baseOffset());
+            assertEquals(expectedStartOffsets.get(i).longValue(), batch.firstOffset());
             assertEquals(expectedEndOffsets.get(i).longValue(), batch.lastOffset());
             assertEquals(magic, batch.magic());
             assertEquals(compression, batch.compressionType());

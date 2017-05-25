@@ -44,7 +44,7 @@ public class AbstractLegacyRecordBatchTest {
         ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
         batch.setLastOffset(lastOffset);
         assertEquals(lastOffset, batch.lastOffset());
-        assertEquals(firstOffset, batch.baseOffset());
+        assertEquals(firstOffset, batch.firstOffset());
         assertTrue(batch.isValid());
 
         List<MutableRecordBatch> recordBatches = Utils.toList(records.batches().iterator());

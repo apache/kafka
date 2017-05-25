@@ -979,7 +979,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     batch.ensureValid();
                 } catch (InvalidRecordException e) {
                     throw new KafkaException("Record batch for partition " + partition + " at offset " +
-                            batch.baseOffset() + " is invalid, cause: " + e.getMessage());
+                            batch.firstOffset() + " is invalid, cause: " + e.getMessage());
                 }
             }
         }
@@ -1025,7 +1025,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             abortedProducerIds.remove(producerId);
                         } else if (isBatchAborted(currentBatch)) {
                             log.trace("Skipping aborted record batch with producerId {} and base offset {}, partition: {}",
-                                    producerId, currentBatch.baseOffset(), partition);
+                                    producerId, currentBatch.firstOffset(), partition);
                             nextFetchOffset = currentBatch.lastOffset() + 1;
                             continue;
                         }
@@ -1115,7 +1115,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Iterator<Record> batchIterator = batch.iterator();
             if (!batchIterator.hasNext())
                 throw new InvalidRecordException("Invalid batch for partition " + partition + " at offset " +
-                        batch.baseOffset() + " with control sequence set, but no records");
+                        batch.firstOffset() + " with control sequence set, but no records");
 
             Record firstRecord = batchIterator.next();
             return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());

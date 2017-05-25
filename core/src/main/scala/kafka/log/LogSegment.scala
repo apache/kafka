@@ -275,7 +275,7 @@ class LogSegment(val log: FileRecords,
 
         // Build offset index
         if(validBytes - lastIndexEntry > indexIntervalBytes) {
-          val startOffset = batch.baseOffset
+          val startOffset = batch.firstOffset
           index.append(startOffset, validBytes)
           timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp)
           lastIndexEntry = validBytes
@@ -285,7 +285,7 @@ class LogSegment(val log: FileRecords,
         if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
           leaderEpochCache.foreach { cache =>
             if (batch.partitionLeaderEpoch > cache.latestEpoch()) // this is to avoid unnecessary warning in cache.assign()
-              cache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
+              cache.assign(batch.partitionLeaderEpoch, batch.firstOffset)
           }
           updateProducerState(producerStateManager, batch)
         }

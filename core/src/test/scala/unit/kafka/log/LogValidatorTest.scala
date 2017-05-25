@@ -179,7 +179,7 @@ class LogValidatorTest {
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
-      assertEquals(baseSequence, batch.baseSequence)
+      assertEquals(baseSequence, batch.firstSequence)
       assertEquals(isTransactional, batch.isTransactional)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
@@ -240,7 +240,7 @@ class LogValidatorTest {
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
-      assertEquals(baseSequence, batch.baseSequence)
+      assertEquals(baseSequence, batch.firstSequence)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
         assertTrue(record.isValid)
@@ -284,7 +284,7 @@ class LogValidatorTest {
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
       assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch)
       assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId)
-      assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence)
+      assertEquals(RecordBatch.NO_SEQUENCE, batch.firstSequence)
     }
     assertEquals(s"Max timestamp should be ${RecordBatch.NO_TIMESTAMP}", RecordBatch.NO_TIMESTAMP, validatedResults.maxTimestamp)
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
@@ -320,7 +320,7 @@ class LogValidatorTest {
       assertEquals(TimestampType.CREATE_TIME, batch.timestampType)
       assertEquals(RecordBatch.NO_PRODUCER_EPOCH, batch.producerEpoch)
       assertEquals(RecordBatch.NO_PRODUCER_ID, batch.producerId)
-      assertEquals(RecordBatch.NO_SEQUENCE, batch.baseSequence)
+      assertEquals(RecordBatch.NO_SEQUENCE, batch.firstSequence)
     }
     assertEquals(timestamp, validatedResults.maxTimestamp)
     assertEquals(s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}",
@@ -370,7 +370,7 @@ class LogValidatorTest {
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
-      assertEquals(baseSequence, batch.baseSequence)
+      assertEquals(baseSequence, batch.firstSequence)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
         assertTrue(record.isValid)

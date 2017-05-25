@@ -435,7 +435,7 @@ public class SenderTest {
                     assertTrue(batchIterator.hasNext());
                     RecordBatch batch = batchIterator.next();
                     assertFalse(batchIterator.hasNext());
-                    assertEquals(0, batch.baseSequence());
+                    assertEquals(0, batch.firstSequence());
                     assertEquals(producerId, batch.producerId());
                     assertEquals(0, batch.producerEpoch());
                     return true;

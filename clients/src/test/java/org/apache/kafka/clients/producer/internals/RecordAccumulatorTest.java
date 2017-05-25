@@ -150,7 +150,7 @@ public class RecordAccumulatorTest {
         List<MutableRecordBatch> recordBatches = TestUtils.toList(producerBatch.records().batches());
         assertEquals(1, recordBatches.size());
         MutableRecordBatch recordBatch = recordBatches.get(0);
-        assertEquals(0L, recordBatch.baseOffset());
+        assertEquals(0L, recordBatch.firstOffset());
         List<Record> records = TestUtils.toList(recordBatch);
         assertEquals(1, records.size());
         Record record = records.get(0);

@@ -71,8 +71,8 @@ private[kafka] object LogValidator extends Logging {
 
   private def validateBatch(batch: RecordBatch, isFromClient: Boolean, toMagic: Byte): Unit = {
     if (isFromClient) {
-      if (batch.hasProducerId && batch.baseSequence < 0)
-        throw new InvalidRecordException(s"Invalid sequence number ${batch.baseSequence} in record batch " +
+      if (batch.hasProducerId && batch.firstSequence < 0)
+        throw new InvalidRecordException(s"Invalid sequence number ${batch.firstSequence} in record batch " +
           s"with producerId ${batch.producerId}")
 
       if (batch.isControlBatch)
@@ -116,7 +116,7 @@ private[kafka] object LogValidator extends Logging {
 
     val (producerId, producerEpoch, sequence, isTransactional) = {
       val first = records.batches.asScala.head
-      (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
+      (first.producerId, first.producerEpoch, first.firstSequence, first.isTransactional)
     }
 
     val newBuffer = ByteBuffer.allocate(sizeInBytesAfterConversion)
@@ -263,7 +263,7 @@ private[kafka] object LogValidator extends Logging {
           // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
           // with older magic versions, there will never be a producer id, etc.
           val first = records.batches.asScala.head
-          (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
+          (first.producerId, first.producerEpoch, first.firstSequence, first.isTransactional)
         }
         buildRecordsAndAssignOffsets(toMagic, offsetCounter, timestampType, CompressionType.forId(targetCodec.codec), now,
           validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
@@ -298,14 +298,14 @@ private[kafka] object LogValidator extends Logging {
                                            validatedRecords: Seq[Record],
                                            producerId: Long,
                                            producerEpoch: Short,
-                                           baseSequence: Int,
+                                           firstSequence: Int,
                                            isTransactional: Boolean,
                                            partitionLeaderEpoch: Int): ValidationAndOffsetAssignResult = {
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
     val builder = MemoryRecords.builder(buffer, magic, compressionType, timestampType, offsetCounter.value,
-      logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch)
+      logAppendTime, producerId, producerEpoch, firstSequence, isTransactional, partitionLeaderEpoch)
 
     validatedRecords.foreach { record =>
       builder.appendWithOffset(offsetCounter.getAndIncrement(), record)
