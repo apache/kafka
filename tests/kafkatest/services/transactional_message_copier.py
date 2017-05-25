@@ -1,0 +1,104 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+
+from ducktape.services.background_thread import BackgroundThreadService
+# from ducktape.cluster.remoteaccount import RemoteCommandError
+
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+
+class TransactionalMessageCopier(KafkaPathResolverMixin, BackgroundThreadService):
+    """This service wraps org.apache.kafka.tools.TransactionalMessageCopier for
+    use in system testing.
+    """
+    PERSISTENT_ROOT = "/mnt/transactional_message_copier"
+    STDOUT_CAPTURE = os.path.join(PERSISTENT_ROOT, "transactional_message_copier.stdout")
+    STDERR_CAPTURE = os.path.join(PERSISTENT_ROOT, "transactional_message_copier.stderr")
+    LOG_DIR = os.path.join(PERSISTENT_ROOT, "logs")
+    LOG_FILE = os.path.join(LOG_DIR, "transactional_message_copier.log")
+    LOG4J_CONFIG = os.path.join(PERSISTENT_ROOT, "tools-log4j.properties")
+    CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "transactional_message_copier.properties")
+
+    logs = {
+        "transactional_message_copier_stdout": {
+            "path": STDOUT_CAPTURE,
+            "collect_default": True},
+        "transactional_message_copier_stderr": {
+            "path": STDERR_CAPTURE,
+            "collect_default": False},
+        "transactional_message_copier_log": {
+            "path": LOG_FILE,
+            "collect_default": True}
+    }
+
+    def __init__(self, context, num_nodes, kafka, transactional_id, consumer_group,
+                 input_topic, input_partition, output_topic, max_messages = -1,
+                 transaction_size = 1000, log_level="INFO"):
+        super(TransactionalMessageCopier, self).__init__(context, num_nodes)
+        self.log_level = log_level
+        self.kafka = kafka
+        self.transactional_id = transactional_id
+        self.consumer_group = consumer_group
+        self.transaction_size = transaction_size
+        self.input_topic = input_topic
+        self.input_partition = input_partition
+        self.output_topic = output_topic
+        self.max_messages = max_messages
+
+    def _worker(self, idx, node):
+        node.account.ssh("mkdir -p %s" % TransactionalMessageCopier.PERSISTENT_ROOT,
+                         allow_fail=False)
+        # Create and upload log properties
+        log_config = self.render('tools_log4j.properties',
+                                 log_file=TransactionalMessageCopier.LOG_FILE)
+        node.account.create_file(TransactionalMessageCopier.LOG4J_CONFIG, log_config)
+        # Configure security
+        self.security_config = self.kafka.security_config.client_config(node=node)
+        self.security_config.setup_node(node)
+        cmd = self.start_cmd(node, idx)
+        self.logger.debug("TransactionalMessageCopier %d command: %s" % (idx, cmd))
+        for line in node.account.ssh_capture(cmd):
+            line = line.strip()
+            self.logger.info(line)
+
+    def start_cmd(self, node, idx):
+        cmd  = "export LOG_DIR=%s;" % TransactionalMessageCopier.LOG_DIR
+        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % TransactionalMessageCopier.LOG4J_CONFIG
+        cmd += self.impl.exec_cmd(node)
+        cmd += "--broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol))
+        cmd += " --transactional-id %s" % self.transactional_id
+        cmd += " --consumer-group %s" % self.consumer_group
+        cmd += " --input-topic %s" % self.input_topic
+        cmd += " --output-topic %s" % self.output_topic
+        cmd += " --input-partition %s" % str(self.input_partition)
+        cmd += " --transaction-size %s" % str(self.transaction_size)
+        if self.max_messages > 0:
+            cmd += " --max-messages %s" % str(self.max_messages)
+
+        return cmd
+
+    def stop_node(self, node, clean_shutdown=True):
+        self.kill_node(node, clean_shutdown, allow_fail=False)
+
+        stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
+        assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
+                        (str(node.account), str(self.stop_timeout_sec))
+
+    def clean_node(self, node, clean_shutdown=False):
+        self.kill_node(node, clean_shutdown, allow_fail=False)
+        node.account.ssh("rm -rf " + self.PERSISTENT_ROOT, allow_fail=False)
+        self.security_config.clean_node(node)
