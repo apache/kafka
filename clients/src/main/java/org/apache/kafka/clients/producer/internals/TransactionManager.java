@@ -333,7 +333,7 @@ public class TransactionManager {
     }
 
     synchronized TxnRequestHandler nextRequestHandler() {
-       if (!newPartitionsToBeAddedToTransaction.isEmpty())
+        if (!newPartitionsToBeAddedToTransaction.isEmpty())
             pendingRequests.add(addPartitionsToTransactionHandler());
 
         TxnRequestHandler nextRequestHandler = pendingRequests.poll();
