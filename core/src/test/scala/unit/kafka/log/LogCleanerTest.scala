@@ -89,6 +89,47 @@ class LogCleanerTest extends JUnitSuite {
   }
 
   @Test
+  def testDuplicateCheckAfterCleaning(): Unit = {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val producerEpoch = 0.toShort
+    val pid1 = 1
+    val pid2 = 2
+    val pid3 = 3
+
+    val appendProducer1 = appendIdempotentAsLeader(log, pid1, producerEpoch)
+    val appendProducer2 = appendIdempotentAsLeader(log, pid2, producerEpoch)
+    val appendProducer3 = appendIdempotentAsLeader(log, pid3, producerEpoch)
+
+    appendProducer1(Seq(1, 2))
+    appendProducer2(Seq(3, 1, 4))
+    appendProducer3(Seq(1, 4))
+
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(2, 3, 4, 1, 4), keysInLog(log))
+    assertEquals(List(1, 2, 4, 5, 6), offsetsInLog(log))
+
+    // check duplicate append from producer 1
+    var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).apply(Seq(1, 2))
+    assertEquals(0L, logAppendInfo.firstOffset)
+    assertEquals(1L, logAppendInfo.lastOffset)
+
+    // check duplicate append from producer 2
+    logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch).apply(Seq(3, 1, 4))
+    assertEquals(2L, logAppendInfo.firstOffset)
+    assertEquals(4L, logAppendInfo.lastOffset)
+
+    // check duplicate append from producer 3
+    logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch).apply(Seq(1, 4))
+    assertEquals(5L, logAppendInfo.firstOffset)
+    assertEquals(6L, logAppendInfo.lastOffset)
+  }
+
+  @Test
   def testBasicTransactionAwareCleaning(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
@@ -1006,23 +1047,27 @@ class LogCleanerTest extends JUnitSuite {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  private def transactionalRecords(records: Seq[SimpleRecord],
-                           producerId: Long,
-                           producerEpoch: Short,
-                           sequence: Int): MemoryRecords = {
-    MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, records: _*)
+  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0): Seq[Int] => LogAppendInfo = {
+    appendAsLeader(log, producerId, producerEpoch, isTransactional = true)
   }
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0): Seq[Int] => Unit = {
+  private def appendIdempotentAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0): Seq[Int] => LogAppendInfo = {
+    appendAsLeader(log, producerId, producerEpoch, isTransactional = false)
+  }
+
+  private def appendAsLeader(log: Log, producerId: Long, producerEpoch: Short = 0, isTransactional: Boolean = true): Seq[Int] => LogAppendInfo = {
     var sequence = 0
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>
         val keyBytes = key.toString.getBytes
         new SimpleRecord(keyBytes, keyBytes) // the value doesn't matter too much since we validate offsets
       }
-      val records = transactionalRecords(simpleRecords, producerId, producerEpoch, sequence)
-      log.appendAsLeader(records, leaderEpoch = 0)
+      val records = if (isTransactional)
+        MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
+      else
+        MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
       sequence += simpleRecords.size
+      log.appendAsLeader(records, leaderEpoch = 0)
     }
   }
 

@@ -332,8 +332,8 @@ public class MemoryRecordsTest {
             builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L,
                     RecordBatch.NO_TIMESTAMP, pid2, epoch2, baseSequence2, true, RecordBatch.NO_PARTITION_LEADER_EPOCH);
             builder.append(16L, "6".getBytes(), "g".getBytes());
-            builder.append(17L, null, "h".getBytes());
-            builder.append(18L, "8".getBytes(), "i".getBytes());
+            builder.append(17L, "7".getBytes(), "h".getBytes());
+            builder.append(18L, null, "i".getBytes());
             builder.close();
 
             buffer.flip();
@@ -356,6 +356,9 @@ public class MemoryRecordsTest {
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.baseSequence());
             assertEquals(RecordBatch.NO_SEQUENCE, firstBatch.lastSequence());
             assertFalse(firstBatch.isTransactional());
+            List<Record> firstBatchRecords = TestUtils.toList(firstBatch);
+            assertEquals(1, firstBatchRecords.size());
+            assertEquals(RecordBatch.NO_SEQUENCE, firstBatchRecords.get(0).sequence());
 
             MutableRecordBatch secondBatch = batches.get(1);
             assertEquals(2, secondBatch.countOrNull().intValue());
@@ -366,6 +369,10 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence1, secondBatch.baseSequence());
             assertEquals(baseSequence1 + 2, secondBatch.lastSequence());
             assertFalse(secondBatch.isTransactional());
+            List<Record> secondBatchRecords = TestUtils.toList(secondBatch);
+            assertEquals(2, secondBatchRecords.size());
+            assertEquals(baseSequence1 + 1, secondBatchRecords.get(0).sequence());
+            assertEquals(baseSequence1 + 2, secondBatchRecords.get(1).sequence());
 
             MutableRecordBatch thirdBatch = batches.get(2);
             assertEquals(2, thirdBatch.countOrNull().intValue());
@@ -376,6 +383,10 @@ public class MemoryRecordsTest {
             assertEquals(baseSequence2, thirdBatch.baseSequence());
             assertEquals(baseSequence2 + 2, thirdBatch.lastSequence());
             assertTrue(thirdBatch.isTransactional());
+            List<Record> thirdBatchRecords = TestUtils.toList(thirdBatch);
+            assertEquals(2, thirdBatchRecords.size());
+            assertEquals(baseSequence2, thirdBatchRecords.get(0).sequence());
+            assertEquals(baseSequence2 + 1, thirdBatchRecords.get(1).sequence());
         }
     }
 

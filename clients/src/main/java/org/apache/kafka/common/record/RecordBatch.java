@@ -96,10 +96,11 @@ public interface RecordBatch extends Iterable<Record> {
     TimestampType timestampType();
 
     /**
-     * Get the first offset contained in this record batch. For magic version prior to 2, this generally
-     * requires deep iteration and will return the offset of the first record in the record batch. For
-     * magic version 2 and above, this will return the first offset of the original record batch (i.e.
-     * prior to compaction). For non-compacted topics, the behavior is equivalent.
+     * Get the base offset contained in this record batch. For magic version prior to 2, the base offset will
+     * always be the offset of the first message in the batch. This generally requires deep iteration and will
+     * return the offset of the first record in the record batch. For magic version 2 and above, this will return
+     * the first offset of the original record batch (i.e. prior to compaction). For non-compacted topics, the
+     * behavior is equivalent.
      *
      * Because this requires deep iteration for older magic versions, this method should be used with
      * caution. Generally {@link #lastOffset()} is safer since access is efficient for all magic versions.
@@ -110,7 +111,7 @@ public interface RecordBatch extends Iterable<Record> {
     long baseOffset();
 
     /**
-     * Get the last offset in this record batch (inclusive). Unlike {@link #baseOffset()}, the last offset
+     * Get the last offset in this record batch (inclusive). Just like {@link #baseOffset()}, the last offset
      * always reflects the offset of the last record in the batch, even after compaction.
      *
      * @return The offset of the last record in this batch
@@ -151,7 +152,7 @@ public interface RecordBatch extends Iterable<Record> {
     boolean hasProducerId();
 
     /**
-     * Get the first sequence number of this record batch.
+     * Get the base sequence number of this record batch. Note that this value is not impacted by log cleaning.
      * @return The first sequence number or -1 if there is none
      */
     int baseSequence();
