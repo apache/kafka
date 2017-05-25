@@ -53,7 +53,7 @@ object TransactionCoordinator {
     val txnStateManager = new TransactionStateManager(config.brokerId, zkUtils, scheduler, replicaManager, txnConfig, time)
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager, txnMarkerPurgatory, time)
 
-    new TransactionCoordinator(config.brokerId, scheduler, metadataCache, producerIdManager, txnStateManager, txnMarkerChannelManager, time)
+    new TransactionCoordinator(config.brokerId, scheduler, producerIdManager, txnStateManager, txnMarkerChannelManager, time)
   }
 
   private def initTransactionError(error: Errors): InitProducerIdResult = {
@@ -75,7 +75,6 @@ object TransactionCoordinator {
  */
 class TransactionCoordinator(brokerId: Int,
                              scheduler: Scheduler,
-                             metadataCache: MetadataCache,
                              producerIdManager: ProducerIdManager,
                              txnManager: TransactionStateManager,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
