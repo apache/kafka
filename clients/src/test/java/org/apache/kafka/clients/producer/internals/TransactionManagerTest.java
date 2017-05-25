@@ -764,6 +764,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());
         assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
     }
 
     @Test
@@ -797,6 +798,7 @@ public class TransactionManagerTest {
 
         sender.run(time.milliseconds());
         assertTrue(abortResult.isCompleted());
+        assertTrue(abortResult.isSuccessful());
     }
 
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {

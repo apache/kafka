@@ -346,7 +346,9 @@ public class TransactionManager {
 
         if (nextRequestHandler != null && nextRequestHandler.isEndTxn() && !transactionStarted) {
             ((EndTxnHandler) nextRequestHandler).result.done();
-            completeTransaction();
+            if (currentState != State.FATAL_ERROR) {
+                completeTransaction();
+            }
             return pendingRequests.poll();
         }
 
@@ -438,7 +440,7 @@ public class TransactionManager {
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
         if (isInErrorState()) {
-            if (requestHandler instanceof EndTxnHandler && transactionStarted) {
+            if (requestHandler instanceof EndTxnHandler) {
                 // we allow abort requests to break out of the error state. The state and the last error
                 // will be cleared when the request returns
                 EndTxnHandler endTxnHandler = (EndTxnHandler) requestHandler;
