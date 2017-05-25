@@ -56,7 +56,8 @@ object LogAppendInfo {
 /**
  * Struct to hold various quantities we compute about each message set before appending to the log
  *
- * @param firstOffset The first offset in the message set
+ * @param firstOffset The first offset in the message set unless the message format is less than V2 and we are appending
+  *                   to the follower. In that case, this will be the last offset for performance reasons.
  * @param lastOffset The last offset in the message set
  * @param maxTimestamp The maximum timestamp of the message set.
  * @param offsetOfMaxTimestamp The offset of the message with the maximum timestamp.
@@ -735,7 +736,7 @@ class Log(@volatile var dir: File,
   private def analyzeAndValidateRecords(records: MemoryRecords, isFromClient: Boolean): LogAppendInfo = {
     var shallowMessageCount = 0
     var validBytesCount = 0
-    var firstOffset = -1L
+    var baseOffset = -1L
     var lastOffset = -1L
     var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
@@ -750,8 +751,10 @@ class Log(@volatile var dir: File,
       // update the first offset if on the first message. For magic versions older than 2, we use the last offset
       // to avoid the need to decompress the data (the last offset can be obtained directly from the wrapper message).
       // For magic version 2, we can get the first offset directly from the batch header.
-      if (firstOffset < 0)
-        firstOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.firstOffset else batch.lastOffset
+      // When appending to the leader, we will update LogAppendInfo.baseOffset with the correct value. In the follower
+      // case, validation will be more lenient.
+      if (baseOffset < 0)
+        baseOffset = if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) batch.firstOffset else batch.lastOffset
 
       // check that offsets are monotonically increasing
       if (lastOffset >= batch.lastOffset)
@@ -787,7 +790,7 @@ class Log(@volatile var dir: File,
 
     // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
-    LogAppendInfo(firstOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
+    LogAppendInfo(baseOffset, lastOffset, maxTimestamp, offsetOfMaxTimestamp, RecordBatch.NO_TIMESTAMP, sourceCodec,
       targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
 

@@ -161,10 +161,10 @@ class LogTest {
     val pid = 1L
     val epoch: Short = 0
 
-    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = 0)
+    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, firstSequence = 0)
     log.appendAsLeader(records, leaderEpoch = 0)
 
-    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, sequence = 2)
+    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = epoch, firstSequence = 2)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 
@@ -210,10 +210,10 @@ class LogTest {
     val pid = 1L
     val epoch = 0.toShort
     val seq = 0
-    val baseOffset = 23L
+    val firstOffset = 23L
 
     // create a batch with a couple gaps to simulate compaction
-    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+    val records = TestUtils.records(pid = pid, epoch = epoch, firstSequence = seq, firstOffset = firstOffset, records = List(
       new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
@@ -230,22 +230,22 @@ class LogTest {
     log.appendAsFollower(filteredRecords)
 
     // append some more data and then truncate to force rebuilding of the PID map
-    val moreRecords = TestUtils.records(baseOffset = baseOffset + 4, records = List(
+    val moreRecords = TestUtils.records(firstOffset = firstOffset + 4, records = List(
       new SimpleRecord(System.currentTimeMillis(), "e".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "f".getBytes)))
     moreRecords.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
     log.appendAsFollower(moreRecords)
 
-    log.truncateTo(baseOffset + 4)
+    log.truncateTo(firstOffset + 4)
 
     val activePids = log.activePids
     assertTrue(activePids.contains(pid))
 
     val entry = activePids(pid)
     assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(firstOffset, entry.firstOffset)
     assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastOffset)
+    assertEquals(firstOffset + 3, entry.lastOffset)
   }
 
   @Test
@@ -254,10 +254,10 @@ class LogTest {
     val pid = 1L
     val epoch = 0.toShort
     val seq = 0
-    val baseOffset = 23L
+    val firstOffset = 23L
 
     // create a batch with a couple gaps to simulate compaction
-    val records = TestUtils.records(pid = pid, epoch = epoch, sequence = seq, baseOffset = baseOffset, records = List(
+    val records = TestUtils.records(pid = pid, epoch = epoch, firstSequence = seq, firstOffset = firstOffset, records = List(
       new SimpleRecord(System.currentTimeMillis(), "a".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "b".getBytes),
       new SimpleRecord(System.currentTimeMillis(), "c".getBytes),
@@ -277,9 +277,9 @@ class LogTest {
 
     val entry = activePids(pid)
     assertEquals(0, entry.firstSeq)
-    assertEquals(baseOffset, entry.firstOffset)
+    assertEquals(firstOffset, entry.firstOffset)
     assertEquals(3, entry.lastSeq)
-    assertEquals(baseOffset + 3, entry.lastOffset)
+    assertEquals(firstOffset + 3, entry.lastOffset)
   }
 
   @Test
@@ -325,15 +325,15 @@ class LogTest {
   @Test
   def testPidExpirationOnSegmentDeletion() {
     val pid1 = 1L
-    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, epoch = 0, sequence = 0)
+    val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), pid = pid1, epoch = 0, firstSequence = 0)
     val log = createLog(records.sizeInBytes, messagesPerSegment = 1, retentionBytes = records.sizeInBytes * 2)
     log.appendAsLeader(records, leaderEpoch = 0)
     log.takeProducerSnapshot()
 
     val pid2 = 2L
-    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, epoch = 0, sequence = 0),
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("bar".getBytes)), pid = pid2, epoch = 0, firstSequence = 0),
       leaderEpoch = 0)
-    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, epoch = 0, sequence = 1),
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord("baz".getBytes)), pid = pid2, epoch = 0, firstSequence = 1),
       leaderEpoch = 0)
     log.takeProducerSnapshot()
 
@@ -422,7 +422,7 @@ class LogTest {
     val log = createLog(2048, maxPidExpirationMs = maxPidExpirationMs,
       pidExpirationCheckIntervalMs = expirationCheckInterval)
     val records = Seq(new SimpleRecord(time.milliseconds(), "foo".getBytes))
-    log.appendAsLeader(TestUtils.records(records, pid = pid, epoch = 0, sequence = 0), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(records, pid = pid, epoch = 0, firstSequence = 0), leaderEpoch = 0)
 
     assertEquals(Set(pid), log.activePids.keySet)
 
@@ -452,7 +452,7 @@ class LogTest {
     // Pad the beginning of the log.
     for (_ <- 0 to 5) {
       val record = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)),
-        pid = pid, epoch = epoch, sequence = seq)
+        pid = pid, epoch = epoch, firstSequence = seq)
       log.appendAsLeader(record, leaderEpoch = 0)
       seq = seq + 1
     }
@@ -461,7 +461,7 @@ class LogTest {
       new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
       new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
       new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)
-    ), pid = pid, epoch = epoch, sequence = seq)
+    ), pid = pid, epoch = epoch, firstSequence = seq)
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals("should have appended 3 entries", multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset + 1, 3)
 
@@ -480,7 +480,7 @@ class LogTest {
         List(
           new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
           new SimpleRecord(time.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)),
-        pid = pid, epoch = epoch, sequence = seq - 2)
+        pid = pid, epoch = epoch, firstSequence = seq - 2)
       log.appendAsLeader(records, leaderEpoch = 0)
       fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
         "in the middle of the log.")
@@ -492,7 +492,7 @@ class LogTest {
      try {
       val records = TestUtils.records(
         List(new SimpleRecord(time.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
-        pid = pid, epoch = epoch, sequence = 1)
+        pid = pid, epoch = epoch, firstSequence = 1)
       log.appendAsLeader(records, leaderEpoch = 0)
       fail ("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
         "in the middle of the log.")
@@ -502,7 +502,7 @@ class LogTest {
 
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
     def createRecordsWithDuplicate = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)),
-      pid = pid, epoch = epoch, sequence = seq)
+      pid = pid, epoch = epoch, firstSequence = seq)
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     assertEquals("Inserted a duplicate records into the log", origAppendInfo.firstOffset, newAppendInfo.firstOffset)
@@ -567,13 +567,13 @@ class LogTest {
     val log = createLog(1024*1024)
     val epoch: Short = 0
     val pid = 1L
-    val baseSequence = 0
+    val firstSequence = 0
     val partitionLeaderEpoch = 0
     // this is a bit contrived. to trigger the duplicate case for a follower append, we have to append
     // a batch with matching sequence numbers, but valid increasing offsets
-    log.appendAsFollower(MemoryRecords.withIdempotentRecords(0L, CompressionType.NONE, pid, epoch, baseSequence,
+    log.appendAsFollower(MemoryRecords.withIdempotentRecords(0L, CompressionType.NONE, pid, epoch, firstSequence,
       partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
-    log.appendAsFollower(MemoryRecords.withIdempotentRecords(2L, CompressionType.NONE, pid, epoch, baseSequence,
+    log.appendAsFollower(MemoryRecords.withIdempotentRecords(2L, CompressionType.NONE, pid, epoch, firstSequence,
       partitionLeaderEpoch, new SimpleRecord("a".getBytes), new SimpleRecord("b".getBytes)))
   }
 
@@ -642,10 +642,10 @@ class LogTest {
     val newEpoch: Short = 1
     val oldEpoch: Short = 0
 
-    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = newEpoch, sequence = 0)
+    val records = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = newEpoch, firstSequence = 0)
     log.appendAsLeader(records, leaderEpoch = 0)
 
-    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = oldEpoch, sequence = 0)
+    val nextRecords = TestUtils.records(List(new SimpleRecord(time.milliseconds, "key".getBytes, "value".getBytes)), pid = pid, epoch = oldEpoch, firstSequence = 0)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 

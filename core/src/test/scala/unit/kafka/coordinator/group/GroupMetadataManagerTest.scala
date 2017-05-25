@@ -456,8 +456,8 @@ class GroupMetadataManagerTest {
     }
   }
 
-  private def appendConsumerOffsetCommit(buffer: ByteBuffer, baseOffset: Long, offsets: Map[TopicPartition, Long]) = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, baseOffset)
+  private def appendConsumerOffsetCommit(buffer: ByteBuffer, firstOffset: Long, offsets: Map[TopicPartition, Long]) = {
+    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.LOG_APPEND_TIME, firstOffset)
     val commitRecords = createCommittedOffsetRecords(offsets)
     commitRecords.foreach(builder.append)
     builder.build()
@@ -465,18 +465,18 @@ class GroupMetadataManagerTest {
   }
 
   private def appendTransactionalOffsetCommits(buffer: ByteBuffer, producerId: Long, producerEpoch: Short,
-                                               baseOffset: Long, offsets: Map[TopicPartition, Long]): Int = {
-    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, baseOffset, producerId, producerEpoch, 0, true)
+                                               firstOffset: Long, offsets: Map[TopicPartition, Long]): Int = {
+    val builder = MemoryRecords.builder(buffer, CompressionType.NONE, firstOffset, producerId, producerEpoch, 0, true)
     val commitRecords = createCommittedOffsetRecords(offsets)
     commitRecords.foreach(builder.append)
     builder.build()
     offsets.size
   }
 
-  private def completeTransactionalOffsetCommit(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, baseOffset: Long,
+  private def completeTransactionalOffsetCommit(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, firstOffset: Long,
                                                 isCommit: Boolean): Int = {
     val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), producerId, producerEpoch, 0, true, true,
+      TimestampType.LOG_APPEND_TIME, firstOffset, time.milliseconds(), producerId, producerEpoch, 0, true, true,
       RecordBatch.NO_PARTITION_LEADER_EPOCH)
     val controlRecordType = if (isCommit) ControlRecordType.COMMIT else ControlRecordType.ABORT
     builder.appendEndTxnMarker(time.milliseconds(), new EndTransactionMarker(controlRecordType, 0))

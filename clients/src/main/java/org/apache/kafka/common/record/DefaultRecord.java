@@ -59,8 +59,8 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  *  | Unused (0-7) |
  *  ----------------
  *
- * The offset and timestamp deltas compute the difference relative to the base offset and
- * base timestamp of the log entry that this record is contained in.
+ * The offset and timestamp deltas compute the difference relative to the first offset and
+ * first timestamp of the record batch that this record is contained in.
  */
 public class DefaultRecord implements Record {
 
@@ -325,45 +325,45 @@ public class DefaultRecord implements Record {
     }
 
     public static DefaultRecord readFrom(DataInputStream input,
-                                         long baseOffset,
-                                         long baseTimestamp,
-                                         int baseSequence,
+                                         long firstOffset,
+                                         long firstTimestamp,
+                                         int firstSequence,
                                          Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
         input.readFully(recordBuffer.array(), recordBuffer.arrayOffset(), sizeOfBodyInBytes);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return readFrom(recordBuffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+        return readFrom(recordBuffer, totalSizeInBytes, firstOffset, firstTimestamp, firstSequence, logAppendTime);
     }
 
     public static DefaultRecord readFrom(ByteBuffer buffer,
-                                         long baseOffset,
-                                         long baseTimestamp,
-                                         int baseSequence,
+                                         long firstOffset,
+                                         long firstTimestamp,
+                                         int firstSequence,
                                          Long logAppendTime) {
         int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
         if (buffer.remaining() < sizeOfBodyInBytes)
             return null;
 
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return readFrom(buffer, totalSizeInBytes, baseOffset, baseTimestamp, baseSequence, logAppendTime);
+        return readFrom(buffer, totalSizeInBytes, firstOffset, firstTimestamp, firstSequence, logAppendTime);
     }
 
     private static DefaultRecord readFrom(ByteBuffer buffer,
                                           int sizeInBytes,
-                                          long baseOffset,
-                                          long baseTimestamp,
-                                          int baseSequence,
+                                          long firstOffset,
+                                          long firstTimestamp,
+                                          int firstSequence,
                                           Long logAppendTime) {
         byte attributes = buffer.get();
         long timestampDelta = ByteUtils.readVarlong(buffer);
-        long timestamp = baseTimestamp + timestampDelta;
+        long timestamp = firstTimestamp + timestampDelta;
         if (logAppendTime != null)
             timestamp = logAppendTime;
 
         int offsetDelta = ByteUtils.readVarint(buffer);
-        long offset = baseOffset + offsetDelta;
-        int sequence = baseSequence >= 0 ? baseSequence + offsetDelta : RecordBatch.NO_SEQUENCE;
+        long offset = firstOffset + offsetDelta;
+        int sequence = firstSequence >= 0 ? firstSequence + offsetDelta : RecordBatch.NO_SEQUENCE;
 
         ByteBuffer key = null;
         int keySize = ByteUtils.readVarint(buffer);

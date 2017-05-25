@@ -63,12 +63,12 @@ public class DefaultRecordBatchTest {
     public void buildDefaultRecordBatchWithProducerId() {
         long pid = 23423L;
         short epoch = 145;
-        int baseSequence = 983;
+        int firstSequence = 983;
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, baseSequence);
+                TimestampType.CREATE_TIME, 1234567L, RecordBatch.NO_TIMESTAMP, pid, epoch, firstSequence);
         builder.appendWithOffset(1234567, 1L, "a".getBytes(), "v".getBytes());
         builder.appendWithOffset(1234568, 2L, "b".getBytes(), "v".getBytes());
 
@@ -80,8 +80,8 @@ public class DefaultRecordBatchTest {
             assertEquals(2L, batch.maxTimestamp());
             assertEquals(pid, batch.producerId());
             assertEquals(epoch, batch.producerEpoch());
-            assertEquals(baseSequence, batch.firstSequence());
-            assertEquals(baseSequence + 1, batch.lastSequence());
+            assertEquals(firstSequence, batch.firstSequence());
+            assertEquals(firstSequence + 1, batch.lastSequence());
 
             for (Record record : batch) {
                 assertTrue(record.isValid());

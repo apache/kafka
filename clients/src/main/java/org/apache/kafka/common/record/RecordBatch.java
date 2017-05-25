@@ -96,16 +96,15 @@ public interface RecordBatch extends Iterable<Record> {
     TimestampType timestampType();
 
     /**
-     * Get the first offset contained in this record batch. For magic version prior to 2, this generally
-     * requires deep iteration and will return the offset of the first record in the record batch. For
-     * magic version 2 and above, this will return the first offset of the original record batch (i.e.
-     * prior to compaction). For non-compacted topics, the behavior is equivalent.
+     * Get the first offset contained in this record batch.
      *
-     * Because this requires deep iteration for older magic versions, this method should be used with
+     * Because this requires deep iteration for magic versions prior to 2, this method should be used with
      * caution. Generally {@link #lastOffset()} is safer since access is efficient for all magic versions.
      *
-     * @return The base offset of this record batch (which may or may not be the offset of the first record
-     *         as described above).
+     * Unlike {@link #lastOffset()}, the first offset is updated during compaction (if applicable) and it always
+     * reflects the offset of the first record in the batch.
+     *
+     * @return The offset of the first record in this batch
      */
     long firstOffset();
 
@@ -114,7 +113,8 @@ public interface RecordBatch extends Iterable<Record> {
      * always reflects the offset of the last record in the original batch written to the log, even if
      * the record itself is removed by the log cleaner.
      *
-     * @return The offset of the last record in this batch
+     * @return The offset of the last record in the original batch written to the log (or this batch if it has never
+     * been written to the log)
      */
     long lastOffset();
 
@@ -153,15 +153,20 @@ public interface RecordBatch extends Iterable<Record> {
 
     /**
      * Get the first sequence number of this record batch.
+     *
+     * Unlike {@link #lastSequence()}, the first sequence number is updated during compaction and it always reflects
+     * the sequence number of the first record in the batch.
+     *
      * @return The first sequence number or -1 if there is none
      */
     int firstSequence();
 
     /**
      * Get the last sequence number of this record batch. Similar to {@link #lastOffset()}, the last
-     * sequence number is not impacted by the log cleaner.
+     * sequence number always reflects the sequence number of the last record in the original batch written to the log,
+     * even if the record itself is removed by the log cleaner.
      *
-     * @return The last sequence number or -1 if there is none
+     * @return The last sequence number (as specified above) or -1 if there is none
      */
     int lastSequence();
 

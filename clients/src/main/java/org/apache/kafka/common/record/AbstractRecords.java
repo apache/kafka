@@ -64,13 +64,13 @@ public abstract class AbstractRecords implements Records {
                 recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
             } else {
                 List<Record> records = Utils.toList(batch.iterator());
-                final long baseOffset;
+                final long firstOffset;
                 if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                    baseOffset = batch.firstOffset();
+                    firstOffset = batch.firstOffset();
                 else
-                    baseOffset = records.get(0).offset();
-                totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, batch.compressionType(), records);
-                recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, records, baseOffset));
+                    firstOffset = records.get(0).offset();
+                totalSizeEstimate += estimateSizeInBytes(toMagic, firstOffset, batch.compressionType(), records);
+                recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, records, firstOffset));
             }
         }
 
@@ -96,7 +96,7 @@ public abstract class AbstractRecords implements Records {
         long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
 
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
-                timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
+                timestampType, recordBatchAndRecords.firstOffset, logAppendTime);
         for (Record record : recordBatchAndRecords.records)
             builder.append(record);
 
@@ -134,7 +134,7 @@ public abstract class AbstractRecords implements Records {
     }
 
     public static int estimateSizeInBytes(byte magic,
-                                          long baseOffset,
+                                          long firstOffset,
                                           CompressionType compressionType,
                                           Iterable<Record> records) {
         int size = 0;
@@ -142,7 +142,7 @@ public abstract class AbstractRecords implements Records {
             for (Record record : records)
                 size += Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, record.key(), record.value());
         } else {
-            size = DefaultRecordBatch.sizeInBytes(baseOffset, records);
+            size = DefaultRecordBatch.sizeInBytes(firstOffset, records);
         }
         return estimateCompressedSizeInBytes(size, compressionType);
     }
@@ -178,12 +178,12 @@ public abstract class AbstractRecords implements Records {
     private static class RecordBatchAndRecords {
         private final RecordBatch batch;
         private final List<Record> records;
-        private final Long baseOffset;
+        private final Long firstOffset;
 
-        private RecordBatchAndRecords(RecordBatch batch, List<Record> records, Long baseOffset) {
+        private RecordBatchAndRecords(RecordBatch batch, List<Record> records, Long firstOffset) {
             this.batch = batch;
             this.records = records;
-            this.baseOffset = baseOffset;
+            this.firstOffset = firstOffset;
         }
     }
 

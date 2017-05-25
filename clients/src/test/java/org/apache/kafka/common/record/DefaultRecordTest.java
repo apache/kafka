@@ -45,21 +45,21 @@ public class DefaultRecordTest {
         };
 
         for (SimpleRecord record : records) {
-            int baseSequence = 723;
-            long baseOffset = 37;
+            int firstSequence = 723;
+            long firstOffset = 37;
             int offsetDelta = 10;
-            long baseTimestamp = System.currentTimeMillis();
+            long firstTimestamp = System.currentTimeMillis();
             long timestampDelta = 323;
 
             ByteBuffer buffer = ByteBuffer.allocate(1024);
             DefaultRecord.writeTo(buffer, offsetDelta, timestampDelta, record.key(), record.value(), record.headers());
             buffer.flip();
 
-            DefaultRecord logRecord = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, baseSequence, null);
+            DefaultRecord logRecord = DefaultRecord.readFrom(buffer, firstOffset, firstTimestamp, firstSequence, null);
             assertNotNull(logRecord);
-            assertEquals(baseOffset + offsetDelta, logRecord.offset());
-            assertEquals(baseSequence + offsetDelta, logRecord.sequence());
-            assertEquals(baseTimestamp + timestampDelta, logRecord.timestamp());
+            assertEquals(firstOffset + offsetDelta, logRecord.offset());
+            assertEquals(firstSequence + offsetDelta, logRecord.sequence());
+            assertEquals(firstTimestamp + timestampDelta, logRecord.timestamp());
             assertEquals(record.key(), logRecord.key());
             assertEquals(record.value(), logRecord.value());
             assertArrayEquals(record.headers(), logRecord.headers());
@@ -72,16 +72,16 @@ public class DefaultRecordTest {
     public void testSerdeNoSequence() {
         ByteBuffer key = ByteBuffer.wrap("hi".getBytes());
         ByteBuffer value = ByteBuffer.wrap("there".getBytes());
-        long baseOffset = 37;
+        long firstOffset = 37;
         int offsetDelta = 10;
-        long baseTimestamp = System.currentTimeMillis();
+        long firstTimestamp = System.currentTimeMillis();
         long timestampDelta = 323;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         DefaultRecord.writeTo(buffer, offsetDelta, timestampDelta, key, value, new Header[0]);
         buffer.flip();
 
-        DefaultRecord record = DefaultRecord.readFrom(buffer, baseOffset, baseTimestamp, RecordBatch.NO_SEQUENCE, null);
+        DefaultRecord record = DefaultRecord.readFrom(buffer, firstOffset, firstTimestamp, RecordBatch.NO_SEQUENCE, null);
         assertNotNull(record);
         assertEquals(RecordBatch.NO_SEQUENCE, record.sequence());
     }

@@ -186,12 +186,12 @@ public class FetcherTest {
 
         long producerId = 1;
         short producerEpoch = 0;
-        int baseSequence = 0;
+        int firstSequence = 0;
         int partitionLeaderEpoch = 0;
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.idempotentBuilder(buffer, CompressionType.NONE, 0L, producerId,
-                producerEpoch, baseSequence);
+                producerEpoch, firstSequence);
         builder.append(0L, "key".getBytes(), null);
         builder.close();
 
@@ -1623,9 +1623,9 @@ public class FetcherTest {
         assertEquals(currentOffset, (long) subscriptions.position(tp1));
     }
 
-    private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {
+    private int appendTransactionalRecords(ByteBuffer buffer, long pid, long firstOffset, int firstSequence, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseSequence, true,
+                TimestampType.CREATE_TIME, firstOffset, time.milliseconds(), pid, (short) 0, firstSequence, true,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
         for (SimpleRecord record : records) {
@@ -1635,22 +1635,22 @@ public class FetcherTest {
         return records.length;
     }
 
-    private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, SimpleRecord... records) {
-        return appendTransactionalRecords(buffer, pid, baseOffset, (int) baseOffset, records);
+    private int appendTransactionalRecords(ByteBuffer buffer, long pid, long firstOffset, SimpleRecord... records) {
+        return appendTransactionalRecords(buffer, pid, firstOffset, (int) firstOffset, records);
     }
 
-    private int commitTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
+    private int commitTransaction(ByteBuffer buffer, long producerId, long firstOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
-        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+        MemoryRecords.writeEndTransactionalMarker(buffer, firstOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         return 1;
     }
 
-    private int abortTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
+    private int abortTransaction(ByteBuffer buffer, long producerId, long firstOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
-        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+        MemoryRecords.writeEndTransactionalMarker(buffer, firstOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
         return 1;
     }

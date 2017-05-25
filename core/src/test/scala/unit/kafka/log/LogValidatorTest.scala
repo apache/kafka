@@ -146,7 +146,7 @@ class LogValidatorTest {
     val now = System.currentTimeMillis()
     val timestampSeq = Seq(now - 1, now + 1, now)
 
-    val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =
+    val (producerId, producerEpoch, firstSequence, isTransactional, partitionLeaderEpoch) =
       if (magic >= RecordBatch.MAGIC_VALUE_V2)
         (1324L, 10.toShort, 984, true, 40)
       else
@@ -154,7 +154,7 @@ class LogValidatorTest {
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
+      producerEpoch, firstSequence, partitionLeaderEpoch, isTransactional,
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
@@ -179,7 +179,7 @@ class LogValidatorTest {
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
-      assertEquals(baseSequence, batch.firstSequence)
+      assertEquals(firstSequence, batch.firstSequence)
       assertEquals(isTransactional, batch.isTransactional)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
@@ -207,7 +207,7 @@ class LogValidatorTest {
     val now = System.currentTimeMillis()
     val timestampSeq = Seq(now - 1, now + 1, now)
 
-    val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =
+    val (producerId, producerEpoch, firstSequence, isTransactional, partitionLeaderEpoch) =
       if (magic >= RecordBatch.MAGIC_VALUE_V2)
         (1324L, 10.toShort, 984, true, 40)
       else
@@ -215,7 +215,7 @@ class LogValidatorTest {
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
+      producerEpoch, firstSequence, partitionLeaderEpoch, isTransactional,
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
@@ -240,7 +240,7 @@ class LogValidatorTest {
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
-      assertEquals(baseSequence, batch.firstSequence)
+      assertEquals(firstSequence, batch.firstSequence)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
         assertTrue(record.isValid)
@@ -337,7 +337,7 @@ class LogValidatorTest {
     val now = System.currentTimeMillis()
     val timestampSeq = Seq(now - 1, now + 1, now)
 
-    val (producerId, producerEpoch, baseSequence, isTransactional, partitionLeaderEpoch) =
+    val (producerId, producerEpoch, firstSequence, isTransactional, partitionLeaderEpoch) =
       if (magic >= RecordBatch.MAGIC_VALUE_V2)
         (1324L, 10.toShort, 984, true, 40)
       else
@@ -345,7 +345,7 @@ class LogValidatorTest {
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
+      producerEpoch, firstSequence, partitionLeaderEpoch, isTransactional,
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
@@ -370,7 +370,7 @@ class LogValidatorTest {
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
-      assertEquals(baseSequence, batch.firstSequence)
+      assertEquals(firstSequence, batch.firstSequence)
       assertEquals(partitionLeaderEpoch, batch.partitionLeaderEpoch)
       for (record <- batch.asScala) {
         assertTrue(record.isValid)
@@ -916,9 +916,9 @@ class LogValidatorTest {
   }
 
   /* check that offsets are assigned consecutively from the given base offset */
-  def checkOffsets(records: MemoryRecords, baseOffset: Long) {
+  def checkOffsets(records: MemoryRecords, firstOffset: Long) {
     assertTrue("Message set should not be empty", records.records.asScala.nonEmpty)
-    var offset = baseOffset
+    var offset = firstOffset
     for (entry <- records.records.asScala) {
       assertEquals("Unexpected offset in message set iterator", offset, entry.offset)
       offset += 1
