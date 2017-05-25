@@ -302,6 +302,43 @@ public class MemoryRecordsTest {
     }
 
     @Test
+    public void testFilterToAlreadyCompactedLog() {
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+
+        // create a batch with some offset gaps to simulate a compacted batch
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
+                TimestampType.CREATE_TIME, 0L);
+        builder.appendWithOffset(5L, 10L, null, "a".getBytes());
+        builder.appendWithOffset(8L, 11L, "1".getBytes(), "b".getBytes());
+        builder.appendWithOffset(10L, 12L, null, "c".getBytes());
+
+        builder.close();
+        buffer.flip();
+
+        ByteBuffer filtered = ByteBuffer.allocate(2048);
+        MemoryRecords.readableRecords(buffer).filterTo(new RetainNonNullKeysFilter(), filtered);
+        filtered.flip();
+        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+
+        List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+        assertEquals(1, batches.size());
+
+        MutableRecordBatch batch = batches.get(0);
+        List<Record> records = TestUtils.toList(batch);
+        assertEquals(1, records.size());
+        assertEquals(8L, records.get(0).offset());
+
+        if (magic >= RecordBatch.MAGIC_VALUE_V2) {
+            // the new format preserves first and last offsets from the original batch
+            assertEquals(0L, batch.baseOffset());
+            assertEquals(10L, batch.lastOffset());
+        } else {
+            assertEquals(8L, batch.baseOffset());
+            assertEquals(8L, batch.lastOffset());
+        }
+    }
+
+    @Test
     public void testFilterToPreservesProducerInfo() {
         if (magic >= RecordBatch.MAGIC_VALUE_V2) {
             ByteBuffer buffer = ByteBuffer.allocate(2048);

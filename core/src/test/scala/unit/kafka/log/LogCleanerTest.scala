@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.File
 import java.nio._
-import java.nio.file.Paths
+import java.nio.file.{Files, Paths}
 import java.util.Properties
 
 import kafka.common._
@@ -93,40 +93,59 @@ class LogCleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
-    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    var log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     val producerEpoch = 0.toShort
     val pid1 = 1
     val pid2 = 2
     val pid3 = 3
+    val pid4 = 4
 
-    val appendProducer1 = appendIdempotentAsLeader(log, pid1, producerEpoch)
-    val appendProducer2 = appendIdempotentAsLeader(log, pid2, producerEpoch)
-    val appendProducer3 = appendIdempotentAsLeader(log, pid3, producerEpoch)
-
-    appendProducer1(Seq(1, 2))
-    appendProducer2(Seq(3, 1, 4))
-    appendProducer3(Seq(1, 4))
+    appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
+    appendIdempotentAsLeader(log, pid2, producerEpoch)(Seq(3, 1, 4))
+    appendIdempotentAsLeader(log, pid3, producerEpoch)(Seq(1, 4))
 
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
-    assertEquals(List(2, 3, 4, 1, 4), keysInLog(log))
-    assertEquals(List(1, 2, 4, 5, 6), offsetsInLog(log))
+    assertEquals(List(2, 3, 3, 4, 1, 4), keysInLog(log))
+    assertEquals(List(1, 2, 3, 5, 6, 7), offsetsInLog(log))
+
+    // we have to reload the log to validate that the cleaner maintained sequence numbers correctly
+    def reloadLog(): Unit = {
+      log.close()
+      log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps), recoveryPoint = 0L)
+    }
+
+    reloadLog()
 
     // check duplicate append from producer 1
-    var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch).apply(Seq(1, 2))
+    var logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
     assertEquals(0L, logAppendInfo.firstOffset)
-    assertEquals(1L, logAppendInfo.lastOffset)
+    assertEquals(2L, logAppendInfo.lastOffset)
 
     // check duplicate append from producer 2
-    logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch).apply(Seq(3, 1, 4))
-    assertEquals(2L, logAppendInfo.firstOffset)
-    assertEquals(4L, logAppendInfo.lastOffset)
+    logAppendInfo = appendIdempotentAsLeader(log, pid2, producerEpoch)(Seq(3, 1, 4))
+    assertEquals(3L, logAppendInfo.firstOffset)
+    assertEquals(5L, logAppendInfo.lastOffset)
 
     // check duplicate append from producer 3
-    logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch).apply(Seq(1, 4))
-    assertEquals(5L, logAppendInfo.firstOffset)
-    assertEquals(6L, logAppendInfo.lastOffset)
+    logAppendInfo = appendIdempotentAsLeader(log, pid3, producerEpoch)(Seq(1, 4))
+    assertEquals(6L, logAppendInfo.firstOffset)
+    assertEquals(7L, logAppendInfo.lastOffset)
+
+    // do one more append and a round of cleaning to force another deletion from producer 1's batch
+    appendIdempotentAsLeader(log, pid4, producerEpoch)(Seq(2))
+    log.roll()
+    cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0L, log.activeSegment.baseOffset))
+    assertEquals(List(3, 3, 4, 1, 4, 2), keysInLog(log))
+    assertEquals(List(2, 3, 5, 6, 7, 8), offsetsInLog(log))
+
+    reloadLog()
+
+    // duplicate append from producer1 should still be fine
+    logAppendInfo = appendIdempotentAsLeader(log, pid1, producerEpoch)(Seq(1, 2, 3))
+    assertEquals(0L, logAppendInfo.firstOffset)
+    assertEquals(2L, logAppendInfo.lastOffset)
   }
 
   @Test
@@ -1015,8 +1034,8 @@ class LogCleanerTest extends JUnitSuite {
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
-  private def makeLog(dir: File = dir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = 0L, scheduler = time.scheduler,
+  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
+    new Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats)
 
   private def noOpCheckDone(topicPartition: TopicPartition) { /* do nothing */  }
@@ -1060,7 +1079,7 @@ class LogCleanerTest extends JUnitSuite {
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>
         val keyBytes = key.toString.getBytes
-        new SimpleRecord(keyBytes, keyBytes) // the value doesn't matter too much since we validate offsets
+        new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter too much since we validate offsets
       }
       val records = if (isTransactional)
         MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
