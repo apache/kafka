@@ -26,9 +26,8 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.log4j.{Level, Logger}
+import org.apache.log4j.Logger
 import org.junit.{After, Test}
-import org.junit.Assert._
 
 class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val log = Logger.getLogger(classOf[ControllerFailoverTest])
@@ -75,8 +74,9 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     initialController.eventManager.put(illegalStateEvent)
     // Check that we have shutdown the scheduler (via onControllerResigned)
     TestUtils.waitUntilTrue(() => !initialController.kafkaScheduler.isStarted, "Scheduler was not shutdown")
-    assertEquals(None, zkUtils.readDataMaybeNull(ZkUtils.ControllerPath))
-    assertEquals(-1, initialController.getControllerID())
+    TestUtils.waitUntilTrue(() => zkUtils.readDataMaybeNull(ZkUtils.ControllerPath)._1.isEmpty,
+      "Controller path was not removed")
+    TestUtils.waitUntilTrue(() => initialController.getControllerID == -1, "Controller id was not set to -1")
     latch.countDown()
 
     TestUtils.waitUntilTrue(() => {
