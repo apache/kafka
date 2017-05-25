@@ -643,26 +643,24 @@ object ConsumerGroupCommand extends Logging {
           }.orNull
         }.toMap
       } else {
-        CommandLineUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetByDurationOpt, opts.allResetOffsetScenarioOpts) )
-        Map.empty
+        CommandLineUtils.printUsageAndDie(opts.parser, "Option '%s' requires one of the following scenarios: %s".format(opts.resetOffsetsOpt, opts.allResetOffsetScenarioOpts) )
       }
     }
 
-    private def checkOffsetRange(topicPartition: TopicPartition, shiftedOffset: Long) = {
-      val newOffset = getLogEndOffset(topicPartition) match {
-        case LogOffsetResult.LogOffset(endOffset) if shiftedOffset > endOffset =>
-          warn(s"New offset ($shiftedOffset) is higher than latest offset. Value will be set to $endOffset")
+    private def checkOffsetRange(topicPartition: TopicPartition, offset: Long) = {
+      getLogEndOffset(topicPartition) match {
+        case LogOffsetResult.LogOffset(endOffset) if offset > endOffset =>
+          warn(s"New offset ($offset) is higher than latest offset. Value will be set to $endOffset")
           endOffset
 
         case _ => getLogStartOffset(topicPartition) match {
-          case LogOffsetResult.LogOffset(startOffset) if shiftedOffset < startOffset =>
-            warn(s"New offset ($shiftedOffset) is lower than earliest offset. Value will be set to $startOffset")
+          case LogOffsetResult.LogOffset(startOffset) if offset < startOffset =>
+            warn(s"New offset ($offset) is lower than earliest offset. Value will be set to $startOffset")
             startOffset
 
-          case _ => shiftedOffset
+          case _ => offset
         }
       }
-      newOffset
     }
 
     private def getDateTime: java.lang.Long = {
