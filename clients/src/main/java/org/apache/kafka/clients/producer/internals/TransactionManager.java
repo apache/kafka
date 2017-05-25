@@ -240,23 +240,23 @@ public class TransactionManager {
         return transactionalId != null;
     }
 
-    public boolean isCompletingTransaction() {
+    public synchronized boolean isCompletingTransaction() {
         return currentState == State.COMMITTING_TRANSACTION || currentState == State.ABORTING_TRANSACTION;
     }
 
-    public boolean isInTransaction() {
-        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
-    }
-
-    public boolean isInErrorState() {
+    public synchronized  boolean isInErrorState() {
         return currentState == State.ABORTABLE_ERROR || currentState == State.FATAL_ERROR;
     }
 
-    public synchronized void transitionToAbortableError(RuntimeException exception) {
+    synchronized boolean isInTransaction() {
+        return currentState == State.IN_TRANSACTION || isCompletingTransaction();
+    }
+
+    synchronized void transitionToAbortableError(RuntimeException exception) {
         transitionTo(State.ABORTABLE_ERROR, exception);
     }
 
-    public synchronized void transitionToFatalError(RuntimeException exception) {
+    synchronized void transitionToFatalError(RuntimeException exception) {
         transitionTo(State.FATAL_ERROR, exception);
     }
 
@@ -388,12 +388,12 @@ public class TransactionManager {
     }
 
     // visible for testing
-    boolean hasPendingOffsetCommits() {
+    synchronized  boolean hasPendingOffsetCommits() {
         return isInTransaction() && !pendingTxnOffsetCommits.isEmpty();
     }
 
     // visible for testing
-    boolean isReadyForTransaction() {
+    synchronized  boolean isReadyForTransaction() {
         return isTransactional() && currentState == State.READY;
     }
 
@@ -590,7 +590,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public synchronized void handleResponse(AbstractResponse response) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
             Errors error = initProducerIdResponse.error();
 
@@ -715,7 +715,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public synchronized void handleResponse(AbstractResponse response) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             Errors error = findCoordinatorResponse.error();
 
@@ -769,7 +769,7 @@ public class TransactionManager {
         }
 
         @Override
-        public void handleResponse(AbstractResponse response) {
+        public synchronized void handleResponse(AbstractResponse response) {
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
 
