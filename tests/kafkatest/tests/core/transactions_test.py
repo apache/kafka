@@ -19,6 +19,7 @@ from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
+from kafkatest.services.transactional_message_copier import TransactionalMessageCopier
 from kafkatest.utils import is_int
 
 from ducktape.tests.test import Test
@@ -73,31 +74,45 @@ class TransactionsTest(Test):
                                       }
                                   })
 
+    def seed_messages(self):
+        seed_timeout_sec = 10000
+        seed_producer = VerifiableProducer(context=self.test_context,
+                                           num_nodes=1,
+                                           kafka=self.kafka,
+                                           topic=self.input_topic,
+                                           message_validator=is_int,
+                                           max_messages=self.num_seed_messages,
+                                           enable_idempotence=True)
 
-       @cluster(num_nodes=8)
-       def test_transactions(self):
-           security_protocol = 'PLAINTEXT'
-           self.kafka.security_protocol = security_protocol
-           self.kafka.interbroker_security_protocol = security_protocol
-           seed_timeout_ms = 10000
-           seed_producer = VerifiableProducer(context=self.test_context,
-                                              num_nodes=1,
-                                              kafka=self.kafka,
-                                              topic=self.input_topic,
-                                              message_validator=is_int,
-                                              max_messages=self.num_seed_messages,
-                                              enable_idempotence=True)
-           self.kafka.start()
-           seed_producer.start()
-           wait_until(lambda: seed_producer.num_acked >= this.num_seed_messages,
-                      timeout_sec=seed_timeout_ms,
-                      err_msg="Producer failed to produce messages for %ds." %\
-                      seed_timeout_ms)
+        seed_producer.start()
+        wait_until(lambda: seed_producer.num_acked >= self.num_seed_messages,
+                   timeout_sec=seed_timeout_sec,
+                   err_msg="Producer failed to produce messages %d in  %ds." %\
+                   (self.num_seed_messages, seed_timeout_sec))
 
 
+    @cluster(num_nodes=8)
+    def test_transactions(self):
+        security_protocol = 'PLAINTEXT'
+        self.kafka.security_protocol = security_protocol
+        self.kafka.interbroker_security_protocol = security_protocol
+        self.kafka.start()
+        self.seed_messages()
+
+        message_copier = TransactionalMessageCopier(
+            context=self.test_context,
+            num_nodes=1,
+            kafka=self.kafka,
+            transactional_id=self.first_transactional_id,
+            consumer_group=self.consumer_group,
+            input_topic=self.input_topic,
+            input_partition=0,
+            output_topic=self.output_topic,
+            max_messages=self.num_seed_messages,
+            transaction_size=self.transaction_size
+        )
+
+        message_copier.start()
 
 
 
-
-    print "hello, transactions!"
-    k
