@@ -160,16 +160,21 @@ class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  // if the leader is not known, return None;
+  // if the leader is known and corresponding node is available, return Some(node)
+  // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
   def getPartitionLeaderEndpoint(topic: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
+    System.out.println("Called here!")
     inReadLock(partitionMetadataLock) {
       cache.get(topic).flatMap(_.get(partitionId)) match {
         case Some(partitionInfo) =>
           val leaderId = partitionInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-          try {
-            getAliveEndpoint(leaderId, listenerName)
-          } catch {
-            case e: BrokerEndPointNotAvailableException =>
-              None
+
+          aliveNodes.get(leaderId) match {
+            case Some(nodeMap) =>
+              Some(nodeMap.getOrElse(listenerName, Node.noNode))
+            case None =>
+              Some(Node.noNode)
           }
 
         case None =>
