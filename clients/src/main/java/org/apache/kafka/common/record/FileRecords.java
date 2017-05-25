@@ -345,14 +345,14 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return An iterator over the batches
      */
     public Iterable<FileChannelRecordBatch> batches(int maxRecordSize) {
-        return batches(maxRecordSize, start);
+        return batchesFrom(maxRecordSize, start);
     }
 
     private Iterable<FileChannelRecordBatch> batchesFrom(int start) {
-        return batches(Integer.MAX_VALUE, start);
+        return batchesFrom(Integer.MAX_VALUE, start);
     }
 
-    private Iterable<FileChannelRecordBatch> batches(final int maxRecordSize, final int start) {
+    private Iterable<FileChannelRecordBatch> batchesFrom(final int maxRecordSize, final int start) {
         return new Iterable<FileChannelRecordBatch>() {
             @Override
             public Iterator<FileChannelRecordBatch> iterator() {

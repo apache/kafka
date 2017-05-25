@@ -262,19 +262,7 @@ public class MemoryRecordsBuilder {
         if (builtRecords != null)
             return;
 
-        if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
-            throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
-
-        if (producerId != RecordBatch.NO_PRODUCER_ID) {
-            if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
-                throw new IllegalArgumentException("Invalid negative producer epoch");
-
-            if (baseSequence < 0 && !isControlBatch)
-                throw new IllegalArgumentException("Invalid negative sequence number used");
-
-            if (magic < RecordBatch.MAGIC_VALUE_V2)
-                throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
-        }
+        validateProducerState();
 
         closeForRecordAppends();
 
@@ -295,6 +283,22 @@ public class MemoryRecordsBuilder {
             buffer.flip();
             buffer.position(initPos);
             builtRecords = MemoryRecords.readableRecords(buffer.slice());
+        }
+    }
+
+    private void validateProducerState() {
+        if (isTransactional && producerId == RecordBatch.NO_PRODUCER_ID)
+            throw new IllegalArgumentException("Cannot write transactional messages without a valid producer ID");
+
+        if (producerId != RecordBatch.NO_PRODUCER_ID) {
+            if (producerEpoch == RecordBatch.NO_PRODUCER_EPOCH)
+                throw new IllegalArgumentException("Invalid negative producer epoch");
+
+            if (baseSequence < 0 && !isControlBatch)
+                throw new IllegalArgumentException("Invalid negative sequence number used");
+
+            if (magic < RecordBatch.MAGIC_VALUE_V2)
+                throw new IllegalArgumentException("Idempotent messages are not supported for magic " + magic);
         }
     }
 

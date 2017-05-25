@@ -30,6 +30,7 @@ import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.{BrokerTopicStats, KafkaConfig}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -221,9 +222,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new RecordFilter {
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
       override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered)
+    }, filtered, Int.MaxValue)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
@@ -265,9 +266,9 @@ class LogTest {
     records.batches.asScala.foreach(_.setPartitionLeaderEpoch(0))
 
     val filtered = ByteBuffer.allocate(2048)
-    records.filterTo(new RecordFilter {
+    records.filterTo(new TopicPartition("foo", 0), new RecordFilter {
       override def shouldRetain(recordBatch: RecordBatch, record: Record): Boolean = !record.hasKey
-    }, filtered)
+    }, filtered, Int.MaxValue)
     filtered.flip()
     val filteredRecords = MemoryRecords.readableRecords(filtered)
 
