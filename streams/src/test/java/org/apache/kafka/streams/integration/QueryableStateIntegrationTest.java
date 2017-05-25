@@ -115,13 +115,10 @@ public class QueryableStateIntegrationTest {
         outputTopicConcurrent = outputTopicConcurrent + "-" + testNo;
         outputTopicThree = outputTopicThree + "-" + testNo;
         streamTwo = streamTwo + "-" + testNo;
-        CLUSTER.createTopic(streamOne);
-        CLUSTER.createTopic(streamConcurrent);
+        CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
         CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
-        CLUSTER.createTopic(outputTopic);
-        CLUSTER.createTopic(outputTopicConcurrent);
-        CLUSTER.createTopic(outputTopicThree);
+        CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicThree);
     }
 
     @Before

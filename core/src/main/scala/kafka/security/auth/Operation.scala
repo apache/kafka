@@ -65,6 +65,10 @@ case object AlterConfigs extends Operation {
   val name = "AlterConfigs"
   val toJava = AclOperation.ALTER_CONFIGS
 }
+case object IdempotentWrite extends Operation {
+  val name = "IdempotentWrite"
+  val toJava = AclOperation.IDEMPOTENT_WRITE
+}
 case object All extends Operation {
   val name = "All"
   val toJava = AclOperation.ALL
@@ -86,5 +90,5 @@ object Operation {
   }
 
   def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, AlterConfigs,
-     DescribeConfigs, All)
+     DescribeConfigs, IdempotentWrite, All)
 }

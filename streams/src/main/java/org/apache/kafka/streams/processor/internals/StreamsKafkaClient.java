@@ -61,6 +61,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.PROCESSING_GUARANTEE_CONFIG;
+
 public class StreamsKafkaClient {
 
     private static final ConfigDef CONFIG = StreamsConfig.configDef()
@@ -127,6 +130,7 @@ public class StreamsKafkaClient {
             streamsConfig.getString(StreamsConfig.CLIENT_ID_CONFIG),
             MAX_INFLIGHT_REQUESTS, // a fixed large enough value will suffice
             streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MS_CONFIG),
+            streamsConfig.getLong(StreamsConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
             streamsConfig.getInt(StreamsConfig.SEND_BUFFER_CONFIG),
             streamsConfig.getInt(StreamsConfig.RECEIVE_BUFFER_CONFIG),
             streamsConfig.getInt(StreamsConfig.REQUEST_TIMEOUT_MS_CONFIG),
@@ -309,7 +313,7 @@ public class StreamsKafkaClient {
      *
      * @throws StreamsException if brokers have version 0.10.0.x
      */
-    public void checkBrokerCompatibility() throws StreamsException {
+    public void checkBrokerCompatibility(final boolean eosEnabled) throws StreamsException {
         final ClientRequest clientRequest = kafkaClient.newClientRequest(
             getAnyReadyBrokerId(),
             new ApiVersionsRequest.Builder(),
@@ -330,5 +334,19 @@ public class StreamsKafkaClient {
         if (apiVersionsResponse.apiVersion(ApiKeys.CREATE_TOPICS.id) == null) {
             throw new StreamsException("Kafka Streams requires broker version 0.10.1.x or higher.");
         }
+
+        if (eosEnabled && !brokerSupportsTransactions(apiVersionsResponse)) {
+            throw new StreamsException("Setting " + PROCESSING_GUARANTEE_CONFIG + "=" + EXACTLY_ONCE + " requires broker version 0.11.0.x or higher.");
+        }
     }
+
+    private boolean brokerSupportsTransactions(final ApiVersionsResponse apiVersionsResponse) {
+        return apiVersionsResponse.apiVersion(ApiKeys.INIT_PRODUCER_ID.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.ADD_PARTITIONS_TO_TXN.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.ADD_OFFSETS_TO_TXN.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.END_TXN.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.WRITE_TXN_MARKERS.id) != null
+            && apiVersionsResponse.apiVersion(ApiKeys.TXN_OFFSET_COMMIT.id) != null;
+    }
+
 }

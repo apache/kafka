@@ -85,7 +85,7 @@ private[group] class MemberMetadata(val memberId: String,
     if (protocols.size != this.supportedProtocols.size)
       return false
 
-    for (i <- 0 until protocols.size) {
+    for (i <- protocols.indices) {
       val p1 = protocols(i)
       val p2 = supportedProtocols(i)
       if (p1._1 != p2._1 || !util.Arrays.equals(p1._2, p2._2))
@@ -114,7 +114,15 @@ private[group] class MemberMetadata(val memberId: String,
     }
   }
 
-  override def toString = {
-    "[%s,%s,%s,%d]".format(memberId, clientId, clientHost, sessionTimeoutMs)
+  override def toString: String = {
+    "MemberMetadata(" +
+      s"memberId=$memberId, " +
+      s"clientId=$clientId, " +
+      s"clientHost=$clientHost, " +
+      s"sessionTimeoutMs=$sessionTimeoutMs, " +
+      s"rebalanceTimeoutMs=$rebalanceTimeoutMs, " +
+      s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
+      ")"
   }
+
 }
