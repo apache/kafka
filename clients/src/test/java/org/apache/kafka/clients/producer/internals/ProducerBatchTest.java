@@ -18,17 +18,21 @@ package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class ProducerBatchTest {
@@ -37,6 +41,31 @@ public class ProducerBatchTest {
 
     private final MemoryRecordsBuilder memoryRecordsBuilder = MemoryRecords.builder(ByteBuffer.allocate(128),
             CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+
+    @Test
+    public void testChecksumNullForMagicV2() {
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+        FutureRecordMetadata future = batch.tryAppend(now, null, new byte[10], Record.EMPTY_HEADERS, null, now);
+        assertNotNull(future);
+        assertNull(future.checksumOrNull());
+    }
+
+    @Test
+    public void testAppendedChecksumMagicV0AndV1() {
+        for (byte magic : Arrays.asList(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1)) {
+            MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(128), magic,
+                    CompressionType.NONE, TimestampType.CREATE_TIME, 128);
+            ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), builder, now);
+            byte[] key = "hi".getBytes();
+            byte[] value = "there".getBytes();
+
+            FutureRecordMetadata future = batch.tryAppend(now, key, value, Record.EMPTY_HEADERS, null, now);
+            assertNotNull(future);
+            byte attributes = LegacyRecord.computeAttributes(magic, CompressionType.NONE, TimestampType.CREATE_TIME);
+            long expectedChecksum = LegacyRecord.computeChecksum(magic, attributes, now, key, value);
+            assertEquals(expectedChecksum, future.checksumOrNull().longValue());
+        }
+    }
 
     /**
      * A {@link ProducerBatch} configured using a very large linger value and a timestamp preceding its create
