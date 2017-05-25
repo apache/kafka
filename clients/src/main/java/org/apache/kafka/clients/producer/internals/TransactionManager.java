@@ -534,7 +534,9 @@ public class TransactionManager {
                     fatalError(response.versionMismatch());
                 } else if (response.hasResponse()) {
                     log.trace("Got transactional response for request:" + requestBuilder());
-                    handleResponse(response.responseBody());
+                    synchronized (TransactionManager.this) {
+                        handleResponse(response.responseBody());
+                    }
                 } else {
                     fatalError(new KafkaException("Could not execute transactional request for unknown reasons"));
                 }
@@ -590,7 +592,7 @@ public class TransactionManager {
         }
 
         @Override
-        public synchronized void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response) {
             InitProducerIdResponse initProducerIdResponse = (InitProducerIdResponse) response;
             Errors error = initProducerIdResponse.error();
 
@@ -634,7 +636,7 @@ public class TransactionManager {
         }
 
         @Override
-        public synchronized void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response) {
             AddPartitionsToTxnResponse addPartitionsToTxnResponse = (AddPartitionsToTxnResponse) response;
             Map<TopicPartition, Errors> errors = addPartitionsToTxnResponse.errors();
             boolean hasPartitionErrors = false;
@@ -715,7 +717,7 @@ public class TransactionManager {
         }
 
         @Override
-        public synchronized void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             Errors error = findCoordinatorResponse.error();
 
@@ -769,7 +771,7 @@ public class TransactionManager {
         }
 
         @Override
-        public synchronized void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response) {
             EndTxnResponse endTxnResponse = (EndTxnResponse) response;
             Errors error = endTxnResponse.error();
 
@@ -817,7 +819,7 @@ public class TransactionManager {
         }
 
         @Override
-        public synchronized void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response) {
             AddOffsetsToTxnResponse addOffsetsToTxnResponse = (AddOffsetsToTxnResponse) response;
             Errors error = addOffsetsToTxnResponse.error();
 
@@ -874,7 +876,7 @@ public class TransactionManager {
         }
 
         @Override
-        public synchronized void handleResponse(AbstractResponse response) {
+        public void handleResponse(AbstractResponse response) {
             TxnOffsetCommitResponse txnOffsetCommitResponse = (TxnOffsetCommitResponse) response;
             boolean coordinatorReloaded = false;
             boolean hadFailure = false;
