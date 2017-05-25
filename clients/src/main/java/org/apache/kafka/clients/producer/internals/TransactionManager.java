@@ -515,10 +515,12 @@ public class TransactionManager {
             result.done();
         }
 
-        synchronized void reenqueue() {
-            this.isRetry = true;
-            pendingRequests.add(this);
-        }
+        void reenqueue() {
+            synchronized (TransactionManager.this) {
+                this.isRetry = true;
+                pendingRequests.add(this);
+            }
+       }
 
         @Override
         @SuppressWarnings("unchecked")
