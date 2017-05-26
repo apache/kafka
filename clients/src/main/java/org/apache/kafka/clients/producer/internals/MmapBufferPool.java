@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.producer.internals;
 
 
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.utils.Time;
 import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 import java.io.File;
@@ -25,39 +27,106 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel.MapMode;
-import java.util.concurrent.BlockingDeque;
-import java.util.concurrent.LinkedBlockingDeque;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class MmapBufferPool implements BufferPool {
-    
     private final long totalMemory;
-    private final int chunkSize;
-    /** This memory is accounted for separately from the poolable buffers in free. */
-//    private long availableMemory;
+    private final int poolableSize;
+    private final Time time;
 
-    private final BlockingDeque<ByteBuffer> free;
-//    private MappedByteBuffer fileBuffer;
+    private final ReentrantLock lock;
+    private final FreeList free;
+    private final Deque<Condition> waiters;
     
-    public MmapBufferPool(long totalMemory, int chunkSize, File backingFileName) throws IOException {
+    public MmapBufferPool(long totalMemory, int poolableSize, Time time, File backingFileName) throws IOException {
         this.totalMemory = totalMemory;
-        this.chunkSize = chunkSize;
-        this.free = new LinkedBlockingDeque<ByteBuffer>();
+        this.poolableSize = poolableSize;
+        this.lock = new ReentrantLock();
+        this.waiters = new ArrayDeque<>();
+        this.time = time;
 
         RandomAccessFile f = new RandomAccessFile(backingFileName, "rw");
         f.setLength(totalMemory);
 
-//        this.fileBuffer = f.getChannel().map(MapMode.READ_WRITE, 0, totalMemory);
-//        f.close();
+        MappedByteBuffer fileBuffer = f.getChannel().map(MapMode.READ_WRITE, 0, totalMemory);
+        f.close();
+
+        this.free = new FreeList(fileBuffer);
     }
 
     @Override
     public ByteBuffer allocate(int size, long maxTimeToBlockMs) throws InterruptedException {
-        return allocateByteBuffer(size);
-    }
+        if (size > this.totalMemory)
+            throw new IllegalArgumentException("Attempt to allocate " + size
+                                               + " bytes, but there is a hard limit of "
+                                               + this.totalMemory
+                                               + " on memory allocations.");
 
-    // Protected for testing.
-    protected ByteBuffer allocateByteBuffer(int size) {
-        throw new NotImplementedException();
+        lock.lock();
+        try {
+            if (this.free.max() >= size) {
+                return this.free.find(size);
+            } else {
+                // we are out of memory and will have to block
+                long accumulated = 0;
+                ByteBuffer buffer = null;
+                boolean hasError = true;
+                Condition moreMemory = this.lock.newCondition();
+                try {
+                    long remainingTimeToBlockNs = TimeUnit.MILLISECONDS.toNanos(maxTimeToBlockMs);
+                    this.waiters.addLast(moreMemory);
+                    // loop over and over until we have a buffer or have reserved
+                    // enough memory to allocate one
+                    while (accumulated < size) {
+                        long startWaitNs = time.nanoseconds();
+                        long timeNs;
+                        boolean waitingTimeElapsed;
+                        try {
+                            waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
+                        } finally {
+                            long endWaitNs = time.nanoseconds();
+                            timeNs = Math.max(0L, endWaitNs - startWaitNs);
+//                            this.waitTime.record(timeNs, time.milliseconds());
+                        }
+
+                        if (waitingTimeElapsed) {
+                            throw new TimeoutException("Failed to allocate memory within the configured max blocking time " + maxTimeToBlockMs + " ms.");
+                        }
+
+                        remainingTimeToBlockNs -= timeNs;
+
+                        // TODO write me
+
+                    }
+
+//                    if (buffer == null)
+//                        buffer = allocateByteBuffer(size);
+                    hasError = false;
+                    //unlock happens in top-level, enclosing finally
+                    return buffer;
+                } finally {
+                    // When this loop was not able to successfully terminate don't loose available memory
+                    if (hasError) {
+//                        this.availableMemory += accumulated;
+                    }
+                    this.waiters.remove(moreMemory);
+                }
+            }
+        } finally {
+            // signal any additional waiters if there is more memory left
+            // over for them
+            try {
+                if (!(this.availableMemory() == 0 && this.free.isEmpty()) && !this.waiters.isEmpty())
+                    this.waiters.peekFirst().signal();
+            } finally {
+                // Another finally... otherwise find bugs complains
+                lock.unlock();
+            }
+        }
     }
 
     @Override
@@ -67,7 +136,15 @@ public class MmapBufferPool implements BufferPool {
 
     @Override
     public void deallocate(ByteBuffer buffer) {
-        throw new NotImplementedException();
+        lock.lock();
+        try {
+            this.free.add(buffer);
+            Condition moreMem = this.waiters.peekFirst();
+            if (moreMem != null)
+                moreMem.signal();
+        } finally {
+            lock.unlock();
+        }
     }
 
     /**
@@ -75,14 +152,12 @@ public class MmapBufferPool implements BufferPool {
      */
     @Override
     public long availableMemory() {
-        // TODO write me
-        return 0;
-    }
-
-    // Protected for testing.
-    protected int freeSize() {
-        // TODO write me
-        return 0;
+        lock.lock();
+        try {
+            return this.free.size();
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -91,16 +166,22 @@ public class MmapBufferPool implements BufferPool {
         return 0;
     }
 
+    /**
+     * The number of threads blocked waiting on memory
+     */
     @Override
     public int queued() {
-     // TODO write me
-        return 0;
+        lock.lock();
+        try {
+            return this.waiters.size();
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public int poolableSize() {
-     // TODO write me
-        return 0;
+        return this.free.size();
     }
 
     @Override
@@ -109,4 +190,8 @@ public class MmapBufferPool implements BufferPool {
         return 0;
     }
 
+    // package-private method used only for testing
+    Deque<Condition> waiters() {
+        return this.waiters;
+    }
 }
